@@ -39,7 +39,7 @@
         return parsed
       }
     } catch (e) {
-      console.warn('[StoreNavigation] localStorage not available or invalid:', e)
+      // Ignore localStorage errors
     }
   
     // Default state
@@ -109,7 +109,7 @@
   
       startAutoRefresh()
     } catch (error) {
-      console.error('[StoreNavigation] Failed to load settings:', error)
+      // Ignore settings loading errors
     }
   
     // Load saved popup state
@@ -293,7 +293,6 @@
           searchIndex.value = response.index
         }
       } catch (error) {
-        console.error('[StoreNavigation] Error sending build search index message:', error)
         searchIndex.value = []
       }
     } else {

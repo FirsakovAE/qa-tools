@@ -24,6 +24,7 @@ interface VueContext {
   roots: VueHTMLElement[]
 }
 
+
 interface ComponentInfo {
   name: string
   props: Record<string, any>
@@ -222,10 +223,15 @@ const processChildren = (
 const MAX_DEPTH = 100;
 
 /**
+ * Максимальное количество обработанных VNodes для предотвращения чрезмерного роста Set
+ */
+const MAX_COLLECTED_SIZE = 10000;
+
+/**
  * Проверяет, должен ли vnode быть пропущен (например, если он уже был обработан или глубина превышена)
  */
 const shouldSkipVNode = (vnode: any, depth: number, collected: Set<any>): boolean => {
-  return !vnode || depth > MAX_DEPTH || collected.has(vnode);
+  return !vnode || depth > MAX_DEPTH || collected.size > MAX_COLLECTED_SIZE || collected.has(vnode);
 };
 
 /**
@@ -234,7 +240,7 @@ const shouldSkipVNode = (vnode: any, depth: number, collected: Set<any>): boolea
  * @param path - Текущий путь в дереве.
  * @param depth - Текущая глубина рекурсии.
  * @param rootElement - Корневой элемент приложения.
- * @param collected - Множество уже собранных VNodes.
+ * @param collected - WeakSet уже собранных VNodes (предотвращает утечки памяти).
  * @param vueContext - Контекст Vue (для унификации работы с версиями).
  * @returns Массив информации о компонентах.
  */

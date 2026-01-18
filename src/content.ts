@@ -1047,9 +1047,7 @@ function uiBridgeMessageHandler(event: MessageEvent): void {
   const message = data.message
   
   if (!message || !message.type) return
-  
-  console.log('[Content] UI -> Content:', message.type)
-  
+
   // Получаем handler из runtimeHandlers
   const handler = runtimeHandlers[message.type]
   

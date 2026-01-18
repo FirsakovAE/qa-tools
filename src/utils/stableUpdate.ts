@@ -1,6 +1,7 @@
 export class StableUpdateManager {
     private lastData: any[] = []
     private lastHash = ''
+    private updateCount = 0
 
     // Сравниваем данные по хэшу для минимизации обновлений
     shouldUpdate(newData: any[]): boolean {
@@ -12,10 +13,23 @@ export class StableUpdateManager {
         if (newHash !== this.lastHash) {
             this.lastData = newData
             this.lastHash = newHash
+            this.updateCount++
             return true
         }
 
         return false
+    }
+
+    // Метод для очистки кэша при необходимости (например, при большом количестве обновлений)
+    clearCache() {
+        this.lastData = []
+        this.lastHash = ''
+        this.updateCount = 0
+    }
+
+    // Получить количество обновлений (для отладки)
+    getUpdateCount(): number {
+        return this.updateCount
     }
 
     private generateHash(data: any[]): string {

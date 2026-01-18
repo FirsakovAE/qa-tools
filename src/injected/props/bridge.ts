@@ -33,11 +33,9 @@ function handleMessage(event: MessageEvent) {
   const { requestId } = event.data
 
   if (event.data.type === MESSAGE_TYPES.UPDATE_PROPS) {
-    console.log('[PropsBridge] Received UPDATE_PROPS:', { componentPath: event.data.componentPath, requestId })
     try {
       const { componentPath, props } = event.data
       const success = updateComponentProps(componentPath, props)
-      console.log('[PropsBridge] Update result:', success)
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
@@ -47,7 +45,6 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
-      console.error('[PropsBridge] Update error:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.UPDATE_PROPS_RESULT,
@@ -181,8 +178,8 @@ export function initPropsBridge() {
     }, '*')
   }
 
-  window.postMessage({ 
+  window.postMessage({
     __FROM_VUE_INSPECTOR__: true,
-    type: MESSAGE_TYPES.READY 
+    type: MESSAGE_TYPES.READY
   }, '*')
 }

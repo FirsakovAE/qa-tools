@@ -38,12 +38,10 @@ function initRuntime() {
       targetWindow: window.parent
     })
     setRuntimeAdapter(adapter)
-    console.log('[Vue Inspector] Standalone mode initialized, baseURL:', baseURL)
   } else {
     // Extension mode
     const adapter = createExtensionAdapter()
     setRuntimeAdapter(adapter)
-    console.log('[Vue Inspector] Extension mode initialized')
   }
 }
 

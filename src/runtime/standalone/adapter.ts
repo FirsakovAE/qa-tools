@@ -99,11 +99,8 @@ export class StandaloneAdapter implements RuntimeAdapter {
     return new Promise((resolve, reject) => {
       try {
         const requestId = `req_${++this.requestCounter}_${Date.now()}`
-        
-        console.log('[StandaloneAdapter] Sending message:', message.type, 'requestId:', requestId)
-        
+
         const timeoutId = setTimeout(() => {
-          console.log('[StandaloneAdapter] Message timeout:', message.type, requestId)
           this.pendingRequests.delete(requestId)
           reject(new Error('Message timeout'))
         }, timeout)
@@ -119,15 +116,12 @@ export class StandaloneAdapter implements RuntimeAdapter {
 
         // Send to target window (content script listens on main window)
         const target = this.config.targetWindow || window.parent
-        console.log('[StandaloneAdapter] Posting to target:', target === window.parent ? 'window.parent' : 'custom')
         target.postMessage({
           [MESSAGE_PREFIX]: true,
           requestId,
           message
         }, this.config.targetOrigin!)
-        console.log('[StandaloneAdapter] postMessage completed for:', message.type)
       } catch (err) {
-        console.error('[StandaloneAdapter] Error in sendMessage:', err)
         reject(err)
       }
     })
@@ -171,16 +165,12 @@ export class StandaloneAdapter implements RuntimeAdapter {
       if (!data || typeof data !== 'object') return
       if (!data[MESSAGE_PREFIX]) return
 
-      console.log('[StandaloneAdapter] Received message with prefix, responseId:', data.responseId, 'hasPending:', this.pendingRequests.has(data.responseId))
-
       // Response to our request
       if (data.responseId && this.pendingRequests.has(data.responseId)) {
         const pending = this.pendingRequests.get(data.responseId)!
         this.pendingRequests.delete(data.responseId)
         clearTimeout(pending.timeout)
-        
-        console.log('[StandaloneAdapter] Resolving request:', data.responseId, 'response:', data.response)
-        
+
         if (data.error) {
           pending.reject(new Error(data.error))
         } else {
@@ -197,7 +187,7 @@ export class StandaloneAdapter implements RuntimeAdapter {
               // Broadcasts don't expect response
             })
           } catch (e) {
-            console.error('[Standalone] Message handler error:', e)
+            // Ignore handler errors
           }
         }
         return
@@ -224,7 +214,7 @@ export class StandaloneAdapter implements RuntimeAdapter {
               return
             }
           } catch (e) {
-            console.error('[Standalone] Message handler error:', e)
+            // Ignore handler errors
           }
         }
       }

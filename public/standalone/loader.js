@@ -10,7 +10,6 @@
   // Получаем конфигурацию установленную bookmarklet'ом
   var config = window.__VUE_INSPECTOR_CONFIG__;
   if (!config || !config.baseURL) {
-    console.error('[Vue Inspector] Configuration not found. Use bookmarklet from setup page.');
     return;
   }
   
@@ -51,7 +50,6 @@
   // Инжектируем UI
   function injectUI() {
     if (document.getElementById('vue-inspector-root')) {
-      console.log('[Vue Inspector] UI already present');
       return;
     }
     
@@ -172,7 +170,6 @@
       if (isCollapsed && !hasVue && iframeLoaded) {
         iframe.src = 'about:blank';
         iframeLoaded = false;
-        console.log('[Vue Inspector] Iframe unloaded (no Vue detected)');
       }
     };
     
@@ -228,9 +225,7 @@
     root.appendChild(host);
     root.appendChild(toggle);
     document.documentElement.appendChild(root);
-    
-    console.log('[Vue Inspector] UI injected');
-    
+
     // Запускаем message relay после создания UI
     setupMessageRelay(iframe);
   }
@@ -285,13 +280,12 @@
       
       // Debug: log ALL messages with __VUE_INSPECTOR__ prefix
       if (data.__VUE_INSPECTOR__) {
-        console.log('[Relay] Message with prefix, source is iframe:', event.source === iframe.contentWindow, 
-                    'type:', data.message?.type, 'requestId:', data.requestId);
+        // Message logging removed
       }
-      
+
       // Debug: log all messages from iframe
       if (event.source === iframe.contentWindow) {
-        console.log('[Relay] Raw message from iframe:', data.__VUE_INSPECTOR__ ? 'has prefix' : 'NO prefix', data);
+        // Raw message logging removed
       }
       
       // === Сообщения от UI iframe -> injected script ===
@@ -300,9 +294,7 @@
         var message = data.message;
         
         if (!message || !message.type) return;
-        
-        console.log('[Relay] UI -> Page:', message.type, requestId ? '(req:' + requestId + ')' : '');
-        
+
         // Специальная обработка PING - отвечаем сразу
         if (message.type === 'PING') {
           if (requestId && iframe.contentWindow) {
@@ -369,12 +361,9 @@
           forwardMessage.type = 'VUE_INSPECTOR_GET_COMPONENTS';
         }
         if (forwardMessage.type === 'UPDATE_COMPONENT_PROPS') {
-          console.log('[Relay] Translating UPDATE_COMPONENT_PROPS -> VUE_INSPECTOR_UPDATE_PROPS');
           forwardMessage.type = 'VUE_INSPECTOR_UPDATE_PROPS';
           forwardMessage.componentPath = forwardMessage.componentUid;
         }
-        
-        console.log('[Relay] Forwarding to page:', forwardMessage.type, 'requestId:', forwardMessage.requestId);
         window.postMessage(forwardMessage, '*');
         return;
       }
@@ -390,8 +379,6 @@
       );
       
       if (event.source === window && (data.__FROM_VUE_INSPECTOR__ || isKnownResponseType)) {
-        console.log('[Relay] Page -> UI:', data.type, data.requestId ? '(req:' + data.requestId + ')' : '');
-        
         // Обработка результата детекции
         if (data.type === 'VUE_INSPECTOR_DETECTION_RESULT') {
           cachedFlags = {
@@ -461,30 +448,23 @@
       var now = Date.now();
       Object.keys(pendingRequests).forEach(function(reqId) {
         if (now - pendingRequests[reqId].timestamp > 30000) {
-          console.log('[Relay] Cleaning stale request:', reqId);
           delete pendingRequests[reqId];
         }
       });
     }, 30000);
-    
-    console.log('[Vue Inspector] Message relay initialized');
   }
-  
+
   // Главная функция инициализации
   function init() {
-    console.log('[Vue Inspector] Initializing standalone mode...');
-    console.log('[Vue Inspector] Base URL:', baseURL);
     
     // Сначала инжектируем script для доступа к Vue
     injectScript()
       .then(function() {
-        console.log('[Vue Inspector] Injected script loaded');
         // Затем инжектируем UI
         injectUI();
-        console.log('[Vue Inspector] Ready! Click the chevron button at the bottom.');
       })
       .catch(function(err) {
-        console.error('[Vue Inspector] Initialization failed:', err);
+        // Initialization failed
       });
   }
   

@@ -33,7 +33,6 @@ export default defineConfig({
             mkdirSync(destDir, { recursive: true })
           }
           copyFileSync(srcHtml, destHtml)
-          console.log('✓ Copied injected UI HTML to injected_ui/index.html')
         }
       }
     },
@@ -53,7 +52,6 @@ export default defineConfig({
         const standaloneDest = docsPath
         if (existsSync(standaloneSrc)) {
           cpSync(standaloneSrc, standaloneDest, { recursive: true, force: true })
-          console.log('✓ Copied standalone files to docs/')
         }
 
         // Копируем необходимые папки для работы standalone
@@ -63,7 +61,6 @@ export default defineConfig({
           const destPath = join(docsPath, folder)
           if (existsSync(srcPath)) {
             cpSync(srcPath, destPath, { recursive: true, force: true })
-            console.log(`✓ Copied ${folder}/ to docs/${folder}/`)
           }
         })
 
@@ -76,7 +73,6 @@ export default defineConfig({
             .replace(/src="\/injected_ui\/index\.js"/g, 'src="./index.js"')
             .replace(/href="\/assets\//g, 'href="../assets/')
           writeFileSync(injectedUiHtmlPath, content, 'utf-8')
-          console.log('✓ Fixed paths in docs/injected_ui/index.html')
         }
 
         // Исправляем baseURL логику в docs/index.html для GitHub Pages
@@ -111,7 +107,6 @@ export default defineConfig({
       const code = \`
         (function(){
           if(window.__VUE_INSPECTOR_INITIALIZED__){
-            console.log('[Vue Inspector] Already loaded');
             return;
           }
           var b='\${baseURL}';
@@ -148,10 +143,7 @@ export default defineConfig({
 
           content = content.replace(oldScriptBlock, newScriptBlock);
           writeFileSync(indexHtmlPath, content, 'utf-8')
-          console.log('✓ Fixed baseURL logic in docs/index.html')
         }
-
-        console.log('✓ GitHub Pages docs/ folder is ready')
       }
     }
   ],

@@ -26,7 +26,6 @@ export function useTreeData() {
     function updateStableData(newData: TreeNodeModel[]) {
         if (updateManager.shouldUpdate(newData)) {
             stableTreeData.value = updateManager.updateTree(stableTreeData.value, newData)
-            // console.log('🔄 Tree updated:', newData.length)
         }
     }
 
@@ -65,18 +64,29 @@ export function useTreeData() {
     })
 
     let refreshIntervalId: number | null = null
+    let cleanupIntervalId: number | null = null
+
     const stopAutoRefresh = () => {
         if (refreshIntervalId !== null) clearInterval(refreshIntervalId)
         refreshIntervalId = null
+        if (cleanupIntervalId !== null) clearInterval(cleanupIntervalId)
+        cleanupIntervalId = null
     }
 
     const startAutoRefresh = () => {
         stopAutoRefresh()
         const interval = settings.value?.updates?.autoRefreshInterval ?? 5000
         if (!settings.value?.updates?.autoRefresh) return
+
         refreshIntervalId = window.setInterval(() => {
             if (!isLoading.value) loadData()
         }, interval)
+
+        // Периодическая очистка кэша StableUpdateManager каждые 50 обновлений
+        // или каждые 5 минут (что наступит раньше)
+        cleanupIntervalId = window.setInterval(() => {
+            updateManager.clearCache()
+        }, Math.min(5 * 60 * 1000, interval * 50)) // 5 минут или 50 циклов автообновления
     }
 
     watch(() => settings.value?.updates, () => startAutoRefresh(), { deep: true })

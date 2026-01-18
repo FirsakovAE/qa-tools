@@ -40,8 +40,6 @@ export function getVueComponents(): ComponentInfo[] {
   const allComponents: ComponentInfo[] = []
   const vueRoots = findVueRoots()
 
-  console.log('[VueInspector] Found Vue roots:', vueRoots.length)
-
   if (vueRoots.length > 0) {
     vueRoots.forEach((root, rootIndex) => {
       const rootVNode = extractRootVNode(root)
@@ -53,20 +51,25 @@ export function getVueComponents(): ComponentInfo[] {
           roots: vueRoots
         }
 
+        // Используем Set для отслеживания обработанных VNodes
+        // Очищаем Set после каждого цикла для предотвращения утечек памяти
+        const collected = new Set()
+
         const components = collectComponentsRecursively(
           rootVNode,
           `root[${rootIndex}]`,
           0,
           root as HTMLElement,
-          new Set(),
+          collected,
           vueContext
         )
-        console.log(`[VueInspector] Root ${rootIndex}: collected ${components.length} components (Vue ${vueContext.version})`)
         allComponents.push(...components)
+
+        // Очищаем Set после использования для предотвращения накопления ссылок
+        collected.clear()
       }
     })
   }
 
-  console.log('[VueInspector] Total components collected:', allComponents.length)
   return allComponents
 }

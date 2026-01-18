@@ -27,12 +27,9 @@ export class RealPropsEditorService implements PropsEditorService {
     private async sendToContentScript(message: any): Promise<any> {
         const runtime = getRuntimeAdapter()
         if (!runtime) {
-            console.error('[PropsEditorService] Runtime adapter not available')
             throw new Error('Runtime adapter not available')
         }
-        console.log('[PropsEditorService] Sending message:', message.type)
         const response = await runtime.sendMessage(message)
-        console.log('[PropsEditorService] Response:', response)
         return response
     }
 
@@ -45,7 +42,6 @@ export class RealPropsEditorService implements PropsEditorService {
 
             return response?.props || null
         } catch (error) {
-            console.error('Failed to get component props:', error)
             return null
         }
     }
@@ -72,12 +68,6 @@ export class RealPropsEditorService implements PropsEditorService {
             
             return success
         } catch (error) {
-
-            // Fallback: попробуем напрямую через консольные команды
-            if (!options?.silent) {
-                this.showConsoleCommands(componentUid, props)
-            }
-
             return false
         }
     }
@@ -93,19 +83,6 @@ export class RealPropsEditorService implements PropsEditorService {
         } catch (error) {
             return null
         }
-    }
-
-    // Показать команды для ручного обновления через консоль
-    private showConsoleCommands(uid: string, props: Record<string, any>) {
-        console.log('💡 Команды для ручного обновления пропсов через консоль:')
-
-        Object.entries(props).forEach(([key, value]) => {
-            const formattedValue = typeof value === 'string' ? `'${value}'` : JSON.stringify(value)
-            console.log(`// Обновить пропс "${key}":`)
-            console.log(`const comp = window.__VUE_INSPECTOR?.findComponentByUid('${uid}');`)
-            console.log(`if (comp?.component?.props) comp.component.props['${key}'] = ${formattedValue};`)
-            console.log(`if (comp?.component?.setupState) comp.component.setupState['${key}'] = ${formattedValue};`)
-        })
     }
 }
 

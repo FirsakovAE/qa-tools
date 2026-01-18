@@ -62,8 +62,7 @@
     
     flagsReceived = true
     featureFlags.value = flags
-    console.log('[Navigation] Feature flags received:', flags)
-    
+
     // Удаляем listener - флаги получены, больше не нужен
     window.removeEventListener('message', handleFlagsMessage)
     
