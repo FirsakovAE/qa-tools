@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "build:extension": "vue-tsc -b && vite build",
+    "build:standalone": "npm run build && echo 'Standalone build ready in docs/'",
     "preview": "vite preview",
     "serve:standalone": "npx serve dist -p 5174 --cors"
   },

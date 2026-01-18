@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
-import { copyFileSync, existsSync, mkdirSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, cpSync } from 'fs'
 import { join } from 'path'
 
 export default defineConfig({
@@ -35,6 +35,39 @@ export default defineConfig({
           copyFileSync(srcHtml, destHtml)
           console.log('✓ Copied injected UI HTML to injected_ui/index.html')
         }
+      }
+    },
+    {
+      name: 'prepare-docs-for-github-pages',
+      closeBundle() {
+        const distPath = join(process.cwd(), 'dist')
+        const docsPath = join(process.cwd(), 'docs')
+
+        // Создаем папку docs если не существует
+        if (!existsSync(docsPath)) {
+          mkdirSync(docsPath, { recursive: true })
+        }
+
+        // Копируем standalone файлы
+        const standaloneSrc = join(distPath, 'standalone')
+        const standaloneDest = docsPath
+        if (existsSync(standaloneSrc)) {
+          cpSync(standaloneSrc, standaloneDest, { recursive: true, force: true })
+          console.log('✓ Copied standalone files to docs/')
+        }
+
+        // Копируем необходимые папки для работы standalone
+        const foldersToCopy = ['js', 'injected_ui', 'assets']
+        foldersToCopy.forEach(folder => {
+          const srcPath = join(distPath, folder)
+          const destPath = join(docsPath, folder)
+          if (existsSync(srcPath)) {
+            cpSync(srcPath, destPath, { recursive: true, force: true })
+            console.log(`✓ Copied ${folder}/ to docs/${folder}/`)
+          }
+        })
+
+        console.log('✓ GitHub Pages docs/ folder is ready')
       }
     }
   ],
