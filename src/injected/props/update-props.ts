@@ -57,19 +57,14 @@ function updateModelProp(instance: any, key: string, value: any): boolean {
 
   if (instance?.emit) {
     instance.emit(updateEvent, value)
-    console.debug(`[updateComponentProps] emit ${updateEvent}`, value)
     return true
   }
 
   if (instance?.$emit) {
     instance.$emit(updateEvent, value)
-    console.debug(`[updateComponentProps] $emit ${updateEvent}`, value)
     return true
   }
 
-  console.warn(
-    `[updateComponentProps] Model prop "${key}" detected, but no emit available`
-  )
   return false
 }
 
@@ -86,7 +81,6 @@ export function updateComponentProps(
   let resolved = resolveComponent(path) ?? findComponentByUidFallback(path)
 
   if (!resolved?.instance?.props) {
-    console.error('[updateComponentProps] Component or props not found:', path)
     return false
   }
 
@@ -103,7 +97,6 @@ export function updateComponentProps(
       if (isModelProp(resolved.instance, key)) {
         if (updateModelProp(resolved.instance, key, newProps[key])) {
           success = true
-          console.debug(`[updateComponentProps] Updated model prop "${key}" via emit`)
           continue
         }
       }
@@ -113,15 +106,7 @@ export function updateComponentProps(
       props[key] = nextValue
       success = true
 
-      console.debug(
-        '[updateComponentProps]',
-        key,
-        oldValue?.constructor?.name,
-        '→',
-        nextValue?.constructor?.name
-      )
     } catch (e) {
-      console.warn(`[updateComponentProps] Failed to update prop "${key}"`, e)
     }
   }
 

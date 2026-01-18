@@ -32,7 +32,6 @@ export class RealDataService {
     private async collectVueComponents(): Promise<ComponentInfo[]> {
         const runtime = getRuntimeAdapter()
         if (!runtime) {
-            console.warn('[RealDataService] Runtime adapter not available')
             return []
         }
 
@@ -50,7 +49,6 @@ export class RealDataService {
                 return []
             }
         } catch (error) {
-            console.warn('[RealDataService] Error collecting components:', error)
             return []
         }
     }

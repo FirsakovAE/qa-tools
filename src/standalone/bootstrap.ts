@@ -19,7 +19,6 @@ export interface StandaloneBootstrapConfig extends StandaloneAdapterConfig {
 export function bootstrapStandalone(config: StandaloneBootstrapConfig): void {
   // Защита от повторной инициализации
   if ((window as any).__VUE_INSPECTOR_INITIALIZED__) {
-    console.warn('[Vue Inspector] Already initialized')
     return
   }
   ;(window as any).__VUE_INSPECTOR_INITIALIZED__ = true
@@ -31,8 +30,6 @@ export function bootstrapStandalone(config: StandaloneBootstrapConfig): void {
   const adapter = createStandaloneAdapter(config)
   setRuntimeAdapter(adapter)
   
-  console.log('[Vue Inspector] Standalone mode initialized')
-  console.log('[Vue Inspector] Capabilities:', adapter.capabilities)
   
   // Автоматически инжектим UI если запрошено
   if (config.autoInjectUI !== false) {
@@ -56,7 +53,6 @@ function injectInspectorUI(baseURL: string): void {
   script.id = 'vue-inspector-content-script'
   script.src = `${baseURL}/js/content.js`
   script.onerror = () => {
-    console.error('[Vue Inspector] Failed to load content script from:', script.src)
   }
   document.head.appendChild(script)
 }

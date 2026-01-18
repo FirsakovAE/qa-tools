@@ -17,7 +17,6 @@ class VueElementInspector {
                 this.vueComponents.set(element, vueInstance);
             }
         }
-        console.log(`✅ Found ${this.vueComponents.size} Vue components`);
     }
     // Получение Vue инстанса из элемента
     getVueInstance(element) {

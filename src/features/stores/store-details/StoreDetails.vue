@@ -127,7 +127,6 @@ async function loadStoreData() {
     const seconds = String(now.getSeconds()).padStart(2, '0')
     lastFetched.value = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
   } catch (err) {
-    console.error('[StoreDetails] Error loading store data:', err)
   } finally {
     isLoading.value = false
   }
@@ -223,7 +222,6 @@ async function saveStateChanges() {
     
     isEditingState.value = false
   } catch (err) {
-    console.error('[StoreDetails] Error saving state:', err)
   }
 }
 
@@ -243,7 +241,6 @@ async function saveGettersChanges() {
     
     isEditingGetters.value = false
   } catch (err) {
-    console.error('[StoreDetails] Error saving getters:', err)
   }
 }
 

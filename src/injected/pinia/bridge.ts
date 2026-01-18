@@ -86,7 +86,6 @@ function handleMessage(event: MessageEvent) {
     try {
       handler(event.data)
     } catch (e) {
-      console.error(`[PiniaAPI] Error handling message type ${event.data.type}:`, e)
     }
   }
 }
@@ -102,7 +101,6 @@ function handleGetStoresSummary(data: GetStoresSummaryMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
-    console.error('[PiniaAPI] Error getting stores summary:', e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_STORES_SUMMARY_DATA',
@@ -124,7 +122,6 @@ function handleBuildSearchIndex(data: BuildSearchIndexMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
-    console.error('[PiniaAPI] Error building search index:', e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_SEARCH_INDEX_READY',
@@ -139,13 +136,10 @@ function handleGetStoreState(data: GetStoreStateMessage) {
   let state = null, getters = {}, actions = {}
 
   try { state = getStoreState(data.storeId) } catch (e) {
-    console.warn(`[PiniaAPI] Error getting state for ${data.storeId}:`, e)
   }
   try { getters = getStoreGetters(data.storeId) } catch (e) {
-    console.warn(`[PiniaAPI] Error getting getters for ${data.storeId}:`, e)
   }
   try { actions = getStoreActions(data.storeId) } catch (e) {
-    console.warn(`[PiniaAPI] Error getting actions for ${data.storeId}:`, e)
   }
 
   window.postMessage({
@@ -195,7 +189,6 @@ function handleReplaceState(data: ReplaceStateMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
-    console.error('[PiniaAPI] PINIA_REPLACE_STATE error:', e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_REPLACE_STATE_RESULT',
@@ -218,7 +211,6 @@ function handlePatchGetters(data: PatchGettersMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
-    console.error('[PiniaAPI] PINIA_PATCH_GETTERS error:', e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_PATCH_GETTERS_RESULT',
@@ -311,7 +303,6 @@ function getAllStoresSummary(): Record<string, any> {
         lastUpdatedFormatted: formatTimestamp(now)
       }
     } catch (e) {
-      console.warn(`[PiniaAPI] Error processing store ${storeId}:`, e)
     }
   }
   return summary

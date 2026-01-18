@@ -150,7 +150,6 @@ function commitEdit() {
       isEditing.value = false
     }
   } catch (error) {
-    console.error('Invalid value:', error)
     // Не сохраняем невалидное значение, просто выходим из режима редактирования
     if (treeEditing) {
       treeEditing.stopEditing()

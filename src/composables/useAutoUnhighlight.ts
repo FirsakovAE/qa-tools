@@ -13,10 +13,8 @@ async function unhighlightElements() {
       type: 'UNHIGHLIGHT_ELEMENT'
     }).catch(error => {
       // Игнорируем ошибки - подсветка может быть уже снята или content script не готов
-      console.debug('Unhighlight message failed (expected on some pages):', error.message)
     })
   } catch (error) {
-    console.error('Failed to unhighlight elements:', error)
   }
 }
 

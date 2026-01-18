@@ -35,13 +35,11 @@ export function useElementInspector() {
             // #region agent log
             logDebug('useElementInspector.ts:startInspecting', 'Inspection started on page', { response });
             // #endregion
-            console.log('🔍 Element inspector started on page');
         }
         catch (error) {
             // #region agent log
             logDebug('useElementInspector.ts:startInspecting', 'Failed to start inspection', { error: String(error) });
             // #endregion
-            console.error('❌ Failed to start element inspection:', error);
             isInspecting.value = false;
         }
     };
@@ -58,13 +56,11 @@ export function useElementInspector() {
             // #region agent log
             logDebug('useElementInspector.ts:stopInspecting', 'Inspection stopped on page', {});
             // #endregion
-            console.log('🔍 Element inspector stopped');
         }
         catch (error) {
             // #region agent log
             logDebug('useElementInspector.ts:stopInspecting', 'Failed to stop inspection', { error: String(error) });
             // #endregion
-            console.error('❌ Failed to stop element inspection:', error);
         }
     };
     const inspectElement = (element) => {
@@ -87,7 +83,6 @@ export function useElementInspector() {
             // Сохраняем выбранный элемент в storage
             runtime.storage.set('vueInspectorInspecting', false);
             runtime.storage.set('vueInspectorSelectedElement', selectedElement.value);
-            console.log('✅ Element selected on page:', selectedElement.value);
             respond({ received: true });
         }
     };

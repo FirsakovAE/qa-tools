@@ -83,7 +83,6 @@ export function serializeProps(props: any, visited = new WeakSet()): any {
           JSON.stringify(value) // Проверяем, можно ли сериализовать
           serialized[key] = serializeProps(value, visited)
         } catch (e) {
-          console.debug('Skipping non-serializable value in object:', key, value, e)
           continue
         }
       } else {
@@ -92,7 +91,6 @@ export function serializeProps(props: any, visited = new WeakSet()): any {
     }
   } catch (e) {
     // Игнорируем ошибки сериализации
-    console.warn('Serialization error:', e)
  }
 
   return serialized

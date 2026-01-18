@@ -183,7 +183,6 @@ export class ExtensionAdapter implements RuntimeAdapter {
           try {
             handler(data.message, () => {})
           } catch (e) {
-            console.error('[ExtensionAdapter] Message handler error:', e)
           }
         }
       }

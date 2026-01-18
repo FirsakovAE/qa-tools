@@ -15,7 +15,6 @@ let currentAdapter: RuntimeAdapter | null = null
  */
 export function setRuntimeAdapter(adapter: RuntimeAdapter): void {
   if (currentAdapter) {
-    console.warn('[Runtime] Adapter already set, destroying previous')
     currentAdapter.destroy()
   }
   currentAdapter = adapter

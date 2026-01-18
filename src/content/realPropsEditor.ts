@@ -69,7 +69,6 @@ class RealPropsEditor {
         }
 
         this.components = findVueComponents()
-        console.log(`✅ Collected ${this.components.length} Vue components`)
     }
 
     private extractVueComponent(element: HTMLElement): ComponentInfo | null {
@@ -107,7 +106,6 @@ class RealPropsEditor {
                 element
             }
         } catch (error) {
-            console.error('Error extracting Vue component:', error)
             return null
         }
     }
@@ -203,12 +201,10 @@ class RealPropsEditor {
                     success = true
                 }
             } catch (error) {
-                console.warn(`Failed to update prop "${key}":`, error)
             }
         })
 
         if (success && !options?.silent) {
-            console.log(`✅ Props updated for ${component.name}:`, newProps)
 
             // Триггерим обновление UI
             if (component.component.$forceUpdate) {
@@ -238,7 +234,6 @@ class RealPropsEditor {
                     }
                 }
             } catch (e2) {
-                console.warn('Failed to extract props from Proxy')
             }
 
             return result
@@ -256,7 +251,6 @@ if (typeof window !== 'undefined') {
     window.addEventListener('load', () => {
         setTimeout(() => {
             window.__VUE_PROPS_EDITOR = new RealPropsEditor()
-            console.log('🔧 Vue Props Editor initialized')
         }, 1000)
     })
 }

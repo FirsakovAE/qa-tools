@@ -74,7 +74,6 @@ export function writePrimitive(target: any, key: string, value: any): boolean {
 export function patchState(storeId: string, path: string, value: any): boolean {
   const store = getStore(storeId)
   if (!store) {
-    console.error(`[PiniaAPI] Store "${storeId}" not found`)
     return false
  }
   
@@ -98,7 +97,6 @@ export function patchState(storeId: string, path: string, value: any): boolean {
     for (let i = 0; i < parts.length - 1; i++) {
       target = target[parts[i]]
       if (target === undefined) {
-        console.error(`[PiniaAPI] Path not found: ${parts.slice(0, i + 1).join('.')}`)
         return false
       }
       // Unwrap ref if encountered in path
@@ -112,7 +110,6 @@ export function patchState(storeId: string, path: string, value: any): boolean {
     
     // 🚫 computed getter — запрещено
     if (isComputedRef(finalTarget)) {
-      console.warn(`[PiniaAPI] Skip patch of getter "${path}"`)
       return false
     }
     
@@ -125,7 +122,6 @@ export function patchState(storeId: string, path: string, value: any): boolean {
     
     return true
   } catch (e) {
-    console.error(`[PiniaAPI] Error patching state:`, e)
     return false
   }
 }
@@ -136,7 +132,6 @@ export function patchState(storeId: string, path: string, value: any): boolean {
 export function replaceState(storeId: string, newState: Record<string, any>): boolean {
   const store = getStore(storeId)
   if (!store) {
-    console.error(`[PiniaAPI] Store "${storeId}" not found`)
     return false
   }
   
@@ -149,14 +144,12 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
           
           // Skip getters (computed refs)
           if (store[key] && isComputedRef(store[key])) {
-            console.warn(`[PiniaAPI] Skip computed getter "${key}"`)
             continue
           }
           
           // Skip defineProperty getters (options-store getters)
           const descriptor = Object.getOwnPropertyDescriptor(store, key)
           if (descriptor && typeof descriptor.get === 'function' && typeof descriptor.set !== 'function') {
-            console.warn(`[PiniaAPI] Skip defineProperty getter "${key}"`)
             continue
           }
           
@@ -194,7 +187,6 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
     }
     return true
   } catch (e) {
-    console.error(`[PiniaAPI] Error replacing state:`, e)
     return false
   }
 }
@@ -209,7 +201,6 @@ export function patchGetters(storeId: string, newGetters: Record<string, any>): 
 } {
   const store = getStore(storeId)
   if (!store) {
-    console.error(`[PiniaAPI] Store "${storeId}" not found`)
     return { success: false, updated: [] }
   }
 
@@ -260,7 +251,6 @@ export function patchGetters(storeId: string, newGetters: Record<string, any>): 
 
     return { success: true, updated }
   } catch (e) {
-    console.error(`[PiniaAPI] Error patching getters:`, e)
     return { success: false, updated }
   }
 }
