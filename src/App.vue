@@ -14,7 +14,7 @@ useAutoUnhighlight()
 
     <!-- КОНТЕНТ -->
     <ScrollArea class="relative z-10 flex-1 min-h-0">
-      <div class="p-2">
+      <div>
         <Navigation />
       </div>
     </ScrollArea>

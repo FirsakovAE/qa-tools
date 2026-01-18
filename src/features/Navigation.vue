@@ -153,7 +153,7 @@
   
   
   <template>
-    <div class="grid h-screen w-full pl-[56px]">
+    <div class="grid min-h-screen w-full pl-[56px]">
       <aside class="inset-y fixed left-0 z-20 flex h-full flex-col border-r">
         <!-- Main navigation -->
         <nav class="grid gap-1 p-2">
@@ -203,7 +203,7 @@
       </aside>
   
       <!-- Main content -->
-      <main class="flex-1 overflow-auto p-2">
+      <main class="flex-1 min-h-0 overflow-auto p-2">
         <!-- ===== Props tab ===== -->
         <div
           v-if="activeTab === 'props'"
@@ -216,6 +216,7 @@
           <div class="col-span-2">
             <ComponentDetails
               v-if="selectedNode"
+              :key="selectedNode.id || selectedNode.componentUid"
               :node="selectedNode"
               @back="selectedNode = null"
             />
@@ -248,6 +249,7 @@
           <div class="col-span-2 h-full min-h-0">
             <StoreDetails
               v-if="selectedStore"
+              :key="selectedStore.id"
               :store="selectedStore"
               @back="selectedStore = null"
             />

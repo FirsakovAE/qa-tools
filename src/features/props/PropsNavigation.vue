@@ -262,7 +262,8 @@ const handleRefresh = async () => {
         </div>
       </div>
 
-      <div class="relative border rounded h-[392px] overflow-auto" v-bind="containerProps">
+      <ScrollArea class="relative border rounded h-[392px]">
+        <div v-bind="containerProps">
         <div
           v-if="!isLoading && filteredTree.length === 0"
           class="absolute inset-0 flex items-center justify-center p-6 text-center text-muted-foreground z-10"
@@ -290,7 +291,8 @@ const handleRefresh = async () => {
             @select="onSelect"
           />
         </div>
-      </div>
+        </div>
+      </ScrollArea>
 
 
 
