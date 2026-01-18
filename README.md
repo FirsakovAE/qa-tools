@@ -1,5 +1,45 @@
-# Vue 3 + TypeScript + Vite
+# Vue Inspector - QA Tools
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue Inspector - инструмент для инспекции и отладки Vue.js приложений.
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## 🚀 Сборка проекта
+
+### Для расширения браузера
+```bash
+npm run build
+```
+Собранные файлы будут в папке `dist/`.
+
+### Для standalone версии (GitHub Pages)
+```bash
+npm run build:standalone
+```
+Автоматически создаст папку `docs/` с файлами для развертывания на GitHub Pages.
+
+## 📦 Установка
+
+### Как расширение браузера
+1. Соберите проект: `npm run build`
+2. Откройте `chrome://extensions/`
+3. Включите "Developer mode"
+4. Нажмите "Load unpacked" и выберите папку `dist/`
+
+### Standalone версия (закладка)
+1. Перейдите на https://firsakovae.github.io/qa-tools/
+2. Перетащите кнопку "📦 Vue Inspector" в панель закладок
+3. Откройте страницу с Vue приложением
+4. Кликните по закладке
+
+## 🛠️ Разработка
+
+```bash
+npm install
+npm run dev  # для разработки
+```
+
+## 📋 Возможности
+
+- Инспекция Vue компонентов
+- Просмотр состояния Pinia store
+- Редактирование props в реальном времени
+- Standalone режим для корпоративных сетей
