@@ -39,7 +39,7 @@
     return new Promise(function(resolve, reject) {
       var script = document.createElement('script');
       script.id = 'vue-inspector-injected-script';
-      script.src = baseURL + '/js/injected.js';
+      script.src = baseURL + '/../js/injected.js';
       script.onload = resolve;
       script.onerror = function() {
         reject(new Error('Failed to load injected.js'));
@@ -151,7 +151,7 @@
         iframeLoaded = true;
         // Используем injected_ui который работает через postMessage
         // Передаём standalone флаг через URL hash (избегаем CORS проблем)
-        iframe.src = baseURL + '/injected_ui/index.html#standalone=' + encodeURIComponent(baseURL);
+        iframe.src = baseURL + '/../injected_ui/index.html#standalone=' + encodeURIComponent(baseURL);
       }
       
       updateState();
