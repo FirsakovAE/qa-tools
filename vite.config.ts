@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
-import { copyFileSync, existsSync, mkdirSync, cpSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 export default defineConfig({
@@ -66,6 +66,18 @@ export default defineConfig({
             console.log(`✓ Copied ${folder}/ to docs/${folder}/`)
           }
         })
+
+        // Исправляем пути в injected_ui/index.html для docs/
+        const injectedUiHtmlPath = join(docsPath, 'injected_ui', 'index.html')
+        if (existsSync(injectedUiHtmlPath)) {
+          let content = readFileSync(injectedUiHtmlPath, 'utf-8')
+          // Заменяем абсолютные пути на относительные
+          content = content
+            .replace(/src="\/injected_ui\/index\.js"/g, 'src="./index.js"')
+            .replace(/href="\/assets\//g, 'href="../assets/')
+          writeFileSync(injectedUiHtmlPath, content, 'utf-8')
+          console.log('✓ Fixed paths in docs/injected_ui/index.html')
+        }
 
         console.log('✓ GitHub Pages docs/ folder is ready')
       }
