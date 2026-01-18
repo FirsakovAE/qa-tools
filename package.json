@@ -1,0 +1,42 @@
+{
+  "name": "my-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "serve:standalone": "npx serve dist -p 5174 --cors"
+  },
+  "dependencies": {
+    "@vueuse/core": "^14.1.0",
+    "autoprefixer": "^10.4.23",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "embla-carousel-vue": "^8.6.0",
+    "lodash-es": "^4.17.22",
+    "lucide-vue-next": "^0.562.0",
+    "postcss": "^8.5.6",
+    "prismjs": "^1.30.0",
+    "reka-ui": "^2.6.1",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss-animate": "^1.0.7",
+    "vaul-vue": "^0.4.1",
+    "vue": "^3.5.24"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/chrome": "^0.1.32",
+    "@types/node": "^24.10.4",
+    "@types/prismjs": "^1.26.5",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.8.1",
+    "tailwindcss": "^4.1.18",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4",
+    "vite-plugin-singlefile": "^2.3.0",
+    "vite-plugin-static-copy": "^3.1.4",
+    "vue-tsc": "^3.1.4"
+  }
+}

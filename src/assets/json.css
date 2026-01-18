@@ -1,0 +1,26 @@
+/* базовые стили JSON-просмотра */
+.json-viewer {
+    font-family: monospace;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    white-space: pre; /* сохранит отступы только из JSON, а не шаблона */
+    margin: 0;        /* убирает лишние внешние отступы */
+}
+
+/* Prism токены */
+.json-viewer .token.string { color: #10b981; }      /* green-500 */
+.json-viewer .token.number { color: #3b82f6; }      /* blue-500 */
+.json-viewer .token.boolean { color: #f59e0b; }     /* amber-500 */
+.json-viewer .token.null { color: #f43f5e; }        /* rose-500 */
+.json-viewer .token.key { color: #8b5cf6; }         /* violet-500 */
+.json-viewer .token.punctuation { color: #6b7280; } /* gray-500 */
+
+/* Optional: Dark theme overrides */
+.dark .json-viewer .token.string { color: #34d399; }      /* green-400 */
+.dark .json-viewer .token.number { color: #60a5fa; }      /* blue-400 */
+.dark .json-viewer .token.boolean { color: #fbbf24; }     /* amber-400 */
+.dark .json-viewer .token.null { color: #f87171; }        /* rose-400 */
+.dark .json-viewer .token.key { color: #a78bfa; }         /* violet-400 */
+.dark .json-viewer .token.punctuation { color: #9ca3af; } /* gray-400 */

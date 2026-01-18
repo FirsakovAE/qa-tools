@@ -1,0 +1,237 @@
+@import "tailwindcss";
+@config "../../tailwind.config.js";
+
+/* =========================
+   Base (sigma-ui + project)
+   ========================= */
+@layer base {
+  /* ---------------------------------
+     Button cursor fix (sigma-ui)
+     --------------------------------- */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* ---------------------------------
+     Root variables + base typography
+     --------------------------------- */
+  :root {
+    /* Layout / rendering (from Vite template) */
+    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* IMPORTANT: browser-native dark awareness only */
+    color-scheme: dark;
+
+    /* sigma-ui tokens */
+    --backdrop-filter-blur: 32px;
+    --radius: 0.5rem;
+
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --border: 240 5.9% 90%;
+    --input: 0 0% 100%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --ring: 240 5.9% 10%;
+  }
+
+  /* ---------------------------------
+     Dark theme (class-based)
+     --------------------------------- */
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 10% 3.9%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --ring: 240 4.9% 83.9%;
+  }
+
+  /* ---------------------------------
+     Full-height layout (CRITICAL)
+     --------------------------------- */
+  /* ONLY popup */
+  html[data-popup],
+  body[data-popup] {
+    width: 400px;
+    height: 600px;
+    overflow: hidden;
+  }
+
+  html[data-popup] {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body[data-popup] {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    font-size: 1rem !important;
+    line-height: 1.5;
+    @apply bg-background text-foreground antialiased;
+    pointer-events: auto;
+  }
+
+  /* injected ui */
+  html[data-injected],
+  body[data-injected],
+  #app {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+
+  #app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* 🔥 КЛЮЧ */
+  }
+
+  /* ---------------------------------
+     Borders (sigma-ui expectation)
+     --------------------------------- */
+  * {
+    @apply border-border;
+  }
+
+  /* ---------------------------------
+     Transitions (sigma-ui animations)
+     --------------------------------- */
+  .fade-slide-top-enter-active,
+  .fade-slide-top-leave-active {
+    transition:
+      opacity 0.3s ease,
+      transform 0.3s ease,
+      filter 0.3s ease;
+  }
+
+  .fade-slide-top-enter-from,
+  .fade-slide-top-leave-to {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(8px);
+  }
+
+  /* ---------------------------------
+     Fix unwanted highlights and focus
+     --------------------------------- */
+  /* Отключаем системный tap / focus highlight */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* browser focus control */
+  :focus,
+  :focus-visible {
+    outline: none;
+  }
+
+  /* Убиваем только tailwind ring */
+  [class*="ring"]:focus,
+  [class*="ring"]:focus-visible {
+    box-shadow: none !important;
+  }
+
+  /* Убрать белый active-state */
+  button,
+  [role="button"] {
+    background-color: transparent;
+  }
+
+  button:active,
+  [role="button"]:active {
+    background-color: transparent;
+  }
+
+}
+
+/* =========================
+   Utilities (project-specific)
+   ========================= */
+@layer utilities {
+  .custom-infuse {
+    background-image:
+            radial-gradient(circle at 0% 0%, rgba(140, 100, 255, 0.3) 0%, transparent 50%),
+            radial-gradient(circle at 100% 0%, rgba(50, 200, 255, 0.25) 0%, transparent 50%),
+            radial-gradient(circle at 20% 100%, rgba(255, 100, 255, 0.2) 0%, transparent 50%),
+            radial-gradient(circle at 80% 100%, rgba(100, 150, 200, 0.15) 0%, transparent 50%),
+            radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
+  }
+}
+
+/* ---------------------------------
+   Debug helpers
+   --------------------------------- */
+.debug-frame {
+  outline: 2px dashed hsl(var(--destructive));
+  outline-offset: -2px;
+}
+
+.debug-frame-soft {
+  box-shadow: inset 0 0 0 1px rgba(255, 0, 0, 0.4);
+}
+
+/* ================================
+   Force font sizes for popup
+   ================================ */
+html[data-popup] {
+  font-size: 16px !important;
+}
+
+html, body {
+  pointer-events: none;
+}
+
+body[data-popup],
+#app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  font-size: 1rem !important;
+  @apply bg-background text-foreground antialiased;
+  pointer-events: auto;
+}
+
+/* ================================
+   Drag state fixes
+   ================================ */
+.dragging * {
+  pointer-events: none !important;
+}

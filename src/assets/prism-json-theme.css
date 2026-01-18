@@ -1,0 +1,38 @@
+/* JSON key */
+.token.property {
+    color: #afafaf;
+
+}
+
+/* String values */
+.token.string {
+    color: rgb(220, 220, 220);
+}
+
+/* Numbers */
+.token.number {
+    color: rgb(220, 220, 220);
+}
+
+/* Booleans */
+.token.boolean {
+    color: rgb(220, 220, 220);
+}
+
+/* null */
+.token.null {
+    color: rgb(220, 220, 220);
+}
+
+/* Braces, commas, etc */
+.token.punctuation {
+    color: rgb(220, 220, 220);
+}
+
+.token.operator {
+    color: #c9d1d9;
+    background: none;
+    box-shadow: none;
+    border: none;
+    font-weight: normal;
+}

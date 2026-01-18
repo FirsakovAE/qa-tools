@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "strict": true,
+    "jsx": "preserve",
+    "sourceMap": true,
+    "outDir": "dist",
+    "noEmit": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["vite/client", "chrome", "node"],
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "exclude": ["src/injected_old.ts"]
+}
