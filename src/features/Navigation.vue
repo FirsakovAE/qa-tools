@@ -196,7 +196,7 @@
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right" :side-offset="5">
-                Options123
+                {{ optionsTab.title }}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
