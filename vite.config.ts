@@ -79,6 +79,78 @@ export default defineConfig({
           console.log('✓ Fixed paths in docs/injected_ui/index.html')
         }
 
+        // Исправляем baseURL логику в docs/index.html для GitHub Pages
+        const indexHtmlPath = join(docsPath, 'index.html')
+        if (existsSync(indexHtmlPath)) {
+          let content = readFileSync(indexHtmlPath, 'utf-8')
+
+          // Полностью заменяем блок script с правильной логикой
+          const oldScriptBlock = /<script>[\s\S]*?<\/script>/;
+          const newScriptBlock = `<script>
+    // Определяем базовый URL для GitHub Pages
+    function getBaseURL() {
+      const origin = window.location.origin; // https://firsakovae.github.io
+      const pathname = window.location.pathname; // /qa-tools/
+
+      // Если на GitHub Pages, добавляем имя репозитория
+      if (origin.includes('github.io')) {
+        // Извлекаем имя репозитория из пути
+        const pathParts = pathname.split('/').filter(p => p);
+        const repoName = pathParts[0]; // 'qa-tools'
+        return origin + '/' + repoName;
+      }
+
+      // Для локального сервера используем origin
+      return origin;
+    }
+
+    document.getElementById('baseUrl').value = getBaseURL();
+
+    function generateBookmarkletCode(baseURL) {
+      // Минимальный код для загрузки inspector
+      const code = \`
+        (function(){
+          if(window.__VUE_INSPECTOR_INITIALIZED__){
+            console.log('[Vue Inspector] Already loaded');
+            return;
+          }
+          var b='\${baseURL}';
+          window.__VUE_INSPECTOR_CONFIG__={baseURL:b};
+          window.__VUE_INSPECTOR_INITIALIZED__=true;
+          var s=document.createElement('script');
+          s.src=b+'/loader.js';
+          s.onerror=function(){alert('Vue Inspector: Failed to load from '+b)};
+          document.head.appendChild(s);
+        })();
+      \`.replace(/\\s+/g, ' ').trim();
+
+      return 'javascript:' + encodeURIComponent(code);
+    }
+
+    function updateBookmarklet() {
+      const baseURL = document.getElementById('baseUrl').value.replace(/\\/$/, '');
+      const bookmarklet = document.getElementById('bookmarklet');
+      bookmarklet.href = generateBookmarkletCode(baseURL);
+    }
+
+    // Инициализация
+    updateBookmarklet();
+
+    // Обновляем при изменении input
+    document.getElementById('baseUrl').addEventListener('input', updateBookmarklet);
+
+    // Предотвращаем переход по ссылке при клике
+    document.getElementById('bookmarklet').addEventListener('click', function(e) {
+      alert('Перетащите эту кнопку в панель закладок браузера,\\nзатем используйте на странице с Vue приложением.');
+      e.preventDefault();
+    });
+  </script>`;
+
+          content = content.replace(oldScriptBlock, newScriptBlock);
+          writeFileSync(indexHtmlPath, content, 'utf-8')
+          console.log('✓ Fixed baseURL logic in docs/index.html')
+        }
+
         console.log('✓ GitHub Pages docs/ folder is ready')
       }
     }
