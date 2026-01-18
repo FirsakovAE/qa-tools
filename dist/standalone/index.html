@@ -273,9 +273,24 @@
   </div>
 
   <script>
-    // Определяем текущий origin как базовый URL
-    const currentOrigin = window.location.origin;
-    document.getElementById('baseUrl').value = currentOrigin;
+    // Определяем базовый URL для GitHub Pages
+    function getBaseURL() {
+      const origin = window.location.origin; // https://firsakovae.github.io
+      const pathname = window.location.pathname; // /qa-tools/dist/standalone/index.html
+
+      // Если на GitHub Pages, добавляем имя репозитория
+      if (origin.includes('github.io')) {
+        // Извлекаем имя репозитория из пути
+        const pathParts = pathname.split('/').filter(p => p);
+        const repoName = pathParts[0]; // 'qa-tools'
+        return origin + '/' + repoName;
+      }
+
+      // Для локального сервера используем origin
+      return origin;
+    }
+
+    document.getElementById('baseUrl').value = getBaseURL();
     
     function generateBookmarkletCode(baseURL) {
       // Минимальный код для загрузки inspector
