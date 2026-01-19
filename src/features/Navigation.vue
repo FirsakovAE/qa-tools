@@ -23,51 +23,134 @@
   import { usePiniaStores } from '@/features/stores/usePiniaStores'
   import type { TreeNodeModel } from '@/types/tree'
   
-  // Pinia stores composable - НЕ вызывает load() автоматически
-  const { storesData, loading: storesLoading, error: storesError, load: loadStoresSummary } = usePiniaStores()
+  /* ============================================================================
+   * Pinia
+   * ============================================================================
+   */
   
-  // Feature flags - получаем из content script
-  interface FeatureFlags {
+  const {
+    storesData,
+    loading: storesLoading,
+    error: storesError,
+    load: loadStoresSummary,
+  } = usePiniaStores()
+  
+  /* ============================================================================
+   * Feature Flags — РАЗДЕЛЕНИЕ ОТВЕТСТВЕННОСТИ
+   * ============================================================================
+   */
+  
+  /**
+   * Флаги, которые реально детектируются окружением
+   * (ТОЛЬКО content script)
+   */
+  interface RemoteFeatureFlags {
     hasVue: boolean
     hasPinia: boolean
     vueVersion: 2 | 3 | null
   }
   
-  const featureFlags = ref<FeatureFlags>({
+  /**
+   * Ручные UI-фичи (dev / prod toggles)
+   * НЕ ПРИХОДЯТ извне
+   */
+  interface UIFeatureFlags {
+    hasNetwork: boolean
+  }
+  
+  /**
+   * Итоговые флаги UI
+   */
+  type FeatureFlags = RemoteFeatureFlags & UIFeatureFlags
+  
+  /* ============================================================================
+   * Remote flags (content script)
+   * ============================================================================
+   */
+  
+  const DEFAULT_REMOTE_FLAGS: RemoteFeatureFlags = {
     hasVue: false,
     hasPinia: false,
-    vueVersion: null
+    vueVersion: null,
+  }
+  
+  const remoteFeatureFlags = ref<RemoteFeatureFlags>({
+    ...DEFAULT_REMOTE_FLAGS,
   })
   
-  // Флаги состояния
-  let storesLoaded = false
-  let flagsReceived = false
+  function normalizeRemoteFlags(
+    flags: Partial<RemoteFeatureFlags>,
+  ): RemoteFeatureFlags {
+    return {
+      ...DEFAULT_REMOTE_FLAGS,
+      ...flags,
+    }
+  }
   
-  // Обработчик сообщений с флагами - удаляется после первого получения
+  /* ============================================================================
+   * UI feature flags (ручные)
+   * ============================================================================
+   */
+  
+  const UI_FEATURE_FLAGS: UIFeatureFlags = {
+    hasNetwork: false, // 👈 dev ON, prod OFF
+  }
+  
+  /**
+   * Локальные QA / debug overrides
+   */
+  const localFeatureOverrides = ref<Partial<UIFeatureFlags>>({
+    // hasNetwork: false,
+  })
+  
+  /* ============================================================================
+   * Финальные флаги UI
+   * ============================================================================
+   */
+  
+  const featureFlags = computed<FeatureFlags>(() => ({
+    ...remoteFeatureFlags.value,   // runtime
+    ...UI_FEATURE_FLAGS,           // ручные
+    ...localFeatureOverrides.value // QA
+  }))
+  
+  /* ============================================================================
+   * Flags lifecycle
+   * ============================================================================
+   */
+  
+  let flagsReceived = false
+  let storesLoaded = false
+  
   function handleFlagsMessage(event: MessageEvent) {
     if (flagsReceived) return
-    
-    let flags: FeatureFlags | null = null
-    
-    // Новый формат: { __VUE_INSPECTOR__: true, broadcast: true, message: { type, flags } }
-    if (event.data?.__VUE_INSPECTOR__ && event.data.broadcast && event.data.message?.type === 'VUE_INSPECTOR_FEATURE_FLAGS') {
-      flags = event.data.message.flags
+  
+    let incomingFlags: Partial<RemoteFeatureFlags> | null = null
+  
+    // Новый формат
+    if (
+      event.data?.__VUE_INSPECTOR__ &&
+      event.data.broadcast &&
+      event.data.message?.type === 'VUE_INSPECTOR_FEATURE_FLAGS'
+    ) {
+      incomingFlags = event.data.message.flags
     }
-    // Старый формат для совместимости: { type, flags }
-    else if (event.data?.type === 'VUE_INSPECTOR_FEATURE_FLAGS' && event.data.flags) {
-      flags = event.data.flags
+    // Старый формат
+    else if (
+      event.data?.type === 'VUE_INSPECTOR_FEATURE_FLAGS' &&
+      event.data.flags
+    ) {
+      incomingFlags = event.data.flags
     }
-    
-    if (!flags) return
-    
+  
+    if (!incomingFlags) return
+  
     flagsReceived = true
-    featureFlags.value = flags
-
-    // Удаляем listener - флаги получены, больше не нужен
+    remoteFeatureFlags.value = normalizeRemoteFlags(incomingFlags)
+  
     window.removeEventListener('message', handleFlagsMessage)
-    
-    // Загружаем сторы ТОЛЬКО если hasPinia = true
-    if (flags.hasPinia && !storesLoaded) {
+  
+    if (remoteFeatureFlags.value.hasPinia && !storesLoaded) {
       storesLoaded = true
       loadStoresSummary()
     }
@@ -75,23 +158,27 @@
   
   onMounted(() => {
     window.addEventListener('message', handleFlagsMessage)
-    
-    // Запрашиваем флаги у parent window (content script)
-    // Используем новый формат с __VUE_INSPECTOR__ префиксом
-    window.parent?.postMessage({
-      __VUE_INSPECTOR__: true,
-      message: { type: 'VUE_INSPECTOR_GET_FLAGS' }
-    }, '*')
+  
+    window.parent?.postMessage(
+      {
+        __VUE_INSPECTOR__: true,
+        message: { type: 'VUE_INSPECTOR_GET_FLAGS' },
+      },
+      '*',
+    )
   })
   
   onUnmounted(() => {
-    // Удаляем только если ещё не удалили ранее
     if (!flagsReceived) {
       window.removeEventListener('message', handleFlagsMessage)
     }
   })
   
-  // Все возможные вкладки (порядок важен!)
+  /* ============================================================================
+   * Tabs
+   * ============================================================================
+   */
+  
   const allTabs = [
     {
       id: 'props',
@@ -109,17 +196,18 @@
       id: 'network',
       title: 'Network',
       icon: GlobeIcon,
-      requiresFlag: null, // Всегда показываем
+      requiresFlag: 'hasNetwork' as const, // 👈 ТОЛЬКО UI-флаг
     },
   ] as const
   
-  // Фильтруем вкладки на основе флагов
-  const tabs = computed(() => {
-    return allTabs.filter(tab => {
-      if (tab.requiresFlag === null) return true
-      return featureFlags.value[tab.requiresFlag]
-    })
-  })
+  const tabs = computed(() =>
+    allTabs.filter(tab => featureFlags.value[tab.requiresFlag]),
+  )
+  
+  /* ============================================================================
+   * Navigation state
+   * ============================================================================
+   */
   
   const optionsTab = {
     id: 'options',
@@ -129,31 +217,46 @@
   
   type TabId = 'props' | 'stores' | 'network' | 'options'
   
-  const activeTab = ref<TabId>('network') // По умолчанию network (всегда доступна)
+  const activeTab = ref<TabId>('network')
+  
   const selectedNode = ref<TreeNodeModel | null>(null)
   const selectedStore = ref<any | null>(null)
-
-  // Следим за изменением доступных вкладок и переключаемся на первую доступную
-  watch(tabs, (newTabs) => {
-    // Если текущая вкладка стала недоступна - переключаемся на первую доступную
-    const currentTabAvailable = newTabs.some(t => t.id === activeTab.value) || activeTab.value === 'options'
-    if (!currentTabAvailable && newTabs.length > 0) {
-      activeTab.value = newTabs[0].id as TabId
-    }
-    // Если есть доступные вкладки и мы на network/options - переключаемся на первую (props/stores)
-    if (newTabs.length > 0 && (activeTab.value === 'network' || activeTab.value === 'options')) {
-      const firstFeatureTab = newTabs.find(t => t.id === 'props' || t.id === 'stores')
-      if (firstFeatureTab) {
-        activeTab.value = firstFeatureTab.id as TabId
+  
+  /* ============================================================================
+   * Tabs watcher
+   * ============================================================================
+   */
+  
+  watch(
+    tabs,
+    newTabs => {
+      const currentAvailable =
+        newTabs.some(t => t.id === activeTab.value) ||
+        activeTab.value === 'options'
+  
+      if (!currentAvailable && newTabs.length > 0) {
+        activeTab.value = newTabs[0].id as TabId
       }
-    }
-  }, { immediate: true })
+  
+      if (
+        newTabs.length > 0 &&
+        (activeTab.value === 'network' || activeTab.value === 'options')
+      ) {
+        const firstMainTab = newTabs.find(
+          t => t.id === 'props' || t.id === 'stores',
+        )
+        if (firstMainTab) {
+          activeTab.value = firstMainTab.id as TabId
+        }
+      }
+    },
+    { immediate: true },
+  )
   </script>
   
   
-  
   <template>
-    <div class="grid min-h-screen w-full pl-[56px]">
+    <div class="grid h-full w-full pl-[56px] overflow-hidden">
       <aside class="inset-y fixed left-0 z-20 flex h-full flex-col border-r">
         <!-- Main navigation -->
         <nav class="grid gap-1 p-2">
@@ -203,17 +306,17 @@
       </aside>
   
       <!-- Main content -->
-      <main class="flex-1 min-h-0 overflow-auto p-2">
+      <main class="h-full min-h-0 overflow-hidden p-2">
         <!-- ===== Props tab ===== -->
         <div
           v-if="activeTab === 'props'"
-          class="grid h-full grid-cols-3 gap-4"
+          class="grid h-full grid-cols-3 gap-4 overflow-hidden"
         >
-          <div class="col-span-1">
+          <div class="col-span-1 h-full min-h-0 overflow-hidden">
             <PropsNavigation @select="node => selectedNode = node" />
           </div>
 
-          <div class="col-span-2">
+          <div class="col-span-2 h-full min-h-0 overflow-hidden">
             <ComponentDetails
               v-if="selectedNode"
               :key="selectedNode.id || selectedNode.componentUid"
@@ -232,10 +335,10 @@
   
         <div
           v-else-if="activeTab === 'stores'"
-          class="grid h-full grid-cols-3 gap-4"
+          class="grid h-full grid-cols-3 gap-4 overflow-hidden"
         >
           <!-- LEFT: list -->
-          <div class="col-span-1 h-full min-h-0">
+          <div class="col-span-1 h-full min-h-0 overflow-hidden">
             <StoreNavigation
               :stores-data="storesData"
               :is-loading="storesLoading"
@@ -246,7 +349,7 @@
           </div>
 
           <!-- RIGHT: details -->
-          <div class="col-span-2 h-full min-h-0">
+          <div class="col-span-2 h-full min-h-0 overflow-hidden">
             <StoreDetails
               v-if="selectedStore"
               :key="selectedStore.id"
@@ -269,12 +372,12 @@
   
         <div
           v-else-if="activeTab === 'options'"
-          class="grid h-full grid-cols-3 gap-4"
+          class="grid h-full grid-cols-3 gap-4 overflow-hidden"
         >
-          <div class="col-span-1 h-full overflow-auto">
+          <div class="col-span-1 h-full min-h-0 overflow-auto">
             <OptionsTab />
           </div>
-          <div class="col-span-2 h-full">
+          <div class="col-span-2 h-full min-h-0">
             <!-- Reserved for future options details -->
           </div>
         </div>

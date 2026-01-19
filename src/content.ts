@@ -1221,6 +1221,7 @@ function injectInspectorUI() {
     height: 0px;
     overflow: hidden;
     pointer-events: none;
+    overscroll-behavior: contain;
   `
 
   // Создаем iframe БЕЗ src - загрузим позже при открытии

@@ -43,14 +43,19 @@ export function writeRefValue(ref: any, value: any): boolean {
  */
 export function writeReactiveObject(obj: any, value: any): boolean {
   if (isVueReactive(obj)) {
-    // Обработка реактивных объектов
     if (Array.isArray(obj) && Array.isArray(value)) {
       obj.length = 0
       obj.push(...value)
       return true
     } else if (!Array.isArray(obj) && typeof value === 'object' && value !== null) {
+      const keysToPreserve = Object.keys(obj).filter(k => typeof obj[k] === 'function')
+      const preservedFunctions: Record<string, any> = {}
+      for (const k of keysToPreserve) {
+        preservedFunctions[k] = obj[k]
+      }
       Object.keys(obj).forEach(k => delete obj[k])
       Object.assign(obj, value)
+      Object.assign(obj, preservedFunctions)
       return true
     }
   }
@@ -162,9 +167,15 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
           if (isVueRef(store[key])) {
             store[key].value = nextValue
           } else if (store[key] && typeof store[key] === 'object' && !Array.isArray(store[key])) {
-            // Object - clear and assign
-            Object.keys(store[key]).forEach(k => delete store[key][k])
-            Object.assign(store[key], nextValue)
+            const existingObj = store[key]
+            const keysToPreserve = Object.keys(existingObj).filter(k => typeof existingObj[k] === 'function')
+            const preservedFunctions: Record<string, any> = {}
+            for (const k of keysToPreserve) {
+              preservedFunctions[k] = existingObj[k]
+            }
+            Object.keys(existingObj).forEach(k => delete existingObj[k])
+            Object.assign(existingObj, nextValue)
+            Object.assign(existingObj, preservedFunctions)
           } else {
             // For primitives - try $state first, then store directly
             if (store.$state && Object.prototype.hasOwnProperty.call(store.$state, key)) {
@@ -238,8 +249,14 @@ export function patchGetters(storeId: string, newGetters: Record<string, any>): 
             updated.push(key)
             continue
           } else if (!Array.isArray(storeValue) && typeof newValue === 'object') {
+            const keysToPreserve = Object.keys(storeValue).filter(k => typeof storeValue[k] === 'function')
+            const preservedFunctions: Record<string, any> = {}
+            for (const k of keysToPreserve) {
+              preservedFunctions[k] = storeValue[k]
+            }
             Object.keys(storeValue).forEach(k => delete storeValue[k])
             Object.assign(storeValue, newValue)
+            Object.assign(storeValue, preservedFunctions)
             updated.push(key)
             continue
           }

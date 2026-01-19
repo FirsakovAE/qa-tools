@@ -324,32 +324,32 @@
   
   <template>
     <div class="h-full flex flex-col">
-      <div class="flex justify-between items-start p-1">
-      <div class="flex flex-col gap-0.5">
-        <div class="flex items-center gap-3">
-          <h3 class="text-lg font-semibold mb-2">
-            Available Stores ({{ storesCount }})
-          </h3>
-          <Button size="sm" variant="ghost" :disabled="isLoading" @click="handleRefresh">
-            <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': isLoading }" />
-          </Button>
+      <div class="shrink-0 flex justify-between items-start p-1">
+        <div class="flex flex-col gap-0.5">
+          <div class="flex items-center gap-3">
+            <h3 class="text-lg font-semibold mb-2">
+              Available Stores ({{ storesCount }})
+            </h3>
+            <Button size="sm" variant="ghost" :disabled="isLoading" @click="handleRefresh">
+              <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': isLoading }" />
+            </Button>
+          </div>
+          <span class="text-sm text-muted-foreground">
+            Updated: {{ isLoading ? 'Loading...' : lastUpdated || 'Just now' }}
+          </span>
         </div>
-        <span class="text-sm text-muted-foreground">
-          Updated: {{ isLoading ? 'Loading...' : lastUpdated || 'Just now' }}
-        </span>
-      </div>
-    </div>
-  
-    <div class="mb-2">
-      <div class="relative">
-        <Input v-model="popupState.storesSearchTerm" placeholder="Search stores..." class="pl-10" />
-        <SearchIcon class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
       </div>
   
-      <div v-if="activeSearchTypes.length" class="flex items-center gap-1 flex-wrap mt-2">
-        <Badge v-for="item in activeSearchTypes" :key="item" variant="secondary">{{ item }}</Badge>
+      <div class="shrink-0 mb-2">
+        <div class="relative">
+          <Input v-model="popupState.storesSearchTerm" placeholder="Search stores..." class="pl-10" />
+          <SearchIcon class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        </div>
+  
+        <div v-if="activeSearchTypes.length" class="flex items-center gap-1 flex-wrap mt-2">
+          <Badge v-for="item in activeSearchTypes" :key="item" variant="secondary">{{ item }}</Badge>
+        </div>
       </div>
-    </div>
   
   
     <div class="relative flex-1 min-h-0 border rounded overflow-hidden">

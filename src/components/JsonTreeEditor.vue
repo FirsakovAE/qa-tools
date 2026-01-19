@@ -25,10 +25,26 @@ const parsedValue = computed(() => {
 
 const copied = ref(false)
 
-async function copyToClipboard() {
-  await navigator.clipboard.writeText(props.modelValue)
-  copied.value = true
-  setTimeout(() => copied.value = false, 1500)
+function copyToClipboard() {
+  try {
+    const textArea = document.createElement('textarea')
+    textArea.value = props.modelValue
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-999999px'
+    textArea.style.top = '-999999px'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    const success = document.execCommand('copy')
+    document.body.removeChild(textArea)
+
+    if (success) {
+      copied.value = true
+      setTimeout(() => copied.value = false, 1500)
+    }
+  } catch {
+    // Silently fail if copy doesn't work
+  }
 }
 
 function emitStringified(newValue: any) {
