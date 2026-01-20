@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted, readonly, markRaw } from 'vue'
-import { toast, CustomUpdateNotification, type UpdateNotificationData } from '@/components/ui/Toaster'
+import { toast, CustomSimple } from '@/components/ui/Toaster'
 import { useRuntime } from '@/runtime'
 
 interface GitHubRelease {
@@ -124,24 +124,16 @@ export function useUpdateChecker() {
   const showUpdateToast = (remoteVersion: string) => {
     try {
       const id = toast.custom(
-        markRaw(CustomUpdateNotification),
+        markRaw(CustomSimple),
         {
           duration: 10000,
           componentProps: {
-            data: {
-              id: '',
-              title: 'Update Available',
-              description: 'Download new version',
-              version: remoteVersion,
-              actionText: 'Dismiss',
-              onDownload: () => {
-                toast.dismiss(id)
-                downloadUpdate()
-              },
-              onDismiss: () => {
-                toast.dismiss(id)
-                runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
-              }
+            title: 'Update Available',
+            description: `Download new version ${remoteVersion}`,
+            actionText: 'Download',
+            onAction: () => {
+              toast.dismiss(id)
+              downloadUpdate()
             }
           },
           onAutoClose: () => {
