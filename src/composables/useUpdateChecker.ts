@@ -1,6 +1,5 @@
-import { ref, onMounted, onUnmounted, readonly, createApp } from 'vue'
-import { toast } from '@/components/ui/Toaster'
-import UpdateNotification from '@/features/update-notification/UpdateNotification.vue'
+import { ref, onMounted, onUnmounted, readonly, markRaw } from 'vue'
+import { toast, CustomUpdateNotification, type UpdateNotificationData } from '@/components/ui/Toaster'
 import { useRuntime } from '@/runtime'
 
 interface GitHubRelease {
@@ -131,133 +130,46 @@ export function useUpdateChecker() {
   }
 
   const showUpdateToast = (remoteVersion: string) => {
-
-    // Проверяем, можем ли использовать vue-sonner (работает в popup)
-    const isInPopup = window.location.href.includes('popup.html')
-
-    if (isInPopup) {
-      // Используем vue-sonner для popup
-      try {
-        const toastId = toast('Update is available', {
-          description: `Download new version ${remoteVersion}`,
-          action: {
-            label: 'Download',
-            onClick: () => {
-              downloadUpdate()
-            }
-          },
-          duration: Infinity,
-          onDismiss: () => {
-            runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
-          }
-        })
-        return toastId
-      } catch (error) {
-        console.error('Failed to create vue-sonner toast:', error)
-      }
-    } else {
-      // Используем нативные браузерные уведомления для injected UI
-      try {
-        if ('Notification' in window) {
-          if (Notification.permission === 'granted') {
-            const notification = new Notification('Vue Inspector - Update Available', {
-              body: `Download new version ${remoteVersion}`,
-              icon: chrome.runtime.getURL('icons/icon128.png'),
-              requireInteraction: true
-            })
-
-            notification.onclick = () => {
-              console.log('Notification clicked, downloading update')
-              downloadUpdate()
-              notification.close()
-            }
-
-            notification.onclose = () => {
-              console.log('Notification closed by user')
-              runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
-            }
-
-            console.log('Native notification created')
-            return 'native-notification'
-          } else if (Notification.permission !== 'denied') {
-            Notification.requestPermission().then(permission => {
-              if (permission === 'granted') {
-                // Рекурсивно вызываем после получения разрешения
-                showUpdateToast(remoteVersion)
-              }
-            })
-          }
-        }
-
-        // Fallback: создаем простой DOM элемент
-        console.log('Using DOM fallback notification')
-        createDOMNotification(remoteVersion)
-        return 'dom-notification'
-      } catch (error) {
-        console.error('Failed to create native notification:', error)
-      }
-    }
-
-    return null
-  }
-
-  const createDOMNotification = (remoteVersion: string) => {
     try {
-      // Создаем контейнер с очень высоким z-index, выходящим за пределы stacking context
-      const container = document.createElement('div')
-      container.id = `update-notification-${Date.now()}`
-      container.style.cssText = `
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        pointer-events: none !important;
-        z-index: 2147483647 !important;
-      `
-      document.body.appendChild(container)
+      const toastData = ref<UpdateNotificationData>({
+        id: '',
+        title: 'Update Available',
+        description: 'Download new version',
+        version: remoteVersion,
+        actionText: 'Dismiss',
+        onDownload: () => {},
+        onDismiss: () => {},
+      })
 
-      // Создаем внутренний контейнер для уведомления
-      const notificationWrapper = document.createElement('div')
-      notificationWrapper.style.cssText = `
-        position: absolute;
-        bottom: 20px;
-        right: -320px;
-        transition: right 0.3s ease-out;
-        pointer-events: auto;
-        z-index: 1;
-      `
-      container.appendChild(notificationWrapper)
-
-      // Создаем Vue приложение с компонентом UpdateNotification
-      const app = createApp(UpdateNotification, {
-        remoteVersion,
-        onDownload: () => {
-          downloadUpdate()
-          app.unmount()
-          container.remove()
+      toastData.value.id = toast.custom(markRaw(CustomUpdateNotification), {
+        componentProps: {
+          data: toastData.value,
         },
+        duration: Infinity,
         onDismiss: () => {
+          // Сохраняем время когда пользователь закрыл тостер
           runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
-          app.unmount()
-          container.remove()
         }
       })
 
-      // Монтируем приложение
-      app.mount(notificationWrapper)
+      // Обновляем обработчики после создания toast
+      toastData.value.onDownload = () => {
+        toast.dismiss(toastData.value.id)
+        downloadUpdate()
+      }
 
-      // Анимируем появление
-      setTimeout(() => {
-        notificationWrapper.style.right = '20px'
-      }, 100)
+      toastData.value.onDismiss = () => {
+        toast.dismiss(toastData.value.id)
+        runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+      }
 
-      console.log('Vue notification created and displayed with high z-index')
-
+      return toastData.value.id
     } catch (error) {
-      console.error('Failed to create Vue notification:', error)
+      console.error('Failed to create update toast:', error)
+      return null
     }
   }
+
 
   const checkForUpdates = async (showToast = true, force = false) => {
     if (isChecking.value) return
