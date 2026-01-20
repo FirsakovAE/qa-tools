@@ -19,7 +19,7 @@
     </script>
     
     <template>
-      <div class="bg-black/80 backdrop-blur-sm toast-gradient-bg flex items-end justify-between w-fit max-w-md relative rounded-lg border border-white/20 shadow-lg p-4">
+      <div class="toast-solid-bg flex items-end justify-between w-fit max-w-md relative rounded-lg border border-white/30 shadow-lg p-4">
         <div class="flex flex-col flex-1 min-w-0 relative z-10">
           <div class="text-sm font-semibold text-white">
             {{ props.data.title }}
