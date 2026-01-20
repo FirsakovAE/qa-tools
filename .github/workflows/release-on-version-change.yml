@@ -1,0 +1,72 @@
+name: Auto release on manifest version change
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'manifest.json'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read version from manifest.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if release already exists
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = `v${{ steps.version.outputs.version }}`
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag
+              })
+              core.setOutput('exists', 'true')
+            } catch {
+              core.setOutput('exists', 'false')
+            }
+
+      - name: Stop if release exists
+        if: steps.check.outputs.exists == 'true'
+        run: echo "Release already exists, skipping."
+
+      - name: Build project
+        if: steps.check.outputs.exists == 'false'
+        run: npm run build
+
+      - name: Archive dist
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          cd dist
+          zip -r ../qa-tools.zip .
+          cd ..
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          files: qa-tools.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
