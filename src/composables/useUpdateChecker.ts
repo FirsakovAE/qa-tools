@@ -39,7 +39,8 @@ export function useUpdateChecker() {
 
   const getLocalVersion = async (): Promise<string> => {
     try {
-      return runtime.getManifest().version
+      const manifest = runtime.getManifest()
+      return manifest?.version || '0.0.0'
     } catch (error) {
       console.error('Failed to read local manifest:', error)
       return '0.0.0'
