@@ -25,8 +25,8 @@ const emit = defineEmits<Emits>();
 </script>
 
 <template>
-  <div class="flex items-end justify-between bg-popover rounded-lg border border-border p-4 shadow-lg max-w-sm">
-    <div class="flex flex-col flex-1">
+  <div class="flex items-end justify-between bg-popover rounded-lg border border-border p-4 shadow-lg w-fit max-w-md">
+    <div class="flex flex-col flex-1 min-w-0">
       <div class="text-sm font-semibold text-popover-foreground">
         {{ props.data.title }}
       </div>
@@ -34,7 +34,7 @@ const emit = defineEmits<Emits>();
         {{ props.data.description }} {{ props.data.version }}
       </div>
     </div>
-    <div class="flex gap-2 ml-4">
+    <div class="flex gap-2 ml-4 flex-shrink-0">
       <Button
         size="xs"
         @click="emit('download')"

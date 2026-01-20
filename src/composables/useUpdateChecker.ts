@@ -154,11 +154,13 @@ export function useUpdateChecker() {
 
       // Обновляем обработчики после создания toast
       toastData.value.onDownload = () => {
+        console.log('Download clicked, dismissing toast with ID:', toastData.value.id)
         toast.dismiss(toastData.value.id)
         downloadUpdate()
       }
 
       toastData.value.onDismiss = () => {
+        console.log('Dismiss clicked, dismissing toast with ID:', toastData.value.id)
         toast.dismiss(toastData.value.id)
         runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
       }
