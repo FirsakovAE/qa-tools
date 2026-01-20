@@ -192,16 +192,7 @@
    Utilities (project-specific)
    ========================= */
 @layer utilities {
-  .app-surface {
-    position: relative;
-    overflow: hidden;
-  }
-
   .custom-infuse {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-
     background-image: var(--infuse-gradient);
   }
 
@@ -209,15 +200,11 @@
     position: relative;
     isolation: isolate;
 
-    /* solid base to block bleed-through */
-    background-color: hsl(var(--background) / 0.75);
+    background-color: transparent;
+    background-image: none;
 
-    /* MAGIC - blur real background underneath */
     backdrop-filter: blur(var(--backdrop-filter-blur));
-
-    border: 1px solid hsl(var(--border) / 0.6);
-    box-shadow:
-      0 10px 30px rgba(0, 0, 0, 0.25);
+    border: 1px solid hsl(var(--border) / 0.5);
   }
 }
 

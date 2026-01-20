@@ -10,7 +10,7 @@
   </script>
   
   <template>
-    <div class="w-full h-full flex flex-col bg-background relative app-surface">
+    <div class="w-full h-full flex flex-col bg-background relative">
       <Infusion class="custom-infuse" src="" />
   
       <div class="relative z-10 flex-1 min-h-0 overflow-hidden">
