@@ -50,7 +50,18 @@ export function useUpdateChecker() {
     try {
       // Используем GitHub API для получения информации о последнем релизе
       const response = await fetch('https://api.github.com/repos/FirsakovAE/qa-tools/releases/latest')
+
+      if (!response.ok) {
+        console.warn(`GitHub API returned ${response.status}: ${response.statusText}`)
+        return '0.0.0'
+      }
+
       const release: GitHubRelease = await response.json()
+
+      if (!release || !release.tag_name) {
+        console.warn('GitHub API response does not contain tag_name:', release)
+        return '0.0.0'
+      }
 
       // Убираем 'v' префикс если он есть (например, 'v2.0.0' -> '2.0.0')
       return release.tag_name.replace(/^v/, '')

@@ -219,3 +219,21 @@ git pull origin main
 ---
 
 **Приятной работы с Vue Inspector! 🎉**
+
+
+🔄 Быстрый релиз (одной командой)
+
+Если хочешь минимальный набор:
+
+npm version 4.5.0 --no-git-tag-version
+git add manifest.json
+git commit -m "release: 4.5.0"
+git push
+
+🧪 Проверка, что релиз реально вышел
+gh release list
+
+
+или в браузере:
+
+https://github.com/FirsakovAE/qa-tools/releases
