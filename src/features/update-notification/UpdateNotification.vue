@@ -76,38 +76,32 @@ onUnmounted(() => {
 <template>
   <div
     ref="container"
-    class="transition-all duration-300 ease-out font-sans"
+    class="bg-popover border border-border rounded-lg shadow-lg p-4 max-w-xs transition-all duration-300 ease-out"
     :style="{
       position: 'relative',
       right: isVisible ? '0' : '-320px'
     }"
+    @mouseenter="handleMouseEnter"
+    @mouseleave="handleMouseLeave"
   >
-    <div
-      class="bg-slate-800 text-white p-4 rounded-lg shadow-xl max-w-xs cursor-default border-l-4 border-blue-500"
-      @mouseenter="handleMouseEnter"
-      @mouseleave="handleMouseLeave"
-    >
-      <div class="font-semibold mb-1">Update Available</div>
-      <div class="text-sm mb-3 opacity-90">
-        Download new version {{ remoteVersion }}
-      </div>
-      <div class="flex gap-2">
-        <Button
-          size="sm"
-          class="bg-blue-500 hover:bg-blue-600 text-white transition-colors"
-          @click="handleDownload"
-        >
-          Download
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          class="bg-slate-600 hover:bg-slate-500 text-white transition-colors"
-          @click="handleDismiss"
-        >
-          Dismiss
-        </Button>
-      </div>
+    <div class="font-semibold text-foreground mb-1">Update Available</div>
+    <div class="text-sm text-muted-foreground mb-3">
+      Download new version {{ remoteVersion }}
+    </div>
+    <div class="flex gap-2">
+      <Button
+        size="sm"
+        @click="handleDownload"
+      >
+        Download
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        @click="handleDismiss"
+      >
+        Dismiss
+      </Button>
     </div>
   </div>
 </template>
