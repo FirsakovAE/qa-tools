@@ -14,11 +14,13 @@
       <div class="relative z-10 flex-1 min-h-0 overflow-hidden">
         <Navigation />
       </div>
-      <Toaster
-        position="bottom-right"
-        :toast-options="{
-          duration: 5000
-        }"
-      />
     </div>
+
+    <!-- Toaster как overlay вне layout -->
+    <Toaster
+      position="bottom-right"
+      :toast-options="{
+        duration: 5000
+      }"
+    />
   </template>
