@@ -203,10 +203,31 @@ export function useUpdateChecker() {
 
   const createDOMNotification = (remoteVersion: string) => {
     try {
-      // Создаем контейнер для Vue приложения
+      // Создаем контейнер с очень высоким z-index, выходящим за пределы stacking context
       const container = document.createElement('div')
       container.id = `update-notification-${Date.now()}`
+      container.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        pointer-events: none !important;
+        z-index: 2147483647 !important;
+      `
       document.body.appendChild(container)
+
+      // Создаем внутренний контейнер для уведомления
+      const notificationWrapper = document.createElement('div')
+      notificationWrapper.style.cssText = `
+        position: absolute;
+        bottom: 20px;
+        right: -320px;
+        transition: right 0.3s ease-out;
+        pointer-events: auto;
+        z-index: 1;
+      `
+      container.appendChild(notificationWrapper)
 
       // Создаем Vue приложение с компонентом UpdateNotification
       const app = createApp(UpdateNotification, {
@@ -224,9 +245,14 @@ export function useUpdateChecker() {
       })
 
       // Монтируем приложение
-      app.mount(container)
+      app.mount(notificationWrapper)
 
-      console.log('Vue notification created and displayed')
+      // Анимируем появление
+      setTimeout(() => {
+        notificationWrapper.style.right = '20px'
+      }, 100)
+
+      console.log('Vue notification created and displayed with high z-index')
 
     } catch (error) {
       console.error('Failed to create Vue notification:', error)

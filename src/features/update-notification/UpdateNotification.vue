@@ -76,10 +76,11 @@ onUnmounted(() => {
 <template>
   <div
     ref="container"
-    :class="[
-      'fixed bottom-5 z-[999999] transition-all duration-300 ease-out font-sans',
-      isVisible ? 'right-5' : '-right-80'
-    ]"
+    class="transition-all duration-300 ease-out font-sans"
+    :style="{
+      position: 'relative',
+      right: isVisible ? '0' : '-320px'
+    }"
   >
     <div
       class="bg-slate-800 text-white p-4 rounded-lg shadow-xl max-w-xs cursor-default border-l-4 border-blue-500"
