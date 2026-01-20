@@ -60,6 +60,11 @@ export interface RuntimeAdapter {
    * @param path - относительный путь к ресурсу
    */
   getResourceURL(path: string): string
+
+  /**
+   * Получить manifest приложения
+   */
+  getManifest(): chrome.runtime.Manifest
   
   /**
    * Отправить сообщение в content script / injected script

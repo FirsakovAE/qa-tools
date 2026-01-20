@@ -35,13 +35,11 @@ const compareVersions = (version1: string, version2: string): number => {
 export function useUpdateChecker() {
   const runtime = useRuntime()
   const isChecking = ref(false)
-  const checkInterval = ref<NodeJS.Timeout | null>(null)
+  const checkInterval = ref<ReturnType<typeof setInterval> | null>(null)
 
   const getLocalVersion = async (): Promise<string> => {
     try {
-      const response = await fetch('/manifest.json')
-      const manifest = await response.json()
-      return manifest.version
+      return runtime.getManifest().version
     } catch (error) {
       console.error('Failed to read local manifest:', error)
       return '0.0.0'

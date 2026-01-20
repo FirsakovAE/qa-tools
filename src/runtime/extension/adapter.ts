@@ -76,6 +76,10 @@ export class ExtensionAdapter implements RuntimeAdapter {
     return chrome.runtime.getURL(path)
   }
 
+  getManifest(): chrome.runtime.Manifest {
+    return chrome.runtime.getManifest()
+  }
+
   async sendMessage<T = unknown>(message: Message, timeout = 5000): Promise<T> {
     // Если мы в iframe - используем postMessage к parent (content script)
     if (this.isIframe) {

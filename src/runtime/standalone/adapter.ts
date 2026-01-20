@@ -95,6 +95,19 @@ export class StandaloneAdapter implements RuntimeAdapter {
     return `${base}/${path}`
   }
 
+  getManifest(): chrome.runtime.Manifest {
+    // Mock manifest for standalone mode
+    return {
+      manifest_version: 3,
+      name: 'Vue Inspector (Standalone)',
+      version: '1.0.0',
+      description: 'Standalone version of Vue Inspector',
+      action: {
+        default_title: 'Vue Inspector'
+      }
+    } as chrome.runtime.Manifest
+  }
+
   async sendMessage<T = unknown>(message: Message, timeout = 5000): Promise<T> {
     return new Promise((resolve, reject) => {
       try {
