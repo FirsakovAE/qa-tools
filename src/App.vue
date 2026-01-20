@@ -1,9 +1,11 @@
 <script setup lang="ts">
   import { Infusion } from '@/components/ui/infusion'
   import { useAutoUnhighlight } from '@/composables/useAutoUnhighlight'
+  import { useUpdateChecker } from '@/composables/useUpdateChecker'
   import Navigation from '@/features/Navigation.vue'
-  
+
   useAutoUnhighlight()
+  useUpdateChecker()
   </script>
   
   <template>
@@ -12,5 +14,6 @@
       <div class="relative z-10 flex-1 min-h-0 overflow-hidden">
         <Navigation />
       </div>
+      <Toaster />
     </div>
   </template>

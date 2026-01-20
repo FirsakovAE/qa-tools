@@ -4,9 +4,11 @@ import './assets/json-viewer.css'
 import './assets/prism-overrides.css'
 import './assets/prism-json-theme.css'
 import App from './App.vue'
+import { Toaster } from '@/components/ui/Toaster'
 import { safeRuntime, safeTabs } from './utils/extensionBridge'
 
 const app = createApp(App)
+app.component('Toaster', Toaster)
 app.mount('#app')
 
 // Функция для снятия подсветки при закрытии popup
