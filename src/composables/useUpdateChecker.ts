@@ -1,4 +1,5 @@
-import { ref, onMounted, onUnmounted, readonly } from 'vue'
+import { ref, onMounted, onUnmounted, readonly, markRaw } from 'vue'
+import { toast, CustomUpdateNotification, type UpdateNotificationData } from '@/components/ui/Toaster'
 import { useRuntime } from '@/runtime'
 
 interface GitHubRelease {
@@ -9,6 +10,7 @@ interface GitHubRelease {
 
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
 const LAST_CHECK_KEY = 'update-checker-last-check'
+const LAST_DISMISSED_KEY = 'update-checker-last-dismissed'
 
 // Функция для семантического сравнения версий
 const compareVersions = (version1: string, version2: string): number => {
@@ -86,6 +88,22 @@ export function useUpdateChecker() {
     }
   }
 
+  const shouldShowUpdateToast = async (): Promise<boolean> => {
+    try {
+      const lastDismissed = await runtime.storage.get<number>(LAST_DISMISSED_KEY)
+      if (lastDismissed) {
+        const timeSinceDismissed = Date.now() - lastDismissed
+        if (timeSinceDismissed < CHECK_INTERVAL) {
+          return false
+        }
+      }
+      return true
+    } catch (error) {
+      console.error('Failed to check last dismissed time:', error)
+      return true
+    }
+  }
+
 
   const downloadUpdate = async () => {
     try {
@@ -100,6 +118,43 @@ export function useUpdateChecker() {
       document.body.removeChild(link)
     } catch (error) {
       console.error('Failed to download update:', error)
+    }
+  }
+
+  const showUpdateToast = (remoteVersion: string) => {
+    try {
+      const id = toast.custom(
+        markRaw(CustomUpdateNotification),
+        {
+          duration: 10000,
+          componentProps: {
+            data: {
+              id: '',
+              title: 'Update Available',
+              description: 'Download new version',
+              version: remoteVersion,
+              actionText: 'Dismiss',
+              onDownload: () => {
+                toast.dismiss(id)
+                downloadUpdate()
+              },
+              onDismiss: () => {
+                toast.dismiss(id)
+                runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+              }
+            }
+          },
+          onAutoClose: () => {
+            // Сохраняем время когда тост автоматически закрылся
+            runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+          }
+        }
+      )
+
+      return id
+    } catch (error) {
+      console.error('Failed to create update toast:', error)
+      return null
     }
   }
 
@@ -131,8 +186,12 @@ export function useUpdateChecker() {
       const versionComparison = compareVersions(remoteVersion, localVersion)
 
       if (versionComparison > 0 && remoteVersion !== '0.0.0') {
-        // Здесь можно добавить логику обработки обновления без показа тостера
         console.log(`Update available: ${remoteVersion} (current: ${localVersion})`)
+
+        const shouldShow = await shouldShowUpdateToast()
+        if (shouldShow) {
+          showUpdateToast(remoteVersion)
+        }
       }
     } catch (error) {
       console.error('Failed to check for updates:', error)
