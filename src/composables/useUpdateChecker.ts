@@ -1,7 +1,6 @@
-import { ref, onMounted, onUnmounted, readonly } from 'vue'
+import { ref, onMounted, onUnmounted, readonly, createApp } from 'vue'
 import { toast } from '@/components/ui/Toaster'
-import { CustomSimple } from '@/components/ui/Toaster'
-import { markRaw } from 'vue'
+import UpdateNotification from '@/components/ui/Toaster/UpdateNotification.vue'
 import { useRuntime } from '@/runtime'
 
 interface GitHubRelease {
@@ -132,22 +131,106 @@ export function useUpdateChecker() {
   }
 
   const showUpdateToast = (remoteVersion: string) => {
-    const toastId = toast.custom(markRaw(CustomSimple), {
-      componentProps: {
-        title: 'Update is available',
-        description: `Download new version ${remoteVersion}`,
-        actionText: 'Download',
-        onAction: () => {
-          toast.dismiss(toastId)
-          downloadUpdate()
-        }
-      },
-      duration: Infinity,
-      onDismiss: () => {
-        // Сохраняем время когда пользователь закрыл тостер
-        runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+
+    // Проверяем, можем ли использовать vue-sonner (работает в popup)
+    const isInPopup = window.location.href.includes('popup.html')
+
+    if (isInPopup) {
+      // Используем vue-sonner для popup
+      try {
+        const toastId = toast('Update is available', {
+          description: `Download new version ${remoteVersion}`,
+          action: {
+            label: 'Download',
+            onClick: () => {
+              downloadUpdate()
+            }
+          },
+          duration: Infinity,
+          onDismiss: () => {
+            runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+          }
+        })
+        return toastId
+      } catch (error) {
+        console.error('Failed to create vue-sonner toast:', error)
       }
-    })
+    } else {
+      // Используем нативные браузерные уведомления для injected UI
+      try {
+        if ('Notification' in window) {
+          if (Notification.permission === 'granted') {
+            const notification = new Notification('Vue Inspector - Update Available', {
+              body: `Download new version ${remoteVersion}`,
+              icon: chrome.runtime.getURL('icons/icon128.png'),
+              requireInteraction: true
+            })
+
+            notification.onclick = () => {
+              console.log('Notification clicked, downloading update')
+              downloadUpdate()
+              notification.close()
+            }
+
+            notification.onclose = () => {
+              console.log('Notification closed by user')
+              runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+            }
+
+            console.log('Native notification created')
+            return 'native-notification'
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(permission => {
+              if (permission === 'granted') {
+                // Рекурсивно вызываем после получения разрешения
+                showUpdateToast(remoteVersion)
+              }
+            })
+          }
+        }
+
+        // Fallback: создаем простой DOM элемент
+        console.log('Using DOM fallback notification')
+        createDOMNotification(remoteVersion)
+        return 'dom-notification'
+      } catch (error) {
+        console.error('Failed to create native notification:', error)
+      }
+    }
+
+    return null
+  }
+
+  const createDOMNotification = (remoteVersion: string) => {
+    try {
+      // Создаем контейнер для Vue приложения
+      const container = document.createElement('div')
+      container.id = `update-notification-${Date.now()}`
+      document.body.appendChild(container)
+
+      // Создаем Vue приложение с компонентом UpdateNotification
+      const app = createApp(UpdateNotification, {
+        remoteVersion,
+        onDownload: () => {
+          downloadUpdate()
+          app.unmount()
+          container.remove()
+        },
+        onDismiss: () => {
+          runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+          app.unmount()
+          container.remove()
+        }
+      })
+
+      // Монтируем приложение
+      app.mount(container)
+
+      console.log('Vue notification created and displayed')
+
+    } catch (error) {
+      console.error('Failed to create Vue notification:', error)
+    }
   }
 
   const checkForUpdates = async (showToast = true, force = false) => {
@@ -157,7 +240,6 @@ export function useUpdateChecker() {
     if (!force) {
       const shouldCheck = await shouldCheckForUpdates()
       if (!shouldCheck) {
-        console.log('Update check skipped: too soon since last check')
         return
       }
     }
@@ -170,29 +252,19 @@ export function useUpdateChecker() {
         getRemoteVersion()
       ])
 
-      console.log('Update check:', { localVersion, remoteVersion })
-
       // Сохраняем время последней проверки
       await runtime.storage.set(LAST_CHECK_KEY, Date.now())
 
       // Используем семантическое сравнение версий: remoteVersion > localVersion
       const versionComparison = compareVersions(remoteVersion, localVersion)
-      console.log('Version comparison result:', versionComparison, '(> 0 means update available)')
 
       if (versionComparison > 0 && remoteVersion !== '0.0.0') {
-        console.log('Update available!')
         if (showToast) {
           const shouldShow = await shouldShowUpdateToast()
-          console.log('Should show toast:', shouldShow)
           if (shouldShow) {
-            console.log('Showing update toast')
             showUpdateToast(remoteVersion)
-          } else {
-            console.log('Toast suppressed (recently dismissed)')
           }
         }
-      } else {
-        console.log('No update available or invalid remote version')
       }
     } catch (error) {
       console.error('Failed to check for updates:', error)

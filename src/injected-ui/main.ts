@@ -48,4 +48,11 @@ function initRuntime() {
 // Инициализируем runtime ДО монтирования Vue приложения
 initRuntime()
 
-createApp(App).mount('#app')
+// Добавляем Toaster в injected UI
+import { Toaster } from '@/components/ui/Toaster'
+
+const app = createApp(App)
+app.component('Toaster', Toaster)
+app.mount('#app')
+
+console.log('Injected UI app mounted')
