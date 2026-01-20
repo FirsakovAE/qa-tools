@@ -193,12 +193,15 @@
    ========================= */
 @layer utilities {
   .app-surface {
-    background-image: var(--infuse-gradient);
-    background-size: cover;
-    background-attachment: fixed;
+    position: relative;
+    overflow: hidden;
   }
 
   .custom-infuse {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+
     background-image: var(--infuse-gradient);
   }
 
@@ -207,17 +210,14 @@
     isolation: isolate;
 
     /* solid base to block bleed-through */
-    background-color: hsl(var(--background));
+    background-color: hsl(var(--background) / 0.75);
 
-    /* same gradient as app */
-    background-image: var(--infuse-gradient);
-
-    /* SYNCHRONIZE WITH APP */
-    background-attachment: fixed;
-    background-size: cover;
-
-    /* visual */
+    /* MAGIC - blur real background underneath */
     backdrop-filter: blur(var(--backdrop-filter-blur));
+
+    border: 1px solid hsl(var(--border) / 0.6);
+    box-shadow:
+      0 10px 30px rgba(0, 0, 0, 0.25);
   }
 }
 
