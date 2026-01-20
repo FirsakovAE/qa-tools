@@ -16,14 +16,15 @@
       <div class="relative z-10 flex-1 min-h-0 overflow-hidden">
         <Navigation />
       </div>
-  
-      <!-- overlay ЖИВЁТ ВНУТРИ APP -->
-      <div id="overlay-root">
-        <Toaster
-          position="bottom-right"
-          :toast-options="{ duration: 5000 }"
-        />
-      </div>
+    </div>
+
+    <!-- Toaster как настоящий overlay вне layout -->
+    <div class="fixed inset-0 pointer-events-none z-50">
+      <Toaster
+        position="bottom-right"
+        class="pointer-events-auto"
+        :toast-options="{ duration: 5000 }"
+      />
     </div>
   </template>
   
