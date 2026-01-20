@@ -53,7 +53,10 @@ export function useUpdateChecker() {
       const response = await fetch('https://api.github.com/repos/FirsakovAE/qa-tools/releases/latest')
 
       if (!response.ok) {
-        console.warn(`GitHub API returned ${response.status}: ${response.statusText}`)
+        // 404 означает отсутствие релизов - это нормально, не логируем как ошибку
+        if (response.status !== 404) {
+          console.warn(`GitHub API returned ${response.status}: ${response.statusText}`)
+        }
         return '0.0.0'
       }
 
