@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
-import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 
 export default defineConfig({
@@ -42,10 +42,13 @@ export default defineConfig({
         const distPath = join(process.cwd(), 'dist')
         const docsPath = join(process.cwd(), 'docs')
 
-        // Создаем папку docs если не существует
-        if (!existsSync(docsPath)) {
-          mkdirSync(docsPath, { recursive: true })
+        // Удаляем существующую папку docs для избежания дублирования файлов
+        if (existsSync(docsPath)) {
+          rmSync(docsPath, { recursive: true, force: true })
         }
+
+        // Создаем папку docs
+        mkdirSync(docsPath, { recursive: true })
 
         // Копируем standalone файлы
         const standaloneSrc = join(distPath, 'standalone')
