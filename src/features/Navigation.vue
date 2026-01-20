@@ -22,6 +22,7 @@
   import OptionsTab from '@/features/settings/OptionsTab.vue'
   import { usePiniaStores } from '@/features/stores/usePiniaStores'
   import type { TreeNodeModel } from '@/types/tree'
+  import { Toaster } from '@/components/ui/Toaster'
   
   /* ============================================================================
    * Pinia
@@ -256,6 +257,17 @@
   
   
   <template>
+    <!-- Toaster как настоящий overlay (вне layout) -->
+    <div class="fixed inset-0 pointer-events-none z-50">
+      <Toaster
+        position="bottom-right"
+        class="pointer-events-auto"
+        :toast-options="{
+          duration: 5000
+        }"
+      />
+    </div>
+
     <div class="grid h-full w-full pl-[56px] overflow-hidden">
       <aside class="inset-y fixed left-0 z-20 flex h-full flex-col border-r">
         <!-- Main navigation -->

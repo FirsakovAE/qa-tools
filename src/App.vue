@@ -15,12 +15,4 @@
         <Navigation />
       </div>
     </div>
-
-    <!-- Toaster как overlay вне layout -->
-    <Toaster
-      position="bottom-right"
-      :toast-options="{
-        duration: 5000
-      }"
-    />
   </template>
