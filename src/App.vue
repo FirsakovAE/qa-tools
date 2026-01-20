@@ -19,13 +19,9 @@
     </div>
 
     <!-- Toaster как настоящий overlay вне layout -->
-    <div class="fixed inset-0 pointer-events-none z-50">
-      <Toaster
-        position="bottom-right"
-        class="pointer-events-auto"
-        :toast-options="{ duration: 5000 }"
-      />
-    </div>
+    <Toaster
+      :toast-options="{ duration: 5000 }"
+    />
   </template>
   
   

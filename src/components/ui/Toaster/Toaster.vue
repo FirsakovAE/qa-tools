@@ -6,7 +6,7 @@ const props = defineProps<ToasterProps>();
 
 <template>
   <Toaster
-    class="!z-[60] pointer-events-auto max-w-[420px]"
+    class="!fixed !bottom-4 !right-4 !z-[9999] pointer-events-auto max-w-[420px]"
     v-bind="props"
     :toast-options="{
       ...props.toastOptions,
