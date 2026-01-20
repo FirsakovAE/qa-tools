@@ -157,6 +157,7 @@ export function useUpdateChecker() {
     if (!force) {
       const shouldCheck = await shouldCheckForUpdates()
       if (!shouldCheck) {
+        console.log('Update check skipped: too soon since last check')
         return
       }
     }
@@ -169,17 +170,29 @@ export function useUpdateChecker() {
         getRemoteVersion()
       ])
 
+      console.log('Update check:', { localVersion, remoteVersion })
+
       // Сохраняем время последней проверки
       await runtime.storage.set(LAST_CHECK_KEY, Date.now())
 
       // Используем семантическое сравнение версий: remoteVersion > localVersion
-      if (compareVersions(remoteVersion, localVersion) > 0 && remoteVersion !== '0.0.0') {
+      const versionComparison = compareVersions(remoteVersion, localVersion)
+      console.log('Version comparison result:', versionComparison, '(> 0 means update available)')
+
+      if (versionComparison > 0 && remoteVersion !== '0.0.0') {
+        console.log('Update available!')
         if (showToast) {
           const shouldShow = await shouldShowUpdateToast()
+          console.log('Should show toast:', shouldShow)
           if (shouldShow) {
+            console.log('Showing update toast')
             showUpdateToast(remoteVersion)
+          } else {
+            console.log('Toast suppressed (recently dismissed)')
           }
         }
+      } else {
+        console.log('No update available or invalid remote version')
       }
     } catch (error) {
       console.error('Failed to check for updates:', error)
