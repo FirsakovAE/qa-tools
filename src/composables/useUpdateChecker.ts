@@ -145,8 +145,9 @@ export function useUpdateChecker() {
         componentProps: {
           data: toastData.value,
         },
-        duration: Infinity,
+        duration: 10000, // 10 секунд вместо бесконечности
         onDismiss: () => {
+          console.log('Toast auto-dismissed or manually dismissed')
           // Сохраняем время когда пользователь закрыл тостер
           runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
         }

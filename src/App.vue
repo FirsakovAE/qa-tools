@@ -14,6 +14,12 @@
       <div class="relative z-10 flex-1 min-h-0 overflow-hidden">
         <Navigation />
       </div>
-      <Toaster position="bottom-right" />
+      <Toaster
+        position="bottom-right"
+        :toast-options="{
+          duration: 5000,
+          className: 'custom-toast-position'
+        }"
+      />
     </div>
   </template>
