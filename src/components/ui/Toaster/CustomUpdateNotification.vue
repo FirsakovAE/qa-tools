@@ -19,8 +19,8 @@
     </script>
     
     <template>
-      <div class="flex items-end justify-between w-fit max-w-md">
-        <div class="flex flex-col flex-1 min-w-0">
+      <div class="toast-gradient-bg flex items-end justify-between w-fit max-w-md relative">
+        <div class="flex flex-col flex-1 min-w-0 relative z-10">
           <div class="text-sm font-semibold">
             {{ props.data.title }}
           </div>
@@ -28,7 +28,7 @@
             {{ props.data.description }} {{ props.data.version }}
           </div>
         </div>
-        <div class="flex gap-2 ml-4 flex-shrink-0">
+        <div class="flex gap-2 ml-4 flex-shrink-0 relative z-10">
           <Button
             size="xs"
             @click="props.data.onDownload"

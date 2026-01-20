@@ -183,7 +183,7 @@
    Utilities (project-specific)
    ========================= */
 @layer utilities {
-  .custom-infuse {
+  .custom-infuse, .toast-gradient-bg {
     background-image:
             radial-gradient(circle at 0% 0%, rgba(140, 100, 255, 0.3) 0%, transparent 50%),
             radial-gradient(circle at 100% 0%, rgba(50, 200, 255, 0.25) 0%, transparent 50%),
@@ -209,14 +209,9 @@
   animation: slide-in-right 0.25s ease-out;
 }
 
-/* Toast gradient background */
+/* Toast inherits the same gradient background as main app */
 .toast-gradient-bg {
-  background-image:
-          radial-gradient(circle at 0% 0%, rgba(140, 100, 255, 0.3) 0%, transparent 50%),
-          radial-gradient(circle at 100% 0%, rgba(50, 200, 255, 0.25) 0%, transparent 50%),
-          radial-gradient(circle at 20% 100%, rgba(255, 100, 255, 0.2) 0%, transparent 50%),
-          radial-gradient(circle at 80% 100%, rgba(100, 150, 200, 0.15) 0%, transparent 50%),
-          radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
+  background-image: inherit;
 }
 
 /* ---------------------------------
