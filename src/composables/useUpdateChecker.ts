@@ -131,42 +131,35 @@ export function useUpdateChecker() {
 
   const showUpdateToast = (remoteVersion: string) => {
     try {
-      const toastData = ref<UpdateNotificationData>({
-        id: '',
-        title: 'Update Available',
-        description: 'Download new version',
-        version: remoteVersion,
-        actionText: 'Dismiss',
-        onDownload: () => {},
-        onDismiss: () => {},
-      })
-
-      toastData.value.id = toast.custom(markRaw(CustomUpdateNotification), {
-        componentProps: {
-          data: toastData.value,
-        },
-        duration: 10000, // 10 секунд вместо бесконечности
-        onDismiss: () => {
-          console.log('Toast auto-dismissed or manually dismissed')
-          // Сохраняем время когда пользователь закрыл тостер
-          runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+      const id = toast.custom(
+        markRaw(CustomUpdateNotification),
+        {
+          duration: 10000,
+          componentProps: {
+            data: {
+              id: '',
+              title: 'Update Available',
+              description: 'Download new version',
+              version: remoteVersion,
+              actionText: 'Dismiss',
+              onDownload: () => {
+                toast.dismiss(id)
+                downloadUpdate()
+              },
+              onDismiss: () => {
+                toast.dismiss(id)
+                runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+              }
+            }
+          },
+          onAutoClose: () => {
+            // Сохраняем время когда тост автоматически закрылся
+            runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
+          }
         }
-      })
+      )
 
-      // Обновляем обработчики после создания toast
-      toastData.value.onDownload = () => {
-        console.log('Download clicked, dismissing toast with ID:', toastData.value.id)
-        toast.dismiss(toastData.value.id)
-        downloadUpdate()
-      }
-
-      toastData.value.onDismiss = () => {
-        console.log('Dismiss clicked, dismissing toast with ID:', toastData.value.id)
-        toast.dismiss(toastData.value.id)
-        runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
-      }
-
-      return toastData.value.id
+      return id
     } catch (error) {
       console.error('Failed to create update toast:', error)
       return null

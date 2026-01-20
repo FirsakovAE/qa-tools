@@ -15,13 +15,7 @@ type Props = {
   data: UpdateNotificationData;
 };
 
-type Emits = {
-  download: [];
-  dismiss: [];
-};
-
 const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
 </script>
 
 <template>
@@ -37,14 +31,14 @@ const emit = defineEmits<Emits>();
     <div class="flex gap-2 ml-4 flex-shrink-0">
       <Button
         size="xs"
-        @click="emit('download')"
+        @click="props.data.onDownload"
       >
         Download
       </Button>
       <Button
         size="xs"
         variant="secondary"
-        @click="emit('dismiss')"
+        @click="props.data.onDismiss"
       >
         {{ props.data.actionText }}
       </Button>

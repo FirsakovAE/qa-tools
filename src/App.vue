@@ -17,8 +17,7 @@
       <Toaster
         position="bottom-right"
         :toast-options="{
-          duration: 5000,
-          className: 'custom-toast-position'
+          duration: 5000
         }"
       />
     </div>
