@@ -1,6 +1,6 @@
 import { ref, onMounted, onUnmounted, readonly, createApp } from 'vue'
 import { toast } from '@/components/ui/Toaster'
-import UpdateNotification from '@/components/ui/Toaster/UpdateNotification.vue'
+import UpdateNotification from '@/features/update-notification/UpdateNotification.vue'
 import { useRuntime } from '@/runtime'
 
 interface GitHubRelease {
