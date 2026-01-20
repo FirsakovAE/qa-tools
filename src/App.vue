@@ -14,6 +14,15 @@
       <div class="relative z-10 flex-1 min-h-0 overflow-hidden">
         <Navigation />
       </div>
-      <Toaster />
+      <Toaster
+        position="bottom-right"
+        :toast-options="{
+          style: {
+            background: 'hsl(var(--popover))',
+            color: 'hsl(var(--popover-foreground))',
+            border: '1px solid hsl(var(--border))'
+          }
+        }"
+      />
     </div>
   </template>
