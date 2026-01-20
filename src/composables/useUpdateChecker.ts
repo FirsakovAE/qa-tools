@@ -1,5 +1,4 @@
-import { ref, onMounted, onUnmounted, readonly, markRaw } from 'vue'
-import { toast, CustomUpdateNotification, type UpdateNotificationData } from '@/components/ui/Toaster'
+import { ref, onMounted, onUnmounted, readonly } from 'vue'
 import { useRuntime } from '@/runtime'
 
 interface GitHubRelease {
@@ -10,7 +9,6 @@ interface GitHubRelease {
 
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
 const LAST_CHECK_KEY = 'update-checker-last-check'
-const LAST_DISMISSED_KEY = 'update-checker-last-dismissed'
 
 // Функция для семантического сравнения версий
 const compareVersions = (version1: string, version2: string): number => {
@@ -33,7 +31,6 @@ const compareVersions = (version1: string, version2: string): number => {
 export function useUpdateChecker() {
   const runtime = useRuntime()
   const isChecking = ref(false)
-  const checkInterval = ref<ReturnType<typeof setInterval> | null>(null)
 
   const getLocalVersion = async (): Promise<string> => {
     try {
@@ -89,21 +86,6 @@ export function useUpdateChecker() {
     }
   }
 
-  const shouldShowUpdateToast = async (): Promise<boolean> => {
-    try {
-      const lastDismissed = await runtime.storage.get<number>(LAST_DISMISSED_KEY)
-      if (lastDismissed) {
-        const timeSinceDismissed = Date.now() - lastDismissed
-        if (timeSinceDismissed < CHECK_INTERVAL) {
-          return false
-        }
-      }
-      return true
-    } catch (error) {
-      console.error('Failed to check last dismissed time:', error)
-      return true
-    }
-  }
 
   const downloadUpdate = async () => {
     try {
@@ -116,58 +98,14 @@ export function useUpdateChecker() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-
-      // Показываем тостер об успешном начале скачивания
-      toast.success('Download started', {
-        description: 'The update archive is being downloaded.'
-      })
     } catch (error) {
       console.error('Failed to download update:', error)
-      toast.error('Download failed', {
-        description: 'Failed to start download. Please try again.'
-      })
-    }
-  }
-
-  const showUpdateToast = (remoteVersion: string) => {
-    try {
-      const id = toast.custom(
-        markRaw(CustomUpdateNotification),
-        {
-          duration: 10000,
-          componentProps: {
-            data: {
-              id: '',
-              title: 'Update Available',
-              description: 'Download new version',
-              version: remoteVersion,
-              actionText: 'Dismiss',
-              onDownload: () => {
-                toast.dismiss(id)
-                downloadUpdate()
-              },
-              onDismiss: () => {
-                toast.dismiss(id)
-                runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
-              }
-            }
-          },
-          onAutoClose: () => {
-            // Сохраняем время когда тост автоматически закрылся
-            runtime.storage.set(LAST_DISMISSED_KEY, Date.now())
-          }
-        }
-      )
-
-      return id
-    } catch (error) {
-      console.error('Failed to create update toast:', error)
-      return null
     }
   }
 
 
-  const checkForUpdates = async (showToast = true, force = false) => {
+
+  const checkForUpdates = async (force = false) => {
     if (isChecking.value) return
 
     // Проверяем, нужно ли выполнять проверку (если не force)
@@ -193,12 +131,8 @@ export function useUpdateChecker() {
       const versionComparison = compareVersions(remoteVersion, localVersion)
 
       if (versionComparison > 0 && remoteVersion !== '0.0.0') {
-        if (showToast) {
-          const shouldShow = await shouldShowUpdateToast()
-          if (shouldShow) {
-            showUpdateToast(remoteVersion)
-          }
-        }
+        // Здесь можно добавить логику обработки обновления без показа тостера
+        console.log(`Update available: ${remoteVersion} (current: ${localVersion})`)
       }
     } catch (error) {
       console.error('Failed to check for updates:', error)
@@ -207,36 +141,14 @@ export function useUpdateChecker() {
     }
   }
 
-  const startPeriodicCheck = () => {
-    // Проверяем сразу при запуске
-    checkForUpdates()
-
-    // Устанавливаем периодическую проверку
-    checkInterval.value = setInterval(() => {
-      checkForUpdates()
-    }, CHECK_INTERVAL)
-  }
-
-  const stopPeriodicCheck = () => {
-    if (checkInterval.value) {
-      clearInterval(checkInterval.value)
-      checkInterval.value = null
-    }
-  }
-
   onMounted(() => {
-    startPeriodicCheck()
-  })
-
-  onUnmounted(() => {
-    stopPeriodicCheck()
+    // Проверяем обновления при запуске
+    checkForUpdates()
   })
 
   return {
     isChecking: readonly(isChecking),
     checkForUpdates,
-    checkForUpdatesNow: () => checkForUpdates(true, true), // Принудительная проверка с показом тостера
-    startPeriodicCheck,
-    stopPeriodicCheck
+    checkForUpdatesNow: () => checkForUpdates(true) // Принудительная проверка
   }
 }
