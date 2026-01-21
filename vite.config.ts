@@ -151,6 +151,30 @@ export default defineConfig({
           content = content.replace(oldScriptBlock, newScriptBlock);
           writeFileSync(indexHtmlPath, content, 'utf-8')
         }
+
+        // =============================
+        // Cleanup cross-build artifacts
+        // =============================
+
+        // 1. Удаляем standalone из dist (extension build должен быть чистым)
+        const standaloneDistPath = join(distPath, 'standalone')
+        if (existsSync(standaloneDistPath)) {
+          rmSync(standaloneDistPath, { recursive: true, force: true })
+        }
+
+        // 2. Удаляем extension-артефакты из docs (standalone должен быть чистым)
+        const docsArtifactsToRemove = [
+          'manifest.json',
+          'icons',
+          'defaultSettings.json'
+        ]
+
+        docsArtifactsToRemove.forEach(name => {
+          const target = join(docsPath, name)
+          if (existsSync(target)) {
+            rmSync(target, { recursive: true, force: true })
+          }
+        })
       }
     }
   ],
