@@ -67,6 +67,13 @@ export default defineConfig({
           }
         })
 
+        // Копируем background изображение в injected_ui папку для standalone режима
+        const backgroundSrc = join(distPath, 'assets', 'background1-CPnR_9dL.jpg')
+        const backgroundDest = join(docsPath, 'injected_ui', 'background1.jpg')
+        if (existsSync(backgroundSrc)) {
+          copyFileSync(backgroundSrc, backgroundDest)
+        }
+
         // Исправляем пути в injected_ui/index.html для docs/
         const injectedUiHtmlPath = join(docsPath, 'injected_ui', 'index.html')
         if (existsSync(injectedUiHtmlPath)) {
@@ -78,10 +85,13 @@ export default defineConfig({
           writeFileSync(injectedUiHtmlPath, content, 'utf-8')
         }
 
-        // Исправляем baseURL логику в docs/index.html для GitHub Pages
+        // Исправляем пути в docs/index.html для GitHub Pages
         const indexHtmlPath = join(docsPath, 'index.html')
         if (existsSync(indexHtmlPath)) {
           let content = readFileSync(indexHtmlPath, 'utf-8')
+
+          // Исправляем пути к assets (убираем ведущий слеш)
+          content = content.replace(/src="\/assets\//g, 'src="assets/')
 
           // Полностью заменяем блок script с правильной логикой
           const oldScriptBlock = /<script>[\s\S]*?<\/script>/;
