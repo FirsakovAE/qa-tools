@@ -254,12 +254,13 @@
 
 /* =========================
    Infuse modes
-   ========================= */
+
 
 .custom-infuse[data-infuse='image']::before {
   background-image: var(--infuse-image);
   opacity: 0.3;
 }
+     ========================= */
 
 .custom-infuse[data-infuse='gradient']::before {
   background-image: var(--infuse-gradient);
