@@ -21,7 +21,7 @@ const mode = computed(() => props.mode ?? 'text')
 </script>
 
 <template>
-  <div class="relative border rounded bg-gray-100 dark:bg-gray-800 min-h-[350px] focus-within:outline focus-within:outline-2 focus-within:outline-ring focus-within:outline-offset-2">
+  <div class="relative json-viewer-wrapper rounded min-h-[350px] focus-within:outline focus-within:outline-2 focus-within:outline-ring focus-within:outline-offset-2">
     <component
       :is="mode === 'tree' ? JsonTreeEditor : JsonTextEditor"
       :model-value="modelValue"

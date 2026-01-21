@@ -1,22 +1,32 @@
 /* src/assets/json-viewer.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 .json-viewer-wrapper {
-    background-color: rgba(255, 255, 255, 0.5); /* альтернатива bg-white/50 */
-    border: 1px solid #d1d5db; /* border-border */
-    border-radius: 0.5rem; /* rounded-md */
-    backdrop-blur: 10px;
+    position: relative;
+    isolation: isolate;
+
+    background-color: transparent;
+    background-image: none;
+
+    backdrop-filter: blur(32px);
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
     .json-viewer-wrapper {
-        background-color: rgba(0, 0, 0, 0.4); /* dark */
+        background-color: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(32px) brightness(1.1);
+        border: 1px solid hsl(var(--border) / 0.6);
     }
 }
 
 .json-viewer {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: monospace;
     font-size: 0.875rem;
-    line-height: 1.5; /* то же, что root */
+    line-height: 1.625;
     padding: 0.75rem;
     white-space: pre-wrap;
     word-break: break-word;
@@ -36,25 +46,7 @@ pre[class*=language-] {
     letter-spacing: inherit !important;
 }
 
-code[class*=language-] {
-    background: transparent !important;
-    margin: 0;
-    padding: 0;
-    border-radius: 0;
-    font-family: inherit !important;
-    font-size: inherit !important;
-    line-height: inherit !important;
-    font-weight: inherit !important;
-    font-style: inherit !important;
-    letter-spacing: inherit !important;
-}
-
-/* Prism токены - с правильной высотой строк */
-.json-viewer .token,
-.json-viewer .token * {
-    line-height: 1.625 !important;
-}
-
+/* Prism токены */
 .json-viewer .token.string      { color: #10b981; } /* green-500 */
 .json-viewer .token.number      { color: #3b82f6; } /* blue-500 */
 .json-viewer .token.boolean     { color: #f59e0b; } /* amber-500 */
