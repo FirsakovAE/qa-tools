@@ -6,10 +6,6 @@
   import { Toaster } from '@/components/ui/Toaster'
   import backgroundImage from '@/assets/background1.jpg'
 
-  // Для standalone режима используем относительный путь к изображению
-  const isStandalone = typeof window !== 'undefined' && (window as any).__VUE_INSPECTOR_STANDALONE__
-  const imageSrc = isStandalone ? './background1.jpg' : backgroundImage
-
   useAutoUnhighlight()
   useUpdateChecker()
   </script>
@@ -17,7 +13,7 @@
   <template>
     <div class="relative h-screen overflow-hidden">
       <Infusion
-      :src="imageSrc"
+      :src="backgroundImage"
       :opacity="0.2"
       :opacityDark="0.3"
       :zIndex="100"

@@ -7,6 +7,7 @@ import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSyn
 import { join } from 'path'
 
 export default defineConfig({
+  base: './',
   plugins: [
     vue(),
     tailwindcss(),
@@ -67,21 +68,14 @@ export default defineConfig({
           }
         })
 
-        // Копируем background изображение в injected_ui папку для standalone режима
-        const backgroundSrc = join(distPath, 'assets', 'background1-CPnR_9dL.jpg')
-        const backgroundDest = join(docsPath, 'injected_ui', 'background1.jpg')
-        if (existsSync(backgroundSrc)) {
-          copyFileSync(backgroundSrc, backgroundDest)
-        }
-
         // Исправляем пути в injected_ui/index.html для docs/
         const injectedUiHtmlPath = join(docsPath, 'injected_ui', 'index.html')
         if (existsSync(injectedUiHtmlPath)) {
           let content = readFileSync(injectedUiHtmlPath, 'utf-8')
-          // Заменяем абсолютные пути на относительные
+          // Заменяем пути для docs/ (они уже относительные из-за base: './')
           content = content
-            .replace(/src="\/injected_ui\/index\.js"/g, 'src="./index.js"')
-            .replace(/href="\/assets\//g, 'href="../assets/')
+            .replace(/src="\.\.\/\.\.\/injected_ui\/index\.js"/g, 'src="./index.js"')
+            .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
           writeFileSync(injectedUiHtmlPath, content, 'utf-8')
         }
 
