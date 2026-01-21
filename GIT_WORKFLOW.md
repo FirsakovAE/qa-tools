@@ -9,6 +9,7 @@
 
 ```bash
 npm run build                         # Собрать билд (dist/ + docs/)
+npm run serve:standalone              # локальный тест корп. версии
 git add .                             # Добавить все изменения
 git commit -m "chore: update preview build"
 git push origin master

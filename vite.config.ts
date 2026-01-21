@@ -160,7 +160,6 @@ export default defineConfig({
     assetsDir: 'assets',
     rollupOptions: {
       input: {
-        popup: 'src/popup/popup.html',
         injected_ui_html: 'src/injected-ui/index.html',
         content: 'src/content.ts',
         background: 'src/background.ts',

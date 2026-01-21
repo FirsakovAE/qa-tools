@@ -251,10 +251,8 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 })
 
-// Обработчик клика по иконке расширения - открываем popup
-chrome.action.onClicked.addListener((tab) => {
-    // Popup открывается автоматически при клике на иконку
-})
+// NOTE: Расширение теперь работает через injected UI без popup
+// Action API больше не используется
 
 // Обработчик сообщений от content script и popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

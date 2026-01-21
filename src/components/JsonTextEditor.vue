@@ -104,9 +104,13 @@ function onInput(e: Event) {
           v-if="editable"
           ref="editableRef"
           class="json-editor h-full min-h-[300px] p-2 font-mono text-sm leading-relaxed overflow-auto
-                 text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-all
+                 whitespace-pre-wrap break-all
                  bg-transparent outline-none focus:outline-none border rounded
-                 cursor-text caret-gray-800 dark:caret-gray-200"
+                 cursor-text"
+          :style="{
+            color: 'hsl(var(--foreground))',
+            caretColor: 'hsl(var(--foreground))'
+          }"
           contenteditable="plaintext-only"
           @input="onInput"
           @keydown="(e) => e.stopPropagation()"
@@ -117,7 +121,7 @@ function onInput(e: Event) {
         <pre
           v-else
           class="json-viewer h-full min-h-[300px] p-2 font-mono text-sm leading-relaxed overflow-auto
-                 text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words"
+                 whitespace-pre-wrap break-words"
         ><code ref="codeRef" class="language-json"></code></pre>
       </div>
       <ScrollBar orientation="vertical" />

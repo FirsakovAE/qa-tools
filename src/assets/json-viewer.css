@@ -17,10 +17,11 @@
 
 @media (prefers-color-scheme: dark) {
     .json-viewer-wrapper {
-      background-color: hsl(240 10% 7% / 0.95);
-      backdrop-filter: none; /* ← принципиально */
+        background-color: hsl(var(--background) / 0.95);
+        backdrop-filter: blur(32px) brightness(1.1);
+        border: 1px solid hsl(var(--border) / 0.6);
     }
-  }
+}
   
   
 
@@ -31,6 +32,7 @@
     padding: 0.75rem;
     white-space: pre-wrap;
     word-break: break-word;
+    color: hsl(var(--foreground));
 }
 
 /* Prism styles - inherit from parent like text mode */
@@ -47,13 +49,13 @@ pre[class*=language-] {
     letter-spacing: inherit !important;
 }
 
-/* Prism токены */
-.json-viewer .token.string      { color: #10b981; } /* green-500 */
-.json-viewer .token.number      { color: #3b82f6; } /* blue-500 */
-.json-viewer .token.boolean     { color: #f59e0b; } /* amber-500 */
-.json-viewer .token.null        { color: #f43f5e; } /* red-500 */
-.json-viewer .token.key         { color: #8b5cf6; } /* violet-500 */
-.json-viewer .token.punctuation { color: #6b7280; } /* gray-500 */
+/* JSON editor стили */
+.json-editor {
+    color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+}
+
+/* Prism токены - определены в json.css для корректной поддержки тем */
 
 /* Tree view стили */
 .json-tree-view {

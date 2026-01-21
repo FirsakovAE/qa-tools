@@ -10,10 +10,10 @@ const props = defineProps<ToasterProps>();
     v-bind="props"
     :toast-options="{
       ...props.toastOptions,
-      unstyled: true,
       classes: {
-        toast: 'toast-slide-in group w-full cursor-default rounded-lg shadow-lg',
-        description: 'text-muted-foreground',
+        toast: 'toast-slide-in toast-surface group w-full rounded-lg text-sm',
+        title: 'font-semibold',
+        description: 'mt-1',
       },
     }"
   />

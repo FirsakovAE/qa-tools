@@ -53,21 +53,6 @@
     --destructive-foreground: 0 0% 98%;
     --ring: 240 5.9% 10%;
 
-    /* Shared gradient (SINGLE SOURCE OF TRUTH) */
-    --infuse-gradient:
-      radial-gradient(circle at 0% 0%, rgba(140, 100, 255, 0.3) 0%, transparent 50%),
-      radial-gradient(circle at 100% 0%, rgba(50, 200, 255, 0.25) 0%, transparent 50%),
-      radial-gradient(circle at 20% 100%, rgba(255, 100, 255, 0.2) 0%, transparent 50%),
-      radial-gradient(circle at 80% 100%, rgba(100, 150, 200, 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
-
-    /* Infuse image mode */
-    --infuse-image: url('/src/assets/background1.jpg');
-    --infuse-mode: gradient; /* gradient | image */
-
-    /* Infuse tuning */
-    --infuse-blur: 48px;
-    --infuse-opacity: 0.85;
   }
 
   /* ---------------------------------
@@ -93,31 +78,6 @@
     --ring: 240 4.9% 83.9%;
   }
 
-  /* ---------------------------------
-     Popup layout (EXTENSION POPUP)
-     --------------------------------- */
-  html[data-popup],
-  body[data-popup] {
-    width: 400px;
-    height: 600px;
-    overflow: hidden;
-  }
-
-  html[data-popup] {
-    font-size: 16px !important;
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
-  }
-
-  body[data-popup] {
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    font-size: 1rem !important;
-    line-height: 1.5;
-    @apply bg-background text-foreground antialiased;
-  }
 
   /* ---------------------------------
      Injected UI (iframe / content)
@@ -214,57 +174,16 @@
    Utilities (project-specific)
    ========================= */
 @layer utilities {
-  .custom-infuse {
-    position: relative;
-    isolation: isolate;
-    z-index: -1;
-  }
-
-  .custom-infuse::before {
-    content: '';
-    position: absolute;
-    inset: -20%;
-    z-index: -1;
-
-    background-image:
-      var(--infuse-gradient);
-
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-
-    filter: blur(var(--infuse-blur));
-    opacity: var(--infuse-opacity);
-
-    transform: translateZ(0);
-    pointer-events: none;
-  }
-
   .toast-surface {
-    position: relative;
-    isolation: isolate;
+    background-color: hsl(var(--background) / 0.96);
+    color: hsl(var(--foreground));
 
-    background-color: transparent;
-    background-image: none;
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: var(--radius);
 
     backdrop-filter: blur(var(--backdrop-filter-blur));
-    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: var(--shadow-md);
   }
-}
-
-/* =========================
-   Infuse modes
-
-
-.custom-infuse[data-infuse='image']::before {
-  background-image: var(--infuse-image);
-  opacity: 0.3;
-}
-     ========================= */
-
-.custom-infuse[data-infuse='gradient']::before {
-  background-image: var(--infuse-gradient);
-  opacity: 0.6;
 }
 
 /* =========================
@@ -279,8 +198,21 @@
     0 8px 32px hsl(0 0% 0% / 0.25);
 }
 
+/* =========================
+   Fix text readability over Infusion
+   ========================= */
+.app-shell > div,
 .app-content {
-  background-color: hsl(var(--background));
+  position: relative;
+  z-index: 10; /* над Infusion */
+  background-color: hsl(var(--background)); /* solid surface */
+  color: hsl(var(--foreground));
+  isolation: isolate;
+}
+
+.app-shell ::selection {
+  background-color: hsl(var(--primary) / 0.5);
+  color: hsl(var(--primary-foreground));
 }
 
 .app-root {
@@ -295,6 +227,53 @@
   isolation: isolate;
   width: 100%;
   height: 100%;
+}
+
+/* =========================
+   Toaster enhancements
+   ========================= */
+
+.toaster-enhanced {
+  --gray1: hsl(var(--background));
+  --gray2: hsl(var(--muted));
+  --gray3: hsl(var(--muted-foreground));
+  --gray4: hsl(var(--foreground));
+  --gray5: hsl(var(--border));
+  --gray6: hsl(var(--border) / 0.5);
+  --gray7: hsl(var(--border) / 0.25);
+  --border-radius: var(--radius);
+  --font-size: 0.875rem;
+  --line-height: 1.25rem;
+}
+
+.toaster-enhanced [data-sonner-toast] {
+  backdrop-filter: blur(32px);
+  background-color: hsl(var(--background) / 0.95) !important;
+  border: 1px solid hsl(var(--border) / 0.5) !important;
+  box-shadow:
+    0 0 0 1px hsl(var(--border) / 0.4),
+    0 8px 32px hsl(0 0% 0% / 0.25);
+  color: hsl(var(--foreground)) !important;
+}
+
+.toaster-enhanced [data-sonner-toast] * {
+  color: inherit !important;
+}
+
+.toaster-enhanced [data-sonner-toast] [data-button] {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border: none !important;
+}
+
+.toaster-enhanced [data-sonner-toast] [data-button]:hover {
+  background-color: hsl(var(--primary) / 0.9) !important;
+}
+
+.toaster-enhanced [data-sonner-toast] [data-cancel] {
+  background-color: hsl(var(--secondary)) !important;
+  color: hsl(var(--secondary-foreground)) !important;
+  border: none !important;
 }
 
 /* =========================
