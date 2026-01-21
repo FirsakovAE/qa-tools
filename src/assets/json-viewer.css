@@ -17,11 +17,12 @@
 
 @media (prefers-color-scheme: dark) {
     .json-viewer-wrapper {
-        background-color: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(32px) brightness(1.1);
-        border: 1px solid hsl(var(--border) / 0.6);
+      background-color: hsl(240 10% 7% / 0.95);
+      backdrop-filter: none; /* ← принципиально */
     }
-}
+  }
+  
+  
 
 .json-viewer {
     font-family: monospace;

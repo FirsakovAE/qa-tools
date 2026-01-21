@@ -13,7 +13,7 @@
     <div class="app-root">
       <Infusion
        class="custom-infuse absolute inset-0" src=""
-       data-infuse="image" 
+       data-infuse="gradient" 
        :opacity="0.15"
        :opacityDark="0.2"
        :blur="72"
