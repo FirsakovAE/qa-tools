@@ -48,6 +48,9 @@ temp/
 # TypeScript
 *.tsbuildinfo
 
+# Files
+feature_plans.md
+
 # Browser extension
 # Usually you want to keep dist/ for extensions, but uncomment if needed
 # dist/
