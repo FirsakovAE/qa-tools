@@ -544,6 +544,50 @@
 
     document.getElementById('baseUrl').value = getBaseURL();
 
+    // Обработчики вкладок
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Убираем активный класс у всех вкладок и контента
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+        // Добавляем активный класс текущей вкладке и соответствующему контенту
+        tab.classList.add('active');
+        const tabId = tab.getAttribute('data-tab');
+        document.getElementById(`${tabId}-tab`).classList.add('active');
+      });
+    });
+
+    // Статическая информация о релизе для GitHub Pages
+    function showStaticReleaseInfo() {
+      const updateInfo = document.getElementById('updateInfo');
+      const updateVersion = document.getElementById('updateVersion');
+      const updateDescription = document.getElementById('updateDescription');
+      const releaseDate = document.getElementById('releaseDate');
+      const downloadLink = document.getElementById('downloadLink');
+      const downloadError = document.getElementById('downloadError');
+
+      // Статические данные последнего релиза
+      const staticRelease = {
+        tag_name: 'v1.2.0',
+        body: 'Исправлены ошибки с отображением компонентов в Vue 3. Поддержка Pinia 2.x. Улучшена производительность инспектора.',
+        published_at: new Date().toISOString(),
+        assets: []
+      };
+
+      updateVersion.textContent = staticRelease.tag_name;
+      updateDescription.textContent = staticRelease.body.replace(/^#+\s+/gm, '');
+      releaseDate.textContent = `Опубликовано: ${new Date(staticRelease.published_at).toLocaleDateString('ru-RU')}`;
+
+      // Для GitHub Pages используем прямую ссылку на releases
+      downloadLink.href = 'https://github.com/FirsakovAE/qa-tools/releases';
+      downloadLink.textContent = 'Посмотреть релизы на GitHub';
+      downloadLink.style.display = 'inline-flex';
+      downloadError.style.display = 'none';
+
+      updateInfo.style.display = 'block';
+    }
+
     function generateBookmarkletCode(baseURL) {
       // Минимальный код для загрузки inspector
       const code = `
@@ -572,6 +616,9 @@
 
     // Инициализация
     updateBookmarklet();
+
+    // Загружаем информацию о релизе
+    showStaticReleaseInfo();
 
     // Обновляем при изменении input
     document.getElementById('baseUrl').addEventListener('input', updateBookmarklet);
