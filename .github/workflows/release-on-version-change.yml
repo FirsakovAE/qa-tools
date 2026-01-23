@@ -53,6 +53,32 @@ jobs:
         if: steps.check.outputs.exists == 'true'
         run: echo "Release already exists, skipping."
 
+      - name: Validate changelog contains version
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+
+          const version = '${{ steps.version.outputs.version }}';
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+
+          const header = `## [${version}]`;
+
+          if (!changelog.includes(header)) {
+            console.error('❌ Changelog validation failed');
+            console.error('');
+            console.error(`Version ${version} is missing in CHANGELOG.md`);
+            console.error('');
+            console.error('Expected section:');
+            console.error(header);
+            console.error('');
+            console.error(`Please move changes from [Unreleased] to [${version}]`);
+            process.exit(1);
+          }
+
+          console.log(`✅ Changelog contains version ${version}`);
+          EOF
+
       - name: Build project
         if: steps.check.outputs.exists == 'false'
         run: npm run build
@@ -64,12 +90,36 @@ jobs:
           zip -r ../qa-tools.zip .
           cd ..
 
+      - name: Extract release notes from CHANGELOG
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+
+          const version = '${{ steps.version.outputs.version }}';
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+
+          const regex = new RegExp(
+            `## \\[${version}\\][\\s\\S]*?(?=\\n## \\[|$)`
+          );
+
+          const match = changelog.match(regex);
+
+          if (!match) {
+            console.error(`Changelog section for ${version} not found`);
+            process.exit(1);
+          }
+
+          fs.writeFileSync('RELEASE.md', match[0].trim());
+          EOF
+
       - name: Create GitHub Release
         if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
+          body_path: RELEASE.md
           files: qa-tools.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

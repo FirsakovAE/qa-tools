@@ -59,7 +59,7 @@ export default defineConfig({
         }
 
         // Копируем необходимые папки для работы standalone
-        const foldersToCopy = ['js', 'injected_ui', 'assets']
+        const foldersToCopy = ['js', 'injected_ui', 'assets', 'icons']
         foldersToCopy.forEach(folder => {
           const srcPath = join(distPath, folder)
           const destPath = join(docsPath, folder)
@@ -163,9 +163,9 @@ export default defineConfig({
         }
 
         // 2. Удаляем extension-артефакты из docs (standalone должен быть чистым)
+        // Примечание: иконки оставляем, так как они могут понадобиться для standalone
         const docsArtifactsToRemove = [
           'manifest.json',
-          'icons',
           'defaultSettings.json'
         ]
 

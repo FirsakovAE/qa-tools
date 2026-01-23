@@ -103,9 +103,9 @@ function onInput(e: Event) {
         <pre
           v-if="editable"
           ref="editableRef"
-          class="json-editor h-full min-h-[300px] p-2 font-mono text-sm leading-relaxed overflow-auto
+          class="json-editor h-full min-h-[300px] font-sans leading-relaxed overflow-auto
                  whitespace-pre-wrap break-all
-                 bg-transparent outline-none focus:outline-none border rounded
+                 bg-transparent outline-none focus:outline-none
                  cursor-text"
           :style="{
             color: 'hsl(var(--foreground))',
@@ -120,7 +120,7 @@ function onInput(e: Event) {
 
         <pre
           v-else
-          class="json-viewer h-full min-h-[300px] p-2 font-mono text-sm leading-relaxed overflow-auto
+          class="json-viewer h-full min-h-[300px] p-2 leading-relaxed overflow-auto
                  whitespace-pre-wrap break-words"
         ><code ref="codeRef" class="language-json"></code></pre>
       </div>

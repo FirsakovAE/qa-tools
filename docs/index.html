@@ -1,9 +1,18 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+<!-- Основная иконка -->
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/icon32.png">
+<!-- Резерв -->
+<link rel="icon" type="image/png" sizes="16x16" href="./icons/icon16.png">
+<!-- Для Safari / Apple -->
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon34.png">
+
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vue Inspector — Standalone</title>
+  <title>Vue Inspector — QA Tools</title>
+
   <style>
     :root {
       --bg: #0a0a0b;
@@ -30,8 +39,15 @@
     }
     
     .container {
-      max-width: 600px;
+      max-width: 700px;
       width: 100%;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
     }
     
     h1 {
@@ -47,7 +63,99 @@
     
     .subtitle {
       color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+    
+    .github-icon {
+      color: var(--text-muted);
+      font-size: 1.5rem;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .github-icon:hover {
+      color: var(--text);
+    }
+    
+    .description {
       margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    
+    .update-info {
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .update-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--accent);
+    }
+    
+    .update-version {
+      background: var(--accent);
+      color: white;
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+    
+    .update-description {
+      font-size: 0.875rem;
+      line-height: 1.5;
+      white-space: pre-line;
+      margin-top: 0.5rem;
+    }
+    
+    .release-date {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .tab {
+      padding: 0.75rem 1.5rem;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 8px 8px 0 0;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .tab.active {
+      color: var(--accent);
+      border-color: var(--border);
+      border-bottom-color: var(--bg);
+      background: var(--surface);
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
     }
     
     .card {
@@ -123,6 +231,26 @@
     
     .bookmarklet:active {
       cursor: grabbing;
+    }
+    
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: background 0.2s;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    
+    .download-btn:hover {
+      background: var(--accent-hover);
     }
     
     .hint {
@@ -202,73 +330,197 @@
     .footer a:hover {
       text-decoration: underline;
     }
+    
+    .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: background 0.2s;
+      margin-top: 0.5rem;
+    }
+    
+    .download-link:hover {
+      background: var(--accent-hover);
+    }
+    
+    .error-message {
+      color: #ef4444;
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1><span>🔍</span> Vue Inspector</h1>
-    <p class="subtitle">Инструмент инспекции Vue/Pinia для корпоративных устройств</p>
+    <div class="header">
+      <div>
+        <h1>      <a href="https://github.com/FirsakovAE" target="_blank" class="github-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+        </a> Vue Inspector</h1>
+        <p class="subtitle">Инструмент инспекции Vue/Pinia</p>
+      </div>
+    </div>
     
-    <div class="card">
-      <div class="card-title">Как использовать</div>
-      
-      <div class="step">
-        <div class="step-number">1</div>
-        <div class="step-content">
-          <p>Перетащите кнопку ниже в панель закладок браузера</p>
+    <div class="description">
+      <p>Этот инструмент позволяет инспектировать Vue компоненты и Pinia хранилища на страницах. Доступно два режима использования: как расширение браузера или как standalone-скрипт.</p>
+    </div>
+    
+    <div id="updateInfo" class="card" style="display: none;">
+      <div class="update-title">
+        <span>Последнее обновление</span>
+        <span class="badge" id="updateVersion"></span>
+      </div>
+      <div class="update-description" id="updateDescription"></div>
+      <div class="release-date" id="releaseDate"></div>
+    </div>
+    
+    <div class="tabs">
+      <button class="tab active" data-tab="extensions">Extensions</button>
+      <button class="tab" data-tab="standalone">Standalone</button>
+    </div>
+    
+    <div id="standalone-tab" class="tab-content">
+      <div class="card">
+        <div class="card-title">Как использовать</div>
+        
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <p>Перетащите кнопку ниже в панель закладок браузера</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <p>Откройте страницу с Vue приложением</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <p>Кликните по закладке — inspector появится внизу страницы</p>
+          </div>
+        </div>
+        
+        <div class="bookmarklet-area">
+          <a id="bookmarklet" class="bookmarklet" href="#">
+            Vue Inspector
+          </a>
+          <span class="hint">← Перетащите в закладки</span>
+        </div>
+        
+        <div class="config-section">
+          <label class="config-label">Адрес сервера с инструментом</label>
+          <input 
+            type="text" 
+            id="baseUrl" 
+            class="config-input" 
+            value=""
+            placeholder="http://localhost:5174"
+          >
+          <button class="update-btn" onclick="updateBookmarklet()">
+            Обновить bookmarklet
+          </button>
         </div>
       </div>
       
-      <div class="step">
-        <div class="step-number">2</div>
-        <div class="step-content">
-          <p>Откройте страницу с Vue приложением</p>
-        </div>
+      <div class="card">
+        <div class="card-title">Режим работы</div>
+        <p style="margin-bottom: 0.75rem;">
+          <span class="badge">Standalone Mode</span>
+        </p>
+        <p class="hint">
+          В standalone режиме некоторые функции недоступны:
+          инспекция других вкладок, фоновая синхронизация.
+          Все основные возможности инспекции Vue и Pinia работают.
+        </p>
       </div>
-      
-      <div class="step">
-        <div class="step-number">3</div>
-        <div class="step-content">
-          <p>Кликните по закладке — inspector появится внизу страницы</p>
+    </div>
+    
+    <div id="extensions-tab" class="tab-content active">
+      <div class="card">
+        <div class="card-title">Установка расширения</div>
+        
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <p>Скачайте последнюю версию расширения</p>
+          </div>
         </div>
-      </div>
-      
-      <div class="bookmarklet-area">
-        <a id="bookmarklet" class="bookmarklet" href="#">
-          📦 Vue Inspector
+        
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <p>Распакуйте архив в удобное место</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <p>Откройте chrome://extensions/ в браузере</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <p>Включите "Developer mode" (режим разработчика) в правом верхнем углу</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <p>Нажмите "Load unpacked" и выберите папку dist/ из распакованного архива</p>
+          </div>
+        </div>
+
+      <div id="downloadSection">
+        <a id="downloadLink" class="download-link" href="#" target="_blank" style="display: none;">
+          Скачать расширение
         </a>
-        <span class="hint">← Перетащите в закладки</span>
+        <div id="downloadError" class="error-message" style="display: none;">
+          Файл для скачивания не найден в релизе. Пожалуйста, скачайте вручную с GitHub.
+        </div>
       </div>
+    </div>
+
       
-      <div class="config-section">
-        <label class="config-label">Адрес сервера с инструментом</label>
-        <input 
-          type="text" 
-          id="baseUrl" 
-          class="config-input" 
-          value=""
-          placeholder="http://localhost:5174"
-        >
-        <button class="update-btn" onclick="updateBookmarklet()">
-          Обновить bookmarklet
-        </button>
+      <div class="card">
+        <div class="card-title">Режим инкогнито для расширения</div>
+        
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <p>Откройте chrome://extensions/</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <p>Найдите Vue Inspector и нажмите "Details"</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <p>Переключите "Allow in Incognito" = ON</p>
+          </div>
+        </div>
       </div>
-    </div>
-    
-    <div class="card">
-      <div class="card-title">Режим работы</div>
-      <p style="margin-bottom: 0.75rem;">
-        <span class="badge">Standalone Mode</span>
-      </p>
-      <p class="hint">
-        В standalone режиме некоторые функции недоступны:
-        инспекция других вкладок, фоновая синхронизация.
-        Все основные возможности инспекции Vue и Pinia работают.
-      </p>
-    </div>
-    
-    <div class="footer">
-      Требуется запущенный сервер: <code>npm run serve:standalone</code>
     </div>
   </div>
 

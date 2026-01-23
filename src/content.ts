@@ -82,6 +82,9 @@ let featureFlags: FeatureFlags = {
 let injectedScriptLoaded = false
 let uiInjected = false
 
+// Результат детекции статичного сайта
+let staticSiteDetection: StaticDetectionResult | null = null
+
 /**
  * Передаёт флаги в iframe UI
  */
@@ -1190,6 +1193,118 @@ function cleanup(): void {
 
 window.addEventListener('beforeunload', cleanup)
 
+// === STATIC SITE DETECTION (HUGO / MPA SAFE MODE) ===
+
+type StaticDetectionResult = {
+  isLikelyStatic: boolean
+  reasons: string[]
+}
+
+function detectStaticSite(): StaticDetectionResult {
+  const reasons: string[] = []
+
+  // === ОСНОВНОЕ ПРАВИЛО: ЕСЛИ ЕСТЬ ПРИЗНАКИ VUE - НЕ СТАТИЧНЫЙ ===
+  // Проверяем наличие Vue через различные признаки
+  const hasVueIndicators =
+    (window as any).__VUE__ ||
+    (window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__ ||
+    !!document.querySelector('[data-v-]') || // Vue scoped styles
+    !!document.querySelector('[v-]') || // Vue directives
+    !!document.querySelector('.vue-app, #app, #root') || // Common Vue app containers
+    Array.from(document.querySelectorAll('script')).some(s =>
+      s.src?.includes('vue') || s.textContent?.includes('Vue.')
+    )
+
+  if (hasVueIndicators) {
+    // Если есть признаки Vue - сайт точно не статичный
+    return { isLikelyStatic: false, reasons: [] }
+  }
+
+  // === ПРОВЕРКИ ТОЛЬКО ДЛЯ САЙТОВ БЕЗ ПРИЗНАКОВ VUE ===
+
+  // 1. Признаки MPA навигации (только если много таких ссылок)
+  const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 30)
+  const mpaLinks = links.filter(a => {
+    const href = a.getAttribute('href')
+    return href && (
+      href.match(/\.html$/) || // .html файлы
+      (href.match(/\/[^/]+\/$/) && !href.includes('#') && !href.includes('?')) // директории без параметров
+    )
+  })
+
+  if (mpaLinks.length > Math.min(links.length * 0.6, 10)) { // 60% ссылок или минимум 10
+    reasons.push(`MPA-style links: ${mpaLinks.length}/${links.length}`)
+  }
+
+  // 2. Навигация типа "navigate" + отсутствие других типов
+  try {
+    const navEntries = performance.getEntriesByType('navigation') as any[]
+    const navType = navEntries?.[0]?.type
+    if (navType === 'navigate') {
+      reasons.push('navigation type = navigate')
+    }
+  } catch {}
+
+  // 3. Отсутствие признаков SPA router (менее строгий критерий)
+  const hasRouterIndicators =
+    window.history?.state?._isRouter || // Vue Router state
+    window.location.hash.includes('#/') || // Hash routing
+    document.querySelector('[data-router-view], [data-router-link]') // Router elements
+
+  if (!hasRouterIndicators) {
+    reasons.push('no router indicators')
+  }
+
+  // 4. Проверка на генераторы статичных сайтов (Hugo, Jekyll, etc.)
+  const hasStaticGeneratorIndicators =
+    !!document.querySelector('meta[name="generator"][content*="Hugo"]') ||
+    !!document.querySelector('meta[name="generator"][content*="Jekyll"]') ||
+    !!document.querySelector('meta[name="generator"][content*="Gatsby"]') ||
+    !!document.querySelector('meta[name="generator"][content*="Next.js"]') ||
+    document.documentElement.classList.contains('hugo-site') ||
+    document.body.classList.contains('jekyll-site')
+
+  if (hasStaticGeneratorIndicators) {
+    reasons.push('static site generator detected')
+  }
+
+  // 5. DOM наблюдение - только значительные изменения
+  let significantDomChanges = 0
+  const root = document.documentElement
+
+  const observer = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      if (m.type === 'childList' && m.target === root) {
+        if (m.addedNodes.length > 3 || m.removedNodes.length > 3) {
+          significantDomChanges++
+        }
+      }
+    }
+  })
+
+  observer.observe(root, { childList: true, subtree: false })
+
+  // Останавливаем наблюдение через 3 сек
+  setTimeout(() => {
+    observer.disconnect()
+    if (significantDomChanges > 2) {
+      reasons.push(`significant DOM changes: ${significantDomChanges}`)
+    }
+  }, 3000)
+
+  // === ИТОГОВАЯ ЭВРИСТИКА ===
+  // Требуем больше признаков для уверенности + явные признаки статичности
+  const hasStrongStaticIndicators =
+    hasStaticGeneratorIndicators ||
+    (mpaLinks.length > Math.min(links.length * 0.8, 15)) // 80% ссылок MPA-style
+
+  const isLikelyStatic =
+    hasStrongStaticIndicators ||
+    (reasons.length >= 3 && !hasVueIndicators) // Минимум 3 признака + отсутствие Vue
+
+  return { isLikelyStatic, reasons }
+}
+
 function injectInspectorUI() {
   if (document.getElementById('vue-inspector-host')) return
 
@@ -1433,14 +1548,19 @@ function injectInspectorUI() {
 // Инициализация content script
 function initializeContentScript(): void {
   init()
-  
-  // UI показываем ВСЕГДА - шеврон должен быть на всех сайтах
-  // Вкладки внутри UI показываются в зависимости от флагов
-  if (!uiInjected) {
+
+  // Детектируем статичный сайт перед созданием UI
+  if (!staticSiteDetection) {
+    staticSiteDetection = detectStaticSite()
+  }
+
+  // UI показываем ТОЛЬКО если сайт не статичный
+  // На статичных сайтах (Hugo/MPA) не показываем шеврон для предотвращения утечки памяти
+  if (!staticSiteDetection.isLikelyStatic && !uiInjected) {
     uiInjected = true
     injectInspectorUI()
   }
-  
+
   startObserving()
   setupHighlightEventListeners()
 }
