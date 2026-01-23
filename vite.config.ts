@@ -87,43 +87,34 @@ export default defineConfig({
           // Исправляем пути к assets (убираем ведущий слеш)
           content = content.replace(/src="\/assets\//g, 'src="assets/')
 
-          // Полностью заменяем блок script с правильной логикой
-          const oldScriptBlock = /<script>[\s\S]*?<\/script>/;
-          const newScriptBlock = `<script>
-    // Определяем базовый URL для GitHub Pages
+          // Заменяем блок script для GitHub Pages
+          const oldScriptPattern = /    \/\/ Определяем текущий origin как базовый URL[\s\S]*?    }\);\s*<\/script>/;
+          const newScript = `    // Определяем базовый URL для GitHub Pages
     function getBaseURL() {
-      const origin = window.location.origin; // https://firsakovae.github.io
-      const pathname = window.location.pathname; // /qa-tools/
+      const origin = window.location.origin;
+      const pathname = window.location.pathname;
 
-      // Если на GitHub Pages, добавляем имя репозитория
       if (origin.includes('github.io')) {
-        // Извлекаем имя репозитория из пути
         const pathParts = pathname.split('/').filter(p => p);
-        const repoName = pathParts[0]; // 'qa-tools'
+        const repoName = pathParts[0];
         return origin + '/' + repoName;
       }
 
-      // Для локального сервера используем origin
       return origin;
     }
 
-    document.getElementById('baseUrl').value = getBaseURL();
-
-    // Обработчики вкладок
-    document.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        // Убираем активный класс у всех вкладок и контента
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-        // Добавляем активный класс текущей вкладке и соответствующему контенту
-        tab.classList.add('active');
-        const tabId = tab.getAttribute('data-tab');
-        document.getElementById(\`\${tabId}-tab\`).classList.add('active');
+    function initTabs() {
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          tab.classList.add('active');
+          const tabId = tab.getAttribute('data-tab');
+          document.getElementById(\`\${tabId}-tab\`).classList.add('active');
+        });
       });
-    });
+    }
 
-    // Статическая информация о релизе для GitHub Pages
     function showStaticReleaseInfo() {
       const updateInfo = document.getElementById('updateInfo');
       const updateVersion = document.getElementById('updateVersion');
@@ -132,44 +123,27 @@ export default defineConfig({
       const downloadLink = document.getElementById('downloadLink');
       const downloadError = document.getElementById('downloadError');
 
-      // Статические данные последнего релиза
+      if (!updateInfo || !updateVersion) return;
+
       const staticRelease = {
         tag_name: 'v1.2.0',
         body: 'Исправлены ошибки с отображением компонентов в Vue 3. Поддержка Pinia 2.x. Улучшена производительность инспектора.',
-        published_at: new Date().toISOString(),
-        assets: []
+        published_at: new Date().toISOString()
       };
 
       updateVersion.textContent = staticRelease.tag_name;
-      updateDescription.textContent = staticRelease.body.replace(/^#+\\s+/gm, '');
+      updateDescription.textContent = staticRelease.body;
       releaseDate.textContent = \`Опубликовано: \${new Date(staticRelease.published_at).toLocaleDateString('ru-RU')}\`;
 
-      // Для GitHub Pages используем прямую ссылку на releases
       downloadLink.href = 'https://github.com/FirsakovAE/qa-tools/releases';
       downloadLink.textContent = 'Посмотреть релизы на GitHub';
       downloadLink.style.display = 'inline-flex';
       downloadError.style.display = 'none';
-
       updateInfo.style.display = 'block';
     }
 
     function generateBookmarkletCode(baseURL) {
-      // Минимальный код для загрузки inspector
-      const code = \`
-        (function(){
-          if(window.__VUE_INSPECTOR_INITIALIZED__){
-            return;
-          }
-          var b='\${baseURL}';
-          window.__VUE_INSPECTOR_CONFIG__={baseURL:b};
-          window.__VUE_INSPECTOR_INITIALIZED__=true;
-          var s=document.createElement('script');
-          s.src=b+'/loader.js';
-          s.onerror=function(){alert('Vue Inspector: Failed to load from '+b)};
-          document.head.appendChild(s);
-        })();
-      \`.replace(/\\s+/g, ' ').trim();
-
+      const code = \`(function(){if(window.__VUE_INSPECTOR_INITIALIZED__){return;}var b='\${baseURL}';window.__VUE_INSPECTOR_CONFIG__={baseURL:b};window.__VUE_INSPECTOR_INITIALIZED__=true;var s=document.createElement('script');s.src=b+'/loader.js';s.onerror=function(){alert('Vue Inspector: Failed to load from '+b)};document.head.appendChild(s);})();\`;
       return 'javascript:' + encodeURIComponent(code);
     }
 
@@ -179,23 +153,23 @@ export default defineConfig({
       bookmarklet.href = generateBookmarkletCode(baseURL);
     }
 
-    // Инициализация
-    updateBookmarklet();
+    // Инициализация после загрузки DOM
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('baseUrl').value = getBaseURL();
+      initTabs();
+      showStaticReleaseInfo();
+      updateBookmarklet();
 
-    // Загружаем информацию о релизе
-    showStaticReleaseInfo();
-
-    // Обновляем при изменении input
-    document.getElementById('baseUrl').addEventListener('input', updateBookmarklet);
-
-    // Предотвращаем переход по ссылке при клике
-    document.getElementById('bookmarklet').addEventListener('click', function(e) {
-      alert('Перетащите эту кнопку в панель закладок браузера,\\nзатем используйте на странице с Vue приложением.');
-      e.preventDefault();
+      // Обработчики событий
+      document.getElementById('baseUrl').addEventListener('input', updateBookmarklet);
+      document.getElementById('bookmarklet').addEventListener('click', function(e) {
+        alert('Перетащите эту кнопку в панель закладок браузера,\\nзатем используйте на странице с Vue приложением.');
+        e.preventDefault();
+      });
     });
   </script>`;
 
-          content = content.replace(oldScriptBlock, newScriptBlock);
+          content = content.replace(oldScriptPattern, newScript);
           writeFileSync(indexHtmlPath, content, 'utf-8')
         }
 
