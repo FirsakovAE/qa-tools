@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Vue Inspector",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Pinia store and props inspector for Vue.js applications",
   "author": "AdamBarmy",
   "icons": {
