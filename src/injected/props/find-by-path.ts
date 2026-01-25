@@ -1,4 +1,8 @@
-// src/injected/find-by-path.ts
+// src/injected/props/find-by-path.ts
+
+import { findVueRoots, extractRootVNode, detectVueContext } from './vue-detect'
+import { getVueComponents as getAllVueComponents } from './collect-all'
+import { resolveAsyncComponent } from './async-wrapper'
 
 // Define interfaces locally to avoid import issues
 interface VueHTMLElement extends HTMLElement {
@@ -30,89 +34,207 @@ interface ElementInfo {
 }
 
 /**
- * Единый контракт для найденного компонента
+ * Unified contract for resolved components
  */
 export interface ResolvedComponent {
-  /** Исходный vnode */
+  /** Original vnode */
   vnode: any
-  /** Экземпляр компонента (для Vue 3) или instance (для Vue 2) */
+  /** Component instance (for Vue 3) or instance (for Vue 2) */
   instance: any | null
-  /** Цель для записи props */
+  /** Target for writing props */
   propsTarget: Record<string, any> | null
-  /** Флаг Vue 2 */
+  /** Vue 2 flag */
   isVue2: boolean
 }
-import { findVueRoots, extractRootVNode, detectVueContext } from './vue-detect'
-import { getVueComponents as getAllVueComponents } from './collect-all'
-import { getVueComponents } from './collect-all'
-import { resolveAsyncComponent } from './async-wrapper'
 
 /**
- * Ищет Vue компонент, связанный с данным DOM элементом.
- * Рекурсивно обходит дерево компонентов для поиска соответствия.
- * @param element - DOM-элемент для поиска.
- * @returns Найденный VNode компонента или null.
+ * Cache for recently found components (WeakMap to allow GC)
+ */
+const vnodeByElementCache = new WeakMap<HTMLElement, any>()
+
+/**
+ * Cache for path lookups with TTL
+ */
+interface PathCacheEntry {
+  vnode: any
+  timestamp: number
+}
+
+const pathCache = new Map<string, PathCacheEntry>()
+const PATH_CACHE_TTL = 500 // 500ms TTL
+const PATH_CACHE_MAX_SIZE = 100
+const PATH_CACHE_CLEANUP_INTERVAL = 30000 // 30 seconds
+
+// Periodic cleanup timer
+let pathCacheCleanupTimer: ReturnType<typeof setInterval> | null = null
+
+/**
+ * Start periodic cleanup of pathCache
+ */
+function startPathCacheCleanup(): void {
+  if (pathCacheCleanupTimer) return
+  
+  pathCacheCleanupTimer = setInterval(() => {
+    cleanupPathCacheInternal()
+  }, PATH_CACHE_CLEANUP_INTERVAL)
+}
+
+/**
+ * Stop periodic cleanup of pathCache
+ */
+function stopPathCacheCleanup(): void {
+  if (pathCacheCleanupTimer) {
+    clearInterval(pathCacheCleanupTimer)
+    pathCacheCleanupTimer = null
+  }
+}
+
+/**
+ * Internal cleanup function for pathCache
+ */
+function cleanupPathCacheInternal(): void {
+  const now = Date.now()
+  const toDelete: string[] = []
+  
+  for (const [key, entry] of pathCache) {
+    if (now - entry.timestamp > PATH_CACHE_TTL) {
+      toDelete.push(key)
+    }
+  }
+  
+  for (const key of toDelete) {
+    pathCache.delete(key)
+  }
+  
+  // If still over max size, remove oldest entries
+  if (pathCache.size > PATH_CACHE_MAX_SIZE) {
+    const entries = Array.from(pathCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp)
+    
+    const toRemove = entries.slice(0, entries.length - PATH_CACHE_MAX_SIZE)
+    for (const [key] of toRemove) {
+      pathCache.delete(key)
+    }
+  }
+}
+
+// Start cleanup timer on module load
+startPathCacheCleanup()
+
+/**
+ * Get from path cache with TTL check
+ */
+function getFromPathCache(key: string): any | null {
+  const entry = pathCache.get(key)
+  if (!entry) return null
+  
+  if (Date.now() - entry.timestamp > PATH_CACHE_TTL) {
+    pathCache.delete(key)
+    return null
+  }
+  
+  return entry.vnode
+}
+
+/**
+ * Set in path cache with size management
+ */
+function setInPathCache(key: string, vnode: any): void {
+  if (pathCache.size >= PATH_CACHE_MAX_SIZE) {
+    cleanupPathCacheInternal()
+  }
+  
+  pathCache.set(key, {
+    vnode,
+    timestamp: Date.now()
+  })
+}
+
+/**
+ * Finds a Vue component associated with a given DOM element.
+ * Uses caching to avoid repeated traversals.
+ * 
+ * @param element - DOM element to search for
+ * @returns Found VNode component or null
  */
 export function findVueComponentByElement(element: HTMLElement): any {
-  // Ищем Vue компонент по DOM элементу
+  // Check cache first
+  if (vnodeByElementCache.has(element)) {
+    return vnodeByElementCache.get(element)
+  }
+  
   const vueRoots = findVueRoots()
+  
   for (const root of vueRoots) {
     const rootVNode = extractRootVNode(root)
     if (!rootVNode) continue
 
-    const findInVNode = (vnode: any): any => {
-      if (!vnode) return null
-
-      // Проверяем текущий vnode
-      if (vnode.el === element || (vnode.component && vnode.component.subTree?.el === element)) {
-        return vnode
-      }
-
-      // Рекурсивно ищем в дочерних элементах
-      if (vnode.children && Array.isArray(vnode.children)) {
-        for (const child of vnode.children) {
-          const found = findInVNode(child)
-          if (found) return found
-        }
-      }
-
-      // Ищем в subTree компонента
-      if (vnode.component?.subTree) {
-        const found = findInVNode(vnode.component.subTree)
-        if (found) return found
-      }
-
-      return null
+    const found = findVNodeByElement(rootVNode, element, new WeakSet())
+    if (found) {
+      vnodeByElementCache.set(element, found)
+      return found
     }
-
-    const component = findInVNode(rootVNode)
-    if (component) return component
   }
 
   return null
 }
 
 /**
- * Находит Vue компонент по его пути в дереве компонентов.
- * Возвращает только vnode без нормализации.
- * @param componentUid - Уникальный идентификатор компонента (путь).
- * @returns Найденный VNode компонента или null.
+ * Internal recursive vnode finder with cycle detection
+ */
+function findVNodeByElement(vnode: any, element: HTMLElement, visited: WeakSet<object>): any {
+  if (!vnode || visited.has(vnode)) return null
+  visited.add(vnode)
+
+  // Check current vnode
+  if (vnode.el === element || (vnode.component?.subTree?.el === element)) {
+    return vnode
+  }
+
+  // Search in children
+  if (Array.isArray(vnode.children)) {
+    for (const child of vnode.children) {
+      if (child && typeof child === 'object') {
+        const found = findVNodeByElement(child, element, visited)
+        if (found) return found
+      }
+    }
+  }
+
+  // Search in component's subTree
+  if (vnode.component?.subTree) {
+    const found = findVNodeByElement(vnode.component.subTree, element, visited)
+    if (found) return found
+  }
+
+  return null
+}
+
+/**
+ * Finds a Vue component by its path in the component tree.
+ * Uses caching to improve performance.
+ * 
+ * @param componentUid - Unique component identifier (path)
+ * @returns Found VNode component or null
  */
 export function findComponentByPath(componentUid: string): any {
+  // Check cache first
+  const cached = getFromPathCache(componentUid)
+  if (cached) return cached
+  
   const vueRoots = findVueRoots()
   if (vueRoots.length === 0) {
     return null
   }
 
-  // Новый формат: path::name::componentId[::selector][::text:content]
+  // Parse path format: path::name::componentId[::selector][::text:content]
   const parts = componentUid.split('::')
   const actualPath = parts[0]
   const expectedName = parts[1]
-  // componentId может содержать селектор, берем только базовую часть uid
   const expectedUidWithSelector = parts[2]
   const expectedUid = expectedUidWithSelector ? expectedUidWithSelector.split('::')[0] : null
 
-  // Если componentUid содержит DOM селектор, используем его для поиска
+  // If componentUid contains a DOM selector, use it for lookup
   const selectorIndex = parts.findIndex((part, index) => {
     return (part.startsWith('#') || part.includes(' > ') || (part.includes('.') && index > 2))
   })
@@ -120,184 +242,105 @@ export function findComponentByPath(componentUid: string): any {
   if (selectorIndex !== -1) {
     let selector = parts.slice(selectorIndex).join('::').replace(/^::/, '')
 
-    // Убираем текстовую часть для поиска по селектору
+    // Remove text part for selector lookup
     if (selector.includes('::text:')) {
       selector = selector.split('::text:')[0]
     }
 
     try {
       const element = document.querySelector(selector)
-      if (element && element instanceof HTMLElement) {
-        // Найдем Vue компонент, связанный с этим элементом
+      if (element instanceof HTMLElement) {
         const component = findVueComponentByElement(element)
         if (component) {
+          setInPathCache(componentUid, component)
           return component
         }
       }
-    } catch (e) {
-      // Игнорируем ошибки невалидных селекторов
+    } catch {
+      // Ignore invalid selector errors
     }
   }
 
-  // Fallback: используем улучшенный подход для поиска по пути компонента
+  // Fallback: navigate by path
+  const result = navigateByPath(vueRoots, actualPath, expectedName, expectedUid)
+  if (result) {
+    setInPathCache(componentUid, result)
+  }
+  
+  return result
+}
+
+/**
+ * Navigate the component tree by path
+ */
+function navigateByPath(
+  vueRoots: VueHTMLElement[],
+  actualPath: string,
+  expectedName: string | undefined,
+  expectedUid: string | null
+): any {
   const pathParts = actualPath.split('.')
 
+  // Handle simple root case
   if (pathParts.length === 1 && pathParts[0] === 'root') {
     const root = vueRoots[0]
     const rootVNode = extractRootVNode(root)
-    if (rootVNode && rootVNode.component) {
+    if (rootVNode?.component) {
       return rootVNode
     }
     return null
   }
 
+  // Validate path
   if (pathParts.length === 0 || !pathParts[0].startsWith('root')) {
     return null
   }
 
+  // Parse root index
   let rootIndex = 0
   if (pathParts[0].startsWith('root[')) {
     const rootIndexMatch = pathParts[0].match(/root\[(\d+)\]/)
-    if (!rootIndexMatch) {
-      return null
-    }
+    if (!rootIndexMatch) return null
     rootIndex = parseInt(rootIndexMatch[1], 10)
-  } else if (pathParts[0] === 'root') {
-    rootIndex = 0
-  } else {
-    return null
- }
+  }
 
-  if (rootIndex >= vueRoots.length) {
-    return null
- }
+  if (rootIndex >= vueRoots.length) return null
 
   const root = vueRoots[rootIndex]
   const rootVNode = extractRootVNode(root)
-  if (!rootVNode) {
-    return null
- }
+  if (!rootVNode) return null
 
-  if (pathParts.length === 1) {
-    return rootVNode
-  }
+  if (pathParts.length === 1) return rootVNode
 
-  let current: any = rootVNode
-  // Получаем контекст Vue для унификации работы с версиями
+  // Navigate the path
   const vueContext = detectVueContext()
   const isVue2 = vueContext.version === 2
+  let current: any = rootVNode
 
   for (let i = 1; i < pathParts.length; i++) {
     const part = pathParts[i]
 
     if (part === 'subTree') {
-      if (current.component?.subTree) {
-        current = current.component.subTree
-      }
-      else if (isVue2) {
-        if (current.child?.component?.subTree) {
-          current = current.child.component.subTree
-        } else if (current.child) {
-          current = current.child
-        } else if (current.componentInstance?.$vnode) {
-          current = current.componentInstance.$vnode
-        } else {
-          return null
-        }
-      } else {
-        return null
-      }
+      current = navigateSubTree(current, isVue2)
     } else if (part.startsWith('children[')) {
-      const indexMatch = part.match(/children\[(\d+)\]/)
-      if (indexMatch) {
-        const index = parseInt(indexMatch[1], 10)
-
-        if (Array.isArray(current.children)) {
-          if (index < current.children.length) {
-            current = current.children[index]
-          } else {
-            return null
-          }
-        }
-        else if (isVue2) {
-          if (current.componentInstance?.$children && Array.isArray(current.componentInstance.$children)) {
-            if (index < current.componentInstance.$children.length) {
-              const childInstance = current.componentInstance.$children[index]
-              current = childInstance.$vnode || childInstance
-            } else {
-              return null
-            }
-          }
-          else if (current.context?.$children && Array.isArray(current.context.$children)) {
-            if (index < current.context.$children.length) {
-              const childInstance = current.context.$children[index]
-              current = childInstance.$vnode || childInstance
-            } else {
-              return null
-            }
-          }
-          else if (current.$children && Array.isArray(current.$children)) {
-            if (index < current.$children.length) {
-              const childInstance = current.$children[index]
-              current = childInstance.$vnode || childInstance
-            } else {
-              return null
-            }
-          }
-          else if (Array.isArray(current.children)) {
-            if (index < current.children.length) {
-              current = current.children[index]
-            } else {
-              return null
-            }
-          } else {
-            return null
-          }
-        } else {
-          return null
-        }
-      } else {
-        return null
-      }
+      current = navigateChildren(current, part, isVue2)
     } else if (part.startsWith('vnodeChildren[')) {
-      const indexMatch = part.match(/vnodeChildren\[(\d+)\]/)
-      if (indexMatch && Array.isArray(current.children)) {
-        const index = parseInt(indexMatch[1], 10)
-        if (index < current.children.length) {
-          current = current.children[index]
-        } else {
-          return null
-        }
-      } else {
-        return null
-      }
+      current = navigateVNodeChildren(current, part)
     } else {
       return null
     }
 
-    if (!current) {
-      return null
-    }
+    if (!current) return null
   }
 
-  // Проверяем имя компонента и uid, если они указаны в пути
+  // Verify name and uid if specified
   if (expectedName && current) {
-    const currentName = current.component?.type?.name ||
-                       current.component?.type?.__name ||
-                       current.component?.type?.displayName ||
-                       current.component?.type?.__file?.split('/').pop()?.replace(/\.vue$/, '') ||
-                       (isVue2 ? current.$options?.name : null) ||
-                       'Anonymous'
-
-    // Проверяем имя компонента
-    if (currentName !== expectedName) {
-      // Продолжаем поиск
-    } else {
-      // Проверяем uid компонента, если он указан в пути
-      if (expectedUid !== null && expectedUid !== 'undefined' && expectedUid !== 'null') {
+    const currentName = getVNodeName(current, isVue2)
+    
+    if (currentName === expectedName) {
+      if (expectedUid && expectedUid !== 'undefined' && expectedUid !== 'null') {
         const currentUid = current.component?.uid || current._uid
-        // Сравниваем только базовую часть uid (без селектора)
-        if (currentUid && currentUid !== expectedUid && !expectedUid.startsWith('anon_')) {
+        if (currentUid && String(currentUid) !== expectedUid && !expectedUid.startsWith('anon_')) {
           return null
         }
       }
@@ -305,76 +348,114 @@ export function findComponentByPath(componentUid: string): any {
     }
   }
 
-  // Поиск по имени должен выполняться в resolveComponent
-
-    // Если точная навигация по пути не удалась, возвращаем null
-    // Искусственные объекты должны создаваться в resolveComponent через similarity search
-
   return current
 }
 
 /**
- * Находит и нормализует компонент к единому контракту ResolvedComponent
- * @param componentUid - Уникальный идентификатор компонента (путь)
- * @returns ResolvedComponent или null
+ * Navigate to subTree
+ */
+function navigateSubTree(current: any, isVue2: boolean): any {
+  if (current.component?.subTree) {
+    return current.component.subTree
+  }
+  
+  if (isVue2) {
+    if (current.child?.component?.subTree) return current.child.component.subTree
+    if (current.child) return current.child
+    if (current.componentInstance?.$vnode) return current.componentInstance.$vnode
+  }
+  
+  return null
+}
+
+/**
+ * Navigate to children by index
+ */
+function navigateChildren(current: any, part: string, isVue2: boolean): any {
+  const indexMatch = part.match(/children\[(\d+)\]/)
+  if (!indexMatch) return null
+  
+  const index = parseInt(indexMatch[1], 10)
+
+  if (Array.isArray(current.children)) {
+    return index < current.children.length ? current.children[index] : null
+  }
+
+  if (isVue2) {
+    // Try different Vue 2 child accessors
+    const childSources = [
+      current.componentInstance?.$children,
+      current.context?.$children,
+      current.$children,
+      current.children
+    ]
+
+    for (const source of childSources) {
+      if (Array.isArray(source) && index < source.length) {
+        const child = source[index]
+        return child.$vnode || child
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Navigate to vnode children
+ */
+function navigateVNodeChildren(current: any, part: string): any {
+  const indexMatch = part.match(/vnodeChildren\[(\d+)\]/)
+  if (!indexMatch || !Array.isArray(current.children)) return null
+  
+  const index = parseInt(indexMatch[1], 10)
+  return index < current.children.length ? current.children[index] : null
+}
+
+/**
+ * Get component name from vnode
+ */
+function getVNodeName(vnode: any, isVue2: boolean): string {
+  return vnode.component?.type?.name ||
+    vnode.component?.type?.__name ||
+    vnode.component?.type?.displayName ||
+    vnode.component?.type?.__file?.split('/').pop()?.replace(/\.vue$/, '') ||
+    (isVue2 ? vnode.$options?.name : null) ||
+    'Anonymous'
+}
+
+/**
+ * Check if an object is writable
+ */
+function canWrite(obj: any): boolean {
+  if (!obj || typeof obj !== 'object') return false
+
+  try {
+    const testKey = Symbol('test')
+    obj[testKey] = true
+    delete obj[testKey]
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Finds and normalizes a component to the unified ResolvedComponent contract
+ * 
+ * @param componentUid - Unique component identifier (path)
+ * @returns ResolvedComponent or null
  */
 export function resolveComponent(componentUid: string): ResolvedComponent | null {
-  // Сначала пытаемся найти настоящий vnode
+  // First try to find the actual vnode
   const componentVNode = findComponentByPath(componentUid)
 
   if (!componentVNode) {
-    // Fallback: поиск по имени среди всех компонентов
-    const parts = componentUid.split('::')
-    const expectedName = parts[1]
-
-    if (expectedName) {
-      const allComponents = getAllVueComponents()
-      const foundComponent = allComponents.find(comp => comp.name === expectedName)
-
-      if (foundComponent) {
-        // Пытаемся найти реальный vnode для этого компонента
-        const realVNode = findComponentByRealVNode(expectedName, foundComponent)
-
-        if (realVNode) {
-          // Нашли реальный vnode, используем его
-          const vueContext = detectVueContext()
-          const isVue2 = vueContext.version === 2
-
-          let instance = realVNode.component
-          let propsTarget = null
-
-          if (!isVue2 && instance) {
-            const resolvedInstance = resolveAsyncComponent(instance) || instance
-            propsTarget = resolvedInstance.props && canWrite(resolvedInstance.props) ? resolvedInstance.props :
-                         realVNode.props && canWrite(realVNode.props) ? realVNode.props : null
-          }
-
-          return {
-            vnode: realVNode,
-            instance,
-            propsTarget,
-            isVue2
-          }
-        } else {
-          // Реальный vnode не найден, используем искусственный объект
-          return {
-            vnode: {
-              component: foundComponent,
-              el: foundComponent.element,
-              props: foundComponent.props
-            },
-            instance: foundComponent,
-            propsTarget: foundComponent.props,
-            isVue2: false
-          }
-        }
-      }
-    }
-
-    return null
+    // Fallback: search by name among all components
+    return resolveByNameFallback(componentUid)
   }
 
-  // Обработка искусственных объектов из поиска по имени
+  // Handle artificial objects from name search
   if (componentVNode.component && componentVNode.el && componentVNode.props && !componentVNode.vnode) {
     return {
       vnode: componentVNode,
@@ -384,7 +465,14 @@ export function resolveComponent(componentUid: string): ResolvedComponent | null
     }
   }
 
-  // Обработка настоящих vnode
+  // Handle actual vnodes
+  return resolveActualVNode(componentVNode)
+}
+
+/**
+ * Resolve from actual vnode
+ */
+function resolveActualVNode(componentVNode: any): ResolvedComponent {
   const vueContext = detectVueContext()
   const isVue2 = vueContext.version === 2
 
@@ -392,18 +480,14 @@ export function resolveComponent(componentUid: string): ResolvedComponent | null
   let propsTarget = null
 
   if (isVue2) {
-    // Vue 2
     instance = componentVNode.componentInstance || componentVNode.context || componentVNode
     propsTarget = instance?.$props || instance?.propsData || instance?._props || null
   } else {
-    // Vue 3
     instance = componentVNode.component
 
     if (instance) {
-      // Разрешаем AsyncComponentWrapper
       const resolvedInstance = resolveAsyncComponent(instance) || instance
 
-      // Приоритеты записи props для Vue 3
       const resolvedWritable = resolvedInstance.props && canWrite(resolvedInstance.props)
       const vnodeWritable = componentVNode.props && canWrite(componentVNode.props)
 
@@ -412,7 +496,6 @@ export function resolveComponent(componentUid: string): ResolvedComponent | null
       } else if (vnodeWritable) {
         propsTarget = componentVNode.props
       } else {
-        // Fallback - пробуем все варианты
         propsTarget = resolvedInstance.props || componentVNode.props || null
       }
     }
@@ -427,69 +510,122 @@ export function resolveComponent(componentUid: string): ResolvedComponent | null
 }
 
 /**
- * Ищет реальный vnode для компонента, найденного по имени
+ * Fallback resolution by component name
  */
-function findComponentByRealVNode(expectedName: string, foundComponent: any): any {
+function resolveByNameFallback(componentUid: string): ResolvedComponent | null {
+  const parts = componentUid.split('::')
+  const expectedName = parts[1]
+
+  if (!expectedName) return null
+
+  const allComponents = getAllVueComponents()
+  const foundComponent = allComponents.find(comp => comp.name === expectedName)
+
+  if (!foundComponent) return null
+
+  // Try to find real vnode for this component
+  const realVNode = findComponentByRealVNode(expectedName)
+
+  if (realVNode) {
+    const vueContext = detectVueContext()
+    const isVue2 = vueContext.version === 2
+
+    let instance = realVNode.component
+    let propsTarget = null
+
+    if (!isVue2 && instance) {
+      const resolvedInstance = resolveAsyncComponent(instance) || instance
+      propsTarget = resolvedInstance.props && canWrite(resolvedInstance.props) ? resolvedInstance.props :
+        realVNode.props && canWrite(realVNode.props) ? realVNode.props : null
+    }
+
+    return {
+      vnode: realVNode,
+      instance,
+      propsTarget,
+      isVue2
+    }
+  }
+
+  // Use artificial object
+  return {
+    vnode: {
+      component: foundComponent,
+      el: foundComponent.element,
+      props: foundComponent.props
+    },
+    instance: foundComponent,
+    propsTarget: foundComponent.props,
+    isVue2: false
+  }
+}
+
+/**
+ * Find real vnode for a component by name
+ */
+function findComponentByRealVNode(expectedName: string): any {
   const vueRoots = findVueRoots()
 
   for (const root of vueRoots) {
     const rootVNode = extractRootVNode(root)
     if (!rootVNode) continue
 
-    // Рекурсивный поиск компонента по имени
-    const findInTree = (vnode: any): any => {
-      if (!vnode) return null
-
-      // Проверяем текущий vnode
-      const componentName = vnode.component?.type?.name ||
-                           vnode.component?.type?.__name ||
-                           vnode.component?.type?.displayName ||
-                           vnode.$options?.name
-
-      if (componentName === expectedName) {
-        return vnode
-      }
-
-      // Ищем в дочерних элементах
-      if (vnode.children && Array.isArray(vnode.children)) {
-        for (const child of vnode.children) {
-          const found = findInTree(child)
-          if (found) return found
-        }
-      }
-
-      // Ищем в subTree
-      if (vnode.component?.subTree) {
-        const found = findInTree(vnode.component.subTree)
-        if (found) return found
-      }
-
-      return null
-    }
-
-    const result = findInTree(rootVNode)
-    if (result) {
-      return result
-    }
+    const found = findInTree(rootVNode, expectedName, new WeakSet())
+    if (found) return found
   }
 
   return null
 }
 
 /**
- * Проверяет, можно ли записывать в объект
+ * Recursive tree search with cycle detection
  */
-function canWrite(obj: any): boolean {
-  if (!obj || typeof obj !== 'object') {
-    return false
+function findInTree(vnode: any, expectedName: string, visited: WeakSet<object>): any {
+  if (!vnode || visited.has(vnode)) return null
+  visited.add(vnode)
+
+  // Check current vnode
+  const componentName = vnode.component?.type?.name ||
+    vnode.component?.type?.__name ||
+    vnode.component?.type?.displayName ||
+    vnode.$options?.name
+
+  if (componentName === expectedName) {
+    return vnode
   }
 
-  try {
-    const testKey = Symbol('test')
-    obj[testKey] = true
-    delete obj[testKey]
-    return true
-  } catch {
-    return false
+  // Search children
+  if (Array.isArray(vnode.children)) {
+    for (const child of vnode.children) {
+      if (child && typeof child === 'object') {
+        const found = findInTree(child, expectedName, visited)
+        if (found) return found
+      }
+    }
   }
+
+  // Search subTree
+  if (vnode.component?.subTree) {
+    const found = findInTree(vnode.component.subTree, expectedName, visited)
+    if (found) return found
+  }
+
+  return null
+}
+
+/**
+ * Clear the path cache and stop cleanup timer
+ * Call this when memory pressure is detected or on page unload
+ */
+export function clearPathCache(): void {
+  pathCache.clear()
+  stopPathCacheCleanup()
+}
+
+/**
+ * Dispose path cache resources - call on page unload
+ */
+export function disposePathCache(): void {
+  pathCache.clear()
+  stopPathCacheCleanup()
 }

@@ -5,11 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Copy, Check } from 'lucide-vue-next'
 import JsonTreeView from './JsonTreeView.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: string
   editable?: boolean
   showCopy?: boolean
-}>()
+  fullHeight?: boolean
+}>(), {
+  fullHeight: false
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
@@ -26,12 +29,23 @@ const parsedValue = computed(() => {
 const copied = ref(false)
 
 function copyToClipboard() {
+  // Format JSON properly before copying
+  let textToCopy = props.modelValue
+  try {
+    const parsed = JSON.parse(props.modelValue)
+    textToCopy = JSON.stringify(parsed, null, 2)
+  } catch {
+    // Keep original if not valid JSON
+  }
+  
+  // Use execCommand first (works in iframes without permissions policy issues)
   try {
     const textArea = document.createElement('textarea')
-    textArea.value = props.modelValue
+    textArea.value = textToCopy
     textArea.style.position = 'fixed'
     textArea.style.left = '-999999px'
     textArea.style.top = '-999999px'
+    textArea.style.opacity = '0'
     document.body.appendChild(textArea)
     textArea.focus()
     textArea.select()
@@ -58,7 +72,7 @@ function emitStringified(newValue: any) {
 </script>
 
 <template>
-  <div class="relative">
+  <div :class="fullHeight ? 'h-full flex flex-col relative' : 'relative'">
     <Button
       v-if="showCopy && !editable"
       variant="ghost"
@@ -70,9 +84,9 @@ function emitStringified(newValue: any) {
       {{ copied ? 'Copied' : 'Copy' }}
     </Button>
 
-    <ScrollArea class="h-[330px]">
+    <ScrollArea :class="fullHeight ? 'flex-1 min-h-0' : 'h-[330px]'">
       <div class="p-2">
-        <div class="min-h-[300px]">
+        <div :class="fullHeight ? '' : 'min-h-[300px]'">
           <JsonTreeView
             :value="parsedValue"
             :editable="editable"
@@ -80,7 +94,7 @@ function emitStringified(newValue: any) {
           />
         </div>
       </div>
-      <ScrollArea orientation="vertical" />
+      <ScrollBar orientation="vertical" />
     </ScrollArea>
   </div>
 </template>

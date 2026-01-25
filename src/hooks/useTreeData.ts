@@ -6,6 +6,11 @@ import { DataServiceFactory } from '@/services/dataServiceFactory'
 import type { DataService } from '@/services/dataServiceFactory'
 import type { TreeSearchOptions } from '@/types/search'
 
+// Flood protection constants
+const FLOOD_WINDOW_MS = 5000 // 5 seconds window
+const MAX_UPDATES_IN_WINDOW = 10 // Max updates allowed in window
+const COOLDOWN_MS = 10000 // Cooldown period after flood detected
+
 export function useTreeData() {
     const updateManager = new StableUpdateManager()
     const rawTreeData = shallowRef<TreeNodeModel[]>([])
@@ -15,6 +20,10 @@ export function useTreeData() {
     const hasLoadedData = ref(false) // Флаг, что данные уже были загружены
     const settings = ref<any>(null)
     const dataService = shallowRef<DataService | null>(null)
+    
+    // Flood protection state
+    const updateTimestamps: number[] = []
+    let floodCooldownUntil = 0
 
     useInspectorSettings().then(s => {
         settings.value = s
@@ -23,8 +32,42 @@ export function useTreeData() {
         loadData()
     })
 
+    /**
+     * Check if we're in a flood state (too many updates in short time)
+     */
+    function isFlooding(): boolean {
+        const now = Date.now()
+        
+        // Check if we're still in cooldown
+        if (now < floodCooldownUntil) {
+            return true
+        }
+        
+        // Remove old timestamps outside the window
+        while (updateTimestamps.length > 0 && updateTimestamps[0] < now - FLOOD_WINDOW_MS) {
+            updateTimestamps.shift()
+        }
+        
+        // Check if too many updates in window
+        if (updateTimestamps.length >= MAX_UPDATES_IN_WINDOW) {
+            console.warn('[VueInspector] Props update flood detected, entering cooldown')
+            floodCooldownUntil = now + COOLDOWN_MS
+            updateTimestamps.length = 0 // Clear timestamps
+            return true
+        }
+        
+        return false
+    }
+    
     function updateStableData(newData: TreeNodeModel[]) {
+        // Check for flood protection
+        if (isFlooding()) {
+            return
+        }
+        
         if (updateManager.shouldUpdate(newData)) {
+            // Track update timestamp
+            updateTimestamps.push(Date.now())
             stableTreeData.value = updateManager.updateTree(stableTreeData.value, newData)
         }
     }
@@ -65,6 +108,7 @@ export function useTreeData() {
 
     let refreshIntervalId: number | null = null
     let cleanupIntervalId: number | null = null
+    let refreshInProgress = false // 🔥 Prevent overlapping refresh calls
 
     const stopAutoRefresh = () => {
         if (refreshIntervalId !== null) clearInterval(refreshIntervalId)
@@ -78,8 +122,17 @@ export function useTreeData() {
         const interval = settings.value?.updates?.autoRefreshInterval ?? 5000
         if (!settings.value?.updates?.autoRefresh) return
 
-        refreshIntervalId = window.setInterval(() => {
-            if (!isLoading.value) loadData()
+        // 🔥 Use async handler with refreshInProgress guard
+        refreshIntervalId = window.setInterval(async () => {
+            // Skip if previous refresh is still running or loading
+            if (refreshInProgress || isLoading.value) return
+            
+            refreshInProgress = true
+            try {
+                await loadData()
+            } finally {
+                refreshInProgress = false
+            }
         }, interval)
 
         // Периодическая очистка кэша StableUpdateManager каждые 50 обновлений

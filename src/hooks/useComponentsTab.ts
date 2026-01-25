@@ -6,6 +6,7 @@ import { PropsEditorServiceFactory, type PropsEditorService } from '@/services/p
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { likeMatch } from '@/utils/likeMatch'
 import { useRuntime } from '@/runtime'
+import { isInFavorites } from '@/utils/favoritesMatcher'
 
 interface ComponentsTabOptions {
     modelValue?: string
@@ -202,7 +203,7 @@ export function useComponentsTab(
         return isInActive
     }
 
-    // Функция проверки, находится ли элемент в избранном
+    // Функция проверки, находится ли элемент в избранном (используем stable matching)
     const isFavorite = (node: TreeNodeModel): boolean => {
         if (!settingsRef.value?.favorites) return false
 
@@ -246,7 +247,8 @@ export function useComponentsTab(
             return `${node.name}::${elementInfo}`
         })()
 
-        return settingsRef.value.favorites.some((fav: { id: string }) => fav.id === elementId)
+        // Use stable matching to compare favorites (ignores unstable Vue UIDs)
+        return isInFavorites(elementId, settingsRef.value.favorites)
     }
 
     const filteredTree = computed((): TreeNodeModel[] => {

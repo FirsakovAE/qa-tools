@@ -1,93 +1,129 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import StoreNavigation from './StoreNavigation.vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
+import { SearchIcon, RefreshCw } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip'
+import PiniaTable from './PiniaTable.vue'
+import PiniaDetails from './PiniaDetails.vue'
+import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
+import type { InspectorSettings } from '@/settings/inspectorSettings'
 
 const runtime = useRuntime()
 
-const storesData = ref<Record<string, any>>({})
-const isLoading = ref(false)
-const error = ref<string | null>(null)
-const vueDetected = ref<boolean | undefined>(undefined)
-const piniaDetected = ref<boolean | undefined>(undefined)
+// ============================================================================
+// Types
+// ============================================================================
 
-let unsubscribe: (() => void) | null = null
-
-// Message handler for receiving Pinia data
-function handlePiniaMessage(message: any, respond: (r: unknown) => void) {
-  if (message?.type === 'PINIA_STORES_SUMMARY_DATA') {
-    if (message.error) {
-      error.value = message.error
-      // Определяем состояния на основе ошибки
-      if (message.error.includes('Could not establish connection') ||
-          message.error.includes('Receiving end does not exist')) {
-        vueDetected.value = false
-        piniaDetected.value = false
-      } else if (message.error.includes('Pinia') || message.error.includes('store')) {
-        vueDetected.value = true
-        piniaDetected.value = false
-      }
-    } else if (message.summary) {
-      storesData.value = message.summary
-      error.value = null
-      vueDetected.value = true
-      piniaDetected.value = true
-    }
-    isLoading.value = false
-  }
+interface StoreEntry {
+  id: string
+  baseId: string
+  stateKeys: number
+  getterKeys: number
+  lastUpdated?: number
+  lastUpdatedFormatted?: string
 }
 
+// ============================================================================
+// State
+// ============================================================================
+
+const entries = ref<StoreEntry[]>([])
+const selectedStoreId = ref<string | null>(null)
+const isLoading = ref(false)
+const error = ref<string | null>(null)
+const lastUpdated = ref<string>('')
+
+// Search state
+const searchTerm = ref('')
+const settings = ref<InspectorSettings | null>(null)
+
+// ============================================================================
+// Settings
+// ============================================================================
+
+onMounted(async () => {
+  try {
+    settings.value = await useInspectorSettings()
+  } catch { /* use defaults */ }
+})
+
+// Search settings from inspector settings
+const searchSettings = computed(() => ({
+  byName: settings.value?.search?.byName ?? true,
+  byKey: settings.value?.search?.byKey ?? false,
+  byValue: settings.value?.search?.byValue ?? false,
+  debounce: settings.value?.search?.debounce ?? 300,
+  minLength: settings.value?.search?.minLength ?? 2
+}))
+
+// ============================================================================
+// Data loading
+// ============================================================================
+
+function formatDateTime(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
+// Pull-only model: load stores summary via request-response
 async function loadStoresSummary() {
   isLoading.value = true
   error.value = null
 
   try {
-    // Проверяем доступность content script с помощью ping
+    // Check content script availability
     let contentScriptReady = false
     try {
       const pingResponse = await runtime.sendMessage<{ pong?: boolean }>({ type: 'PING' })
       if (pingResponse?.pong) {
         contentScriptReady = true
       }
-    } catch (pingError: any) {
-      // В standalone режиме нет возможности инжектировать скрипты
-      // Content script должен быть уже загружен
+    } catch {
       contentScriptReady = false
     }
 
     if (!contentScriptReady) {
-      // Content script недоступен - значит Vue не найден
-      vueDetected.value = false
-      piniaDetected.value = false
       isLoading.value = false
       return
     }
 
-    // Отправляем запрос через content script
+    // Request store summary
     const response = await runtime.sendMessage<{
       type: string
-      summary?: Record<string, any>
+      summary?: Record<string, StoreEntry>
       detected?: boolean
       error?: string
     }>({
       type: 'PINIA_GET_STORES_SUMMARY'
     })
     
-    // Обрабатываем response напрямую
     if (response?.summary) {
-      storesData.value = response.summary
-      piniaDetected.value = response.detected ?? true
-      vueDetected.value = true
+      entries.value = Object.values(response.summary)
+      lastUpdated.value = formatDateTime(new Date())
       isLoading.value = false
     } else if (response?.error) {
       error.value = response.error
       isLoading.value = false
     } else {
-      // Fallback таймаут на случай если ответ пустой
+      // Fallback timeout
       setTimeout(() => {
         if (isLoading.value) {
           isLoading.value = false
-          if (Object.keys(storesData.value).length === 0) {
+          if (entries.value.length === 0) {
             error.value = 'Timeout: Pinia stores not found or not initialized'
           }
         }
@@ -97,41 +133,268 @@ async function loadStoresSummary() {
   } catch (err: any) {
     const errorMessage = err.message || 'Failed to load stores'
 
-    // Определяем состояния на основе ошибки подключения
     if (errorMessage.includes('Could not establish connection') ||
         errorMessage.includes('Receiving end does not exist')) {
-      // Content script недоступен - Vue не найден
-      vueDetected.value = false
-      piniaDetected.value = false
-      error.value = null // Не показываем ошибку подключения пользователю
+      error.value = null
     } else {
-      // Другая ошибка - возможно Vue есть, но Pinia нет
       error.value = 'Failed to load Pinia stores. Make sure Pinia is installed and initialized.'
-      vueDetected.value = true
-      piniaDetected.value = false
     }
 
     isLoading.value = false
   }
 }
 
-// Загружаем данные при монтировании компонента
+// Auto-refresh logic
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+  }
+  
+  if (settings.value?.updates?.autoRefresh && settings.value?.updates?.autoRefreshInterval) {
+    autoRefreshTimer = setInterval(() => {
+      if (!isLoading.value) {
+        loadStoresSummary()
+      }
+    }, settings.value.updates.autoRefreshInterval)
+  }
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+    autoRefreshTimer = null
+  }
+}
+
+watch(() => settings.value?.updates?.autoRefresh, (newValue, oldValue) => {
+  if (newValue !== oldValue) {
+    if (newValue) {
+      startAutoRefresh()
+    } else {
+      stopAutoRefresh()
+    }
+  }
+})
+
+watch(() => settings.value?.updates?.autoRefreshInterval, (newValue, oldValue) => {
+  if (newValue !== oldValue && settings.value?.updates?.autoRefresh) {
+    startAutoRefresh()
+  }
+})
+
+// Visibility handler
+let isVisible = true
+const visibilityHandler = (event: MessageEvent) => {
+  if (event.data?.__VUE_INSPECTOR__ && event.data.broadcast && 
+      event.data.message?.type === 'VUE_INSPECTOR_VISIBILITY_CHANGED') {
+    isVisible = event.data.message.visible
+    if (isVisible && settings.value?.updates?.autoRefresh) {
+      startAutoRefresh()
+    } else {
+      stopAutoRefresh()
+    }
+  }
+}
+
+// ============================================================================
+// Filtering
+// ============================================================================
+
+const debouncedSearchTerm = ref('')
+
+const updateDebouncedSearch = useDebounceFn((term: string) => {
+  debouncedSearchTerm.value = term
+}, searchSettings.value.debounce)
+
+watch(searchTerm, (term) => {
+  if (term.length >= searchSettings.value.minLength || term.length === 0) {
+    updateDebouncedSearch(term)
+  }
+})
+
+// Filter stores
+const filteredEntries = computed(() => {
+  const q = debouncedSearchTerm.value.toLowerCase().trim()
+  if (!q) return entries.value
+  
+  return entries.value.filter(store => {
+    // Search by name
+    if (searchSettings.value.byName && store.baseId?.toLowerCase().includes(q)) {
+      return true
+    }
+    
+    return false
+  })
+})
+
+// Active search types for badges
+const activeSearchTypes = computed(() => {
+  const types: string[] = []
+  if (searchSettings.value.byName) types.push('Name')
+  if (searchSettings.value.byKey) types.push('Key')
+  if (searchSettings.value.byValue) types.push('Value')
+  return types
+})
+
+// ============================================================================
+// Computed
+// ============================================================================
+
+const selectedStore = computed(() => {
+  if (!selectedStoreId.value) return null
+  return entries.value.find(s => s.id === selectedStoreId.value) || null
+})
+
+const entriesCount = computed(() => filteredEntries.value.length)
+const totalCount = computed(() => entries.value.length)
+
+// ============================================================================
+// Actions
+// ============================================================================
+
+function selectStore(store: StoreEntry) {
+  selectedStoreId.value = store.id
+}
+
+function deselectStore() {
+  selectedStoreId.value = null
+}
+
+async function handleRefresh() {
+  if (isLoading.value) return
+  await loadStoresSummary()
+}
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
+
 onMounted(() => {
-  // Подписываемся на сообщения от content script
-  unsubscribe = runtime.onMessage(handlePiniaMessage)
+  window.addEventListener('message', visibilityHandler)
   loadStoresSummary()
+  
+  // Start auto-refresh if enabled
+  if (settings.value?.updates?.autoRefresh) {
+    startAutoRefresh()
+  }
 })
 
 onUnmounted(() => {
-  unsubscribe?.()
+  window.removeEventListener('message', visibilityHandler)
+  stopAutoRefresh()
 })
 </script>
 
 <template>
-  <StoreNavigation
-    :stores-data="storesData"
-    :is-loading="isLoading"
-    :error="error"
-    @refresh="loadStoresSummary"
-  />
+  <TooltipProvider>
+    <div class="h-full flex flex-col overflow-hidden">
+      <!-- Toolbar -->
+      <div class="shrink-0 flex items-center gap-2 p-2 border-b">
+        <!-- Left: Title -->
+        <h3 class="text-lg font-semibold shrink-0">
+          Stores
+        </h3>
+        
+        <!-- Search bar -->
+        <div class="flex-1 max-w-xs relative">
+          <Input
+            v-model="searchTerm"
+            placeholder="Search stores..."
+            class="pl-8 h-8"
+          />
+          <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
+        </div>
+        
+        <!-- Search type badges (always visible) -->
+        <div v-if="activeSearchTypes.length" class="flex items-center gap-1">
+          <Badge v-for="item in activeSearchTypes" :key="item" variant="secondary" class="text-xs px-1.5 py-0">
+            {{ item }}
+          </Badge>
+        </div>
+        
+        <!-- Spacer -->
+        <div class="flex-1" />
+        
+        <!-- Right: Status badges and controls -->
+        <div class="flex items-center gap-2 shrink-0">
+          <Badge variant="secondary" class="font-mono">
+            {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
+          </Badge>
+          
+          <!-- Refresh button -->
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-8 w-8"
+                :disabled="isLoading"
+                @click="handleRefresh"
+              >
+                <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': isLoading }" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Refresh
+            </TooltipContent>
+          </Tooltip>
+          
+          <!-- Updated time -->
+          <span class="text-xs text-muted-foreground whitespace-nowrap">
+            {{ isLoading ? 'Loading...' : lastUpdated }}
+          </span>
+        </div>
+      </div>
+      
+      <!-- Content -->
+      <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden">
+        <!-- Left: Table -->
+        <div class="h-full min-h-0 overflow-hidden">
+          <PiniaTable
+            :entries="filteredEntries"
+            :selected-id="selectedStoreId"
+            @select="selectStore"
+          />
+        </div>
+        
+        <!-- Right: Details -->
+        <div class="h-full min-h-0 overflow-hidden border rounded-lg">
+          <PiniaDetails
+            v-if="selectedStore"
+            :key="selectedStore.id"
+            :store="selectedStore"
+            @back="deselectStore"
+          />
+          
+          <div
+            v-else
+            class="h-full flex items-center justify-center text-muted-foreground"
+          >
+            Select a store to see details
+          </div>
+        </div>
+      </div>
+      
+      <!-- Error overlay -->
+      <div
+        v-if="error"
+        class="absolute inset-0 z-10 bg-background/80 flex items-center justify-center text-destructive text-sm"
+      >
+        {{ error }}
+      </div>
+    </div>
+  </TooltipProvider>
 </template>
+
+<style scoped>
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>
