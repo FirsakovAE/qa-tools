@@ -329,12 +329,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   opacity: 1;
 }
 
-/* Show star on row hover - uses DOM class */
-.props-row-hovered .star-btn,
-.props-row:hover:not(.props-row-favorite) .star-btn {
-    opacity: 1;
-}
-
 .star-btn.star-favorite .h-3\.5 {
   color: hsl(48 100% 50%);
   fill: hsl(48 100% 50%);
