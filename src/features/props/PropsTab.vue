@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { SearchIcon, RefreshCw, Star } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -22,14 +22,25 @@ import { useTreeData } from '@/hooks/useTreeData'
 import { useRuntime } from '@/runtime'
 import { safeRuntime, safeTabs, safeStorage } from '@/utils/extensionBridge'
 import { isInFavorites, findMatchingFavorite } from '@/utils/favoritesMatcher'
+import { 
+  type PropsRow, 
+  createPropsRow, 
+  updateRowsVisibility,
+  sortRowsByFavorite 
+} from './types'
 
 const runtime = useRuntime()
 
 // ============================================================================
-// State
+// State - OPTIMIZED MODEL
 // ============================================================================
 
-const entries = ref<TreeNodeModel[]>([])
+// STABLE rows array - reference NEVER changes, only row.visible mutates
+const rows = shallowRef<PropsRow[]>([])
+
+// Trigger for forcing re-render after visibility mutation
+const visibilityVersion = ref(0)
+
 const selectedNode = ref<TreeNodeModel | null>(null)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
@@ -38,6 +49,7 @@ const lastUpdated = ref<string>('')
 // Search state
 const searchTerm = ref('')
 const propsOnly = ref(false)
+const debouncedSearchTerm = ref('')
 const settings = ref<BaseInspectorSettings | null>(null)
 
 // Favorites (pass full objects for proper matching)
@@ -45,6 +57,93 @@ const favorites = computed(() => {
   if (!settings.value?.favorites) return []
   return settings.value.favorites
 })
+
+// Search settings from inspector settings
+const searchSettings = computed(() => ({
+  byName: settings.value?.search?.byName ?? true,
+  byLabel: settings.value?.search?.byLabel ?? false,
+  byRootElement: settings.value?.search?.byRootElement ?? false,
+  byKey: settings.value?.search?.byKey ?? false,
+  byValue: settings.value?.search?.byValue ?? false,
+  debounce: settings.value?.search?.debounce ?? 300,
+  minLength: settings.value?.search?.minLength ?? 2
+}))
+
+// ============================================================================
+// Helper functions - MUST BE DEFINED BEFORE watches that use them
+// ============================================================================
+
+function formatDateTime(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
+function getElementInfo(node: TreeNodeModel): string {
+  if (node.element) {
+    if (node.element instanceof HTMLElement) {
+      const tag = node.element.tagName.toLowerCase()
+      const cls = node.element.className
+        ? '.' + node.element.className.trim().replace(/\s+/g, '.')
+        : ''
+      return tag + cls
+    } else if (node.element.tagName) {
+      const tag = node.element.tagName.toLowerCase()
+      const cls = node.element.className
+        ? '.' + node.element.className.trim().replace(/\s+/g, '.')
+        : ''
+      return tag + cls
+    }
+  }
+  
+  if (node.rootElement?.tagName) {
+    const tag = node.rootElement.tagName.toLowerCase()
+    const cls = node.rootElement.className
+      ? '.' + node.rootElement.className.trim().replace(/\s+/g, '.')
+      : ''
+    return tag + cls
+  }
+  
+  return 'Logic only'
+}
+
+function getNodeId(node: TreeNodeModel): string {
+  if (node.componentUid) return node.componentUid
+  if (node.id && node.id.includes('::')) return node.id
+  return `${node.name}::${getElementInfo(node)}`
+}
+
+function isFavoriteNode(node: TreeNodeModel): boolean {
+  if (!settings.value?.favorites?.length) return false
+  const id = getNodeId(node)
+  return isInFavorites(id, settings.value.favorites)
+}
+
+function applyFilters() {
+  updateRowsVisibility(rows.value, {
+    propsOnly: propsOnly.value,
+    searchTerm: debouncedSearchTerm.value,
+    searchByName: searchSettings.value.byName,
+    searchByRootElement: searchSettings.value.byRootElement,
+    searchByKey: searchSettings.value.byKey,
+    searchByValue: searchSettings.value.byValue
+  })
+  
+  // Trigger re-render (cheap - just increments a number)
+  visibilityVersion.value++
+}
+
+function updateFavoriteFlags() {
+  for (const row of rows.value) {
+    row.isFavoriteFlag = isFavoriteNode(row)
+  }
+  sortRowsByFavorite(rows.value)
+  visibilityVersion.value++
+}
 
 // ============================================================================
 // Settings
@@ -66,22 +165,13 @@ if (storage?.onChanged) {
     if (changes[settingsKey]) {
       useInspectorSettings().then(newSettings => {
         settings.value = newSettings
+        // Update favorite flags on rows
+        updateFavoriteFlags()
       }).catch(() => {})
     }
   }
   storage.onChanged.addListener(storageListener)
 }
-
-// Search settings from inspector settings
-const searchSettings = computed(() => ({
-  byName: settings.value?.search?.byName ?? true,
-  byLabel: settings.value?.search?.byLabel ?? false,
-  byRootElement: settings.value?.search?.byRootElement ?? false,
-  byKey: settings.value?.search?.byKey ?? false,
-  byValue: settings.value?.search?.byValue ?? false,
-  debounce: settings.value?.search?.debounce ?? 300,
-  minLength: settings.value?.search?.minLength ?? 2
-}))
 
 // ============================================================================
 // Data loading
@@ -89,9 +179,28 @@ const searchSettings = computed(() => ({
 
 const { treeData, isLoading: treeLoading, error: treeError, refresh } = useTreeData()
 
+// Transform incoming data to PropsRow format (only on new data)
 watch(treeData, (data) => {
   if (data) {
-    entries.value = [...data] as TreeNodeModel[]
+    // Create new rows array with pre-calculated flags
+    const newRows = data.map(node => 
+      createPropsRow(node as TreeNodeModel, isFavoriteNode(node as TreeNodeModel))
+    )
+    
+    // Sort by favorites
+    sortRowsByFavorite(newRows)
+    
+    // Apply current visibility filters
+    updateRowsVisibility(newRows, {
+      propsOnly: propsOnly.value,
+      searchTerm: debouncedSearchTerm.value,
+      searchByName: searchSettings.value.byName,
+      searchByRootElement: searchSettings.value.byRootElement,
+      searchByKey: searchSettings.value.byKey,
+      searchByValue: searchSettings.value.byValue
+    })
+    
+    rows.value = newRows
     lastUpdated.value = formatDateTime(new Date())
   }
 }, { immediate: true })
@@ -103,16 +212,6 @@ watch(treeLoading, (loading) => {
 watch(treeError, (err) => {
   error.value = err
 })
-
-function formatDateTime(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
-}
 
 // Auto-refresh logic
 let autoRefreshTimer: number | null = null
@@ -159,10 +258,8 @@ watch(settings, (newSettings) => {
 })
 
 // ============================================================================
-// Filtering
+// Filtering - OPTIMIZED (mutates row.visible, zero array creation)
 // ============================================================================
-
-const debouncedSearchTerm = ref('')
 
 const updateDebouncedSearch = useDebounceFn((term: string) => {
   debouncedSearchTerm.value = term
@@ -174,106 +271,19 @@ watch(searchTerm, (term) => {
   }
 })
 
-// Filter tree data
-const filteredEntries = computed(() => {
-  let result = entries.value
-  
-  // Filter by props only
-  if (propsOnly.value) {
-    result = result.filter(node => node.props && Object.keys(node.props).length > 0)
-  }
-  
-  // Filter by search term
-  const q = debouncedSearchTerm.value.toLowerCase().trim()
-  if (q) {
-    result = result.filter(node => {
-      // Search by name
-      if (searchSettings.value.byName && node.name?.toLowerCase().includes(q)) {
-        return true
-      }
-      
-      // Search by root element
-      if (searchSettings.value.byRootElement) {
-        const elementInfo = getElementInfo(node)
-        if (elementInfo.toLowerCase().includes(q)) {
-          return true
-        }
-      }
-      
-      // Search by key
-      if (searchSettings.value.byKey && node.props) {
-        if (Object.keys(node.props).some(k => k.toLowerCase().includes(q))) {
-          return true
-        }
-      }
-      
-      // Search by value
-      if (searchSettings.value.byValue && node.props) {
-        if (Object.values(node.props).some(v => String(v).toLowerCase().includes(q))) {
-          return true
-        }
-      }
-      
-      return false
-    })
-  }
-  
-  // Sort: favorites first
-  return result.sort((a, b) => {
-    const aFav = isFavoriteNode(a)
-    const bFav = isFavoriteNode(b)
-    if (aFav && !bFav) return -1
-    if (!aFav && bFav) return 1
-    return 0
-  })
+// Watch filter changes
+watch([propsOnly, debouncedSearchTerm], applyFilters)
+watch(searchSettings, applyFilters, { deep: true })
+
+/**
+ * Visible rows for RecycleScroller
+ * Virtualization REQUIRES filtered array (scroller calculates scroll height from items.length)
+ */
+const visibleRows = computed(() => {
+  // Touch visibilityVersion to create dependency
+  void visibilityVersion.value
+  return rows.value.filter(r => r.visible)
 })
-
-function getElementInfo(node: TreeNodeModel): string {
-  if (node.element) {
-    if (node.element instanceof HTMLElement) {
-      const tag = node.element.tagName.toLowerCase()
-      const cls = node.element.className
-        ? '.' + node.element.className.trim().replace(/\s+/g, '.')
-        : ''
-      return tag + cls
-    } else if (node.element.tagName) {
-      const tag = node.element.tagName.toLowerCase()
-      const cls = node.element.className
-        ? '.' + node.element.className.trim().replace(/\s+/g, '.')
-        : ''
-      return tag + cls
-    }
-  }
-  
-  if (node.rootElement?.tagName) {
-    const tag = node.rootElement.tagName.toLowerCase()
-    const cls = node.rootElement.className
-      ? '.' + node.rootElement.className.trim().replace(/\s+/g, '.')
-      : ''
-    return tag + cls
-  }
-  
-  return 'Logic only'
-}
-
-function getNodeId(node: TreeNodeModel): string {
-  // Use componentUid if available
-  if (node.componentUid) {
-    return node.componentUid
-  }
-  // Fallback to id if it looks like a path (contains ::)
-  if (node.id && node.id.includes('::')) {
-    return node.id
-  }
-  // Final fallback
-  return `${node.name}::${getElementInfo(node)}`
-}
-
-function isFavoriteNode(node: TreeNodeModel): boolean {
-  if (!settings.value?.favorites?.length) return false
-  const id = getNodeId(node)
-  return isInFavorites(id, settings.value.favorites)
-}
 
 // Active search types for badges
 const activeSearchTypes = computed(() => {
@@ -290,15 +300,16 @@ const activeSearchTypes = computed(() => {
 // Computed
 // ============================================================================
 
-const entriesCount = computed(() => filteredEntries.value.length)
-const totalCount = computed(() => entries.value.length)
-const favoritesCount = computed(() => filteredEntries.value.filter(isFavoriteNode).length)
+// Counts based on visibleRows (already computed and cached)
+const entriesCount = computed(() => visibleRows.value.length)
+const totalCount = computed(() => rows.value.length)
+const favoritesCount = computed(() => visibleRows.value.filter(r => r.isFavoriteFlag).length)
 
 // ============================================================================
 // Actions
 // ============================================================================
 
-function selectEntry(node: TreeNodeModel) {
+function selectEntry(node: PropsRow) {
   selectedNode.value = node
 }
 
@@ -312,13 +323,13 @@ async function handleRefresh() {
   lastUpdated.value = formatDateTime(new Date())
 }
 
-// Toggle favorite for a node
-async function toggleFavorite(node: TreeNodeModel) {
+// Toggle favorite for a node (NO sorting - element stays in place)
+async function toggleFavorite(node: PropsRow) {
   if (!settings.value) return
 
   const elementId = getNodeId(node)
 
-  if (isFavoriteNode(node)) {
+  if (node.isFavoriteFlag) {
     // Remove from favorites
     const matchingFav = findMatchingFavorite(elementId, settings.value.favorites)
     if (matchingFav) {
@@ -326,6 +337,7 @@ async function toggleFavorite(node: TreeNodeModel) {
         (fav: FavoriteItem) => fav.id !== matchingFav.id
       )
     }
+    node.isFavoriteFlag = false
   } else {
     // Add to favorites
     const favoriteItem: FavoriteItem = {
@@ -336,9 +348,10 @@ async function toggleFavorite(node: TreeNodeModel) {
       timestamp: new Date().toISOString()
     }
     settings.value.favorites.push(favoriteItem)
+    node.isFavoriteFlag = true
   }
 
-  // Save settings
+  // Save settings (NO sorting - element stays in place)
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
@@ -475,9 +488,8 @@ onUnmounted(() => {
         <!-- Left: Table -->
         <div class="h-full min-h-0 overflow-hidden">
           <PropsTable
-            :entries="filteredEntries"
+            :rows="visibleRows"
             :selected-id="selectedNode?.id || null"
-            :favorites="favorites"
             @select="selectEntry"
             @toggle-favorite="toggleFavorite"
           />

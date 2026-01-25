@@ -282,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rollupOptions: {
       input: {
         injected_ui_html: 'src/injected-ui/index.html',
-        content: 'src/content.ts',
+        content: 'src/content/index.ts',
         background: 'src/background.ts',
         injected: 'src/injected/main.ts'
       },
@@ -297,8 +297,12 @@ document.addEventListener('DOMContentLoaded', () => {
           return 'assets/[name]-[hash].js'
         },
         chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash][extname]'
-      }
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        // Prevent code splitting - extension scripts must be self-contained
+        manualChunks: undefined
+      },
+      // Prevent code splitting that would break injected scripts
+      preserveEntrySignatures: 'strict'
     }
   },
   publicDir: false

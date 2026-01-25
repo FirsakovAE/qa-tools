@@ -25,11 +25,6 @@ export type RuntimeHandler = (
 ) => boolean | void
 
 /**
- * Strategy function for finding elements to highlight
- */
-export type HighlightStrategy = (componentPath: string) => HTMLElement | null
-
-/**
  * Extended HTMLElement with Vue internals
  */
 export interface VueHTMLElement extends HTMLElement {

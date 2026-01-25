@@ -16,6 +16,9 @@ import {
 import {
   handleUnhighlightElement,
   handleHighlightElement,
+  handleHighlightElementByElement,
+  handleHighlightByUid,
+  handleClearElementRegistry,
   handleUpdateComponentProps,
   handleGetComponentProps
 } from './props'
@@ -54,7 +57,10 @@ export const runtimeHandlers: Record<string, RuntimeHandler> = {
   
   // Props / Highlight
   UNHIGHLIGHT_ELEMENT: handleUnhighlightElement,
-  HIGHLIGHT_ELEMENT: handleHighlightElement,
+  HIGHLIGHT_BY_UID: handleHighlightByUid,
+  HIGHLIGHT_ELEMENT: handleHighlightElement, // Legacy support
+  HIGHLIGHT_ELEMENT_BY_ELEMENT: handleHighlightElementByElement, // Deprecated
+  CLEAR_ELEMENT_REGISTRY: handleClearElementRegistry,
   UPDATE_COMPONENT_PROPS: handleUpdateComponentProps,
   GET_COMPONENT_PROPS: handleGetComponentProps,
   

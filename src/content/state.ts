@@ -33,6 +33,9 @@ export let currentHighlightedElement: HTMLElement | null = null
 export let highlightOverlay: HTMLElement | null = null
 export let highlightRafId: number | null = null
 
+// Element lookup attribute (set by injected script on elements)
+export const ELEMENT_UID_ATTRIBUTE = 'data-vue-inspector-uid'
+
 // Timeout reference
 export let checkTimeout: number | null = null
 
@@ -97,6 +100,23 @@ export function setHighlightRafId(id: number | null): void {
   highlightRafId = id
 }
 
+/**
+ * Get element by UID using data attribute lookup
+ * This is deterministic - not heuristic searching
+ * 
+ * The injected script marks elements with data-vue-inspector-uid attribute,
+ * and we look them up by that exact attribute.
+ */
+export function getElementByUid(uid: number): HTMLElement | null {
+  const element = document.querySelector(`[${ELEMENT_UID_ATTRIBUTE}="${uid}"]`)
+  
+  if (element instanceof HTMLElement && element.isConnected) {
+    return element
+  }
+  
+  return null
+}
+
 export function setCheckTimeout(timeout: number | null): void {
   checkTimeout = timeout
 }
@@ -132,4 +152,5 @@ export function resetAllState(): void {
   highlightRafId = null
   checkTimeout = null
   uiBridgeInitialized = false
+  // Note: Element marks (data attributes) are managed by injected script
 }

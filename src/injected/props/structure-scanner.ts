@@ -15,6 +15,7 @@
 import { findVueRoots, extractRootVNode } from './vue-detect'
 import { getMetaStore, type ComponentMeta } from './meta-store'
 import { TraversalState } from './cache'
+import { syncElementRegistry, unregisterElementFromContent } from './element-registry'
 
 // ============================================================================
 // Types
@@ -412,6 +413,8 @@ export function scanStructure(options: { minIntervalMs?: number; force?: boolean
       const meta = store.getByUid(uid)
       if (meta) {
         store.unregisterComponent(meta.instance)
+        // Unregister element from content script
+        unregisterElementFromContent(uid)
         unmounted++
       }
     }
@@ -420,6 +423,10 @@ export function scanStructure(options: { minIntervalMs?: number; force?: boolean
   // Update last seen
   lastSeenUids = currentUids
   total = currentUids.size
+
+  // Sync element registry with content script
+  // This ensures content script has latest uid → HTMLElement mappings
+  syncElementRegistry()
 
   // Update stats
   const duration = performance.now() - startTime

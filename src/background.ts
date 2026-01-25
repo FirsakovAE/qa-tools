@@ -334,8 +334,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
             break
 
+        case 'HIGHLIGHT_BY_UID':
+            // Пересылаем сообщение в content script для подсветки по UID
+            if (message.tabId) {
+                sendMessageWithRetry(message.tabId, {
+                    type: 'HIGHLIGHT_BY_UID',
+                    uid: message.uid
+                }, 'HIGHLIGHT_BY_UID')
+            }
+            break
+
         case 'HIGHLIGHT_ELEMENT':
-            // Пересылаем сообщение в content script для подсветки элемента
+            // Legacy: пересылаем сообщение в content script для подсветки элемента
             if (message.tabId) {
                 sendMessageWithRetry(message.tabId, {
                     type: 'HIGHLIGHT_ELEMENT',
