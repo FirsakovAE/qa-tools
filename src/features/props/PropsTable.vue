@@ -27,7 +27,7 @@ const emit = defineEmits<{
 let hoveredUid: number | null = null
 let pendingHighlightUid: number | null = null
 let highlightScheduled = false
-let pendingUnhighlight = false
+let hoveredEl: HTMLElement | null = null
 
 /**
  * rAF-throttled highlight sender
@@ -35,17 +35,16 @@ let pendingUnhighlight = false
  */
 function scheduleHighlight(uid: number | null) {
   pendingHighlightUid = uid
-  pendingUnhighlight = uid === null
 
   if (highlightScheduled) return
   highlightScheduled = true
 
   requestAnimationFrame(() => {
     highlightScheduled = false
-    
-    if (pendingUnhighlight) {
+
+    if (pendingHighlightUid === null) {
       sendUnhighlight()
-    } else if (pendingHighlightUid !== null) {
+    } else {
       sendHighlight(pendingHighlightUid)
     }
   })
@@ -80,24 +79,26 @@ function onRowHover(row: PropsRow, event: Event) {
   // Use pre-calculated uid and hasDomElement
   const canHighlight = row.uid !== null && row.hasDomElement
   const effectiveUid = canHighlight ? row.uid : null
-  
+
   // Skip if same effective UID
   if (effectiveUid === hoveredUid) return
-  
+
   // Remove hover class from previous row
-  const prevHovered = document.querySelector('.props-row-hovered')
-  if (prevHovered) {
-    prevHovered.classList.remove('props-row-hovered')
+  if (hoveredEl) {
+    hoveredEl.classList.remove('props-row-hovered')
   }
-  
+
   // Add hover class to current row (NEVER for favorites)
-  const target = (event.target as HTMLElement).closest('.props-row')
+  const target = (event.target as HTMLElement).closest('.props-row') as HTMLElement | null
   if (target && !row.isFavoriteFlag) {
     target.classList.add('props-row-hovered')
+    hoveredEl = target
+  } else {
+    hoveredEl = null
   }
-  
+
   hoveredUid = effectiveUid
-  
+
   // Send highlight for elements with DOM, or unhighlight for "Logic only"
   scheduleHighlight(effectiveUid)
 }
@@ -106,17 +107,21 @@ function onRowHover(row: PropsRow, event: Event) {
  * Handle mouse leave from scroller area
  */
 function onScrollerLeave() {
-  const prevHovered = document.querySelector('.props-row-hovered')
-  if (prevHovered) {
-    prevHovered.classList.remove('props-row-hovered')
+  if (hoveredEl) {
+    hoveredEl.classList.remove('props-row-hovered')
+    hoveredEl = null
   }
-  
+
   hoveredUid = null
   scheduleHighlight(null)
 }
 
 // Cleanup on unmount
 onUnmounted(() => {
+  if (hoveredEl) {
+    hoveredEl.classList.remove('props-row-hovered')
+    hoveredEl = null
+  }
   if (hoveredUid !== null) {
     sendUnhighlight()
   }
@@ -305,24 +310,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 
 .props-row-selected {
   background: hsl(var(--muted));
-}
-
-/* Favorite - ALWAYS priority */
-.props-row-favorite {
-  background: hsl(48 100% 95% / 0.5);
-}
-
-/* Fallback: favorite + hovered = still favorite background */
-.props-row-favorite.props-row-hovered {
-  background: hsl(48 100% 95% / 0.5);
-}
-
-:deep(.dark) .props-row-favorite {
-  background: hsl(48 100% 10% / 0.3);
-}
-
-:deep(.dark) .props-row-favorite.props-row-hovered {
-  background: hsl(48 100% 10% / 0.3);
 }
 
 /* Star button */
