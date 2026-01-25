@@ -5,8 +5,6 @@ import { SearchIcon, RefreshCw, Star } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
 import {
   Tooltip,
   TooltipContent,
@@ -48,7 +46,6 @@ const lastUpdated = ref<string>('')
 
 // Search state
 const searchTerm = ref('')
-const propsOnly = ref(false)
 const debouncedSearchTerm = ref('')
 const settings = ref<BaseInspectorSettings | null>(null)
 
@@ -125,14 +122,13 @@ function isFavoriteNode(node: TreeNodeModel): boolean {
 
 function applyFilters() {
   updateRowsVisibility(rows.value, {
-    propsOnly: propsOnly.value,
     searchTerm: debouncedSearchTerm.value,
     searchByName: searchSettings.value.byName,
     searchByRootElement: searchSettings.value.byRootElement,
     searchByKey: searchSettings.value.byKey,
     searchByValue: searchSettings.value.byValue
   })
-  
+
   // Trigger re-render (cheap - just increments a number)
   visibilityVersion.value++
 }
@@ -192,7 +188,6 @@ watch(treeData, (data) => {
     
     // Apply current visibility filters
     updateRowsVisibility(newRows, {
-      propsOnly: propsOnly.value,
       searchTerm: debouncedSearchTerm.value,
       searchByName: searchSettings.value.byName,
       searchByRootElement: searchSettings.value.byRootElement,
@@ -272,7 +267,7 @@ watch(searchTerm, (term) => {
 })
 
 // Watch filter changes
-watch([propsOnly, debouncedSearchTerm], applyFilters)
+watch([debouncedSearchTerm], applyFilters)
 watch(searchSettings, applyFilters, { deep: true })
 
 /**
@@ -435,28 +430,13 @@ onUnmounted(() => {
         <!-- Right: Status badges and controls -->
         <div class="flex items-center gap-2 shrink-0">
           <Badge variant="secondary" class="font-mono">
-            {{ entriesCount }}<span v-if="(searchTerm || propsOnly) && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
+            {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
           </Badge>
           <Badge v-if="favoritesCount > 0" variant="outline" class="text-yellow-500 border-yellow-500/30">
             <Star class="h-3 w-3 mr-1 fill-yellow-500" />
             {{ favoritesCount }}
           </Badge>
           
-          <!-- Props only toggle -->
-          <div class="flex items-center gap-1.5">
-            <Checkbox 
-              id="props-only" 
-              :checked="propsOnly"
-              @update:checked="(val: boolean) => propsOnly = val"
-            />
-            <Label 
-              for="props-only" 
-              class="text-xs text-muted-foreground cursor-pointer"
-              @click="propsOnly = !propsOnly"
-            >
-              Props only
-            </Label>
-          </div>
           
           <!-- Refresh button -->
           <Tooltip>

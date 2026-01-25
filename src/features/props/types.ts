@@ -88,7 +88,6 @@ function extractUid(node: TreeNodeModel): number | null {
 export function updateRowsVisibility(
   rows: PropsRow[],
   options: {
-    propsOnly: boolean
     searchTerm: string
     searchByName: boolean
     searchByRootElement: boolean
@@ -96,16 +95,11 @@ export function updateRowsVisibility(
     searchByValue: boolean
   }
 ): void {
-  const { propsOnly, searchTerm, searchByName, searchByRootElement, searchByKey, searchByValue } = options
+  const { searchTerm, searchByName, searchByRootElement, searchByKey, searchByValue } = options
   const q = searchTerm.toLowerCase().trim()
   const hasSearch = q.length > 0
 
   for (const row of rows) {
-    // Props only filter
-    if (propsOnly && !row.hasPropsFlag) {
-      row.visible = false
-      continue
-    }
 
     // Search filter
     if (hasSearch) {
