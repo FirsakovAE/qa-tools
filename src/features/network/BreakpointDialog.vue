@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -27,7 +27,13 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
-// Form state - use v-model:checked with reka-ui
+// Make open truly controllable with v-model
+const openProxy = computed({
+  get: () => props.open,
+  set: (v) => emit('update:open', v),
+})
+
+// Form state - use v-model with reka-ui
 const triggerRequest = ref(true)
 const triggerResponse = ref(false)
 
@@ -58,19 +64,60 @@ const port = ref('')
 const path = ref('')
 const query = ref('')
 
-// Reset form ONLY when dialog OPENS (not on any reactive update while open)
+// Function to fill form from entry
+function fillFromEntry(entry: NetworkEntry) {
+  // Parse URL directly from entry to avoid reactivity timing issues
+  let parsedUrlParts = { scheme: 'https', host: '', port: '', path: '/', query: '' }
+
+  if (entry) {
+    try {
+      const url = new URL(entry.url)
+      parsedUrlParts = {
+        scheme: url.protocol.replace(':', ''),
+        host: url.hostname,
+        port: url.port || '',
+        path: url.pathname || '/',
+        query: url.search ? url.search.substring(1) : ''
+      }
+    } catch {
+      // Use defaults if URL parsing fails
+    }
+  }
+
+  // Set form values
+  scheme.value = parsedUrlParts.scheme
+  host.value = parsedUrlParts.host
+  port.value = parsedUrlParts.port
+  path.value = parsedUrlParts.path
+  query.value = parsedUrlParts.query
+  triggerRequest.value = true
+  triggerResponse.value = false
+}
+
+// Watch for dialog opening
 watch(() => props.open, (isOpen, wasOpen) => {
-  // Only reset when dialog opens (false -> true transition)
   if (isOpen && !wasOpen && props.entry) {
-    scheme.value = urlParts.value.scheme
-    host.value = urlParts.value.host
-    port.value = urlParts.value.port
-    path.value = urlParts.value.path
-    query.value = urlParts.value.query
+    // Dialog is opening with an entry
+    fillFromEntry(props.entry)
+  } else if (!isOpen) {
+    // Dialog is closing - reset form state
+    scheme.value = ''
+    host.value = ''
+    port.value = ''
+    path.value = ''
+    query.value = ''
     triggerRequest.value = true
     triggerResponse.value = false
   }
-})
+}, { immediate: false })
+
+// Watch for entry changes (when dialog is already open)
+watch(() => props.entry, (entry, prevEntry) => {
+  if (props.open && entry && entry !== prevEntry) {
+    // Entry changed while dialog is open
+    fillFromEntry(entry)
+  }
+}, { immediate: false })
 
 // Determine trigger type
 const getTrigger = (): BreakpointTrigger => {
@@ -115,7 +162,7 @@ const isValid = computed(() => {
 </script>
 
 <template>
-  <AlertDialog :open="open" @update:open="$emit('update:open', $event)">
+  <AlertDialog v-model:open="openProxy">
     <AlertDialogContent class="max-w-md">
       <AlertDialogHeader>
         <AlertDialogTitle>Set Breakpoint</AlertDialogTitle>
@@ -179,14 +226,14 @@ const isValid = computed(() => {
           </div>
         </div>
         
-        <!-- Trigger selection with v-model:checked -->
+        <!-- Trigger selection with v-model -->
         <div class="space-y-3 pt-2 border-t">
           <Label class="text-xs text-muted-foreground">Trigger Point</Label>
           <div class="flex items-center gap-6">
             <div class="flex items-center space-x-2">
               <Checkbox
                 id="trigger-request"
-                v-model:checked="triggerRequest"
+                v-model="triggerRequest"
               />
               <Label for="trigger-request" class="text-sm font-normal cursor-pointer">
                 Request
@@ -195,7 +242,7 @@ const isValid = computed(() => {
             <div class="flex items-center space-x-2">
               <Checkbox
                 id="trigger-response"
-                v-model:checked="triggerResponse"
+                v-model="triggerResponse"
               />
               <Label for="trigger-response" class="text-sm font-normal cursor-pointer">
                 Response

@@ -383,31 +383,38 @@ function interceptFetch(): void {
       const response = await originalFetch.call(window, effectiveInput, effectiveInit)
       const endTime = performance.now()
       const duration = endTime - startTime
-      
-      // Clone response to read body
+
+      // Clone response only once, but defer reading until after breakpoint resume
+      let responseBody: string | null = null
       const clone = response.clone()
-      
-      // Read response body
-      let responseBody = await readResponseBody(response, clone)
-      const { text: bodyText, truncated, originalSize } = truncateBody(responseBody)
-      
+
       // Get response headers
       let responseHeaders = parseHeaders(response.headers)
-      
-      // Calculate size
-      const contentLength = getContentLength(responseHeaders)
-      const size = contentLength || originalSize
-      
+
       // ========================================
       // RESPONSE BREAKPOINT CHECK
       // ========================================
       let finalResponse = response
-      
+
       if (callbacks?.onBreakpointCheck) {
         const match = callbacks.onBreakpointCheck(url, 'response')
-        
+
         if (match) {
-          // First notify about response so UI can show it
+          console.log('[VueInspector Interceptor] 🛑 PAUSING RESPONSE - waiting for resume...')
+          
+          // Read response body BEFORE waiting for resume (so UI can show it)
+          responseBody = await readResponseBody(response, clone)
+          const trunc = truncateBody(responseBody)
+          let bodyText = trunc.text
+          let truncated = trunc.truncated
+          let originalSize = trunc.originalSize
+
+          // Calculate size
+          const contentLength = getContentLength(responseHeaders)
+          const size = contentLength || originalSize
+
+          // ✅ Notify UI about the response BEFORE pausing (so user can see/edit body)
+          // NOTE: Always notify for breakpoints, regardless of isPaused (breakpoints work even when logging is paused)
           if (callbacks?.onResponse) {
             callbacks.onResponse(requestId, {
               status: response.status,
@@ -418,46 +425,68 @@ function interceptFetch(): void {
               duration
             })
           }
-          
-          // ACTUALLY PAUSE HERE - response has been received but NOT returned to app yet!
+
+          // NOW pause and wait for user to modify and click Apply
           const modifications = await waitForBreakpointResume(
             requestId,
             match.breakpointId,
             'response'
           ) as BreakpointModifiedResponse | undefined
-          
+
           // Apply any modifications from user
           if (modifications && modifications.responseBody !== undefined) {
-            // Create a new Response with modified body
             const modifiedBody = modifications.responseBody
-            const modifiedStatus = modifications.status ?? response.status
-            const modifiedStatusText = modifications.statusText ?? response.statusText
-            
+
             // Create modified headers
             const modifiedHeaders = new Headers()
             const headersToUse = modifications.responseHeaders ?? responseHeaders
             headersToUse.forEach(h => modifiedHeaders.set(h.name, h.value))
-            
+
             // Update content-length if body changed
             if (modifiedBody !== null) {
               modifiedHeaders.set('content-length', String(modifiedBody.length))
+            } else {
+              modifiedHeaders.delete('content-length')
             }
-            
+
             finalResponse = new Response(modifiedBody, {
-              status: modifiedStatus,
-              statusText: modifiedStatusText,
+              status: modifications.status ?? response.status,
+              statusText: modifications.statusText ?? response.statusText,
               headers: modifiedHeaders
             })
-            
+
             // Update for logging
             responseBody = modifiedBody
             responseHeaders = headersToUse
+
+            // Update UI with modified response
+            if (callbacks?.onResponse) {
+              callbacks.onResponse(requestId, {
+                status: finalResponse.status,
+                statusText: finalResponse.statusText,
+                headers: responseHeaders,
+                body: modifiedBody,
+                size: modifiedBody?.length || 0,
+                duration
+              })
+            }
           }
-          
+
           return finalResponse
         }
       }
-      
+
+      // No response breakpoint - read body normally from the existing clone
+      responseBody = await readResponseBody(clone, clone)
+      const trunc = truncateBody(responseBody)
+      let bodyText = trunc.text
+      let truncated = trunc.truncated
+      let originalSize = trunc.originalSize
+
+      // Calculate size
+      const contentLength = getContentLength(responseHeaders)
+      const size = contentLength || originalSize
+
       // Notify about response (normal flow, no response breakpoint)
       // Only log if not paused
       if (callbacks?.onResponse && !isPaused) {
@@ -489,21 +518,47 @@ function interceptFetch(): void {
 // XMLHttpRequest Interceptor
 // ============================================================================
 
+// Store original addEventListener for XHR
+const originalXHRAddEventListener = XMLHttpRequest.prototype.addEventListener
+
+// Extended XHR data including event handler management
+interface XHRData {
+  id: string
+  method: string
+  url: string
+  startTime: number
+  requestHeaders: Array<{ name: string; value: string }>
+  requestBody: string | null
+  // Event handler queues - handlers are stored and called AFTER breakpoint resolves
+  loadHandlers: Array<EventListenerOrEventListenerObject>
+  readystatechangeHandlers: Array<EventListenerOrEventListenerObject>
+  errorHandlers: Array<EventListenerOrEventListenerObject>
+  // Flag to track if response breakpoint is active
+  responseBreakpointPending: boolean
+  // Stored response data for delayed handler calls
+  storedResponseData: {
+    responseText: string
+    response: unknown
+    status: number
+    statusText: string
+    responseHeaders: Array<{ name: string; value: string }>
+  } | null
+}
+
 /**
  * Intercept XMLHttpRequest
- * Note: XHR breakpoints are more complex due to async event-based nature
- * For now, we support logging but request breakpoints require fetch
+ * 
+ * Response breakpoint strategy for XHR:
+ * 1. Intercept addEventListener and onload/onreadystatechange setters
+ * 2. Store all handlers instead of attaching them directly
+ * 3. When load event fires, check for breakpoint
+ * 4. If breakpoint, wait for resume, apply modifications
+ * 5. Override response properties with (possibly modified) values
+ * 6. THEN call stored handlers - they see modified data
  */
 function interceptXHR(): void {
-  // Track pending XHR requests
-  const xhrMap = new WeakMap<XMLHttpRequest, {
-    id: string
-    method: string
-    url: string
-    startTime: number
-    requestHeaders: Array<{ name: string; value: string }>
-    requestBody: string | null
-  }>()
+  // Track pending XHR requests with extended data
+  const xhrMap = new WeakMap<XMLHttpRequest, XHRData>()
   
   // Override open
   XMLHttpRequest.prototype.open = function(
@@ -522,11 +577,70 @@ function interceptXHR(): void {
         url: urlStr,
         startTime: 0,
         requestHeaders: [],
-        requestBody: null
+        requestBody: null,
+        loadHandlers: [],
+        readystatechangeHandlers: [],
+        errorHandlers: [],
+        responseBreakpointPending: false,
+        storedResponseData: null
       })
+      
+      // Intercept addEventListener for this XHR instance
+      setupXHREventInterception(this, xhrMap.get(this)!)
     }
     
     return originalXHROpen.call(this, method, url, async, username, password)
+  }
+  
+  // Setup event interception for XHR instance
+  function setupXHREventInterception(xhr: XMLHttpRequest, data: XHRData): void {
+    // Override addEventListener to capture handlers
+    xhr.addEventListener = function(
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions
+    ): void {
+      if (type === 'load') {
+        data.loadHandlers.push(listener)
+        return // Don't attach directly - we'll call manually after breakpoint
+      }
+      if (type === 'readystatechange') {
+        data.readystatechangeHandlers.push(listener)
+        return
+      }
+      if (type === 'error') {
+        data.errorHandlers.push(listener)
+        // Still attach error handlers directly
+      }
+      // For other events, attach normally
+      return originalXHRAddEventListener.call(this, type, listener, options)
+    }
+    
+    // Track onload property assignment
+    let _onload: ((this: XMLHttpRequest, ev: ProgressEvent) => unknown) | null = null
+    Object.defineProperty(xhr, 'onload', {
+      get: () => _onload,
+      set: (handler) => {
+        _onload = handler
+        if (handler) {
+          data.loadHandlers.push(handler as EventListenerOrEventListenerObject)
+        }
+      },
+      configurable: true
+    })
+    
+    // Track onreadystatechange property assignment  
+    let _onreadystatechange: ((this: XMLHttpRequest, ev: Event) => unknown) | null = null
+    Object.defineProperty(xhr, 'onreadystatechange', {
+      get: () => _onreadystatechange,
+      set: (handler) => {
+        _onreadystatechange = handler
+        if (handler) {
+          data.readystatechangeHandlers.push(handler as EventListenerOrEventListenerObject)
+        }
+      },
+      configurable: true
+    })
   }
   
   // Override setRequestHeader
@@ -542,7 +656,7 @@ function interceptXHR(): void {
   const pendingXHRRequests = new Map<string, {
     xhr: XMLHttpRequest
     body: Document | XMLHttpRequestBodyInit | null | undefined
-    data: typeof xhrMap extends WeakMap<XMLHttpRequest, infer T> ? T : never
+    data: XHRData
   }>()
   
   // Override send
@@ -578,7 +692,7 @@ function interceptXHR(): void {
         pendingXHRRequests.set(data.id, { xhr, body, data })
         
         // Notify about request first (so UI shows it)
-        if (callbacks?.onRequest && !isPaused) {
+        if (callbacks?.onRequest) {
           callbacks.onRequest({
             id: data.id,
             startTime: data.startTime,
@@ -598,19 +712,19 @@ function interceptXHR(): void {
         breakpointResolvers.set(data.id, {
           resolve: (modifications) => {
             console.log('[VueInspector Interceptor] XHR breakpoint resumed, sending request...')
-            
+
             // Apply modifications if any
             let finalBody = body
             if (modifications && 'requestBody' in modifications && modifications.requestBody !== undefined) {
               finalBody = modifications.requestBody as XMLHttpRequestBodyInit
             }
-            
+
             // Remove from pending
             pendingXHRRequests.delete(data.id)
-            
-            // Setup listeners BEFORE sending (for response handling)
-            setupXHRListeners(xhr, data)
-            
+
+            // Setup internal listener for response handling
+            setupXHRInternalListener(xhr, data)
+
             // Now actually send the request
             originalXHRSend.call(xhr, finalBody)
           },
@@ -642,26 +756,33 @@ function interceptXHR(): void {
       })
     }
     
-    // Setup response listeners
-    setupXHRListeners(this, data)
+    // Setup internal listener for response handling
+    setupXHRInternalListener(this, data)
     
     // Send the request
     return originalXHRSend.call(this, body)
   }
   
-  // Helper to setup XHR event listeners
-  function setupXHRListeners(
-    xhr: XMLHttpRequest, 
-    data: { id: string; startTime: number }
+  /**
+   * Setup internal XHR listener that handles:
+   * 1. Response breakpoint detection
+   * 2. Waiting for user resume
+   * 3. Applying modifications
+   * 4. Calling stored app handlers with (modified) data
+   */
+  function setupXHRInternalListener(
+    xhr: XMLHttpRequest,
+    data: XHRData
   ): void {
-    // Listen for response
-    xhr.addEventListener('load', function(this: XMLHttpRequest) {
+    // Use native addEventListener to attach our internal handler
+    // This handler fires BEFORE we call app handlers
+    originalXHRAddEventListener.call(xhr, 'load', async function(this: XMLHttpRequest) {
       const endTime = performance.now()
       const duration = endTime - data.startTime
       
       // Parse response headers
       const headerStr = this.getAllResponseHeaders()
-      const responseHeaders: Array<{ name: string; value: string }> = []
+      let responseHeaders: Array<{ name: string; value: string }> = []
       headerStr.split('\r\n').forEach(line => {
         const idx = line.indexOf(':')
         if (idx > 0) {
@@ -689,37 +810,213 @@ function interceptXHR(): void {
       const contentLength = parseInt(this.getResponseHeader('content-length') || '0', 10)
       const size = contentLength || originalSize
       
-      // Notify about response
-      if (callbacks?.onResponse) {
-        callbacks.onResponse(data.id, {
-          status: this.status,
-          statusText: this.statusText,
-          headers: responseHeaders,
-          body: truncated ? bodyText : responseBody,
-          size,
-          duration
-        })
+      // ========================================
+      // RESPONSE BREAKPOINT CHECK FOR XHR
+      // ========================================
+
+      if (callbacks?.onBreakpointCheck) {
+        const match = callbacks.onBreakpointCheck(data.url, 'response')
+
+        if (match) {
+          console.log('[VueInspector Interceptor] 🛑 PAUSING XHR RESPONSE - waiting for resume...')
+          
+          // ✅ Notify UI about the response BEFORE pausing (so user can see/edit body)
+          // NOTE: Always notify for breakpoints, regardless of isPaused
+          if (callbacks?.onResponse) {
+            callbacks.onResponse(data.id, {
+              status: this.status,
+              statusText: this.statusText,
+              headers: responseHeaders,
+              body: truncated ? bodyText : responseBody,
+              size,
+              duration
+            })
+          }
+
+          // NOW pause and wait for user to modify and click Apply
+          const modifications = await waitForBreakpointResume(
+            data.id,
+            match.breakpointId,
+            'response'
+          ) as BreakpointModifiedResponse | undefined
+
+          // Apply any modifications from user
+          if (modifications) {
+            // For XHR, we need to override the response properties
+            if (modifications.responseBody !== undefined) {
+              // Override responseText and response
+              const modifiedBody = modifications.responseBody
+              Object.defineProperty(this, 'responseText', {
+                get: () => modifiedBody || '',
+                configurable: true
+              })
+              Object.defineProperty(this, 'response', {
+                get: () => modifiedBody || null,
+                configurable: true
+              })
+
+              // Update responseBody for logging
+              responseBody = modifiedBody
+            }
+
+            if (modifications.status !== undefined) {
+              Object.defineProperty(this, 'status', {
+                get: () => modifications.status,
+                configurable: true
+              })
+            }
+
+            if (modifications.statusText !== undefined) {
+              Object.defineProperty(this, 'statusText', {
+                get: () => modifications.statusText,
+                configurable: true
+              })
+            }
+
+            if (modifications.responseHeaders) {
+              // Override getAllResponseHeaders and getResponseHeader
+              const headerString = modifications.responseHeaders.map(h => `${h.name}: ${h.value}`).join('\r\n') + '\r\n\r\n'
+              Object.defineProperty(this, 'getAllResponseHeaders', {
+                value: () => headerString,
+                configurable: true
+              })
+
+              const headerMap = new Map(modifications.responseHeaders.map(h => [h.name.toLowerCase(), h.value]))
+              Object.defineProperty(this, 'getResponseHeader', {
+                value: (name: string) => headerMap.get(name.toLowerCase()) || null,
+                configurable: true
+              })
+
+              // Update responseHeaders for logging
+              responseHeaders = modifications.responseHeaders
+            }
+
+            // Update UI with modified response
+            if (callbacks?.onResponse) {
+              callbacks.onResponse(data.id, {
+                status: this.status,
+                statusText: this.statusText,
+                headers: responseHeaders,
+                body: responseBody,
+                size: responseBody?.length || 0,
+                duration
+              })
+            }
+          }
+          
+          // ✅ NOW call stored app handlers (they see modified data)
+          callStoredHandlers(this, data)
+        } else {
+          // No breakpoint match - notify UI normally
+          if (callbacks?.onResponse && !isPaused) {
+            callbacks.onResponse(data.id, {
+              status: this.status,
+              statusText: this.statusText,
+              headers: responseHeaders,
+              body: truncated ? bodyText : responseBody,
+              size,
+              duration
+            })
+          }
+          // Call stored app handlers
+          callStoredHandlers(this, data)
+        }
+      } else {
+        // No breakpoint check available - notify UI normally
+        if (callbacks?.onResponse && !isPaused) {
+          callbacks.onResponse(data.id, {
+            status: this.status,
+            statusText: this.statusText,
+            headers: responseHeaders,
+            body: truncated ? bodyText : responseBody,
+            size,
+            duration
+          })
+        }
+        // Call stored app handlers
+        callStoredHandlers(this, data)
       }
     })
     
-    // Listen for errors
-    xhr.addEventListener('error', function() {
+    // Listen for errors - use original addEventListener
+    originalXHRAddEventListener.call(xhr, 'error', function() {
       if (callbacks?.onError) {
         callbacks.onError(data.id, 'XMLHttpRequest failed')
       }
+      // Call stored error handlers
+      callStoredErrorHandlers(xhr, data)
     })
     
-    xhr.addEventListener('abort', function() {
+    originalXHRAddEventListener.call(xhr, 'abort', function() {
       if (callbacks?.onError) {
         callbacks.onError(data.id, 'Request aborted')
       }
     })
     
-    xhr.addEventListener('timeout', function() {
+    originalXHRAddEventListener.call(xhr, 'timeout', function() {
       if (callbacks?.onError) {
         callbacks.onError(data.id, 'Request timed out')
       }
     })
+  }
+  
+  /**
+   * Call stored load and readystatechange handlers
+   * This is called AFTER breakpoint is resolved and modifications are applied
+   */
+  function callStoredHandlers(xhr: XMLHttpRequest, data: XHRData): void {
+    // Create a synthetic load event
+    const loadEvent = new ProgressEvent('load', {
+      lengthComputable: true,
+      loaded: xhr.response?.length || 0,
+      total: xhr.response?.length || 0
+    })
+    
+    // Call all stored load handlers
+    for (const handler of data.loadHandlers) {
+      try {
+        if (typeof handler === 'function') {
+          handler.call(xhr, loadEvent)
+        } else if (handler && typeof handler.handleEvent === 'function') {
+          handler.handleEvent(loadEvent)
+        }
+      } catch (err) {
+        console.error('[VueInspector Interceptor] Error calling load handler:', err)
+      }
+    }
+    
+    // Call readystatechange handlers (readyState should be 4 = DONE)
+    const readystateEvent = new Event('readystatechange')
+    for (const handler of data.readystatechangeHandlers) {
+      try {
+        if (typeof handler === 'function') {
+          handler.call(xhr, readystateEvent)
+        } else if (handler && typeof handler.handleEvent === 'function') {
+          handler.handleEvent(readystateEvent)
+        }
+      } catch (err) {
+        console.error('[VueInspector Interceptor] Error calling readystatechange handler:', err)
+      }
+    }
+  }
+  
+  /**
+   * Call stored error handlers
+   */
+  function callStoredErrorHandlers(xhr: XMLHttpRequest, data: XHRData): void {
+    const errorEvent = new ProgressEvent('error')
+    
+    for (const handler of data.errorHandlers) {
+      try {
+        if (typeof handler === 'function') {
+          handler.call(xhr, errorEvent)
+        } else if (handler && typeof handler.handleEvent === 'function') {
+          handler.handleEvent(errorEvent)
+        }
+      } catch (err) {
+        console.error('[VueInspector Interceptor] Error calling error handler:', err)
+      }
+    }
   }
 }
 
