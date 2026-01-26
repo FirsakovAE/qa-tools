@@ -23,7 +23,9 @@ import {
 import JsonEditor from '@/components/JsonEditor.vue'
 import type { NetworkEntry, HeaderEntry, UrlParam } from '@/types/network'
 import { getStatusCategory, formatBytes, formatDuration } from '@/types/network'
+import { copyToClipboard } from '@/utils/networkUtils'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useCurlCopy } from '@/composables/useCurlCopy'
 import type { BaseInspectorSettings } from '@/types/inspector'
 
 export interface BreakpointEditData {
@@ -68,9 +70,11 @@ const settings = ref<BaseInspectorSettings | null>(null)
 const jsonMode = ref<'text' | 'tree'>('text')
 
 // Copy states
-const curlCopied = ref(false)
 const copiedHeaderIndex = ref<number | null>(null)
 const copiedResponseHeaderIndex = ref<number | null>(null)
+
+// cURL copy functionality
+const { curlCopied, copyCurl: copyCurlCommand } = useCurlCopy()
 
 // Editable state for breakpoint mode
 const editableParams = ref<UrlParam[]>([])
@@ -272,85 +276,6 @@ watch(
 )
 
 // ============================================================================
-// cURL Generation (with pretty-printed JSON body)
-// ============================================================================
-
-function generateCurl(): string {
-  const parts: string[] = ['curl']
-  
-  // Method
-  if (props.entry.method !== 'GET') {
-    parts.push(`-X ${props.entry.method}`)
-  }
-  
-  // URL
-  parts.push(`'${props.entry.url}'`)
-  
-  // Headers
-  for (const header of props.entry.requestHeaders) {
-    // Skip pseudo-headers and some internal ones
-    if (header.name.startsWith(':')) continue
-    if (header.name.toLowerCase() === 'content-length') continue
-    
-    const escapedValue = header.value.replace(/'/g, "'\\''")
-    parts.push(`-H '${header.name}: ${escapedValue}'`)
-  }
-  
-  // Body - pretty-print JSON
-  if (props.entry.requestBody?.text) {
-    let formattedBody = props.entry.requestBody.text
-    try {
-      const parsed = JSON.parse(props.entry.requestBody.text)
-      formattedBody = JSON.stringify(parsed, null, 4)
-    } catch {
-      // Keep original if not valid JSON
-    }
-    const escapedBody = formattedBody.replace(/'/g, "'\\''")
-    parts.push(`--data '${escapedBody}'`)
-  }
-  
-  return parts.join(' \\\n  ')
-}
-
-// ============================================================================
-// Clipboard (with fallback for permission issues)
-// ============================================================================
-
-async function copyToClipboard(text: string): Promise<boolean> {
-  // Try execCommand first (works in iframes without permissions)
-  try {
-    const textArea = document.createElement('textarea')
-    textArea.value = text
-    textArea.style.position = 'fixed'
-    textArea.style.left = '-999999px'
-    textArea.style.top = '-999999px'
-    textArea.style.opacity = '0'
-    document.body.appendChild(textArea)
-    textArea.focus()
-    textArea.select()
-    const success = document.execCommand('copy')
-    document.body.removeChild(textArea)
-    return success
-  } catch {
-    // If execCommand fails, try clipboard API as fallback
-    try {
-      await navigator.clipboard.writeText(text)
-      return true
-    } catch {
-      return false
-    }
-  }
-}
-
-// Copy cURL command with visual feedback
-async function copyCurl() {
-  const curl = generateCurl()
-  const success = await copyToClipboard(curl)
-  if (success) {
-    curlCopied.value = true
-    setTimeout(() => { curlCopied.value = false }, 2000)
-  }
-}
 
 // Copy header value with visual feedback
 async function copyHeaderValue(value: string, index: number, isResponse: boolean = false) {
@@ -405,7 +330,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               size="sm"
               class="h-8 shrink-0 text-xs gap-1.5 transition-colors"
               :class="{ 'text-green-500 border-green-500/50': curlCopied }"
-              @click="copyCurl"
+              @click="copyCurlCommand(props.entry)"
             >
               <component :is="curlCopied ? Check : Copy" class="h-3.5 w-3.5" />
               {{ curlCopied ? 'Copied!' : 'Copy cURL' }}

@@ -11,15 +11,10 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from '@/components/ui/tooltip'
-import { PenLine } from 'lucide-vue-next'
 import type { NetworkEntry } from '@/types/network'
 import { getStatusCategory, formatBytes, formatDuration } from '@/types/network'
+import NetworkRowActions from './NetworkRowActions.vue'
+import { buildCurlCommand, copyToClipboard } from '@/utils/networkUtils'
 
 const props = defineProps<{
   entries: NetworkEntry[]
@@ -32,10 +27,11 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select', id: string): void
   (e: 'setBreakpoint', entry: NetworkEntry): void
+  (e: 'copyCurl', entry: NetworkEntry): void
 }>()
 
-// Hover state for breakpoint button
-const hoveredEntryId = ref<string | null>(null)
+// cURL copy functionality
+
 
 // Method badge variant based on HTTP method
 function getMethodVariant(method: string): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -96,6 +92,14 @@ const handleBreakpointClick = (entry: NetworkEntry, event: Event) => {
   emit('setBreakpoint', entry)
 }
 
+const handleCopyCurl = async (entry: NetworkEntry) => {
+  const curl = buildCurlCommand(entry)
+  const ok = await copyToClipboard(curl)
+  if (ok) {
+    emit('copyCurl', entry)
+  }
+}
+
 // Check if entry has an active breakpoint (hit/pending)
 const hasBreakpoint = (entryId: string): boolean => {
   return props.breakpointEntryIds?.has(entryId) ?? false
@@ -108,8 +112,7 @@ const matchesBreakpointPattern = (entryId: string): boolean => {
 </script>
 
 <template>
-  <TooltipProvider>
-    <div class="h-full flex flex-col border rounded-lg overflow-hidden">
+  <div class="h-full flex flex-col border rounded-lg overflow-hidden">
       <div class="shrink-0 border-b bg-muted/30">
         <Table>
           <TableHeader>
@@ -118,8 +121,8 @@ const matchesBreakpointPattern = (entryId: string): boolean => {
               <TableHead class="w-[70px] text-xs font-semibold">Method</TableHead>
               <TableHead class="text-xs font-semibold">Name</TableHead>
               <TableHead class="w-[80px] text-xs font-semibold text-right">Time</TableHead>
-              <TableHead class="w-[28px] text-xs font-semibold"></TableHead>
               <TableHead class="w-[80px] text-xs font-semibold text-right">Size</TableHead>
+              <TableHead class="w-[28px] text-xs font-semibold text-right"></TableHead>
             </TableRow>
           </TableHeader>
         </Table>
@@ -139,8 +142,6 @@ const matchesBreakpointPattern = (entryId: string): boolean => {
                 'border-l-2 border-l-amber-500/50': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id)
               }"
               @click="handleRowClick(entry.id)"
-              @mouseenter="hoveredEntryId = entry.id"
-              @mouseleave="hoveredEntryId = null"
             >
               <TableCell class="w-[70px] py-2">
                 <Badge
@@ -177,35 +178,19 @@ const matchesBreakpointPattern = (entryId: string): boolean => {
               <TableCell class="w-[80px] py-2 text-right text-xs text-muted-foreground font-mono">
                 {{ entry.pending ? '...' : formatDuration(entry.duration) }}
               </TableCell>
-              
-              <!-- Breakpoint button cell -->
-              <TableCell class="w-[28px] py-2 px-0">
-                <div class="flex justify-center items-center h-full">
-                  <Tooltip>
-                    <TooltipTrigger as-child>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="h-6 w-6 p-0 transition-opacity"
-                        :class="{
-                          'opacity-0 group-hover:opacity-100': !hasBreakpoint(entry.id) && !matchesBreakpointPattern(entry.id),
-                          'text-amber-500': hasBreakpoint(entry.id),
-                          'text-amber-500/60 opacity-100': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id)
-                        }"
-                        @click="handleBreakpointClick(entry, $event)"
-                      >
-                        <PenLine class="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {{ hasBreakpoint(entry.id) ? 'Edit Breakpoint' : matchesBreakpointPattern(entry.id) ? 'Breakpoint Active' : 'Set Breakpoint' }}
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </TableCell>
-              
+
               <TableCell class="w-[80px] py-2 text-right text-xs text-muted-foreground font-mono">
                 {{ entry.pending ? '...' : formatBytes(entry.size) }}
+              </TableCell>
+              
+              <TableCell class="w-[28px] py-2 pr-2 text-right">
+                <div class="flex justify-center items-center h-full">
+                  <NetworkRowActions
+                    :entry="entry"
+                    @set-breakpoint="emit('setBreakpoint', entry)"
+                    @copy-curl="handleCopyCurl(entry)"
+                  />
+                </div>
               </TableCell>
             </TableRow>
             
@@ -218,5 +203,4 @@ const matchesBreakpointPattern = (entryId: string): boolean => {
         </Table>
       </ScrollArea>
     </div>
-  </TooltipProvider>
 </template>

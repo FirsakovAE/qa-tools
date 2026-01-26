@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useCurlCopy } from '@/composables/useCurlCopy'
 import { useDebounceFn } from '@vueuse/core'
 import { Trash2, Pause, Play, SearchIcon } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,9 @@ const isReady = ref(false)
 // Search state
 const searchTerm = ref('')
 const settings = ref<BaseInspectorSettings | null>(null)
+
+// cURL copy (shared logic with NetworkDetails)
+const { copyCurl } = useCurlCopy()
 
 // Search index for fast lookup (minimal CPU)
 interface SearchIndexEntry {
@@ -393,6 +397,10 @@ function tryExpandApp() {
 function handleSetBreakpoint(entry: NetworkEntry) {
   breakpointDialogEntry.value = entry
   breakpointDialogOpen.value = true
+}
+
+function handleCopyCurl(entry: NetworkEntry) {
+  copyCurl(entry)
 }
 
 /**
@@ -996,6 +1004,7 @@ onUnmounted(() => {
           :breakpoint-matching-ids="entriesMatchingBreakpoints"
           @select="selectEntry"
           @set-breakpoint="handleSetBreakpoint"
+          @copy-curl="handleCopyCurl"
         />
       </div>
       
