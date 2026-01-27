@@ -15,10 +15,11 @@ import {
 import NetworkTable from './NetworkTable.vue'
 import NetworkDetails, { type BreakpointEditData } from './NetworkDetails.vue'
 import BreakpointDialog from './BreakpointDialog.vue'
+import MockDialog from './MockDialog.vue'
 import type { NetworkEntry, NetworkConfig } from '@/types/network'
 import { DEFAULT_NETWORK_CONFIG } from '@/types/network'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
-import type { BaseInspectorSettings, BreakpointItem, BreakpointTrigger } from '@/types/inspector'
+import type { BaseInspectorSettings, BreakpointItem, BreakpointTrigger, MockRule } from '@/types/inspector'
 
 // ============================================================================
 // Props & Emits
@@ -74,6 +75,10 @@ const searchIndex = ref<SearchIndexEntry[]>([])
 const breakpointDialogOpen = ref(false)
 const breakpointDialogEntry = ref<NetworkEntry | null>(null)
 
+// Mock dialog state (Map Local feature)
+const mockDialogOpen = ref(false)
+const mockDialogEntry = ref<NetworkEntry | null>(null)
+
 // Current breakpoint mode state
 const breakpointMode = ref(false)
 const breakpointTrigger = ref<'request' | 'response' | undefined>(undefined)
@@ -103,15 +108,21 @@ const breakpointDrafts = ref<Map<string, BreakpointDraft>>(new Map())
 // Settings
 // ============================================================================
 
-// Load settings and sync breakpoints
+// Load settings and sync breakpoints/mocks
 onMounted(async () => {
   try {
     settings.value = await useInspectorSettings()
     
-    // Sync breakpoints to injected script after settings load
+    // Initialize mocks if not present
+    if (settings.value && !settings.value.mocks) {
+      settings.value.mocks = { active: [], inactive: [] }
+    }
+    
+    // Sync breakpoints and mocks to injected script after settings load
     // Use nextTick to ensure reactive updates are complete
     setTimeout(() => {
       syncBreakpointsToInjected()
+      syncMocksToInjected()
     }, 100)
   } catch {
     // Use defaults
@@ -335,6 +346,96 @@ watch(activeBreakpoints, () => {
   syncBreakpointsToInjected()
 }, { deep: true })
 
+// ============================================================================
+// Mock (Map Local) Sync to Injected Script
+// ============================================================================
+
+// Active mocks from settings
+const activeMocks = computed<MockRule[]>(() => {
+  return settings.value?.mocks?.active ?? []
+})
+
+/**
+ * Convert MockRule to MockConfig format for injected script
+ */
+function convertMocksForSync(mocks: MockRule[]) {
+  return mocks.map(m => ({
+    id: m.id,
+    enabled: m.enabled,
+    scheme: m.scheme,
+    host: m.host,
+    port: m.port,
+    path: m.path,
+    query: m.query,
+    method: m.method,
+    status: m.status || 200,
+    statusText: m.statusText || 'OK',
+    headers: m.headers || [],
+    body: m.body || '',
+    delay: m.delay
+  }))
+}
+
+/**
+ * Sync mocks to injected script
+ */
+function syncMocksToInjected() {
+  const mocksToSync = convertMocksForSync(activeMocks.value)
+  const plainMocks = JSON.parse(JSON.stringify(mocksToSync))
+  console.log('[VueInspector UI] 🎭 Syncing mocks to injected:', plainMocks.length)
+  if (plainMocks.length > 0) {
+    console.log('[VueInspector UI] 🎭 First mock:', {
+      id: plainMocks[0].id,
+      host: plainMocks[0].host,
+      path: plainMocks[0].path,
+      status: plainMocks[0].status,
+      bodyLength: plainMocks[0].body?.length,
+      headersCount: plainMocks[0].headers?.length
+    })
+  }
+  sendNetworkCommand('NETWORK_MOCKS_SYNC', {
+    mocks: plainMocks
+  })
+}
+
+// Watch for mock changes and sync to injected script
+watch(activeMocks, () => {
+  syncMocksToInjected()
+}, { deep: true })
+
+/**
+ * Handle mock dialog open
+ */
+function handleMockResponse(entry: NetworkEntry) {
+  mockDialogEntry.value = entry
+  mockDialogOpen.value = true
+}
+
+/**
+ * Handle mock confirmation from dialog
+ */
+function handleMockConfirm(mock: MockRule) {
+  if (!settings.value) return
+  
+  // Initialize mocks if not present
+  if (!settings.value.mocks) {
+    settings.value.mocks = { active: [], inactive: [] }
+  }
+  
+  // Add mock to active list
+  settings.value.mocks.active.push(mock)
+  
+  console.log('[VueInspector UI] 🎭 Mock created:', mock.id, 'for', mock.host, mock.path)
+  console.log('[VueInspector UI] 🎭 Mock body length:', mock.body?.length, 'headers:', mock.headers?.length)
+  
+  // Force sync to injected script immediately
+  syncMocksToInjected()
+  
+  // Close dialog
+  mockDialogOpen.value = false
+  mockDialogEntry.value = null
+}
+
 /**
  * Handle breakpoint hit - pause request and open details
  */
@@ -540,7 +641,7 @@ function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
   
   return {
     entryId: entry.id,
-    name: entry.name.toLowerCase(),
+    name: entry.path.toLowerCase(),
     method: entry.method.toLowerCase(),
     requestBodyKeys,
     requestBodyValues,
@@ -800,6 +901,16 @@ function processNetworkMessage(msg: any): void {
       console.log('[VueInspector UI] Breakpoints synced confirmed:', msg.count, 'breakpoints')
       break
       
+    case 'NETWORK_MOCKS_SYNCED':
+      // Confirmation that mocks were synced to injected script
+      console.log('[VueInspector UI] 🎭 Mocks synced confirmed:', msg.count, 'mocks')
+      break
+      
+    case 'NETWORK_MOCK_APPLIED':
+      // A mock was applied (request was intercepted and fake response returned)
+      console.log('[VueInspector UI] 🎭 Mock applied for request:', msg.requestId, 'mockId:', msg.mockId)
+      break
+      
     case 'NETWORK_ENTRIES_DATA':
       isReady.value = true
       if (msg.entries && Array.isArray(msg.entries)) {
@@ -1019,6 +1130,7 @@ onUnmounted(() => {
           @back="deselectEntry"
           @apply-breakpoint="handleApplyBreakpoint"
           @update-draft="handleDraftUpdate"
+          @mock-response="handleMockResponse"
         />
         
         <div
@@ -1036,6 +1148,14 @@ onUnmounted(() => {
       :entry="breakpointDialogEntry"
       @confirm="handleBreakpointConfirm"
       @cancel="breakpointDialogEntry = null"
+    />
+    
+    <!-- Mock Dialog (Map Local feature) -->
+    <MockDialog
+      v-model:open="mockDialogOpen"
+      :entry="mockDialogEntry"
+      @confirm="handleMockConfirm"
+      @cancel="mockDialogEntry = null"
     />
   </div>
 </template>

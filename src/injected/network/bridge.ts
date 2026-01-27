@@ -6,7 +6,7 @@
  * to prevent Vite from code-splitting it into a separate chunk.
  */
 
-import type { PendingRequest, ResponseData, BreakpointConfig, BreakpointMatch } from './types'
+import type { PendingRequest, ResponseData, BreakpointConfig, BreakpointMatch, MockConfig, MockMatch } from './types'
 import {
   initNetworkInterceptor,
   pauseInterception,
@@ -54,6 +54,7 @@ interface NetworkEntry {
   timestamp: string
   method: string
   url: string
+  path: string
   name: string
   status: number
   statusText: string
@@ -92,6 +93,15 @@ function extractUrlName(url: string): string {
     return urlObj.host
   } catch {
     return url.substring(0, 50)
+  }
+}
+
+function extractUrlPath(url: string): string {
+  try {
+    const urlObj = new URL(url)
+    return urlObj.pathname
+  } catch {
+    return url
   }
 }
 
@@ -198,6 +208,13 @@ let config: NetworkConfig = {
 
 // Active breakpoints (synced from UI settings)
 let activeBreakpoints: BreakpointConfig[] = []
+
+// ============================================================================
+// Mock (Map Local) Configuration State
+// ============================================================================
+
+// Active mocks (synced from UI settings)
+let activeMocks: MockConfig[] = []
 
 /**
  * Match URL against a breakpoint pattern
@@ -342,6 +359,130 @@ function handleBreakpointHit(requestId: string, breakpointId: string, trigger: '
 }
 
 // ============================================================================
+// Mock (Map Local) Matching
+// ============================================================================
+
+/**
+ * Match URL against a mock pattern (same logic as breakpoint matching)
+ */
+function matchUrlToMock(url: string, method: string, mock: MockConfig): boolean {
+  try {
+    const urlObj = new URL(url)
+    
+    // Check method first (if specified)
+    if (mock.method && mock.method.toUpperCase() !== method.toUpperCase()) {
+      return false
+    }
+    
+    // Check scheme (http, https)
+    if (mock.scheme) {
+      const urlScheme = urlObj.protocol.replace(':', '')
+      if (urlScheme !== mock.scheme) {
+        return false
+      }
+    }
+    
+    // Check host (supports wildcard *)
+    if (mock.host) {
+      const hostPattern = mock.host
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+      const hostRegex = new RegExp(`^${hostPattern}$`, 'i')
+      if (!hostRegex.test(urlObj.hostname)) {
+        return false
+      }
+    }
+    
+    // Check port
+    if (mock.port) {
+      const urlPort = urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80')
+      if (urlPort !== mock.port) {
+        return false
+      }
+    }
+    
+    // Check path (supports wildcard *)
+    if (mock.path) {
+      const pathPattern = mock.path
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+      const pathRegex = new RegExp(`^${pathPattern}`, 'i')
+      if (!pathRegex.test(urlObj.pathname)) {
+        return false
+      }
+    }
+    
+    // Check query (if specified, use partial match)
+    if (mock.query) {
+      const queryPattern = mock.query
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+      const queryRegex = new RegExp(queryPattern, 'i')
+      const searchWithoutPrefix = urlObj.search ? urlObj.search.substring(1) : ''
+      if (!queryRegex.test(searchWithoutPrefix)) {
+        return false
+      }
+    }
+    
+    return true
+  } catch (e) {
+    console.log('[VueInspector Network] ❌ Mock URL parse error:', e)
+    return false
+  }
+}
+
+/**
+ * Check if a URL matches any active mock (Map Local)
+ * Returns MockMatch if found, null otherwise
+ */
+function checkMock(url: string, method: string): MockMatch | null {
+  console.log('[VueInspector Network] checkMock called:', url, 'method:', method, 'activeMocks count:', activeMocks.length)
+  
+  if (activeMocks.length === 0) {
+    return null
+  }
+  
+  for (const mock of activeMocks) {
+    console.log('[VueInspector Network] Checking against mock:', {
+      id: mock.id,
+      enabled: mock.enabled,
+      host: mock.host,
+      path: mock.path
+    })
+    
+    if (!mock.enabled) {
+      console.log('[VueInspector Network] Mock disabled, skipping')
+      continue
+    }
+    
+    const matches = matchUrlToMock(url, method, mock)
+    console.log('[VueInspector Network] Match result:', matches)
+    
+    if (matches) {
+      console.log('[VueInspector Network] 🎭 MOCK MATCH!', mock.id, 'for', url)
+      console.log('[VueInspector Network] 🎭 Returning mock with body length:', mock.body?.length)
+      return {
+        mockId: mock.id,
+        mock
+      }
+    }
+  }
+  
+  console.log('[VueInspector Network] No mock match found')
+  return null
+}
+
+/**
+ * Handle mock applied notification (for UI logging)
+ */
+function handleMockApplied(requestId: string, mockId: string): void {
+  sendToContentScript('NETWORK_MOCK_APPLIED', {
+    requestId,
+    mockId
+  })
+}
+
+// ============================================================================
 // IPC Communication
 // ============================================================================
 
@@ -399,6 +540,7 @@ function handleRequest(request: PendingRequest): void {
     timestamp: new Date().toISOString(),
     method: request.method,
     url: request.url,
+    path: extractUrlPath(request.url),
     name: extractUrlName(request.url),
     status: 0,
     statusText: '',
@@ -444,6 +586,7 @@ function handleResponse(id: string, response: ResponseData): void {
     timestamp: pendingEntry.timestamp || new Date().toISOString(),
     method: pendingEntry.method || 'GET',
     url: pendingEntry.url || '',
+    path: pendingEntry.path || extractUrlPath(pendingEntry.url || ''),
     name: pendingEntry.name || '',
     status: response.status,
     statusText: response.statusText,
@@ -492,6 +635,7 @@ function handleError(id: string, errorMessage: string): void {
     timestamp: pendingEntry.timestamp || new Date().toISOString(),
     method: pendingEntry.method || 'GET',
     url: pendingEntry.url || '',
+    path: pendingEntry.path || extractUrlPath(pendingEntry.url || ''),
     name: pendingEntry.name || '',
     status: 0,
     statusText: 'Failed',
@@ -536,7 +680,7 @@ function handleMessage(event: MessageEvent): void {
   if (!__VUE_INSPECTOR__ || !__NETWORK_CMD__) return
   
   // Debug: log received commands
-  if (type?.startsWith('NETWORK_BREAKPOINT')) {
+  if (type?.startsWith('NETWORK_BREAKPOINT') || type?.startsWith('NETWORK_MOCK')) {
     console.log('[VueInspector Network] Received command:', type, event.data)
   }
   
@@ -589,6 +733,30 @@ function handleMessage(event: MessageEvent): void {
         sendToContentScript('NETWORK_BREAKPOINTS_SYNCED', {
           count: activeBreakpoints.length,
           breakpoints: activeBreakpoints.map(bp => ({ id: bp.id, host: bp.host, path: bp.path }))
+        })
+      }
+      break
+      
+    case 'NETWORK_MOCKS_SYNC':
+      // Sync mocks from UI settings (Map Local feature)
+      if (Array.isArray(event.data.mocks)) {
+        activeMocks = event.data.mocks
+        console.log('[VueInspector Network] 🎭 Mocks synced:', activeMocks.length, 'mocks')
+        if (activeMocks.length > 0) {
+          console.log('[VueInspector Network] 🎭 First mock details:', {
+            id: activeMocks[0].id,
+            enabled: activeMocks[0].enabled,
+            host: activeMocks[0].host,
+            path: activeMocks[0].path,
+            status: activeMocks[0].status,
+            bodyLength: activeMocks[0].body?.length,
+            headersCount: activeMocks[0].headers?.length
+          })
+        }
+        // Notify UI that sync was successful
+        sendToContentScript('NETWORK_MOCKS_SYNCED', {
+          count: activeMocks.length,
+          mocks: activeMocks.map(m => ({ id: m.id, host: m.host, path: m.path, status: m.status }))
         })
       }
       break
@@ -651,16 +819,18 @@ export function initNetworkModule(): void {
   // Listen for commands
   window.addEventListener('message', handleMessage)
   
-  // Initialize interceptor with breakpoint support
+  // Initialize interceptor with breakpoint and mock (Map Local) support
   try {
     initNetworkInterceptor({
       onRequest: handleRequest,
       onResponse: handleResponse,
       onError: handleError,
       onBreakpointCheck: checkBreakpoint,
-      onBreakpointHit: handleBreakpointHit
+      onBreakpointHit: handleBreakpointHit,
+      onMockCheck: checkMock,
+      onMockApplied: handleMockApplied
     }, config.maxBodySize)
-    console.log('[VueInspector Bridge] ✅ Interceptor initialized successfully')
+    console.log('[VueInspector Bridge] ✅ Interceptor initialized with Mock (Map Local) support')
   } catch (error) {
     console.error('[VueInspector Bridge] ❌ Failed to initialize interceptor:', error)
   }
@@ -687,4 +857,5 @@ export function cleanupNetworkModule(): void {
   entries = []
   pendingRequests.clear()
   activeBreakpoints = []
+  activeMocks = []
 }

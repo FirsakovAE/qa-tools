@@ -164,7 +164,7 @@ const matchesBreakpointPattern = (entryId: string): boolean => {
               
               <TableCell class="py-2 max-w-0">
                 <div class="truncate text-sm" :title="entry.url">
-                  {{ entry.name }}
+                  {{ entry.path }}
                 </div>
                 <div
                   v-if="entry.error"

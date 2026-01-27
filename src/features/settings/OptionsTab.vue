@@ -45,7 +45,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { InspectorSettings, FavoriteItem, BreakpointItem } from '@/settings/inspectorSettings'
+import type { InspectorSettings, FavoriteItem, BreakpointItem, MockRule } from '@/settings/inspectorSettings'
 
 // -------------------- STATE --------------------
 const settings = ref<InspectorSettings | null>(null)
@@ -123,6 +123,11 @@ onMounted(async () => {
     // Инициализируем breakpoints настройки
     if (loadedSettings && !loadedSettings.breakpoints) {
       loadedSettings.breakpoints = { ...defaultInspectorSettings.breakpoints }
+    }
+
+    // Инициализируем mocks настройки
+    if (loadedSettings && !loadedSettings.mocks) {
+      loadedSettings.mocks = { ...defaultInspectorSettings.mocks }
     }
 
   } catch (error) {
@@ -294,6 +299,46 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
   if (bp.port) url += `:${bp.port}`
   url += bp.path
   if (bp.query) url += `?${bp.query}`
+  return url
+}
+
+// -------------------- MOCKS (Map Local) --------------------
+type MockRow = MockRule & { active: boolean }
+
+const mockRows = computed<MockRow[]>(() => {
+  if (!settings.value?.mocks) return []
+  return [
+    ...settings.value.mocks.active.map(m => ({ ...m, active: true })),
+    ...settings.value.mocks.inactive.map(m => ({ ...m, active: false })),
+  ]
+})
+
+function toggleMock(mockId: string, currentlyActive: boolean) {
+  if (!settings.value?.mocks) return
+  
+  const from = currentlyActive ? settings.value.mocks.active : settings.value.mocks.inactive
+  const to = currentlyActive ? settings.value.mocks.inactive : settings.value.mocks.active
+  
+  const index = from.findIndex(m => m.id === mockId)
+  if (index !== -1) {
+    const [mock] = from.splice(index, 1)
+    to.push(mock)
+  }
+}
+
+function removeMock(mockId: string) {
+  if (!settings.value?.mocks) return
+  settings.value.mocks.active = settings.value.mocks.active.filter(m => m.id !== mockId)
+  settings.value.mocks.inactive = settings.value.mocks.inactive.filter(m => m.id !== mockId)
+}
+
+function formatMockUrl(mock: MockRule): string {
+  let url = ''
+  if (mock.method) url += `${mock.method} `
+  url += `${mock.scheme || '*'}://${mock.host || '*'}`
+  if (mock.port) url += `:${mock.port}`
+  url += mock.path || '/*'
+  if (mock.query) url += `?${mock.query}`
   return url
 }
 
@@ -719,6 +764,103 @@ async function handleReset() {
                   <TableRow v-if="!breakpointRows.length">
                     <TableCell colspan="4" class="text-center text-muted-foreground py-8">
                       No breakpoints configured. Set breakpoints from the Network tab.
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <!-- MOCKS (Map Local) -->
+          <div class="space-y-4 border-t pt-5">
+            <h4 class="text-sm font-semibold flex items-center gap-2">
+              Mocks (Map Local)
+              <span class="text-xs font-normal text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded">
+                Like Charles Proxy
+              </span>
+            </h4>
+            <p class="text-sm text-muted-foreground">
+              Matching requests will return fake responses without hitting the network.
+            </p>
+
+            <div class="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead class="w-[350px]">URL Pattern</TableHead>
+                    <TableHead class="text-center w-[80px]">Status</TableHead>
+                    <TableHead class="text-center w-[80px]">Delay</TableHead>
+                    <TableHead class="text-center w-[100px]">State</TableHead>
+                    <TableHead class="text-right w-[150px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                  <TableRow v-for="row in mockRows" :key="row.id">
+                    <TableCell class="py-2 px-4">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm truncate" :title="formatMockUrl(row)">
+                        {{ formatMockUrl(row) }}
+                      </div>
+                      <div class="text-xs text-muted-foreground mt-1">
+                        {{ row.description || `Added: ${new Date(row.timestamp).toLocaleDateString()}` }}
+                      </div>
+                    </TableCell>
+
+                    <TableCell class="text-center py-2 px-4">
+                      <div 
+                        :class="[
+                          !row.active ? 'opacity-50' : '',
+                          'text-sm font-mono',
+                          row.status >= 200 && row.status < 300 ? 'text-green-500' : '',
+                          row.status >= 400 && row.status < 500 ? 'text-orange-500' : '',
+                          row.status >= 500 ? 'text-red-500' : ''
+                        ]"
+                      >
+                        {{ row.status }}
+                      </div>
+                    </TableCell>
+
+                    <TableCell class="text-center py-2 px-4">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="text-sm text-muted-foreground">
+                        {{ row.delay ? `${row.delay}ms` : '-' }}
+                      </div>
+                    </TableCell>
+
+                    <TableCell class="text-center py-2 px-4">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="text-sm">
+                        {{ row.active ? 'Active' : 'Disabled' }}
+                      </div>
+                    </TableCell>
+
+                    <TableCell class="text-right py-2 px-4">
+                      <div class="flex justify-end gap-2">
+                        <Button
+                            size="sm"
+                            :variant="row.active ? 'secondary' : 'outline'"
+                            @click="toggleMock(row.id, row.active)"
+                            :disabled="!settings"
+                            class="h-7 text-xs"
+                        >
+                          <Power class="w-3 h-3 mr-1" />
+                          {{ row.active ? 'Disable' : 'Enable' }}
+                        </Button>
+
+                        <Button
+                            size="sm"
+                            variant="destructive"
+                            @click="removeMock(row.id)"
+                            :disabled="!settings"
+                            class="h-7 w-7 p-0"
+                        >
+                          <Trash class="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+
+                  <TableRow v-if="!mockRows.length">
+                    <TableCell colspan="5" class="text-center text-muted-foreground py-8">
+                      No mocks configured. Click "Mock Response" on any request in the Network tab.
                     </TableCell>
                   </TableRow>
                 </TableBody>

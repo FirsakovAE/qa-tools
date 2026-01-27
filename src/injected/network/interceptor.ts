@@ -16,7 +16,9 @@ import type {
   ResponseData,
   BreakpointMatch,
   BreakpointModifiedRequest,
-  BreakpointModifiedResponse
+  BreakpointModifiedResponse,
+  MockConfig,
+  MockMatch
 } from './types'
 
 // Store original implementations
@@ -24,6 +26,7 @@ const originalFetch = window.fetch
 const originalXHROpen = XMLHttpRequest.prototype.open
 const originalXHRSend = XMLHttpRequest.prototype.send
 const originalXHRSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader
+const originalXHRResponseTypeDescriptor = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseType')
 
 // Extension URL patterns to exclude
 const EXTENSION_PATTERNS = [
@@ -272,7 +275,7 @@ function applyRequestModifications(
 // ============================================================================
 
 /**
- * Intercept fetch API with REAL breakpoint support
+ * Intercept fetch API with REAL breakpoint support and Mock (Map Local) feature
  */
 function interceptFetch(): void {
   window.fetch = async function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -295,6 +298,135 @@ function interceptFetch(): void {
     
     const requestId = generateRequestId()
     const startTime = performance.now()
+    
+    // ========================================
+    // 🎯 MOCK CHECK - BEFORE ANY NETWORK CALL!
+    // This is Map Local: return fake response without hitting network
+    // ========================================
+    if (callbacks?.onMockCheck) {
+      const mockMatch = callbacks.onMockCheck(url, method.toUpperCase())
+      
+      if (mockMatch && mockMatch.mock && mockMatch.mock.enabled) {
+        console.log('[VueInspector Interceptor] 🎭 MOCK MATCH! Returning fake response for:', url)
+        console.log('[VueInspector Interceptor] Mock details:', {
+          id: mockMatch.mockId,
+          status: mockMatch.mock.status,
+          bodyLength: mockMatch.mock.body?.length,
+          headersCount: mockMatch.mock.headers?.length
+        })
+        
+        try {
+          // Apply delay if configured (like Charles Proxy)
+          if (mockMatch.mock.delay && mockMatch.mock.delay > 0) {
+            console.log('[VueInspector Interceptor] Applying mock delay:', mockMatch.mock.delay, 'ms')
+            await new Promise(resolve => setTimeout(resolve, mockMatch.mock.delay))
+          }
+          
+          // ✅ FIX #1: Ensure body is ALWAYS a valid string
+          // If body is object/array, stringify it. If undefined/null, use empty string
+          let mockBody: string
+          const rawBody = mockMatch.mock.body
+          if (rawBody === undefined || rawBody === null) {
+            mockBody = ''
+          } else if (typeof rawBody === 'string') {
+            mockBody = rawBody
+          } else {
+            mockBody = JSON.stringify(rawBody)
+          }
+          
+          // ✅ FIX #2: Validate JSON if content-type is json
+          const contentType = mockMatch.mock.headers?.find(
+            h => h.name.toLowerCase() === 'content-type'
+          )?.value || 'application/json'
+          
+          if (contentType.includes('json') && mockBody) {
+            try {
+              // Validate it's parseable JSON
+              JSON.parse(mockBody)
+            } catch {
+              console.warn('[VueInspector Interceptor] Mock body is not valid JSON, wrapping as string')
+              mockBody = JSON.stringify(mockBody)
+            }
+          }
+          
+          // Build response headers
+          const responseHeaders = new Headers()
+          if (mockMatch.mock.headers && Array.isArray(mockMatch.mock.headers)) {
+            mockMatch.mock.headers.forEach(h => {
+              if (h.name && h.value !== undefined) {
+                responseHeaders.set(h.name, h.value)
+              }
+            })
+          }
+          
+          // ✅ FIX #3: Ensure content-type and content-length are set
+          if (!responseHeaders.has('content-type')) {
+            responseHeaders.set('content-type', 'application/json; charset=utf-8')
+          }
+          responseHeaders.set('content-length', String(new TextEncoder().encode(mockBody).length))
+          
+          // Create synthetic Response
+          const mockResponse = new Response(mockBody, {
+            status: mockMatch.mock.status || 200,
+            statusText: mockMatch.mock.statusText || 'OK',
+            headers: responseHeaders
+          })
+          
+          console.log('[VueInspector Interceptor] 🎭 Mock Response created successfully')
+          
+          // Notify that mock was applied (for UI logging)
+          if (callbacks?.onMockApplied) {
+            callbacks.onMockApplied(requestId, mockMatch.mockId)
+          }
+          
+          // Extract request headers for logging
+          let requestHeaders: Array<{ name: string; value: string }> = []
+          const headersSource = init?.headers || (input instanceof Request ? input.headers : null)
+          if (headersSource) {
+            if (headersSource instanceof Headers) {
+              headersSource.forEach((value, name) => requestHeaders.push({ name, value }))
+            } else if (Array.isArray(headersSource)) {
+              headersSource.forEach(([name, value]) => requestHeaders.push({ name, value }))
+            } else {
+              Object.entries(headersSource).forEach(([name, value]) => requestHeaders.push({ name, value }))
+            }
+          }
+          
+          // Log the mocked request (so it appears in Network tab)
+          if (callbacks?.onRequest && !isPaused) {
+            callbacks.onRequest({
+              id: requestId,
+              startTime,
+              method: method.toUpperCase(),
+              url,
+              requestHeaders,
+              requestBody: serializeRequestBody(init?.body || (input instanceof Request ? input.body as BodyInit : null))
+            })
+          }
+          
+          // Log the mocked response
+          const endTime = performance.now()
+          if (callbacks?.onResponse && !isPaused) {
+            callbacks.onResponse(requestId, {
+              status: mockMatch.mock.status || 200,
+              statusText: mockMatch.mock.statusText || 'OK',
+              headers: mockMatch.mock.headers || [],
+              body: mockBody,
+              size: mockBody.length,
+              duration: endTime - startTime
+            })
+          }
+          
+          // 🔥 RETURN FAKE RESPONSE - NO NETWORK CALL MADE!
+          console.log('[VueInspector Interceptor] 🎭 Mock response returned, request never hit network')
+          return mockResponse
+          
+        } catch (mockError) {
+          console.error('[VueInspector Interceptor] ❌ Error creating mock response:', mockError)
+          // Fall through to real network call if mock fails
+        }
+      }
+    }
     
     // Extract request headers (from init or Request object)
     let requestHeaders: Array<{ name: string; value: string }> = []
@@ -652,6 +784,22 @@ function interceptXHR(): void {
     return originalXHRSetRequestHeader.call(this, name, value)
   }
   
+  // ✅ FIX: Track responseType for proper mock response handling
+  if (originalXHRResponseTypeDescriptor) {
+    Object.defineProperty(XMLHttpRequest.prototype, 'responseType', {
+      get: function() {
+        return (this as any)._responseType || ''
+      },
+      set: function(value: XMLHttpRequestResponseType) {
+        (this as any)._responseType = value
+        if (originalXHRResponseTypeDescriptor.set) {
+          originalXHRResponseTypeDescriptor.set.call(this, value)
+        }
+      },
+      configurable: true
+    })
+  }
+  
   // Pending XHR requests waiting for breakpoint resume
   const pendingXHRRequests = new Map<string, {
     xhr: XMLHttpRequest
@@ -675,6 +823,210 @@ function interceptXHR(): void {
     
     data.startTime = performance.now()
     data.requestBody = serializeRequestBody(body as BodyInit)
+    
+    // ========================================
+    // 🎯 MOCK CHECK FOR XHR - BEFORE ANY NETWORK CALL!
+    // ========================================
+    if (callbacks?.onMockCheck) {
+      const mockMatch = callbacks.onMockCheck(data.url, data.method)
+      
+      if (mockMatch && mockMatch.mock && mockMatch.mock.enabled) {
+        console.log('[VueInspector Interceptor] 🎭 XHR MOCK MATCH! Returning fake response for:', data.url)
+        console.log('[VueInspector Interceptor] XHR Mock details:', {
+          id: mockMatch.mockId,
+          status: mockMatch.mock.status,
+          bodyLength: mockMatch.mock.body?.length,
+          headersCount: mockMatch.mock.headers?.length
+        })
+        
+        // Log the mocked request (so it appears in Network tab)
+        if (callbacks?.onRequest && !isPaused) {
+          callbacks.onRequest({
+            id: data.id,
+            startTime: data.startTime,
+            method: data.method,
+            url: data.url,
+            requestHeaders: data.requestHeaders,
+            requestBody: data.requestBody
+          })
+        }
+        
+        // ✅ FIX: Ensure body is ALWAYS a valid string
+        let mockBody: string
+        const rawBody = mockMatch.mock.body
+        if (rawBody === undefined || rawBody === null) {
+          mockBody = ''
+        } else if (typeof rawBody === 'string') {
+          mockBody = rawBody
+        } else {
+          mockBody = JSON.stringify(rawBody)
+        }
+        
+        const mockStatus = mockMatch.mock.status || 200
+        const mockStatusText = mockMatch.mock.statusText || 'OK'
+        const mockHeaders = mockMatch.mock.headers || []
+        
+        // ✅ FIX: Validate JSON if needed
+        const contentType = mockHeaders.find(
+          h => h.name.toLowerCase() === 'content-type'
+        )?.value || 'application/json'
+        
+        if (contentType.includes('json') && mockBody) {
+          try {
+            JSON.parse(mockBody)
+          } catch {
+            console.warn('[VueInspector Interceptor] XHR Mock body is not valid JSON, wrapping')
+            mockBody = JSON.stringify(mockBody)
+          }
+        }
+        
+        // Apply delay if configured
+        const applyMockAndCallHandlers = async () => {
+          try {
+            if (mockMatch.mock.delay && mockMatch.mock.delay > 0) {
+              console.log('[VueInspector Interceptor] Applying XHR mock delay:', mockMatch.mock.delay, 'ms')
+              await new Promise(resolve => setTimeout(resolve, mockMatch.mock.delay))
+            }
+            
+            const endTime = performance.now()
+            const duration = endTime - data.startTime
+            
+            // ✅ FIX #4: Helper to dispatch readyState change properly
+            const dispatchReadyStateChange = (state: number) => {
+              Object.defineProperty(xhr, 'readyState', {
+                get: () => state,
+                configurable: true
+              })
+              xhr.dispatchEvent(new Event('readystatechange'))
+            }
+            
+            // Override status properties FIRST (before readyState changes)
+            Object.defineProperty(xhr, 'status', {
+              get: () => mockStatus,
+              configurable: true
+            })
+            
+            Object.defineProperty(xhr, 'statusText', {
+              get: () => mockStatusText,
+              configurable: true
+            })
+            
+            // ✅ FIX #5: Handle responseType properly
+            const responseType = (xhr as any)._responseType || xhr.responseType || ''
+            
+            Object.defineProperty(xhr, 'responseText', {
+              get: () => mockBody,
+              configurable: true
+            })
+            
+            // Set response based on responseType
+            if (responseType === 'json') {
+              // ✅ FIX #6: Return parsed JSON for responseType='json'
+              let parsedResponse: any
+              try {
+                parsedResponse = mockBody ? JSON.parse(mockBody) : null
+              } catch {
+                parsedResponse = mockBody
+              }
+              Object.defineProperty(xhr, 'response', {
+                get: () => parsedResponse,
+                configurable: true
+              })
+            } else if (responseType === 'arraybuffer') {
+              const encoder = new TextEncoder()
+              Object.defineProperty(xhr, 'response', {
+                get: () => encoder.encode(mockBody).buffer,
+                configurable: true
+              })
+            } else if (responseType === 'blob') {
+              Object.defineProperty(xhr, 'response', {
+                get: () => new Blob([mockBody], { type: contentType }),
+                configurable: true
+              })
+            } else {
+              // Default: text or empty string
+              Object.defineProperty(xhr, 'response', {
+                get: () => mockBody,
+                configurable: true
+              })
+            }
+            
+            // Override header methods
+            const headerString = mockHeaders.length > 0 
+              ? mockHeaders.map(h => `${h.name}: ${h.value}`).join('\r\n') + '\r\n\r\n'
+              : 'content-type: application/json\r\n\r\n'
+            const headerMap = new Map(mockHeaders.map(h => [h.name.toLowerCase(), h.value]))
+            if (!headerMap.has('content-type')) {
+              headerMap.set('content-type', 'application/json; charset=utf-8')
+            }
+            
+            Object.defineProperty(xhr, 'getAllResponseHeaders', {
+              value: () => headerString,
+              configurable: true
+            })
+            
+            Object.defineProperty(xhr, 'getResponseHeader', {
+              value: (name: string) => headerMap.get(name.toLowerCase()) || null,
+              configurable: true
+            })
+            
+            // ✅ FIX #7: CRITICAL - Dispatch proper XHR lifecycle sequence
+            // Many frameworks (Axios, Vue Resource) depend on this exact sequence
+            console.log('[VueInspector Interceptor] 🎭 XHR dispatching lifecycle events...')
+            
+            // Simulate: OPENED -> HEADERS_RECEIVED -> LOADING -> DONE
+            dispatchReadyStateChange(2) // HEADERS_RECEIVED
+            dispatchReadyStateChange(3) // LOADING  
+            dispatchReadyStateChange(4) // DONE
+            
+            // ✅ FIX #8: CRITICAL - Fire load AND loadend events
+            // Without loadend, Axios/Vue promises may never resolve!
+            const progressEventInit = {
+              lengthComputable: true,
+              loaded: mockBody.length,
+              total: mockBody.length
+            }
+            
+            xhr.dispatchEvent(new ProgressEvent('load', progressEventInit))
+            xhr.dispatchEvent(new ProgressEvent('loadend', progressEventInit))
+            
+            console.log('[VueInspector Interceptor] 🎭 XHR lifecycle complete (load + loadend dispatched)')
+            
+            // Log the mocked response
+            if (callbacks?.onResponse && !isPaused) {
+              callbacks.onResponse(data.id, {
+                status: mockStatus,
+                statusText: mockStatusText,
+                headers: mockHeaders,
+                body: mockBody,
+                size: mockBody.length,
+                duration
+              })
+            }
+            
+            // Notify mock was applied
+            if (callbacks?.onMockApplied) {
+              callbacks.onMockApplied(data.id, mockMatch.mockId)
+            }
+            
+            console.log('[VueInspector Interceptor] 🎭 XHR Mock response ready, calling stored handlers')
+            
+            // Call stored handlers with mock data (for manually attached handlers)
+            callStoredHandlers(xhr, data)
+            
+          } catch (mockError) {
+            console.error('[VueInspector Interceptor] ❌ Error applying XHR mock:', mockError)
+            // If mock fails, we can't recover for XHR - just log error
+          }
+        }
+        
+        // Execute async but don't return from send()
+        applyMockAndCallHandlers()
+        
+        // 🔥 DON'T CALL originalXHRSend - request never hits network!
+        return
+      }
+    }
     
     // ========================================
     // REQUEST BREAKPOINT CHECK FOR XHR
@@ -1033,7 +1385,9 @@ export function initNetworkInterceptor(cbs: InterceptorCallbacks, maxSize?: numb
     hasOnResponse: !!cbs.onResponse,
     hasOnError: !!cbs.onError,
     hasOnBreakpointCheck: !!cbs.onBreakpointCheck,
-    hasOnBreakpointHit: !!cbs.onBreakpointHit
+    hasOnBreakpointHit: !!cbs.onBreakpointHit,
+    hasOnMockCheck: !!cbs.onMockCheck,
+    hasOnMockApplied: !!cbs.onMockApplied
   })
   
   callbacks = cbs
@@ -1076,6 +1430,12 @@ export function cleanupNetworkInterceptor(): void {
   XMLHttpRequest.prototype.open = originalXHROpen
   XMLHttpRequest.prototype.send = originalXHRSend
   XMLHttpRequest.prototype.setRequestHeader = originalXHRSetRequestHeader
+  
+  // Restore responseType descriptor
+  if (originalXHRResponseTypeDescriptor) {
+    Object.defineProperty(XMLHttpRequest.prototype, 'responseType', originalXHRResponseTypeDescriptor)
+  }
+  
   callbacks = null
   
   // Cancel all pending breakpoints

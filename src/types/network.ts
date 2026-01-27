@@ -74,7 +74,10 @@ export interface NetworkEntry {
   
   /** Full URL of the request */
   url: string
-  
+
+  /** URL path without query string */
+  path: string
+
   /** Short name for display (extracted from URL) */
   name: string
   

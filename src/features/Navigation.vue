@@ -288,6 +288,12 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
    */
   
   const allTabs = [
+  {
+      id: 'network',
+      title: 'Network',
+      icon: GlobeIcon,
+      requiresFlag: 'hasNetwork' as const, // 👈 ТОЛЬКО UI-флаг
+    },
     {
       id: 'props',
       title: 'Props',
@@ -299,12 +305,6 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
       title: 'Pinia Stores',
       icon: DatabaseIcon,
       requiresFlag: 'hasPinia' as const,
-    },
-    {
-      id: 'network',
-      title: 'Network',
-      icon: GlobeIcon,
-      requiresFlag: 'hasNetwork' as const, // 👈 ТОЛЬКО UI-флаг
     },
   ] as const
   
