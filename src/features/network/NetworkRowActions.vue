@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { MoreHorizontal } from 'lucide-vue-next'
+import { MoreHorizontal, FileJson2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
 import type { NetworkEntry } from '@/types/network'
@@ -16,6 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'set-breakpoint', entry: NetworkEntry): void
   (e: 'copy-curl', entry: NetworkEntry): void
+  (e: 'mock-response', entry: NetworkEntry): void
 }>()
 </script>
 
@@ -32,13 +34,24 @@ const emit = defineEmits<{
       </Button>
     </DropdownMenuTrigger>
 
-    <DropdownMenuContent align="end" class="w-40">
+    <DropdownMenuContent align="end" class="w-44">
       <DropdownMenuItem @click.stop="emit('set-breakpoint', entry)">
         Breakpoint
       </DropdownMenuItem>
 
       <DropdownMenuItem @click.stop="emit('copy-curl', entry)">
         Copy cURL
+      </DropdownMenuItem>
+      
+      <DropdownMenuSeparator />
+      
+      <DropdownMenuItem 
+        @click.stop="emit('mock-response', entry)"
+        :disabled="!entry.responseBody?.text"
+        class="text-purple-500 focus:text-purple-500"
+      >
+        <FileJson2 class="h-4 w-4 mr-2" />
+        Mock Response
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>

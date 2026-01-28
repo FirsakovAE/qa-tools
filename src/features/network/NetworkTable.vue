@@ -28,6 +28,7 @@ const emit = defineEmits<{
   (e: 'select', id: string): void
   (e: 'setBreakpoint', entry: NetworkEntry): void
   (e: 'copyCurl', entry: NetworkEntry): void
+  (e: 'mockResponse', entry: NetworkEntry): void
 }>()
 
 // cURL copy functionality
@@ -189,6 +190,7 @@ const matchesBreakpointPattern = (entryId: string): boolean => {
                     :entry="entry"
                     @set-breakpoint="emit('setBreakpoint', entry)"
                     @copy-curl="handleCopyCurl(entry)"
+                    @mock-response="emit('mockResponse', entry)"
                   />
                 </div>
               </TableCell>

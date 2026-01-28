@@ -1397,8 +1397,6 @@ export function initNetworkInterceptor(cbs: InterceptorCallbacks, maxSize?: numb
   
   interceptFetch()
   interceptXHR()
-  
-  console.log('[VueInspector Interceptor] ✅ Initialized, fetch intercepted')
 }
 
 /**

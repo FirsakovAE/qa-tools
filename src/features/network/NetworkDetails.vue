@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { ArrowLeft, Copy, Check, Send, FileJson2 } from 'lucide-vue-next'
+import { ArrowLeft, Copy, Check, Send } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -59,7 +59,6 @@ const emit = defineEmits<{
   (e: 'back'): void
   (e: 'applyBreakpoint', data: BreakpointEditData): void
   (e: 'updateDraft', updates: Partial<BreakpointDraft>): void
-  (e: 'mockResponse', entry: NetworkEntry): void
 }>()
 
 // Active section (removed 'auth')
@@ -339,24 +338,6 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
           </TooltipTrigger>
           <TooltipContent side="bottom">
             Copy as cURL command (for Postman)
-          </TooltipContent>
-        </Tooltip>
-        
-        <!-- Mock Response button (Map Local feature) -->
-        <Tooltip v-if="!breakpointMode && entry.responseBody?.text">
-          <TooltipTrigger as-child>
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-8 shrink-0 text-xs gap-1.5 transition-colors text-purple-500 border-purple-500/50 hover:bg-purple-500/10"
-              @click="emit('mockResponse', entry)"
-            >
-              <FileJson2 class="h-3.5 w-3.5" />
-              Mock Response
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            Create mock rule to return this response (Map Local)
           </TooltipContent>
         </Tooltip>
         

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/tooltip'
 import NetworkTable from './NetworkTable.vue'
 import NetworkDetails, { type BreakpointEditData } from './NetworkDetails.vue'
+import MockForm from './MockForm.vue'
 import BreakpointDialog from './BreakpointDialog.vue'
 import MockDialog from './MockDialog.vue'
 import type { NetworkEntry, NetworkConfig } from '@/types/network'
@@ -75,9 +76,13 @@ const searchIndex = ref<SearchIndexEntry[]>([])
 const breakpointDialogOpen = ref(false)
 const breakpointDialogEntry = ref<NetworkEntry | null>(null)
 
-// Mock dialog state (Map Local feature)
+// Mock dialog state (Map Local feature) - deprecated, keeping for fallback
 const mockDialogOpen = ref(false)
 const mockDialogEntry = ref<NetworkEntry | null>(null)
+
+// Mock form mode (inline in right panel)
+const mockFormMode = ref(false)
+const mockFormEntry = ref<NetworkEntry | null>(null)
 
 // Current breakpoint mode state
 const breakpointMode = ref(false)
@@ -404,15 +409,25 @@ watch(activeMocks, () => {
 }, { deep: true })
 
 /**
- * Handle mock dialog open
+ * Handle mock response - show MockForm in right panel
  */
 function handleMockResponse(entry: NetworkEntry) {
-  mockDialogEntry.value = entry
-  mockDialogOpen.value = true
+  // Select the entry and enter mock form mode
+  selectedEntryId.value = entry.id
+  mockFormEntry.value = entry
+  mockFormMode.value = true
 }
 
 /**
- * Handle mock confirmation from dialog
+ * Handle back from MockForm - return to details view
+ */
+function handleMockFormBack() {
+  mockFormMode.value = false
+  mockFormEntry.value = null
+}
+
+/**
+ * Handle mock confirmation from dialog or form
  */
 function handleMockConfirm(mock: MockRule) {
   if (!settings.value) return
@@ -431,9 +446,13 @@ function handleMockConfirm(mock: MockRule) {
   // Force sync to injected script immediately
   syncMocksToInjected()
   
-  // Close dialog
+  // Close dialog (deprecated)
   mockDialogOpen.value = false
   mockDialogEntry.value = null
+  
+  // Close mock form mode and return to details
+  mockFormMode.value = false
+  mockFormEntry.value = null
 }
 
 /**
@@ -979,6 +998,11 @@ function clearEntries() {
 }
 
 function selectEntry(id: string) {
+  // Exit mock form mode when selecting a different entry
+  if (mockFormMode.value && mockFormEntry.value?.id !== id) {
+    mockFormMode.value = false
+    mockFormEntry.value = null
+  }
   selectedEntryId.value = id
 }
 
@@ -1116,13 +1140,26 @@ onUnmounted(() => {
           @select="selectEntry"
           @set-breakpoint="handleSetBreakpoint"
           @copy-curl="handleCopyCurl"
+          @mock-response="handleMockResponse"
         />
       </div>
       
-      <!-- Right: Details -->
-      <div class="h-full min-h-0 overflow-hidden border rounded-lg" :class="{ 'ring-2 ring-amber-500': breakpointMode && selectedEntryId && pendingBreakpoints.has(selectedEntryId) }">
+      <!-- Right: Details / MockForm -->
+      <div class="h-full min-h-0 overflow-hidden border rounded-lg" :class="{ 
+        'ring-2 ring-amber-500': breakpointMode && selectedEntryId && pendingBreakpoints.has(selectedEntryId),
+        'ring-2 ring-purple-500': mockFormMode
+      }">
+        <!-- Mock Form Mode -->
+        <MockForm
+          v-if="mockFormMode && mockFormEntry"
+          :entry="mockFormEntry"
+          @back="handleMockFormBack"
+          @confirm="handleMockConfirm"
+        />
+        
+        <!-- Network Details Mode -->
         <NetworkDetails
-          v-if="selectedEntry"
+          v-else-if="selectedEntry"
           :entry="selectedEntry"
           :breakpoint-mode="breakpointMode && pendingBreakpoints.has(selectedEntry.id)"
           :breakpoint-trigger="breakpointTrigger"
@@ -1130,7 +1167,6 @@ onUnmounted(() => {
           @back="deselectEntry"
           @apply-breakpoint="handleApplyBreakpoint"
           @update-draft="handleDraftUpdate"
-          @mock-response="handleMockResponse"
         />
         
         <div
