@@ -22,10 +22,9 @@ import {
 } from '@/components/ui/tooltip'
 import JsonEditor from '@/components/JsonEditor.vue'
 import type { NetworkEntry } from '@/types/network'
-import { formatBytes, formatDuration, getStatusCategory } from '@/types/network'
-import type { MockRule, MockHeaderEntry } from '@/types/inspector'
+import type { MockRule, MockHeaderEntry, BaseInspectorSettings } from '@/types/inspector'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
-import type { BaseInspectorSettings } from '@/types/inspector'
+import { parseUrl, buildUrlPreview, getStatusClass, formatJson, generateId } from './utils'
 
 const props = defineProps<{
   entry: NetworkEntry
@@ -68,34 +67,15 @@ const responseHeaders = ref<MockHeaderEntry[]>([])
 const delay = ref(0)
 const description = ref('')
 
-// Function to format JSON for editing
-function formatJson(text: string | undefined | null): string {
-  if (!text) return '{}'
-  try {
-    const parsed = JSON.parse(text)
-    return JSON.stringify(parsed, null, 2)
-  } catch {
-    return text
-  }
-}
-
 // Function to fill form from entry
 function fillFromEntry(entry: NetworkEntry) {
   // Parse URL
-  try {
-    const url = new URL(entry.url)
-    scheme.value = url.protocol.replace(':', '')
-    host.value = url.hostname
-    port.value = url.port || ''
-    path.value = url.pathname || '/'
-    query.value = url.search ? url.search.substring(1) : ''
-  } catch {
-    scheme.value = 'https'
-    host.value = ''
-    port.value = ''
-    path.value = '/'
-    query.value = ''
-  }
+  const parsed = parseUrl(entry.url)
+  scheme.value = parsed.scheme
+  host.value = parsed.host
+  port.value = parsed.port
+  path.value = parsed.path
+  query.value = parsed.query
   
   // Method
   method.value = entry.method
@@ -135,12 +115,16 @@ function removeHeader(index: number) {
   responseHeaders.value.splice(index, 1)
 }
 
+function removeAllHeaders() {
+  responseHeaders.value = []
+}
+
 // Handle confirm
 function handleConfirm() {
   if (!props.entry || !isValid.value) return
   
   const mock: MockRule = {
-    id: `mock-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    id: generateId('mock'),
     enabled: true,
     scheme: scheme.value || undefined,
     host: host.value || undefined,
@@ -167,30 +151,12 @@ const isValid = computed(() => {
 
 // Preview URL pattern
 const urlPreview = computed(() => {
-  let url = `${scheme.value || '*'}://${host.value || '*'}`
-  if (port.value) url += `:${port.value}`
-  url += path.value || '/*'
-  if (query.value) url += `?${query.value}`
-  return url
+  return buildUrlPreview(scheme.value, host.value, port.value, path.value, query.value)
 })
 
-// Status styling (same as NetworkDetails)
+// Status styling
 const statusClass = computed(() => {
-  if (props.entry.pending) return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30'
-  
-  const category = getStatusCategory(props.entry.status)
-  switch (category) {
-    case 'success':
-      return 'bg-green-500/20 text-green-500 border-green-500/30'
-    case 'redirect':
-      return 'bg-blue-500/20 text-blue-500 border-blue-500/30'
-    case 'client-error':
-      return 'bg-orange-500/20 text-orange-500 border-orange-500/30'
-    case 'server-error':
-      return 'bg-red-500/20 text-red-500 border-red-500/30'
-    default:
-      return 'bg-red-500/20 text-red-500 border-red-500/30'
-  }
+  return getStatusClass(props.entry.status, props.entry.pending)
 })
 
 // Section definitions
@@ -412,9 +378,20 @@ const sections: Array<{ id: SectionId; label: string }> = [
           <div class="p-3 space-y-4">
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-semibold">Response Headers</h4>
-              <Button variant="outline" size="sm" class="h-7 text-xs" @click="addHeader">
-                Add Header
-              </Button>
+              <div class="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  class="h-7 text-xs text-destructive hover:text-destructive" 
+                  :disabled="responseHeaders.length === 0"
+                  @click="removeAllHeaders"
+                >
+                  Remove all
+                </Button>
+                <Button variant="outline" size="sm" class="h-7 text-xs" @click="addHeader">
+                  Add Header
+                </Button>
+              </div>
             </div>
             
             <div v-if="responseHeaders.length === 0" class="text-sm text-muted-foreground text-center py-8">

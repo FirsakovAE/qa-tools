@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/Textarea'
 import {
   Table,
@@ -30,6 +31,12 @@ import type { BaseInspectorSettings } from '@/types/inspector'
 
 export interface BreakpointEditData {
   entryId: string
+  // URL data
+  method: string
+  scheme: string
+  host: string
+  path: string
+  // Other data
   params: UrlParam[]
   requestHeaders: HeaderEntry[]
   requestBody: string | null
@@ -41,6 +48,12 @@ export interface BreakpointEditData {
 export interface BreakpointDraft {
   entryId: string
   trigger: 'request' | 'response'
+  // URL data
+  method: string
+  scheme: string
+  host: string
+  path: string
+  // Other data
   params: Array<{ key: string; value: string }>
   requestHeaders: Array<{ name: string; value: string }>
   responseHeaders: Array<{ name: string; value: string }>
@@ -57,12 +70,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'back'): void
+  (e: 'cancelBreakpoint', entryId: string): void
   (e: 'applyBreakpoint', data: BreakpointEditData): void
   (e: 'updateDraft', updates: Partial<BreakpointDraft>): void
 }>()
 
-// Active section (removed 'auth')
-type SectionId = 'params' | 'headers' | 'request' | 'response'
+// Active section
+type SectionId = 'url' | 'params' | 'headers' | 'request' | 'response'
 const activeSection = ref<SectionId>('headers')
 
 // JSON mode setting
@@ -77,6 +91,10 @@ const copiedResponseHeaderIndex = ref<number | null>(null)
 const { curlCopied, copyCurl: copyCurlCommand } = useCurlCopy()
 
 // Editable state for breakpoint mode
+const editableMethod = ref<string>('')
+const editableScheme = ref<string>('')
+const editableHost = ref<string>('')
+const editablePath = ref<string>('')
 const editableParams = ref<UrlParam[]>([])
 const editableRequestHeaders = ref<HeaderEntry[]>([])
 const editableResponseHeaders = ref<HeaderEntry[]>([])
@@ -94,16 +112,28 @@ function formatJsonForEdit(text: string | undefined | null): string {
   }
 }
 
+// Track if we've already initialized from draft for this entry
+const initializedEntryId = ref<string | null>(null)
+
 // Initialize editable data from DRAFT (source of truth, isolated from entries[] updates)
-watch(() => [props.breakpointDraft, props.breakpointMode, props.breakpointTrigger], () => {
-  console.log('[NetworkDetails] Watch triggered:', { 
-    breakpointMode: props.breakpointMode, 
-    breakpointTrigger: props.breakpointTrigger,
-    hasDraft: !!props.breakpointDraft,
-    entryId: props.entry?.id
-  })
-  
-  if (props.breakpointMode && props.breakpointDraft) {
+// Only initialize ONCE when entering breakpoint mode - not on every draft update
+watch(() => [props.breakpointMode, props.entry?.id, props.breakpointDraft?.entryId], () => {
+  // Only initialize when:
+  // 1. We're in breakpoint mode
+  // 2. We have a draft
+  // 3. We haven't already initialized for this entry
+  if (props.breakpointMode && props.breakpointDraft && initializedEntryId.value !== props.entry?.id) {
+    console.log('[NetworkDetails] Initializing from draft for entry:', props.entry?.id)
+    
+    // Mark as initialized for this entry
+    initializedEntryId.value = props.entry?.id || null
+    
+    // Load URL data from DRAFT
+    editableMethod.value = props.breakpointDraft.method || ''
+    editableScheme.value = props.breakpointDraft.scheme || ''
+    editableHost.value = props.breakpointDraft.host || ''
+    editablePath.value = props.breakpointDraft.path || ''
+    
     // Load from DRAFT - this is isolated from entries[] updates
     editableParams.value = JSON.parse(JSON.stringify(props.breakpointDraft.params || []))
     editableRequestHeaders.value = JSON.parse(JSON.stringify(props.breakpointDraft.requestHeaders || []))
@@ -113,20 +143,26 @@ watch(() => [props.breakpointDraft, props.breakpointMode, props.breakpointTrigge
     editableResponseBody.value = formatJsonForEdit(props.breakpointDraft.responseBody)
     
     console.log('[NetworkDetails] Loaded from draft:', {
+      method: editableMethod.value,
+      host: editableHost.value,
       params: editableParams.value.length,
       requestHeaders: editableRequestHeaders.value.length,
       requestBody: editableRequestBody.value?.substring(0, 50)
     })
     
-    // Set active section based on breakpoint trigger
-    console.log('[NetworkDetails] Setting active section for trigger:', props.breakpointTrigger)
+    // Set active section to URL tab for request breakpoints
     if (props.breakpointTrigger === 'response') {
       activeSection.value = 'response'
     } else if (props.breakpointTrigger === 'request') {
-      activeSection.value = 'request'
+      activeSection.value = 'url'
     }
   }
-}, { immediate: true, deep: true })
+  
+  // Reset initialized flag when exiting breakpoint mode
+  if (!props.breakpointMode) {
+    initializedEntryId.value = null
+  }
+}, { immediate: true })
 
 // Whether we can edit request or response based on trigger
 const canEditRequest = computed(() => {
@@ -137,18 +173,48 @@ const canEditResponse = computed(() => {
   return props.breakpointMode && props.breakpointTrigger === 'response'
 })
 
+// Handle back button - cancel breakpoint if active
+function handleBack() {
+  if (props.breakpointMode) {
+    emit('cancelBreakpoint', props.entry.id)
+  } else {
+    emit('back')
+  }
+}
+
 // Handle apply breakpoint
 function handleApplyBreakpoint() {
   if (!props.breakpointMode) return
   
   emit('applyBreakpoint', {
     entryId: props.entry.id,
+    method: editableMethod.value,
+    scheme: editableScheme.value,
+    host: editableHost.value,
+    path: editablePath.value,
     params: editableParams.value,
     requestHeaders: editableRequestHeaders.value,
     requestBody: editableRequestBody.value || null,
     responseHeaders: editableResponseHeaders.value,
     responseBody: editableResponseBody.value || null
   })
+}
+
+// Update URL field and emit to parent draft
+function updateUrlField(field: 'method' | 'scheme' | 'host' | 'path', newValue: string) {
+  if (field === 'method') {
+    editableMethod.value = newValue
+    emit('updateDraft', { method: newValue })
+  } else if (field === 'scheme') {
+    editableScheme.value = newValue
+    emit('updateDraft', { scheme: newValue })
+  } else if (field === 'host') {
+    editableHost.value = newValue
+    emit('updateDraft', { host: newValue })
+  } else if (field === 'path') {
+    editablePath.value = newValue
+    emit('updateDraft', { path: newValue })
+  }
 }
 
 // Update header value and emit to parent draft
@@ -177,6 +243,38 @@ function updateParam(index: number, field: 'key' | 'value', newValue: string | n
   }
 }
 
+// Add/remove params
+function addParam() {
+  editableParams.value.push({ key: '', value: '' })
+  emit('updateDraft', { params: JSON.parse(JSON.stringify(editableParams.value)) })
+}
+
+function removeParam(index: number) {
+  editableParams.value.splice(index, 1)
+  emit('updateDraft', { params: JSON.parse(JSON.stringify(editableParams.value)) })
+}
+
+function removeAllParams() {
+  editableParams.value = []
+  emit('updateDraft', { params: [] })
+}
+
+// Add/remove request headers
+function addRequestHeader() {
+  editableRequestHeaders.value.push({ name: '', value: '' })
+  emit('updateDraft', { requestHeaders: JSON.parse(JSON.stringify(editableRequestHeaders.value)) })
+}
+
+function removeRequestHeader(index: number) {
+  editableRequestHeaders.value.splice(index, 1)
+  emit('updateDraft', { requestHeaders: JSON.parse(JSON.stringify(editableRequestHeaders.value)) })
+}
+
+function removeAllRequestHeaders() {
+  editableRequestHeaders.value = []
+  emit('updateDraft', { requestHeaders: [] })
+}
+
 // Update body and emit to parent draft
 function updateRequestBody(value: string) {
   editableRequestBody.value = value
@@ -195,13 +293,22 @@ onMounted(async () => {
   } catch { /* use defaults */ }
 })
 
-// Sections definition (removed Authorization)
-const sections: Array<{ id: SectionId; label: string }> = [
-  { id: 'params', label: 'Params' },
-  { id: 'headers', label: 'Headers' },
-  { id: 'request', label: 'Request' },
-  { id: 'response', label: 'Response' }
-]
+// Sections definition - URL tab only visible in breakpoint mode
+const sections = computed<Array<{ id: SectionId; label: string }>>(() => {
+  const baseSections: Array<{ id: SectionId; label: string }> = [
+    { id: 'params', label: 'Params' },
+    { id: 'headers', label: 'Headers' },
+    { id: 'request', label: 'Request' },
+    { id: 'response', label: 'Response' }
+  ]
+  
+  // Add URL tab at the beginning when in breakpoint mode (request only)
+  if (canEditRequest.value) {
+    return [{ id: 'url' as SectionId, label: 'URL' }, ...baseSections]
+  }
+  
+  return baseSections
+})
 
 // Status styling
 const statusClass = computed(() => {
@@ -220,6 +327,50 @@ const statusClass = computed(() => {
     default:
       return 'bg-red-500/20 text-red-500 border-red-500/30'
   }
+})
+
+// ============================================================================
+// Computed display values for breakpoint mode
+// These show the MODIFIED data when in breakpoint mode
+// ============================================================================
+
+// Build query string from params
+const paramsQueryString = computed(() => {
+  if (!editableParams.value || editableParams.value.length === 0) return ''
+  const params = editableParams.value.filter(p => p.key)
+  if (params.length === 0) return ''
+  const searchParams = new URLSearchParams()
+  params.forEach(p => searchParams.append(p.key, p.value))
+  return '?' + searchParams.toString()
+})
+
+// Full URL preview including params
+const fullUrlPreview = computed(() => {
+  const scheme = editableScheme.value || 'https'
+  const host = editableHost.value || ''
+  // Get path without query string (if path has query, strip it since we use params)
+  let path = editablePath.value || '/'
+  const pathQueryIndex = path.indexOf('?')
+  if (pathQueryIndex !== -1) {
+    path = path.substring(0, pathQueryIndex)
+  }
+  return `${scheme}://${host}${path}${paramsQueryString.value}`
+})
+
+// Display method (modified in breakpoint mode, original otherwise)
+const displayMethod = computed(() => {
+  if (canEditRequest.value && editableMethod.value) {
+    return editableMethod.value
+  }
+  return props.entry.method
+})
+
+// Display URL (modified in breakpoint mode, original otherwise)
+const displayUrl = computed(() => {
+  if (canEditRequest.value) {
+    return fullUrlPreview.value
+  }
+  return props.entry.url
 })
 
 // ============================================================================
@@ -298,14 +449,14 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
     <div class="h-full flex flex-col">
       <!-- Header -->
       <div class="shrink-0 flex items-center gap-3 p-3 border-b">
-        <Button variant="ghost" size="icon" class="h-8 w-8" @click="emit('back')">
+        <Button variant="ghost" size="icon" class="h-8 w-8" @click="handleBack">
           <ArrowLeft class="h-4 w-4" />
         </Button>
         
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
-            <Badge variant="outline" class="font-mono text-xs">
-              {{ entry.method }}
+            <Badge variant="outline" class="font-mono text-xs" :class="{ 'text-amber-500 border-amber-500/50': breakpointMode && editableMethod !== entry.method }">
+              {{ displayMethod }}
             </Badge>
             <Badge variant="outline" :class="statusClass" class="font-mono text-xs">
               {{ entry.pending ? '⏳ Pending' : entry.status }}
@@ -316,9 +467,12 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             <span class="text-xs text-muted-foreground">
               {{ formatBytes(entry.size) }}
             </span>
+            <Badge v-if="breakpointMode" variant="outline" class="text-xs text-amber-500 border-amber-500/50">
+              Breakpoint
+            </Badge>
           </div>
-          <div class="text-sm truncate text-muted-foreground" :title="entry.url">
-            {{ entry.url }}
+          <div class="text-sm truncate text-muted-foreground" :title="displayUrl" :class="{ 'text-amber-500': breakpointMode && displayUrl !== entry.url }">
+            {{ displayUrl }}
           </div>
         </div>
         
@@ -378,9 +532,88 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
       
       <!-- Content -->
       <div class="flex-1 min-h-0 overflow-hidden">
+        <!-- URL Section (Breakpoint mode only) -->
+        <ScrollArea v-if="activeSection === 'url' && canEditRequest" class="h-full">
+          <div class="p-3 space-y-4">
+            <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md">
+              <p class="text-sm text-amber-600 dark:text-amber-400">
+                Modify the URL components before sending the request. Changes will override the original request URL.
+              </p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-1.5">
+                <Label class="text-xs">Method</Label>
+                <Input
+                  :model-value="editableMethod"
+                  @update:model-value="updateUrlField('method', String($event))"
+                  placeholder="GET"
+                  class="h-8 text-sm font-mono"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label class="text-xs">Scheme</Label>
+                <Input
+                  :model-value="editableScheme"
+                  @update:model-value="updateUrlField('scheme', String($event))"
+                  placeholder="https"
+                  class="h-8 text-sm font-mono"
+                />
+              </div>
+            </div>
+            
+            <div class="space-y-1.5">
+              <Label class="text-xs">Host</Label>
+              <Input
+                :model-value="editableHost"
+                @update:model-value="updateUrlField('host', String($event))"
+                placeholder="api.example.com"
+                class="h-8 text-sm font-mono"
+              />
+            </div>
+            
+            <div class="space-y-1.5">
+              <Label class="text-xs">Path</Label>
+              <Input
+                :model-value="editablePath"
+                @update:model-value="updateUrlField('path', String($event))"
+                placeholder="/api/v1/users"
+                class="h-8 text-sm font-mono"
+              />
+            </div>
+            
+            <!-- Preview -->
+            <div class="p-3 bg-muted/50 rounded-md">
+              <Label class="text-xs text-muted-foreground">URL Preview (includes query params)</Label>
+              <div class="font-mono text-sm mt-1 break-all">
+                {{ fullUrlPreview }}
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+        
         <!-- Params Section -->
-        <ScrollArea v-if="activeSection === 'params'" class="h-full">
-          <div class="p-3">
+        <ScrollArea v-else-if="activeSection === 'params'" class="h-full">
+          <div class="p-3 space-y-3">
+            <!-- Add/Remove buttons for edit mode -->
+            <div v-if="canEditRequest" class="flex items-center justify-between">
+              <span class="text-sm font-semibold">Query Parameters</span>
+              <div class="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  class="h-7 text-xs text-destructive hover:text-destructive" 
+                  :disabled="editableParams.length === 0"
+                  @click="removeAllParams"
+                >
+                  Remove all
+                </Button>
+                <Button variant="outline" size="sm" class="h-7 text-xs" @click="addParam">
+                  Add Param
+                </Button>
+              </div>
+            </div>
+            
             <div v-if="(canEditRequest ? editableParams : entry.params).length === 0" class="text-sm text-muted-foreground text-center py-8">
               No query parameters
             </div>
@@ -389,6 +622,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 <TableRow>
                   <TableHead class="w-1/3">Key</TableHead>
                   <TableHead>Value</TableHead>
+                  <TableHead v-if="canEditRequest" class="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -407,6 +641,16 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                         @update:model-value="updateParam(index, 'value', $event)"
                         class="h-7 text-xs font-mono"
                       />
+                    </TableCell>
+                    <TableCell class="py-2 text-center align-top">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                        @click="removeParam(index)"
+                      >
+                        ×
+                      </Button>
                     </TableCell>
                   </TableRow>
                 </template>
@@ -440,7 +684,23 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             
             <!-- Request Headers -->
             <div>
-              <h4 class="text-sm font-semibold mb-2">Request Headers</h4>
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-sm font-semibold">Request Headers</h4>
+                <div v-if="canEditRequest" class="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    class="h-7 text-xs text-destructive hover:text-destructive" 
+                    :disabled="editableRequestHeaders.length === 0"
+                    @click="removeAllRequestHeaders"
+                  >
+                    Remove all
+                  </Button>
+                  <Button variant="outline" size="sm" class="h-7 text-xs" @click="addRequestHeader">
+                    Add Header
+                  </Button>
+                </div>
+              </div>
               <div v-if="(canEditRequest ? editableRequestHeaders : entry.requestHeaders).length === 0" class="text-sm text-muted-foreground">
                 No request headers
               </div>
@@ -449,7 +709,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   <TableRow>
                     <TableHead class="w-1/3">Name</TableHead>
                     <TableHead>Value</TableHead>
-                    <TableHead class="w-10 text-center">Copy</TableHead>
+                    <TableHead class="w-10 text-center">{{ canEditRequest ? '' : 'Copy' }}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -459,6 +719,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                         <Input
                           :model-value="header.name"
                           @update:model-value="updateRequestHeader(index, 'name', $event)"
+                          placeholder="Header name"
                           class="h-7 text-xs font-mono"
                         />
                       </TableCell>
@@ -466,6 +727,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                         <Input
                           :model-value="header.value"
                           @update:model-value="updateRequestHeader(index, 'value', $event)"
+                          placeholder="Header value"
                           class="h-7 text-xs font-mono"
                         />
                       </TableCell>
@@ -473,11 +735,10 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                         <Button
                           variant="ghost"
                           size="sm"
-                          class="h-6 w-6 p-0 transition-colors"
-                          :class="{ 'text-green-500': copiedHeaderIndex === index }"
-                          @click="copyHeaderValue(header.value, index)"
+                          class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                          @click="removeRequestHeader(index)"
                         >
-                          <component :is="copiedHeaderIndex === index ? Check : Copy" class="h-3 w-3" />
+                          ×
                         </Button>
                       </TableCell>
                     </TableRow>

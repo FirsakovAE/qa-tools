@@ -249,6 +249,64 @@ function serializeRequestBody(body: BodyInit | null | undefined): string | null 
 }
 
 /**
+ * Build new URL from modifications
+ */
+function buildModifiedUrl(
+  originalUrl: string,
+  modifications: BreakpointModifiedRequest
+): string {
+  try {
+    const url = new URL(originalUrl)
+    
+    // Apply scheme change
+    if (modifications.scheme) {
+      url.protocol = modifications.scheme + ':'
+    }
+    
+    // Apply host change (may include port)
+    if (modifications.host) {
+      const [host, port] = modifications.host.split(':')
+      url.hostname = host
+      if (port) {
+        url.port = port
+      } else {
+        url.port = ''
+      }
+    }
+    
+    // Apply path change (may include query)
+    if (modifications.path) {
+      const [pathname, search] = modifications.path.split('?')
+      url.pathname = pathname
+      if (search !== undefined) {
+        url.search = search ? '?' + search : ''
+      }
+    }
+    
+    // Apply params change - rebuild query string (empty array clears all params)
+    if (Array.isArray(modifications.params)) {
+      if (modifications.params.length > 0) {
+        const searchParams = new URLSearchParams()
+        modifications.params.forEach(p => {
+          if (p.key) {
+            searchParams.append(p.key, p.value)
+          }
+        })
+        url.search = searchParams.toString() ? '?' + searchParams.toString() : ''
+      } else {
+        // Empty array - clear all params
+        url.search = ''
+      }
+    }
+    
+    return url.toString()
+  } catch (e) {
+    console.warn('[VueInspector Interceptor] Failed to build modified URL:', e)
+    return originalUrl
+  }
+}
+
+/**
  * Apply modifications to request init
  */
 function applyRequestModifications(
@@ -256,6 +314,11 @@ function applyRequestModifications(
   modifications: BreakpointModifiedRequest
 ): RequestInit {
   const modified: RequestInit = { ...init }
+  
+  // Apply method change
+  if (modifications.method) {
+    modified.method = modifications.method
+  }
   
   if (modifications.requestHeaders) {
     const headers = new Headers()
@@ -487,14 +550,43 @@ function interceptFetch(): void {
         
         // Apply any modifications from user
         if (modifications) {
+          console.log('[VueInspector Interceptor] Applying modifications:', {
+            method: modifications.method,
+            scheme: modifications.scheme,
+            host: modifications.host,
+            path: modifications.path,
+            paramsCount: modifications.params?.length,
+            headersCount: modifications.requestHeaders?.length,
+            hasBody: modifications.requestBody !== undefined
+          })
+          
           const modifiedInit = applyRequestModifications(init, modifications)
           
-          // If input is a Request object, we need to create a new one with modifications
-          if (input instanceof Request) {
-            effectiveInput = new Request(input, modifiedInit)
-            effectiveInit = undefined // Options are now in the Request object
+          // Apply URL modifications (scheme, host, path, params)
+          // Note: empty params array also counts as URL modification (clears query string)
+          const hasUrlMods = modifications.scheme || modifications.host || 
+                            modifications.path || Array.isArray(modifications.params)
+          
+          if (hasUrlMods) {
+            const modifiedUrl = buildModifiedUrl(url, modifications)
+            console.log('[VueInspector Interceptor] URL modified:', url, '->', modifiedUrl)
+            
+            // If input is a Request object, we need to create a new one with new URL
+            if (input instanceof Request) {
+              effectiveInput = new Request(modifiedUrl, { ...modifiedInit })
+              effectiveInit = undefined
+            } else {
+              effectiveInput = modifiedUrl
+              effectiveInit = modifiedInit
+            }
           } else {
-            effectiveInit = modifiedInit
+            // No URL modifications, just apply init changes
+            if (input instanceof Request) {
+              effectiveInput = new Request(input, modifiedInit)
+              effectiveInit = undefined
+            } else {
+              effectiveInit = modifiedInit
+            }
           }
           
           // Update captured data with modifications
@@ -1064,11 +1156,49 @@ function interceptXHR(): void {
         breakpointResolvers.set(data.id, {
           resolve: (modifications) => {
             console.log('[VueInspector Interceptor] XHR breakpoint resumed, sending request...')
+            
+            const reqMods = modifications as BreakpointModifiedRequest | undefined
 
             // Apply modifications if any
             let finalBody = body
-            if (modifications && 'requestBody' in modifications && modifications.requestBody !== undefined) {
-              finalBody = modifications.requestBody as XMLHttpRequestBodyInit
+            if (reqMods?.requestBody !== undefined) {
+              finalBody = reqMods.requestBody as XMLHttpRequestBodyInit
+            }
+            
+            // Check if URL modifications require re-opening
+            // Note: empty params array also counts as URL modification (clears query string)
+            const hasUrlMods = reqMods && (reqMods.scheme || reqMods.host || 
+                              reqMods.path || reqMods.method || 
+                              Array.isArray(reqMods.params))
+            
+            if (hasUrlMods && reqMods) {
+              // Build modified URL
+              const modifiedUrl = buildModifiedUrl(data.url, reqMods)
+              const modifiedMethod = reqMods.method || data.method
+              
+              console.log('[VueInspector Interceptor] XHR URL modified:', data.url, '->', modifiedUrl)
+              
+              // Re-open XHR with new URL (this resets headers)
+              originalXHROpen.call(xhr, modifiedMethod, modifiedUrl, true)
+              
+              // Re-apply headers (use modified headers if available)
+              const headersToApply = reqMods.requestHeaders || data.requestHeaders
+              headersToApply.forEach(h => {
+                try {
+                  originalXHRSetRequestHeader.call(xhr, h.name, h.value)
+                } catch { /* Some headers can't be set */ }
+              })
+              
+              // Update data for logging
+              data.url = modifiedUrl
+              data.method = modifiedMethod
+              if (reqMods.requestHeaders) {
+                data.requestHeaders = reqMods.requestHeaders
+              }
+            } else if (reqMods?.requestHeaders) {
+              // Only header modifications - can't easily re-apply without re-open
+              // For now, log a warning - full solution would require re-opening
+              console.warn('[VueInspector Interceptor] XHR header modifications require URL mods to take effect')
             }
 
             // Remove from pending
@@ -1260,7 +1390,10 @@ function interceptXHR(): void {
           callStoredHandlers(this, data)
         } else {
           // No breakpoint match - notify UI normally
-          if (callbacks?.onResponse && !isPaused) {
+          // Check for status 0 which indicates CORS or network error
+          if (this.status === 0 && callbacks?.onError) {
+            callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
+          } else if (callbacks?.onResponse && !isPaused) {
             callbacks.onResponse(data.id, {
               status: this.status,
               statusText: this.statusText,
@@ -1275,7 +1408,10 @@ function interceptXHR(): void {
         }
       } else {
         // No breakpoint check available - notify UI normally
-        if (callbacks?.onResponse && !isPaused) {
+        // Check for status 0 which indicates CORS or network error
+        if (this.status === 0 && callbacks?.onError) {
+          callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
+        } else if (callbacks?.onResponse && !isPaused) {
           callbacks.onResponse(data.id, {
             status: this.status,
             statusText: this.statusText,
@@ -1291,9 +1427,20 @@ function interceptXHR(): void {
     })
     
     // Listen for errors - use original addEventListener
-    originalXHRAddEventListener.call(xhr, 'error', function() {
+    originalXHRAddEventListener.call(xhr, 'error', function(this: XMLHttpRequest) {
       if (callbacks?.onError) {
-        callbacks.onError(data.id, 'XMLHttpRequest failed')
+        // Try to get more specific error info
+        let errorMessage = 'XMLHttpRequest failed'
+        
+        // If status is available, include it
+        if (this.status > 0) {
+          errorMessage = `HTTP ${this.status}: ${this.statusText || 'Error'}`
+        } else if (this.status === 0) {
+          // Status 0 usually means CORS error or network failure
+          errorMessage = 'Network error (CORS blocked or connection failed)'
+        }
+        
+        callbacks.onError(data.id, errorMessage)
       }
       // Call stored error handlers
       callStoredErrorHandlers(xhr, data)

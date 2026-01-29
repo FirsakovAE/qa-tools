@@ -60,6 +60,13 @@ export interface BreakpointMatch {
  * Modified request data from breakpoint edit
  */
 export interface BreakpointModifiedRequest {
+  // URL modifications
+  method?: string
+  scheme?: string
+  host?: string
+  path?: string
+  params?: Array<{ key: string; value: string }>
+  // Headers and body
   requestHeaders?: Array<{ name: string; value: string }>
   requestBody?: string | null
 }
