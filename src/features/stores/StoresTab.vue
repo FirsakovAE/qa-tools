@@ -16,6 +16,7 @@ import PiniaDetails from './PiniaDetails.vue'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
+import { deepSearchKey, deepSearchValue } from '@/features/props'
 
 const runtime = useRuntime()
 
@@ -30,6 +31,9 @@ interface StoreEntry {
   getterKeys: number
   lastUpdated?: number
   lastUpdatedFormatted?: string
+  // Lazy-loaded for key/value search
+  state?: Record<string, any>
+  getters?: Record<string, any>
 }
 
 // ============================================================================
@@ -45,6 +49,10 @@ const lastUpdated = ref<string>('')
 // Search state
 const searchTerm = ref('')
 const settings = ref<InspectorSettings | null>(null)
+
+// Track which stores have their data loaded (for key/value search)
+const storesDataLoaded = ref(false)
+const isLoadingStoreData = ref(false)
 
 // ============================================================================
 // Settings
@@ -115,6 +123,8 @@ async function loadStoresSummary() {
       entries.value = Object.values(response.summary)
       lastUpdated.value = formatDateTime(new Date())
       isLoading.value = false
+      // Reset store data loaded flag - data needs to be reloaded for key/value search
+      storesDataLoaded.value = false
     } else if (response?.error) {
       error.value = response.error
       isLoading.value = false
@@ -141,6 +151,47 @@ async function loadStoresSummary() {
     }
 
     isLoading.value = false
+  }
+}
+
+// Load state/getters data for all stores (for key/value search)
+async function loadAllStoresData() {
+  if (storesDataLoaded.value || isLoadingStoreData.value) return
+  if (entries.value.length === 0) return
+  
+  isLoadingStoreData.value = true
+  
+  try {
+    // Load data for each store in parallel
+    const loadPromises = entries.value.map(async (store) => {
+      try {
+        const response = await runtime.sendMessage<{
+          state?: any
+          getters?: any
+          error?: string
+        }>({
+          type: 'PINIA_GET_STORE_STATE',
+          storeId: store.id
+        })
+        
+        if (response) {
+          // Update store entry with state/getters
+          if ('state' in response) {
+            store.state = response.state ?? {}
+          }
+          if ('getters' in response) {
+            store.getters = response.getters ?? {}
+          }
+        }
+      } catch {
+        // Ignore individual store errors
+      }
+    })
+    
+    await Promise.all(loadPromises)
+    storesDataLoaded.value = true
+  } finally {
+    isLoadingStoreData.value = false
   }
 }
 
@@ -214,6 +265,19 @@ watch(searchTerm, (term) => {
   }
 })
 
+// Trigger data loading when key/value search is active
+const needsStoreData = computed(() => 
+  (searchSettings.value.byKey || searchSettings.value.byValue) && 
+  debouncedSearchTerm.value.trim().length > 0
+)
+
+// Watch for when we need store data
+watch(needsStoreData, (needs) => {
+  if (needs && !storesDataLoaded.value) {
+    loadAllStoresData()
+  }
+})
+
 // Filter stores
 const filteredEntries = computed(() => {
   const q = debouncedSearchTerm.value.toLowerCase().trim()
@@ -223,6 +287,26 @@ const filteredEntries = computed(() => {
     // Search by name
     if (searchSettings.value.byName && store.baseId?.toLowerCase().includes(q)) {
       return true
+    }
+    
+    // Search by key in state/getters (deep search)
+    if (searchSettings.value.byKey) {
+      if (store.state && deepSearchKey(store.state, q)) {
+        return true
+      }
+      if (store.getters && deepSearchKey(store.getters, q)) {
+        return true
+      }
+    }
+    
+    // Search by value in state/getters (deep search)
+    if (searchSettings.value.byValue) {
+      if (store.state && deepSearchValue(store.state, q)) {
+        return true
+      }
+      if (store.getters && deepSearchValue(store.getters, q)) {
+        return true
+      }
     }
     
     return false
@@ -320,7 +404,10 @@ onUnmounted(() => {
         <!-- Right: Status badges and controls -->
         <div class="flex items-center gap-2 shrink-0">
           <Badge variant="secondary" class="font-mono">
-            {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
+            <span v-if="isLoadingStoreData" class="text-muted-foreground">...</span>
+            <template v-else>
+              {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
+            </template>
           </Badge>
           
           <!-- Refresh button -->

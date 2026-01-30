@@ -9,6 +9,88 @@
 
 import type { TreeNodeModel } from '@/types/tree'
 
+// ============================================================================
+// Deep Search Utilities (CPU-optimized)
+// ============================================================================
+
+const MAX_SEARCH_DEPTH = 20 // Prevent infinite recursion on circular refs
+
+/**
+ * Deep search for a key in nested object
+ * Returns true immediately when match is found (early exit)
+ */
+export function deepSearchKey(obj: unknown, query: string, depth = 0): boolean {
+  if (depth > MAX_SEARCH_DEPTH || obj === null || obj === undefined) {
+    return false
+  }
+
+  if (typeof obj !== 'object') {
+    return false
+  }
+
+  // Handle arrays - search each element
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      if (deepSearchKey(item, query, depth + 1)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  // Handle objects - check keys and recurse into values
+  for (const key of Object.keys(obj)) {
+    // Check if key matches
+    if (key.toLowerCase().includes(query)) {
+      return true
+    }
+    // Recurse into value
+    if (deepSearchKey((obj as Record<string, unknown>)[key], query, depth + 1)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Deep search for a value in nested object
+ * Returns true immediately when match is found (early exit)
+ */
+export function deepSearchValue(obj: unknown, query: string, depth = 0): boolean {
+  if (depth > MAX_SEARCH_DEPTH) {
+    return false
+  }
+
+  if (obj === null || obj === undefined) {
+    return false
+  }
+
+  // Primitive types - check string representation
+  if (typeof obj !== 'object') {
+    return String(obj).toLowerCase().includes(query)
+  }
+
+  // Handle arrays - search each element
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      if (deepSearchValue(item, query, depth + 1)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  // Handle objects - recurse into values
+  for (const key of Object.keys(obj)) {
+    if (deepSearchValue((obj as Record<string, unknown>)[key], query, depth + 1)) {
+      return true
+    }
+  }
+
+  return false
+}
+
 export interface PropsRow extends TreeNodeModel {
   /** Pre-calculated: has props with count > 0 */
   hasPropsFlag: boolean
@@ -114,13 +196,13 @@ export function updateRowsVisibility(
       }
 
       if (!matches && searchByKey && row.props) {
-        if (Object.keys(row.props).some(k => k.toLowerCase().includes(q))) {
+        if (deepSearchKey(row.props, q)) {
           matches = true
         }
       }
 
       if (!matches && searchByValue && row.props) {
-        if (Object.values(row.props).some(v => String(v).toLowerCase().includes(q))) {
+        if (deepSearchValue(row.props, q)) {
           matches = true
         }
       }
