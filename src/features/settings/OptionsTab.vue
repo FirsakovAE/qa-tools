@@ -51,6 +51,72 @@ import type { InspectorSettings, FavoriteItem, BreakpointItem, MockRule } from '
 const settings = ref<InspectorSettings | null>(null)
 const isLoading = ref(true)
 
+// -------------------- NETWORK SYNC --------------------
+/**
+ * Send command to injected network module via content script
+ * This allows OptionsTab to sync breakpoints/mocks directly
+ */
+function sendNetworkCommand(type: string, data: Record<string, any> = {}): void {
+  window.parent?.postMessage({
+    __VUE_INSPECTOR__: true,
+    message: {
+      type,
+      __VUE_INSPECTOR__: true,
+      __NETWORK_CMD__: true,
+      ...data
+    }
+  }, '*')
+}
+
+/**
+ * Sync breakpoints to injected script
+ */
+function syncBreakpoints() {
+  if (!settings.value?.breakpoints) return
+  
+  const breakpointsToSync = settings.value.breakpoints.active.map(bp => ({
+    id: bp.id,
+    scheme: bp.scheme,
+    host: bp.host,
+    port: bp.port,
+    path: bp.path,
+    query: bp.query,
+    trigger: bp.trigger,
+    enabled: true
+  }))
+
+  sendNetworkCommand('NETWORK_BREAKPOINTS_SYNC', {
+    breakpoints: JSON.parse(JSON.stringify(breakpointsToSync))
+  })
+}
+
+/**
+ * Sync mocks to injected script
+ */
+function syncMocks() {
+  if (!settings.value?.mocks) return
+  
+  const mocksToSync = settings.value.mocks.active.map(m => ({
+    id: m.id,
+    enabled: true,
+    scheme: m.scheme,
+    host: m.host,
+    port: m.port,
+    path: m.path,
+    query: m.query,
+    method: m.method,
+    status: m.status || 200,
+    statusText: m.statusText || 'OK',
+    headers: m.headers || [],
+    body: m.body === undefined ? undefined : (m.body || ''),
+    delay: m.delay
+  }))
+
+  sendNetworkCommand('NETWORK_MOCKS_SYNC', {
+    mocks: JSON.parse(JSON.stringify(mocksToSync))
+  })
+}
+
 // локальные значения для UI
 const debounceValue = ref(300)
 const minLengthValue = ref(2)
@@ -281,12 +347,18 @@ function toggleBreakpoint(breakpointId: string, currentlyActive: boolean) {
     const [breakpoint] = from.splice(index, 1)
     to.push(breakpoint)
   }
+  
+  // Sync to injected script immediately
+  syncBreakpoints()
 }
 
 function removeBreakpoint(breakpointId: string) {
   if (!settings.value?.breakpoints) return
   settings.value.breakpoints.active = settings.value.breakpoints.active.filter(bp => bp.id !== breakpointId)
   settings.value.breakpoints.inactive = settings.value.breakpoints.inactive.filter(bp => bp.id !== breakpointId)
+  
+  // Sync to injected script immediately
+  syncBreakpoints()
 }
 
 function formatTrigger(trigger: string): string {
@@ -324,12 +396,18 @@ function toggleMock(mockId: string, currentlyActive: boolean) {
     const [mock] = from.splice(index, 1)
     to.push(mock)
   }
+  
+  // Sync to injected script immediately
+  syncMocks()
 }
 
 function removeMock(mockId: string) {
   if (!settings.value?.mocks) return
   settings.value.mocks.active = settings.value.mocks.active.filter(m => m.id !== mockId)
   settings.value.mocks.inactive = settings.value.mocks.inactive.filter(m => m.id !== mockId)
+  
+  // Sync to injected script immediately
+  syncMocks()
 }
 
 function formatMockUrl(mock: MockRule): string {
@@ -395,6 +473,9 @@ async function handleImport() {
         debounceValue.value = newSettings.search.debounce ?? 300
         minLengthValue.value = newSettings.search.minLength ?? 2
       }
+      // Sync breakpoints and mocks after import
+      syncBreakpoints()
+      syncMocks()
       showAlert('Import Complete', 'Settings have been imported successfully.', 'success')
     } catch (error) {
       importError.value = error instanceof Error ? error.message : 'Invalid settings file'
@@ -413,6 +494,9 @@ async function handleReset() {
       debounceValue.value = newSettings.search.debounce ?? 300
       minLengthValue.value = newSettings.search.minLength ?? 2
     }
+    // Sync breakpoints and mocks after reset (they should now be empty)
+    syncBreakpoints()
+    syncMocks()
     showAlert('Reset Complete', 'All settings have been reset to defaults.', 'success')
   } catch (error) {
     showAlert('Reset Failed', 'Failed to reset settings. Please try again.', 'error')

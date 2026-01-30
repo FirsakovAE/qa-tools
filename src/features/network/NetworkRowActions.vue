@@ -47,7 +47,6 @@ const emit = defineEmits<{
       
       <DropdownMenuItem 
         @click.stop="emit('mock-response', entry)"
-        :disabled="!entry.responseBody?.text"
         class="text-purple-500 focus:text-purple-500"
       >
         <FileJson2 class="h-4 w-4 mr-2" />

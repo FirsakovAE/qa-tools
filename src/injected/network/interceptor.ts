@@ -307,6 +307,14 @@ function buildModifiedUrl(
 }
 
 /**
+ * Check if HTTP method allows body
+ */
+function methodAllowsBody(method: string): boolean {
+  const methodUpper = method.toUpperCase()
+  return methodUpper !== 'GET' && methodUpper !== 'HEAD'
+}
+
+/**
  * Apply modifications to request init
  */
 function applyRequestModifications(
@@ -326,8 +334,15 @@ function applyRequestModifications(
     modified.headers = headers
   }
   
-  if (modifications.requestBody !== undefined) {
+  // Determine effective method (modified or original)
+  const effectiveMethod = modifications.method || init?.method || 'GET'
+  
+  // Only set body if method allows it (GET/HEAD cannot have body)
+  if (modifications.requestBody !== undefined && methodAllowsBody(effectiveMethod)) {
     modified.body = modifications.requestBody
+  } else if (!methodAllowsBody(effectiveMethod)) {
+    // Ensure body is removed for GET/HEAD methods
+    delete modified.body
   }
   
   return modified
@@ -412,25 +427,36 @@ function interceptFetch(): void {
             }
           }
           
+          // ✅ FIX: Handle status codes that don't allow a body (204, 205, 304)
+          // Per HTTP spec, these responses MUST NOT have a body
+          const mockStatus = mockMatch.mock.status || 200
+          const isNoBodyStatus = mockStatus === 204 || mockStatus === 205 || mockStatus === 304
+          // Also treat empty body as no body
+          const hasBody = !isNoBodyStatus && mockBody !== ''
+          const responseBody = hasBody ? mockBody : null
+          
           // Build response headers
           const responseHeaders = new Headers()
           if (mockMatch.mock.headers && Array.isArray(mockMatch.mock.headers)) {
             mockMatch.mock.headers.forEach(h => {
               if (h.name && h.value !== undefined) {
+                // Skip Content-Type header if there's no body
+                if (!hasBody && h.name.toLowerCase() === 'content-type') return
                 responseHeaders.set(h.name, h.value)
               }
             })
           }
           
-          // ✅ FIX #3: Ensure content-type and content-length are set
-          if (!responseHeaders.has('content-type')) {
+          // ✅ FIX #3: Only set content-type if there's a body
+          if (hasBody && !responseHeaders.has('content-type')) {
             responseHeaders.set('content-type', 'application/json; charset=utf-8')
           }
-          responseHeaders.set('content-length', String(new TextEncoder().encode(mockBody).length))
+          // Set content-length (0 for no body)
+          responseHeaders.set('content-length', hasBody ? String(new TextEncoder().encode(mockBody).length) : '0')
           
           // Create synthetic Response
-          const mockResponse = new Response(mockBody, {
-            status: mockMatch.mock.status || 200,
+          const mockResponse = new Response(responseBody, {
+            status: mockStatus,
             statusText: mockMatch.mock.statusText || 'OK',
             headers: responseHeaders
           })
@@ -471,11 +497,11 @@ function interceptFetch(): void {
           const endTime = performance.now()
           if (callbacks?.onResponse && !isPaused) {
             callbacks.onResponse(requestId, {
-              status: mockMatch.mock.status || 200,
+              status: mockStatus,
               statusText: mockMatch.mock.statusText || 'OK',
               headers: mockMatch.mock.headers || [],
-              body: mockBody,
-              size: mockBody.length,
+              body: hasBody ? mockBody : '',
+              size: hasBody ? mockBody.length : 0,
               duration: endTime - startTime
             })
           }
@@ -958,12 +984,20 @@ function interceptXHR(): void {
         const mockStatusText = mockMatch.mock.statusText || 'OK'
         const mockHeaders = mockMatch.mock.headers || []
         
-        // ✅ FIX: Validate JSON if needed
+        // ✅ FIX: Handle status codes that don't allow a body (204, 205, 304)
+        const isNoBodyStatus = mockStatus === 204 || mockStatus === 205 || mockStatus === 304
+        // Also treat empty body as no body
+        const hasBody = !isNoBodyStatus && mockBody !== ''
+        if (!hasBody) {
+          mockBody = ''
+        }
+        
+        // ✅ FIX: Validate JSON if needed (only if there's a body)
         const contentType = mockHeaders.find(
           h => h.name.toLowerCase() === 'content-type'
         )?.value || 'application/json'
         
-        if (contentType.includes('json') && mockBody) {
+        if (hasBody && contentType.includes('json') && mockBody) {
           try {
             JSON.parse(mockBody)
           } catch {
@@ -1043,13 +1077,21 @@ function interceptXHR(): void {
               })
             }
             
-            // Override header methods
-            const headerString = mockHeaders.length > 0 
-              ? mockHeaders.map(h => `${h.name}: ${h.value}`).join('\r\n') + '\r\n\r\n'
-              : 'content-type: application/json\r\n\r\n'
-            const headerMap = new Map(mockHeaders.map(h => [h.name.toLowerCase(), h.value]))
-            if (!headerMap.has('content-type')) {
+            // Override header methods - filter out Content-Type if no body
+            const filteredHeaders = mockHeaders.filter(h => {
+              if (!hasBody && h.name.toLowerCase() === 'content-type') return false
+              return true
+            })
+            
+            // Build header string and map
+            let headerString = filteredHeaders.map(h => `${h.name}: ${h.value}`).join('\r\n')
+            if (headerString) headerString += '\r\n\r\n'
+            
+            const headerMap = new Map(filteredHeaders.map(h => [h.name.toLowerCase(), h.value]))
+            // Only add default Content-Type if there's a body and it's not already set
+            if (hasBody && !headerMap.has('content-type')) {
               headerMap.set('content-type', 'application/json; charset=utf-8')
+              headerString = 'content-type: application/json; charset=utf-8\r\n' + headerString
             }
             
             Object.defineProperty(xhr, 'getAllResponseHeaders', {
@@ -1161,8 +1203,16 @@ function interceptXHR(): void {
 
             // Apply modifications if any
             let finalBody = body
-            if (reqMods?.requestBody !== undefined) {
+            
+            // Determine effective method
+            const effectiveMethod = reqMods?.method || data.method
+            
+            // Only apply body modifications if method allows body
+            if (reqMods?.requestBody !== undefined && methodAllowsBody(effectiveMethod)) {
               finalBody = reqMods.requestBody as XMLHttpRequestBodyInit
+            } else if (!methodAllowsBody(effectiveMethod)) {
+              // Clear body for GET/HEAD methods
+              finalBody = null
             }
             
             // Check if URL modifications require re-opening

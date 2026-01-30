@@ -169,6 +169,12 @@ const canEditRequest = computed(() => {
   return props.breakpointMode && (props.breakpointTrigger === 'request' || props.breakpointTrigger === undefined)
 })
 
+// Check if current method allows body (GET/HEAD don't allow body)
+const methodAllowsBody = computed(() => {
+  const method = (canEditRequest.value ? editableMethod.value : props.entry.method)?.toUpperCase()
+  return method !== 'GET' && method !== 'HEAD'
+})
+
 const canEditResponse = computed(() => {
   return props.breakpointMode && props.breakpointTrigger === 'response'
 })
@@ -841,7 +847,12 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         
         <!-- Request Body Section -->
         <div v-else-if="activeSection === 'request'" class="h-full flex flex-col">
-          <div v-if="!entry.requestBody && !canEditRequest" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+          <!-- GET/HEAD methods cannot have body -->
+          <div v-if="!methodAllowsBody" class="flex-1 flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
+            <span>{{ displayMethod }} requests cannot have a body</span>
+            <span v-if="canEditRequest" class="text-xs">(Change method in URL tab to add body)</span>
+          </div>
+          <div v-else-if="!entry.requestBody && !canEditRequest" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
             No request body
           </div>
           <template v-else>
@@ -859,7 +870,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 <Badge v-if="entry.requestBody?.isBinary" variant="outline" class="text-xs">
                   Binary
                 </Badge>
-                <Badge v-if="canEditRequest" variant="outline" class="text-xs text-amber-500 border-amber-500/50">
+                <Badge v-if="canEditRequest && methodAllowsBody" variant="outline" class="text-xs text-amber-500 border-amber-500/50">
                   Editable
                 </Badge>
               </div>

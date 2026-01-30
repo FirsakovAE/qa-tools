@@ -76,8 +76,8 @@ export interface MockRule {
     statusText?: string
     /** Response headers */
     headers: MockHeaderEntry[]
-    /** Response body (JSON string) */
-    body: string
+    /** Response body (JSON string) - undefined means no body */
+    body?: string
     
     /** Optional delay in ms before returning response (like Charles) */
     delay?: number

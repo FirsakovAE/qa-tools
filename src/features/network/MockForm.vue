@@ -26,6 +26,26 @@ import type { MockRule, MockHeaderEntry, BaseInspectorSettings } from '@/types/i
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { parseUrl, buildUrlPreview, getStatusClass, formatJson, generateId } from './utils'
 
+// HTTP Status Text mapping (RFC 7231)
+const HTTP_STATUS_TEXT: Record<number, string> = {
+  200: 'OK',
+  201: 'Created',
+  202: 'Accepted',
+  204: 'No Content',
+  301: 'Moved Permanently',
+  302: 'Found',
+  304: 'Not Modified',
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'Not Found',
+  409: 'Conflict',
+  422: 'Unprocessable Entity',
+  500: 'Internal Server Error',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+}
+
 const props = defineProps<{
   entry: NetworkEntry
 }>()
@@ -61,11 +81,46 @@ const method = ref('')
 
 // Response fields
 const status = ref(200)
-const statusText = ref('OK')
+const statusText = ref('')
+const statusTextManuallyEdited = ref(false)
 const responseBody = ref('')
+
 const responseHeaders = ref<MockHeaderEntry[]>([])
 const delay = ref(0)
 const description = ref('')
+
+// Computed placeholder for status text based on status code
+const statusTextPlaceholder = computed(() => {
+  return HTTP_STATUS_TEXT[status.value] || 'OK'
+})
+
+// Effective status text (user input or placeholder)
+const effectiveStatusText = computed(() => {
+  if (statusText.value.trim()) {
+    return statusText.value
+  }
+  return statusTextPlaceholder.value
+})
+
+// Handle status text change - mark as manually edited
+function handleStatusTextChange(value: string | number | undefined) {
+  const strValue = String(value ?? '')
+  statusText.value = strValue
+  if (strValue.trim()) {
+    statusTextManuallyEdited.value = true
+  }
+}
+
+// Handle status code change - only update placeholder, not the actual text if manually edited
+function handleStatusCodeChange(value: string | number | undefined) {
+  const strValue = String(value ?? '')
+  const numValue = parseInt(strValue, 10)
+  if (!isNaN(numValue) && numValue >= 100 && numValue <= 599) {
+    status.value = numValue
+  } else if (strValue === '') {
+    status.value = 200
+  }
+}
 
 // Function to fill form from entry
 function fillFromEntry(entry: NetworkEntry) {
@@ -80,10 +135,26 @@ function fillFromEntry(entry: NetworkEntry) {
   // Method
   method.value = entry.method
   
-  // Response
+  // Response status
   status.value = entry.status || 200
-  statusText.value = entry.statusText || 'OK'
-  responseBody.value = formatJson(entry.responseBody?.text)
+  // Don't set statusText directly - use placeholder unless entry had a non-standard text
+  const expectedText = HTTP_STATUS_TEXT[entry.status || 200]
+  if (entry.statusText && entry.statusText !== expectedText) {
+    // Entry had a custom status text, use it
+    statusText.value = entry.statusText
+    statusTextManuallyEdited.value = true
+  } else {
+    // Use placeholder (will show via computed)
+    statusText.value = ''
+    statusTextManuallyEdited.value = false
+  }
+  
+  // Response body - always show editor, empty means no body
+  if (entry.responseBody?.text) {
+    responseBody.value = formatJson(entry.responseBody.text)
+  } else {
+    responseBody.value = ''
+  }
   
   // Response headers
   responseHeaders.value = entry.responseHeaders.map(h => ({ name: h.name, value: h.value }))
@@ -123,6 +194,20 @@ function removeAllHeaders() {
 function handleConfirm() {
   if (!props.entry || !isValid.value) return
   
+  // Empty body means no body (undefined), otherwise use the content
+  const trimmedBody = responseBody.value.trim()
+  const hasBody = trimmedBody !== ''
+  const bodyValue = hasBody ? responseBody.value : undefined
+  console.log('[MockForm] Creating mock - body:', bodyValue === undefined ? 'undefined (empty)' : bodyValue?.substring(0, 50))
+  
+  // Filter headers: remove empty names, and remove Content-Type if no body
+  const filteredHeaders = responseHeaders.value.filter(h => {
+    if (h.name.trim() === '') return false
+    // Remove Content-Type header if there's no body
+    if (!hasBody && h.name.toLowerCase() === 'content-type') return false
+    return true
+  })
+  
   const mock: MockRule = {
     id: generateId('mock'),
     enabled: true,
@@ -133,14 +218,16 @@ function handleConfirm() {
     query: query.value || undefined,
     method: method.value || undefined,
     status: status.value,
-    statusText: statusText.value || 'OK',
-    headers: responseHeaders.value.filter(h => h.name.trim() !== ''),
-    body: responseBody.value,
+    statusText: effectiveStatusText.value,
+    headers: filteredHeaders,
+    // Empty body = no body (undefined), otherwise use provided content
+    body: bodyValue,
     delay: delay.value > 0 ? delay.value : undefined,
     timestamp: new Date().toISOString(),
     description: description.value || undefined
   }
   
+  console.log('[MockForm] Mock created:', { ...mock, body: mock.body === undefined ? 'undefined' : mock.body?.substring(0, 50) })
   emit('confirm', mock)
 }
 
@@ -343,10 +430,10 @@ const sections: Array<{ id: SectionId; label: string }> = [
               <Label for="status" class="text-xs">Status Code</Label>
               <Input
                 id="status"
-                v-model.number="status"
-                type="number"
-                :min="100"
-                :max="599"
+                :model-value="String(status)"
+                @update:model-value="handleStatusCodeChange"
+                inputmode="numeric"
+                pattern="[0-9]*"
                 class="h-8 text-sm font-mono"
               />
             </div>
@@ -354,13 +441,15 @@ const sections: Array<{ id: SectionId; label: string }> = [
               <Label for="statusText" class="text-xs">Status Text</Label>
               <Input
                 id="statusText"
-                v-model="statusText"
-                placeholder="OK"
+                :model-value="statusText"
+                @update:model-value="handleStatusTextChange"
+                :placeholder="statusTextPlaceholder"
                 class="h-8 text-sm font-mono"
               />
             </div>
           </div>
           
+          <!-- JSON Editor - always shown, empty = no body -->
           <div class="flex-1 min-h-0">
             <JsonEditor
               v-model="responseBody"
@@ -370,6 +459,9 @@ const sections: Array<{ id: SectionId; label: string }> = [
               :full-height="true"
               class="h-full"
             />
+          </div>
+          <div class="shrink-0 px-3 py-1 text-xs text-muted-foreground border-t">
+            Leave empty for no response body
           </div>
         </div>
         

@@ -33,7 +33,8 @@ export function useMockState(
       status: m.status || 200,
       statusText: m.statusText || 'OK',
       headers: m.headers || [],
-      body: m.body || '',
+      // Preserve undefined for no-body mocks, only fallback to '' for null
+      body: m.body === undefined ? undefined : (m.body || ''),
       delay: m.delay
     }))
 
