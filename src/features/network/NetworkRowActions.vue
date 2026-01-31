@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MoreHorizontal, FileJson2 } from 'lucide-vue-next'
+import { MoreHorizontal, Terminal, PauseCircle, Shuffle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -35,21 +35,21 @@ const emit = defineEmits<{
     </DropdownMenuTrigger>
 
     <DropdownMenuContent align="end" class="w-44">
-      <DropdownMenuItem @click.stop="emit('set-breakpoint', entry)">
-        Breakpoint
-      </DropdownMenuItem>
 
       <DropdownMenuItem @click.stop="emit('copy-curl', entry)">
+        <Terminal class="h-4 w-4 mr-2" />
         Copy cURL
       </DropdownMenuItem>
-      
+
       <DropdownMenuSeparator />
+
+      <DropdownMenuItem @click.stop="emit('set-breakpoint', entry)">
+        <PauseCircle class="h-4 w-4 mr-2" />
+        Breakpoint Request
+      </DropdownMenuItem>    
       
-      <DropdownMenuItem 
-        @click.stop="emit('mock-response', entry)"
-        class="text-purple-500 focus:text-purple-500"
-      >
-        <FileJson2 class="h-4 w-4 mr-2" />
+      <DropdownMenuItem @click.stop="emit('mock-response', entry)">
+        <Shuffle class="h-4 w-4 mr-2" />
         Mock Response
       </DropdownMenuItem>
     </DropdownMenuContent>

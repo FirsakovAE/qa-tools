@@ -106,7 +106,7 @@ const sections: Array<{ id: SectionId; label: string }> = [
           <div class="flex items-center gap-2 mb-1">
             <Badge variant="outline" class="text-amber-500 border-amber-500/50 gap-1">
               <CirclePause class="h-3 w-3" />
-              Set Breakpoint
+              Breakpoint Request
             </Badge>
             <Badge variant="outline" class="font-mono text-xs">
               {{ entry.method }}
@@ -224,17 +224,6 @@ const sections: Array<{ id: SectionId; label: string }> = [
             <div class="p-3 bg-muted/50 rounded-md">
               <Label class="text-xs text-muted-foreground">URL Pattern Preview</Label>
               <div class="font-mono text-sm mt-1 break-all">{{ urlPreview }}</div>
-            </div>
-            
-            <!-- Trigger info (Request only) -->
-            <div class="p-3 border rounded-md border-amber-500/30 bg-amber-500/5">
-              <div class="flex items-center gap-2">
-                <CirclePause class="h-4 w-4 text-amber-500" />
-                <span class="text-sm font-medium">Request Breakpoint</span>
-              </div>
-              <p class="text-xs text-muted-foreground mt-1">
-                Pauses before sending request. You can modify URL params, headers, and request body.
-              </p>
             </div>
           </div>
         </ScrollArea>

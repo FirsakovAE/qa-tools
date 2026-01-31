@@ -780,7 +780,7 @@ async function handleReset() {
 
           <!-- BREAKPOINTS -->
           <div class="space-y-4 border-t pt-5">
-            <h4 class="text-sm font-semibold">Breakpoints</h4>
+            <h4 class="text-sm font-semibold">Breakpoints Requests</h4>
             <p class="text-sm text-muted-foreground">
               Network requests matching these patterns will be paused for inspection and editing.
             </p>
@@ -858,10 +858,7 @@ async function handleReset() {
           <!-- MOCKS (Map Local) -->
           <div class="space-y-4 border-t pt-5">
             <h4 class="text-sm font-semibold flex items-center gap-2">
-              Mocks (Map Local)
-              <span class="text-xs font-normal text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded">
-                Like Charles Proxy
-              </span>
+              Mocks Responses
             </h4>
             <p class="text-sm text-muted-foreground">
               Matching requests will return fake responses without hitting the network.

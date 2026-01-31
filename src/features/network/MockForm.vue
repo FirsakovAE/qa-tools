@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ArrowLeft, Check, FileJson2 } from 'lucide-vue-next'
+import { ArrowLeft, Check, Shuffle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -266,7 +266,7 @@ const sections: Array<{ id: SectionId; label: string }> = [
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
             <Badge variant="outline" class="text-purple-500 border-purple-500/50 gap-1">
-              <FileJson2 class="h-3 w-3" />
+              <Shuffle class="h-3 w-3" />
               Mock Response
             </Badge>
             <Badge variant="outline" class="font-mono text-xs">
