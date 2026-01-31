@@ -238,7 +238,6 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
       event.data.message?.type === 'NETWORK_BREAKPOINT_HIT'
     ) {
       const msg = event.data.message
-      console.log('[Navigation] Breakpoint hit detected - switching to Network tab', msg)
       
       // Store pending breakpoint info so NetworkTab can show details on mount
       if (msg.requestId && msg.trigger) {

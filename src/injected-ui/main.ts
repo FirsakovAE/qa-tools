@@ -54,5 +54,3 @@ import { Toaster } from '@/components/ui/Toaster'
 const app = createApp(App)
 app.component('Toaster', Toaster)
 app.mount('#app')
-
-console.log('Injected UI app mounted')

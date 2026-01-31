@@ -365,12 +365,8 @@ function interceptFetch(): void {
     
     const method = init?.method || (input instanceof Request ? input.method : 'GET')
     
-    // Debug: log every fetch call
-    console.log('[VueInspector Interceptor] 📡 fetch() called:', method, url)
-    
     // Check exclusions (but NOT isPaused - that only affects logging, not breakpoints)
     if (shouldExcludeUrl(url) || shouldExcludeMethod(method)) {
-      console.log('[VueInspector Interceptor] Skipping (excluded):', url)
       return originalFetch.call(window, input, init)
     }
     
@@ -385,22 +381,13 @@ function interceptFetch(): void {
       const mockMatch = callbacks.onMockCheck(url, method.toUpperCase())
       
       if (mockMatch && mockMatch.mock && mockMatch.mock.enabled) {
-        console.log('[VueInspector Interceptor] 🎭 MOCK MATCH! Returning fake response for:', url)
-        console.log('[VueInspector Interceptor] Mock details:', {
-          id: mockMatch.mockId,
-          status: mockMatch.mock.status,
-          bodyLength: mockMatch.mock.body?.length,
-          headersCount: mockMatch.mock.headers?.length
-        })
         
         try {
           // Apply delay if configured (like Charles Proxy)
           if (mockMatch.mock.delay && mockMatch.mock.delay > 0) {
-            console.log('[VueInspector Interceptor] Applying mock delay:', mockMatch.mock.delay, 'ms')
             await new Promise(resolve => setTimeout(resolve, mockMatch.mock.delay))
           }
           
-          // ✅ FIX #1: Ensure body is ALWAYS a valid string
           // If body is object/array, stringify it. If undefined/null, use empty string
           let mockBody: string
           const rawBody = mockMatch.mock.body
@@ -412,7 +399,6 @@ function interceptFetch(): void {
             mockBody = JSON.stringify(rawBody)
           }
           
-          // ✅ FIX #2: Validate JSON if content-type is json
           const contentType = mockMatch.mock.headers?.find(
             h => h.name.toLowerCase() === 'content-type'
           )?.value || 'application/json'
@@ -447,7 +433,6 @@ function interceptFetch(): void {
             })
           }
           
-          // ✅ FIX #3: Only set content-type if there's a body
           if (hasBody && !responseHeaders.has('content-type')) {
             responseHeaders.set('content-type', 'application/json; charset=utf-8')
           }
@@ -460,9 +445,7 @@ function interceptFetch(): void {
             statusText: mockMatch.mock.statusText || 'OK',
             headers: responseHeaders
           })
-          
-          console.log('[VueInspector Interceptor] 🎭 Mock Response created successfully')
-          
+                    
           // Notify that mock was applied (for UI logging)
           if (callbacks?.onMockApplied) {
             callbacks.onMockApplied(requestId, mockMatch.mockId)
@@ -506,8 +489,6 @@ function interceptFetch(): void {
             })
           }
           
-          // 🔥 RETURN FAKE RESPONSE - NO NETWORK CALL MADE!
-          console.log('[VueInspector Interceptor] 🎭 Mock response returned, request never hit network')
           return mockResponse
           
         } catch (mockError) {
@@ -557,16 +538,11 @@ function interceptFetch(): void {
     // ========================================
     let effectiveInput: RequestInfo | URL = input
     let effectiveInit: RequestInit | undefined = init
-    
-    // Debug: check if breakpoint callback exists
-    console.log('[VueInspector Interceptor] Checking request breakpoint for:', url, 'callback exists:', !!callbacks?.onBreakpointCheck)
-    
+        
     if (callbacks?.onBreakpointCheck) {
       const match = callbacks.onBreakpointCheck(url, 'request')
-      console.log('[VueInspector Interceptor] Breakpoint match result:', match)
       
       if (match) {
-        console.log('[VueInspector Interceptor] 🛑 PAUSING REQUEST - waiting for resume...')
         // ACTUALLY PAUSE HERE - request has NOT been sent yet!
         const modifications = await waitForBreakpointResume(
           requestId,
@@ -576,15 +552,6 @@ function interceptFetch(): void {
         
         // Apply any modifications from user
         if (modifications) {
-          console.log('[VueInspector Interceptor] Applying modifications:', {
-            method: modifications.method,
-            scheme: modifications.scheme,
-            host: modifications.host,
-            path: modifications.path,
-            paramsCount: modifications.params?.length,
-            headersCount: modifications.requestHeaders?.length,
-            hasBody: modifications.requestBody !== undefined
-          })
           
           const modifiedInit = applyRequestModifications(init, modifications)
           
@@ -595,7 +562,6 @@ function interceptFetch(): void {
           
           if (hasUrlMods) {
             const modifiedUrl = buildModifiedUrl(url, modifications)
-            console.log('[VueInspector Interceptor] URL modified:', url, '->', modifiedUrl)
             
             // If input is a Request object, we need to create a new one with new URL
             if (input instanceof Request) {
@@ -650,7 +616,6 @@ function interceptFetch(): void {
         const match = callbacks.onBreakpointCheck(url, 'response')
 
         if (match) {
-          console.log('[VueInspector Interceptor] 🛑 PAUSING RESPONSE - waiting for resume...')
           
           // Read response body BEFORE waiting for resume (so UI can show it)
           responseBody = await readResponseBody(response, clone)
@@ -929,12 +894,7 @@ function interceptXHR(): void {
   XMLHttpRequest.prototype.send = function(body?: Document | XMLHttpRequestBodyInit | null): void {
     const data = xhrMap.get(this)
     const xhr = this
-    
-    // Debug: log XHR calls
-    if (data) {
-      console.log('[VueInspector Interceptor] 📡 XHR send() called:', data.method, data.url)
-    }
-    
+        
     if (!data) {
       return originalXHRSend.call(this, body)
     }
@@ -949,13 +909,6 @@ function interceptXHR(): void {
       const mockMatch = callbacks.onMockCheck(data.url, data.method)
       
       if (mockMatch && mockMatch.mock && mockMatch.mock.enabled) {
-        console.log('[VueInspector Interceptor] 🎭 XHR MOCK MATCH! Returning fake response for:', data.url)
-        console.log('[VueInspector Interceptor] XHR Mock details:', {
-          id: mockMatch.mockId,
-          status: mockMatch.mock.status,
-          bodyLength: mockMatch.mock.body?.length,
-          headersCount: mockMatch.mock.headers?.length
-        })
         
         // Log the mocked request (so it appears in Network tab)
         if (callbacks?.onRequest && !isPaused) {
@@ -1010,14 +963,12 @@ function interceptXHR(): void {
         const applyMockAndCallHandlers = async () => {
           try {
             if (mockMatch.mock.delay && mockMatch.mock.delay > 0) {
-              console.log('[VueInspector Interceptor] Applying XHR mock delay:', mockMatch.mock.delay, 'ms')
               await new Promise(resolve => setTimeout(resolve, mockMatch.mock.delay))
             }
             
             const endTime = performance.now()
             const duration = endTime - data.startTime
             
-            // ✅ FIX #4: Helper to dispatch readyState change properly
             const dispatchReadyStateChange = (state: number) => {
               Object.defineProperty(xhr, 'readyState', {
                 get: () => state,
@@ -1037,7 +988,6 @@ function interceptXHR(): void {
               configurable: true
             })
             
-            // ✅ FIX #5: Handle responseType properly
             const responseType = (xhr as any)._responseType || xhr.responseType || ''
             
             Object.defineProperty(xhr, 'responseText', {
@@ -1047,7 +997,6 @@ function interceptXHR(): void {
             
             // Set response based on responseType
             if (responseType === 'json') {
-              // ✅ FIX #6: Return parsed JSON for responseType='json'
               let parsedResponse: any
               try {
                 parsedResponse = mockBody ? JSON.parse(mockBody) : null
@@ -1104,16 +1053,11 @@ function interceptXHR(): void {
               configurable: true
             })
             
-            // ✅ FIX #7: CRITICAL - Dispatch proper XHR lifecycle sequence
-            // Many frameworks (Axios, Vue Resource) depend on this exact sequence
-            console.log('[VueInspector Interceptor] 🎭 XHR dispatching lifecycle events...')
-            
             // Simulate: OPENED -> HEADERS_RECEIVED -> LOADING -> DONE
             dispatchReadyStateChange(2) // HEADERS_RECEIVED
             dispatchReadyStateChange(3) // LOADING  
             dispatchReadyStateChange(4) // DONE
             
-            // ✅ FIX #8: CRITICAL - Fire load AND loadend events
             // Without loadend, Axios/Vue promises may never resolve!
             const progressEventInit = {
               lengthComputable: true,
@@ -1123,9 +1067,7 @@ function interceptXHR(): void {
             
             xhr.dispatchEvent(new ProgressEvent('load', progressEventInit))
             xhr.dispatchEvent(new ProgressEvent('loadend', progressEventInit))
-            
-            console.log('[VueInspector Interceptor] 🎭 XHR lifecycle complete (load + loadend dispatched)')
-            
+                        
             // Log the mocked response
             if (callbacks?.onResponse && !isPaused) {
               callbacks.onResponse(data.id, {
@@ -1142,9 +1084,7 @@ function interceptXHR(): void {
             if (callbacks?.onMockApplied) {
               callbacks.onMockApplied(data.id, mockMatch.mockId)
             }
-            
-            console.log('[VueInspector Interceptor] 🎭 XHR Mock response ready, calling stored handlers')
-            
+
             // Call stored handlers with mock data (for manually attached handlers)
             callStoredHandlers(xhr, data)
             
@@ -1165,14 +1105,11 @@ function interceptXHR(): void {
     // ========================================
     // REQUEST BREAKPOINT CHECK FOR XHR
     // ========================================
-    console.log('[VueInspector Interceptor] Checking XHR request breakpoint for:', data.url, 'callback exists:', !!callbacks?.onBreakpointCheck)
     
     if (callbacks?.onBreakpointCheck) {
       const match = callbacks.onBreakpointCheck(data.url, 'request')
-      console.log('[VueInspector Interceptor] XHR Breakpoint match result:', match)
       
       if (match) {
-        console.log('[VueInspector Interceptor] 🛑 PAUSING XHR REQUEST - waiting for resume...')
         
         // Store pending XHR request
         pendingXHRRequests.set(data.id, { xhr, body, data })
@@ -1197,7 +1134,6 @@ function interceptXHR(): void {
         // Store resolver for this XHR - will be called when user clicks Apply
         breakpointResolvers.set(data.id, {
           resolve: (modifications) => {
-            console.log('[VueInspector Interceptor] XHR breakpoint resumed, sending request...')
             
             const reqMods = modifications as BreakpointModifiedRequest | undefined
 
@@ -1225,9 +1161,7 @@ function interceptXHR(): void {
               // Build modified URL
               const modifiedUrl = buildModifiedUrl(data.url, reqMods)
               const modifiedMethod = reqMods.method || data.method
-              
-              console.log('[VueInspector Interceptor] XHR URL modified:', data.url, '->', modifiedUrl)
-              
+                            
               // Re-open XHR with new URL (this resets headers)
               originalXHROpen.call(xhr, modifiedMethod, modifiedUrl, true)
               
@@ -1261,7 +1195,6 @@ function interceptXHR(): void {
             originalXHRSend.call(xhr, finalBody)
           },
           reject: (error) => {
-            console.log('[VueInspector Interceptor] XHR breakpoint cancelled:', error.message)
             pendingXHRRequests.delete(data.id)
             // Abort the XHR
             xhr.abort()
@@ -1350,7 +1283,6 @@ function interceptXHR(): void {
         const match = callbacks.onBreakpointCheck(data.url, 'response')
 
         if (match) {
-          console.log('[VueInspector Interceptor] 🛑 PAUSING XHR RESPONSE - waiting for resume...')
           
           // ✅ Notify UI about the response BEFORE pausing (so user can see/edit body)
           // NOTE: Always notify for breakpoints, regardless of isPaused
@@ -1577,15 +1509,6 @@ function interceptXHR(): void {
  * Initialize network interceptor
  */
 export function initNetworkInterceptor(cbs: InterceptorCallbacks, maxSize?: number): void {
-  console.log('[VueInspector Interceptor] Initializing...', {
-    hasOnRequest: !!cbs.onRequest,
-    hasOnResponse: !!cbs.onResponse,
-    hasOnError: !!cbs.onError,
-    hasOnBreakpointCheck: !!cbs.onBreakpointCheck,
-    hasOnBreakpointHit: !!cbs.onBreakpointHit,
-    hasOnMockCheck: !!cbs.onMockCheck,
-    hasOnMockApplied: !!cbs.onMockApplied
-  })
   
   callbacks = cbs
   if (maxSize) {

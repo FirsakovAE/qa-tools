@@ -186,8 +186,6 @@ export function useUpdateChecker() {
       const versionComparison = compareVersions(remoteVersion, localVersion)
 
       if (versionComparison > 0 && remoteVersion !== '0.0.0') {
-        console.log(`Update available: ${remoteVersion} (current: ${localVersion})`)
-
         const shouldShow = await shouldShowUpdateToast()
         if (shouldShow) {
           showUpdateToast(remoteVersion)

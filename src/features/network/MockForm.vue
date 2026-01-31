@@ -198,7 +198,6 @@ function handleConfirm() {
   const trimmedBody = responseBody.value.trim()
   const hasBody = trimmedBody !== ''
   const bodyValue = hasBody ? responseBody.value : undefined
-  console.log('[MockForm] Creating mock - body:', bodyValue === undefined ? 'undefined (empty)' : bodyValue?.substring(0, 50))
   
   // Filter headers: remove empty names, and remove Content-Type if no body
   const filteredHeaders = responseHeaders.value.filter(h => {
@@ -227,7 +226,6 @@ function handleConfirm() {
     description: description.value || undefined
   }
   
-  console.log('[MockForm] Mock created:', { ...mock, body: mock.body === undefined ? 'undefined' : mock.body?.substring(0, 50) })
   emit('confirm', mock)
 }
 

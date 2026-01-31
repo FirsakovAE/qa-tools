@@ -123,7 +123,6 @@ watch(() => [props.breakpointMode, props.entry?.id, props.breakpointDraft?.entry
   // 2. We have a draft
   // 3. We haven't already initialized for this entry
   if (props.breakpointMode && props.breakpointDraft && initializedEntryId.value !== props.entry?.id) {
-    console.log('[NetworkDetails] Initializing from draft for entry:', props.entry?.id)
     
     // Mark as initialized for this entry
     initializedEntryId.value = props.entry?.id || null
@@ -141,14 +140,6 @@ watch(() => [props.breakpointMode, props.entry?.id, props.breakpointDraft?.entry
     // Format JSON properly for editing
     editableRequestBody.value = formatJsonForEdit(props.breakpointDraft.requestBody)
     editableResponseBody.value = formatJsonForEdit(props.breakpointDraft.responseBody)
-    
-    console.log('[NetworkDetails] Loaded from draft:', {
-      method: editableMethod.value,
-      host: editableHost.value,
-      params: editableParams.value.length,
-      requestHeaders: editableRequestHeaders.value.length,
-      requestBody: editableRequestBody.value?.substring(0, 50)
-    })
     
     // Set active section to URL tab for request breakpoints
     if (props.breakpointTrigger === 'response') {
