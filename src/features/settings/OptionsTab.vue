@@ -823,17 +823,6 @@ async function handleReset() {
                       <div class="flex justify-end gap-2">
                         <Button
                             size="sm"
-                            :variant="row.active ? 'secondary' : 'outline'"
-                            @click="toggleBreakpoint(row.id, row.active)"
-                            :disabled="!settings"
-                            class="h-7 text-xs"
-                        >
-                          <Power class="w-3 h-3 mr-1" />
-                          {{ row.active ? 'Disable' : 'Enable' }}
-                        </Button>
-
-                        <Button
-                            size="sm"
                             variant="destructive"
                             @click="removeBreakpoint(row.id)"
                             :disabled="!settings"
@@ -915,17 +904,6 @@ async function handleReset() {
 
                     <TableCell class="text-right py-2 px-4">
                       <div class="flex justify-end gap-2">
-                        <Button
-                            size="sm"
-                            :variant="row.active ? 'secondary' : 'outline'"
-                            @click="toggleMock(row.id, row.active)"
-                            :disabled="!settings"
-                            class="h-7 text-xs"
-                        >
-                          <Power class="w-3 h-3 mr-1" />
-                          {{ row.active ? 'Disable' : 'Enable' }}
-                        </Button>
-
                         <Button
                             size="sm"
                             variant="destructive"
