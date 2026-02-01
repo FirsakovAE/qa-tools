@@ -33,10 +33,12 @@ git push origin master
 
 ```bash
 # 1. Создать ветку
-git checkout -b experiment/{name}
+git checkout -b features/{name}
 # 2. МР в ветку
 git add src/
 git commit -m "wip: pinia rewrite"
+# З. Запушить ветку
+git push -u origin features/{name}
 # 3. Удалить ветку
 
 git checkout master
@@ -65,6 +67,7 @@ git branch                 # Текущие ветки
 git branch --show-current # Быстро узнать текущую ветку
 git checkout master        # Вернуться в стабильную ветку
 git pull origin master     # Забрать обновления
+git restore .
 ```
 
 ## Git add

@@ -1,4 +1,4 @@
-// src/injected/async-wrapper.ts
+// src/injected/props/async-wrapper.ts
 
 /**
  * Проверяет, является ли компонент AsyncComponentWrapper

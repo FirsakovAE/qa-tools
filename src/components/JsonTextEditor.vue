@@ -6,11 +6,14 @@ import { Copy, Check } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: string
   editable?: boolean
   showCopy?: boolean
-}>()
+  fullHeight?: boolean
+}>(), {
+  fullHeight: false
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
@@ -58,12 +61,23 @@ watch(() => props.editable, () => {
 })
 
 function copyToClipboard() {
+  // Format JSON properly before copying
+  let textToCopy = editedJson.value
+  try {
+    const parsed = JSON.parse(editedJson.value)
+    textToCopy = JSON.stringify(parsed, null, 2)
+  } catch {
+    // Keep original if not valid JSON
+  }
+  
+  // Use execCommand first (works in iframes without permissions policy issues)
   try {
     const textArea = document.createElement('textarea')
-    textArea.value = editedJson.value
+    textArea.value = textToCopy
     textArea.style.position = 'fixed'
     textArea.style.left = '-999999px'
     textArea.style.top = '-999999px'
+    textArea.style.opacity = '0'
     document.body.appendChild(textArea)
     textArea.focus()
     textArea.select()
@@ -86,7 +100,7 @@ function onInput(e: Event) {
 </script>
 
 <template>
-  <div>
+  <div :class="fullHeight ? 'h-full flex flex-col' : ''">
     <Button
       v-if="showCopy && !editable"
       variant="ghost"
@@ -98,15 +112,16 @@ function onInput(e: Event) {
       {{ copied ? 'Copied' : 'Copy' }}
     </Button>
 
-    <ScrollArea class="h-[330px]">
+    <ScrollArea :class="fullHeight ? 'flex-1 min-h-0' : 'h-[330px]'">
       <div class="p-2">
         <pre
           v-if="editable"
           ref="editableRef"
-          class="json-editor h-full min-h-[300px] font-sans leading-relaxed overflow-auto
+          class="json-editor h-full font-sans leading-relaxed overflow-auto
                  whitespace-pre-wrap break-all
                  bg-transparent outline-none focus:outline-none
                  cursor-text"
+          :class="fullHeight ? '' : 'min-h-[300px]'"
           :style="{
             color: 'hsl(var(--foreground))',
             caretColor: 'hsl(var(--foreground))'
@@ -120,8 +135,9 @@ function onInput(e: Event) {
 
         <pre
           v-else
-          class="json-viewer h-full min-h-[300px] p-2 leading-relaxed overflow-auto
+          class="json-viewer h-full p-2 leading-relaxed overflow-auto
                  whitespace-pre-wrap break-words"
+          :class="fullHeight ? '' : 'min-h-[300px]'"
         ><code ref="codeRef" class="language-json"></code></pre>
       </div>
       <ScrollBar orientation="vertical" />

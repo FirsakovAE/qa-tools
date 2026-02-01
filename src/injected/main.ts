@@ -1,24 +1,32 @@
 /**
- * Главный entry point для injected скрипта
- * Выполняет детекцию и загружает модули
+ * Main entry point for injected script
+ * Performs detection and loads modules
  * 
- * ВАЖНО: Не используем dynamic imports, т.к. они не работают 
- * когда скрипт загружен cross-origin (standalone mode)
+ * Detection strategy:
+ * - Vue: __VUE_DEVTOOLS_GLOBAL_HOOK__ with app:init event listener
+ * - Pinia: app.use() interception + app:init fallback
+ * 
+ * This ensures detection works even if the inspector loads before Vue/Pinia
  */
 
-import { detect, type DetectionResult } from './detector'
-// Статические импорты - всё бандлится в один файл
-import { initPropsModule } from './props/index'
+import { 
+  detect, 
+  setupReactiveDetection, 
+  getDetectionState,
+  type DetectionResult 
+} from './detector'
+import { initPropsModule, cleanupPropsModule } from './props/index'
 import { initPiniaModule } from './pinia/index'
+import { initNetworkModule, cleanupNetworkModule } from './network/index'
 
-// Храним результат детекции глобально
-let detectionResult: DetectionResult | null = null
+// Module state
 let propsModuleLoaded = false
 let piniaModuleLoaded = false
-let detectionSent = false // Флаг: был ли отправлен результат детекции
+let networkModuleLoaded = false
+let cleanupDetection: (() => void) | null = null
 
 /**
- * Отправляет результат детекции в content script
+ * Send detection result to content script
  */
 function sendDetectionResult(result: DetectionResult) {
   window.postMessage({
@@ -26,28 +34,70 @@ function sendDetectionResult(result: DetectionResult) {
     __FROM_VUE_INSPECTOR__: true,
     ...result
   }, '*')
+  
+  // Also send legacy format for compatibility
+  window.postMessage({
+    type: 'VUE_INSPECTOR_VUE_DETECTED',
+    __FROM_VUE_INSPECTOR__: true,
+    detected: result.hasVue,
+    url: window.location.href,
+    hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
+    hasVue2: result.vueVersion === 2
+  }, '*')
 }
 
 /**
- * Инициализирует модуль props если Vue обнаружен
+ * Initialize props module when Vue is detected
  */
 function loadPropsModule() {
-  if (propsModuleLoaded || !detectionResult?.hasVue) return
+  if (propsModuleLoaded) return
   propsModuleLoaded = true
   initPropsModule()
+  
+  // Notify that props module is ready
+  window.postMessage({
+    type: 'VUE_INSPECTOR_PROPS_READY',
+    __FROM_VUE_INSPECTOR__: true
+  }, '*')
 }
 
 /**
- * Инициализирует модуль pinia если Pinia обнаружен
+ * Initialize pinia module when Pinia is detected
  */
 function loadPiniaModule() {
-  if (piniaModuleLoaded || !detectionResult?.hasPinia) return
+  if (piniaModuleLoaded) return
   piniaModuleLoaded = true
   initPiniaModule()
+  
+  // Notify that pinia module is ready
+  window.postMessage({
+    type: 'VUE_INSPECTOR_PINIA_READY',
+    __FROM_VUE_INSPECTOR__: true
+  }, '*')
 }
 
 /**
- * Обработчик сообщений от content script
+ * Handle Vue detection (immediate or reactive)
+ */
+function onVueDetected(version: 2 | 3) {
+  loadPropsModule()
+  
+  // Send updated detection result
+  sendDetectionResult(getDetectionState())
+}
+
+/**
+ * Handle Pinia detection (immediate or reactive)
+ */
+function onPiniaDetected() {
+  loadPiniaModule()
+  
+  // Send updated detection result
+  sendDetectionResult(getDetectionState())
+}
+
+/**
+ * Message handler for content script communication
  */
 function handleMessage(event: MessageEvent) {
   if (event.source !== window || !event.data || typeof event.data !== 'object') {
@@ -56,95 +106,100 @@ function handleMessage(event: MessageEvent) {
   
   const { type } = event.data
   
-  // Запрос на проверку Vue
+  // Request to check Vue
   if (type === 'VUE_INSPECTOR_CHECK_VUE') {
-    // Если детекция уже выполнена - просто отправляем сохранённый результат
-    if (detectionResult && detectionSent) {
-      sendDetectionResult(detectionResult)
-      return
-    }
-    
-    // Выполняем детекцию только один раз
-    if (!detectionResult) {
-      detectionResult = detect()
-    }
-    
-    // Отправляем результат
-    sendDetectionResult(detectionResult)
-    detectionSent = true
-    
-    // Отправляем также старый формат для совместимости
-    window.postMessage({
-      type: 'VUE_INSPECTOR_VUE_DETECTED',
-      __FROM_VUE_INSPECTOR__: true,
-      detected: detectionResult.hasVue,
-      url: window.location.href,
-      hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
-      hasVue2: detectionResult.vueVersion === 2
-    }, '*')
-    
-    // Загружаем модули если нужно
-    if (detectionResult.hasVue) {
-      loadPropsModule()
-    }
-    if (detectionResult.hasPinia) {
-      loadPiniaModule()
-    }
-    
+    sendDetectionResult(getDetectionState())
     return
   }
   
-  // Запрос на получение флагов (для UI)
+  // Request to get flags (for UI)
   if (type === 'VUE_INSPECTOR_GET_FLAGS') {
-    // Просто отправляем сохранённый результат (детекция уже выполнена при инициализации)
-    if (detectionResult) {
-      sendDetectionResult(detectionResult)
+    sendDetectionResult(getDetectionState())
+    return
+  }
+  
+  // Force re-detection request
+  if (type === 'VUE_INSPECTOR_FORCE_DETECT') {
+    const result = detect()
+    
+    if (result.hasVue && !propsModuleLoaded) {
+      loadPropsModule()
     }
+    
+    if (result.hasPinia && !piniaModuleLoaded) {
+      loadPiniaModule()
+    }
+    
+    sendDetectionResult(result)
     return
   }
 }
 
-// Регистрируем обработчик сообщений
-window.addEventListener('message', handleMessage)
-
-// Выполняем начальную детекцию ОДИН раз
-detectionResult = detect()
-detectionSent = true
-
-// Если Vue найден - сразу загружаем props модуль
-if (detectionResult.hasVue) {
-  loadPropsModule()
+/**
+ * Initialize the inspector
+ */
+function initialize() {
+  // Register message handler
+  window.addEventListener('message', handleMessage)
+  
+  // Initialize network module immediately (doesn't require Vue)
+  loadNetworkModule()
+  
+  // Setup reactive detection with callbacks
+  cleanupDetection = setupReactiveDetection({
+    onVueDetected,
+    onPiniaDetected
+  })
+  
+  // Get initial detection state
+  const initialResult = getDetectionState()
+  
+  // Send initial detection result
+  sendDetectionResult(initialResult)
+  
+  // Send ready signal
+  window.postMessage({
+    type: 'VUE_INSPECTOR_READY',
+    __FROM_VUE_INSPECTOR__: true
+  }, '*')
 }
 
-// Если Pinia найден - сразу загружаем pinia модуль
-if (detectionResult.hasPinia) {
-  loadPiniaModule()
+/**
+ * Initialize network module (always available)
+ */
+function loadNetworkModule() {
+  if (networkModuleLoaded) return
+  networkModuleLoaded = true
+  initNetworkModule()
+  
+  // Notify that network module is ready
+  window.postMessage({
+    type: 'VUE_INSPECTOR_NETWORK_READY',
+    __FROM_VUE_INSPECTOR__: true
+  }, '*')
 }
 
-// Отправляем результат детекции
-sendDetectionResult(detectionResult)
-
-// Также отправляем старый формат для совместимости
-window.postMessage({
-  type: 'VUE_INSPECTOR_VUE_DETECTED',
-  __FROM_VUE_INSPECTOR__: true,
-  detected: detectionResult.hasVue,
-  url: window.location.href,
-  hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
-  hasVue2: detectionResult.vueVersion === 2
-}, '*')
-
-// Сигнал готовности
-window.postMessage({
-  type: 'VUE_INSPECTOR_READY',
-  __FROM_VUE_INSPECTOR__: true
-}, '*')
-
-// Если Vue НЕ найден - удаляем обработчик сообщений
-// На сайтах без Vue нам не нужно слушать сообщения - экономим ресурсы
-if (!detectionResult.hasVue) {
+/**
+ * Cleanup on page unload
+ */
+function cleanup() {
   window.removeEventListener('message', handleMessage)
+  cleanupDetection?.()
+  cleanupPropsModule()
+  cleanupNetworkModule()
 }
 
-// Экспортируем для отладки
-;(window as any).__VUE_INSPECTOR_DETECTION__ = () => detectionResult
+// Register cleanup
+window.addEventListener('beforeunload', cleanup)
+window.addEventListener('pagehide', cleanup)
+
+// Initialize
+initialize()
+
+// Export for debugging
+;(window as any).__VUE_INSPECTOR_DETECTION__ = () => getDetectionState()
+;(window as any).__VUE_INSPECTOR_FORCE_DETECT__ = () => {
+  const result = detect()
+  sendDetectionResult(result)
+  return result
+}

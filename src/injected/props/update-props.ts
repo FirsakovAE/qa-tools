@@ -1,6 +1,7 @@
 // src/injected/update-props.ts
 
 import { resolveComponent } from './find-by-path'
+import { getMetaStore } from './meta-store'
 
 /**
  * Сохраняет тип данных при обновлении значения
@@ -69,6 +70,30 @@ function updateModelProp(instance: any, key: string, value: any): boolean {
 }
 
 /**
+ * Найти instance по UID через meta store
+ */
+function findInstanceByUid(uid: number): any | null {
+  const store = getMetaStore()
+  const meta = store.getByUid(uid)
+  if (!meta) return null
+  return meta.instance
+}
+
+/**
+ * Получить props объект из instance
+ */
+function getPropsFromInstance(instance: any): any | null {
+  if (!instance) return null
+  // Vue 3
+  if (instance.props) return instance.props
+  // Vue 2
+  if (instance.$props) return instance.$props
+  if (instance._props) return instance._props
+  if (instance.propsData) return instance.propsData
+  return null
+}
+
+/**
  * Обновляет пропсы компонента по указанному пути.
  * @param path - Путь к компоненту (или UID для обратной совместимости).
  * @param newProps - Новые значения пропсов.
@@ -78,14 +103,33 @@ export function updateComponentProps(
   path: string,
   newProps: Record<string, any>
 ): boolean {
-  let resolved = resolveComponent(path) ?? findComponentByUidFallback(path)
+  let instance: any = null
+  let props: any = null
 
-  if (!resolved?.instance?.props) {
+  // NEW: Try to find by UID from meta store first
+  if (path.startsWith('uid:')) {
+    const uidStr = path.substring(4)
+    const uid = parseInt(uidStr, 10)
+    if (!isNaN(uid)) {
+      instance = findInstanceByUid(uid)
+      props = getPropsFromInstance(instance)
+    }
+  }
+
+  // Fallback to old path-based lookup
+  if (!props) {
+    const resolved = resolveComponent(path) ?? findComponentByUidFallback(path)
+    if (resolved?.instance) {
+      instance = resolved.instance
+      props = getPropsFromInstance(instance)
+    }
+  }
+
+  if (!instance || !props) {
     return false
   }
 
   let success = false
-  const props = resolved.instance.props
 
   for (const key in newProps) {
     if (!(key in props)) continue
@@ -94,8 +138,8 @@ export function updateComponentProps(
       const oldValue = props[key]
 
       // Для useModel пропсов используем emit вместо прямого присваивания
-      if (isModelProp(resolved.instance, key)) {
-        if (updateModelProp(resolved.instance, key, newProps[key])) {
+      if (isModelProp(instance, key)) {
+        if (updateModelProp(instance, key, newProps[key])) {
           success = true
           continue
         }
@@ -107,6 +151,7 @@ export function updateComponentProps(
       success = true
 
     } catch (e) {
+      // Ignore errors for individual props
     }
   }
 
