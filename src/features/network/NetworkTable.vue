@@ -20,6 +20,7 @@ const props = defineProps<{
   selectedId: string | null
   breakpointEntryIds?: Set<string>
   breakpointMatchingIds?: Set<string>
+  mockMatchingIds?: Set<string>
 }>()
 
 const emit = defineEmits<{
@@ -60,6 +61,11 @@ function hasBreakpoint(entryId: string): boolean {
 function matchesBreakpointPattern(entryId: string): boolean {
   return props.breakpointMatchingIds?.has(entryId) ?? false
 }
+
+// Check if entry matches a mock pattern
+function matchesMockPattern(entryId: string): boolean {
+  return props.mockMatchingIds?.has(entryId) ?? false
+}
 </script>
 
 <template>
@@ -87,10 +93,12 @@ function matchesBreakpointPattern(entryId: string): boolean {
             :key="entry.id"
             class="cursor-pointer transition-colors group"
             :class="{
-              'bg-muted': selectedId === entry.id,
+              'bg-muted': selectedId === entry.id && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
               'opacity-60': entry.pending,
               'bg-amber-500/10 hover:bg-amber-500/20': hasBreakpoint(entry.id),
-              'border-l-2 border-l-amber-500/50': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id)
+              'border-l-2 border-l-amber-500/50': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
+              'bg-purple-500/10 hover:bg-purple-500/20': matchesMockPattern(entry.id) && selectedId === entry.id && !hasBreakpoint(entry.id),
+              'border-l-2 border-l-purple-500/50': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id)
             }"
             @click="emit('select', entry.id)"
           >

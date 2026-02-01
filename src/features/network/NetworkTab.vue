@@ -23,6 +23,7 @@ import {
   useNetworkSearch, 
   useBreakpointState,
   useMockState,
+  useNetworkUIState,
   type BreakpointDraft
 } from './composables'
 import { deepClone } from './utils'
@@ -121,17 +122,20 @@ const breakpointState = useBreakpointState(
 // Mock state
 const mockState = useMockState(
   () => activeMocks.value,
-  { sendCommand }
+  { sendCommand },
+  () => entries.value
 )
 
 // cURL copy
 const { copyCurl } = useCurlCopy()
 
+// UI State (persisted at module level)
+const { selectedEntryId } = useNetworkUIState()
+
 // ============================================================================
 // UI State
 // ============================================================================
 
-const selectedEntryId = ref<string | null>(null)
 const mockFormMode = ref(false)
 const mockFormEntry = ref<NetworkEntry | null>(null)
 const breakpointFormMode = ref(false)
@@ -507,6 +511,7 @@ function handleDraftUpdate(updates: Partial<BreakpointDraft>) {
           :selected-id="selectedEntryId"
           :breakpoint-entry-ids="breakpointState.breakpointEntryIds.value"
           :breakpoint-matching-ids="breakpointState.entriesMatchingBreakpoints.value"
+          :mock-matching-ids="mockState.entriesMatchingMocks.value"
           @select="selectEntry"
           @set-breakpoint="handleSetBreakpoint"
           @copy-curl="handleCopyCurl"

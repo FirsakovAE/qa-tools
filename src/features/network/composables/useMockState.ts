@@ -3,7 +3,10 @@
  * Manages mock (Map Local) sync to injected script
  */
 
+import { computed } from 'vue'
 import type { MockRule } from '@/types/inspector'
+import type { NetworkEntry } from '@/types/network'
+import { getMockMatchingEntryIds } from './useBreakpointMatching'
 import { deepClone } from '../utils'
 
 export interface MockStateOptions {
@@ -15,8 +18,17 @@ export interface MockStateOptions {
  */
 export function useMockState(
   activeMocks: () => MockRule[],
-  options: MockStateOptions
+  options: MockStateOptions,
+  entries?: () => NetworkEntry[]
 ) {
+  /**
+   * Entry IDs that match any active mock pattern (for highlighting)
+   */
+  const entriesMatchingMocks = computed<Set<string>>(() => {
+    if (!entries) return new Set()
+    return getMockMatchingEntryIds(entries(), activeMocks())
+  })
+
   /**
    * Sync mocks to injected script
    */
@@ -44,6 +56,7 @@ export function useMockState(
   }
 
   return {
-    syncMocks
+    syncMocks,
+    entriesMatchingMocks
   }
 }

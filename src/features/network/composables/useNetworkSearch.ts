@@ -1,6 +1,9 @@
 /**
  * Network Search Composable
  * Handles search functionality with indexed lookups for performance
+ * 
+ * NOTE: State is stored at module level to persist across tab switches
+ * (when NetworkTab is unmounted and remounted)
  */
 
 import { ref, computed, watch } from 'vue'
@@ -25,6 +28,14 @@ interface SearchIndexEntry {
   responseBodyKeys: string[]
   responseBodyValues: string[]
 }
+
+// ============================================================================
+// Module-level State (persists across component mounts)
+// ============================================================================
+
+const searchTerm = ref('')
+const searchIndex = ref<SearchIndexEntry[]>([])
+const debouncedSearchTerm = ref('')
 
 /**
  * Extract JSON keys recursively
@@ -104,9 +115,7 @@ export function useNetworkSearch(
   entries: () => NetworkEntry[],
   getSettings: () => SearchSettings
 ) {
-  const searchTerm = ref('')
-  const searchIndex = ref<SearchIndexEntry[]>([])
-  const debouncedSearchTerm = ref('')
+  // State is now module-level, no need to create new refs
   
   // Debounced search update
   const updateDebouncedSearch = useDebounceFn((term: string) => {

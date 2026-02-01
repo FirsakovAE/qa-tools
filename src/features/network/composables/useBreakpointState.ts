@@ -1,6 +1,9 @@
 /**
  * Breakpoint State Composable
  * Manages breakpoint mode, pending breakpoints, and drafts
+ * 
+ * NOTE: State is stored at module level to persist across tab switches
+ * (when NetworkTab is unmounted and remounted)
  */
 
 import { ref, computed, watch } from 'vue'
@@ -39,6 +42,16 @@ export interface BreakpointStateOptions {
 }
 
 // ============================================================================
+// Module-level State (persists across component mounts)
+// ============================================================================
+
+const breakpointMode = ref(false)
+const breakpointTrigger = ref<'request' | 'response' | undefined>(undefined)
+const breakpointEntryIds = ref<Set<string>>(new Set())
+const pendingBreakpoints = ref<Map<string, PendingBreakpoint>>(new Map())
+const breakpointDrafts = ref<Map<string, BreakpointDraft>>(new Map())
+
+// ============================================================================
 // Composable
 // ============================================================================
 
@@ -47,12 +60,7 @@ export function useBreakpointState(
   entries: () => NetworkEntry[],
   options: BreakpointStateOptions
 ) {
-  // State
-  const breakpointMode = ref(false)
-  const breakpointTrigger = ref<'request' | 'response' | undefined>(undefined)
-  const breakpointEntryIds = ref<Set<string>>(new Set())
-  const pendingBreakpoints = ref<Map<string, PendingBreakpoint>>(new Map())
-  const breakpointDrafts = ref<Map<string, BreakpointDraft>>(new Map())
+  // State is now module-level, no need to create new refs
 
   // ============================================================================
   // Computed

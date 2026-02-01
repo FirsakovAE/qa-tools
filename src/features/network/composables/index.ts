@@ -17,9 +17,13 @@ export {
   type BreakpointStateOptions 
 } from './useBreakpointState'
 export { useMockState, type MockStateOptions } from './useMockState'
+export { useNetworkUIState } from './useNetworkUIState'
 export { 
   matchesBreakpoint, 
   findMatchingBreakpoint, 
   getMatchingEntryIds,
-  matchUrlPattern 
+  matchUrlPattern,
+  matchesMock,
+  findMatchingMock,
+  getMockMatchingEntryIds
 } from './useBreakpointMatching'

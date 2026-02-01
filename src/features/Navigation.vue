@@ -415,7 +415,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
         >
           <PropsTab />
         </div>
-  
+
         <!-- ===== Stores tab (unified two-panel layout) ===== -->
         <div
           v-else-if="activeTab === 'stores'"
@@ -423,7 +423,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
         >
           <StoresTab />
         </div>
-  
+
         <!-- ===== Network tab (unified two-panel layout) ===== -->
         <div
           v-else-if="activeTab === 'network'"
@@ -434,7 +434,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
             @clear-pending-breakpoint="clearPendingBreakpoint"
           />
         </div>
-  
+
         <!-- ===== Options tab ===== -->
         <div
           v-else-if="activeTab === 'options'"
