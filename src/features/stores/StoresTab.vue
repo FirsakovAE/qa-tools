@@ -125,6 +125,11 @@ async function loadStoresSummary() {
       isLoading.value = false
       // Reset store data loaded flag - data needs to be reloaded for key/value search
       storesDataLoaded.value = false
+      
+      // If key/value search is active, reload store data immediately
+      if (needsStoreData.value) {
+        loadAllStoresData()
+      }
     } else if (response?.error) {
       error.value = response.error
       isLoading.value = false
