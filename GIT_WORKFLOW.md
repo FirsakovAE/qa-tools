@@ -46,7 +46,7 @@ git branch -D experiment/pinia-rewrite
 
 # 3. Влить ветку в мастер
 git checkout master
-git merge experiment/pinia-rewrite
+git merge features/network-breakpoints
 git push origin master
 ```
 
