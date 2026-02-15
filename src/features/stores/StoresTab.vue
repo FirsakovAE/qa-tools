@@ -5,6 +5,7 @@ import { SearchIcon, RefreshCw } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { FacetedFilter } from '@/components/ui/FacetedFilter'
 import {
   Tooltip,
   TooltipContent,
@@ -72,6 +73,28 @@ const searchSettings = computed(() => ({
   debounce: settings.value?.piniaSearch?.debounce ?? 300,
   minLength: settings.value?.piniaSearch?.minLength ?? 2
 }))
+
+// Search type options for FacetedFilter
+const piniaSearchTypeMap: Record<string, keyof typeof searchSettings.value> = {
+  'Name': 'byName',
+  'Key': 'byKey',
+  'Value': 'byValue',
+}
+const piniaSearchTypeOptions = Object.keys(piniaSearchTypeMap)
+
+const selectedSearchTypes = computed<string[]>({
+  get() {
+    if (!settings.value?.piniaSearch) return []
+    return piniaSearchTypeOptions.filter(label => settings.value!.piniaSearch[piniaSearchTypeMap[label]] as boolean)
+  },
+  set(selected: string[]) {
+    if (!settings.value?.piniaSearch) return
+    for (const label of piniaSearchTypeOptions) {
+      const key = piniaSearchTypeMap[label]
+      ;(settings.value.piniaSearch as any)[key] = selected.includes(label)
+    }
+  }
+})
 
 // ============================================================================
 // Data loading
@@ -396,12 +419,12 @@ onUnmounted(() => {
           <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
         </div>
         
-        <!-- Search type badges (always visible) -->
-        <div v-if="activeSearchTypes.length" class="flex items-center gap-1">
-          <Badge v-for="item in activeSearchTypes" :key="item" variant="secondary" class="text-xs px-1.5 py-0">
-            {{ item }}
-          </Badge>
-        </div>
+        <!-- Search type filter -->
+        <FacetedFilter
+          v-model="selectedSearchTypes"
+          title="Search by"
+          :options="piniaSearchTypeOptions"
+        />
         
         <!-- Spacer -->
         <div class="flex-1" />

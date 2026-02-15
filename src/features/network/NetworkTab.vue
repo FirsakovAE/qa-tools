@@ -4,6 +4,7 @@ import { Trash2, Pause, Play, SearchIcon } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { FacetedFilter } from '@/components/ui/FacetedFilter'
 import {
   Tooltip,
   TooltipContent,
@@ -94,6 +95,29 @@ const {
       addEntry(normalizeEntry(entry))
     }
     breakpointState.handleBreakpointHit(requestId, trigger)
+  }
+})
+
+// Search type options for FacetedFilter
+const searchTypeMap: Record<string, keyof typeof searchSettings.value> = {
+  'Name': 'byName',
+  'Label': 'byLabel',
+  'Key': 'byKey',
+  'Value': 'byValue',
+}
+const searchTypeOptions = Object.keys(searchTypeMap)
+
+const selectedSearchTypes = computed<string[]>({
+  get() {
+    if (!settings.value?.networkSearch) return []
+    return searchTypeOptions.filter(label => settings.value!.networkSearch[searchTypeMap[label]] as boolean)
+  },
+  set(selected: string[]) {
+    if (!settings.value?.networkSearch) return
+    for (const label of searchTypeOptions) {
+      const key = searchTypeMap[label]
+      ;(settings.value.networkSearch as any)[key] = selected.includes(label)
+    }
   }
 })
 
@@ -471,12 +495,12 @@ function handleDraftUpdate(updates: Partial<BreakpointDraft>) {
         <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
       </div>
       
-      <!-- Search type badges -->
-      <div v-if="activeSearchTypes.length" class="flex items-center gap-1">
-        <Badge v-for="item in activeSearchTypes" :key="item" variant="secondary" class="text-xs px-1.5 py-0">
-          {{ item }}
-        </Badge>
-      </div>
+      <!-- Search type filter -->
+      <FacetedFilter
+        v-model="selectedSearchTypes"
+        title="Search by"
+        :options="searchTypeOptions"
+      />
       
       <div class="flex-1" />
       

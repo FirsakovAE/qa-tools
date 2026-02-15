@@ -279,28 +279,28 @@ onMounted(async () => {
     <div v-else class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden">
 
       <!-- Left: Sidebar + Content -->
-      <div class="h-full min-h-0 flex overflow-hidden border rounded-lg">
+      <div class="h-full min-h-0 flex overflow-hidden gap-2">
 
         <!-- Sidebar Nav -->
-        <div class="shrink-0 w-[140px] border-r bg-muted/30 p-2 flex flex-col gap-1">
+        <div class="shrink-0 w-[240px] p-1 flex flex-col gap-1 bg-muted/40 backdrop-blur-sm rounded-lg">
           <Button
             v-for="section in sections"
             :key="section.id"
             variant="ghost"
             size="sm"
             :class="[
-              'justify-start h-8 text-xs',
+              'justify-start h-10 text-sm',
               activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
             ]"
             @click="activeSection = section.id"
           >
-            <component :is="section.icon" class="w-3.5 h-3.5 mr-2 shrink-0" />
+            <component :is="section.icon" class="w-5 h-5 mr-2 shrink-0" />
             {{ section.label }}
           </Button>
         </div>
 
         <!-- Section Content -->
-        <ScrollArea class="flex-1 min-h-0">
+        <ScrollArea class="flex-1 min-h-0 border rounded-lg">
           <div class="p-4">
             <GeneralSection
               v-if="activeSection === 'general'"
