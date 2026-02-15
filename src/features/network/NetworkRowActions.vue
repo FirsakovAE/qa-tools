@@ -12,6 +12,8 @@ import type { NetworkEntry } from '@/types/network'
 
 const props = defineProps<{
   entry: NetworkEntry
+  matchesBreakpoint?: boolean
+  matchesMock?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,7 +36,7 @@ const emit = defineEmits<{
       </Button>
     </DropdownMenuTrigger>
 
-    <DropdownMenuContent align="end" class="w-44">
+    <DropdownMenuContent align="end" class="w-48">
 
       <DropdownMenuItem @click.stop="emit('copy-curl', entry)">
         <Terminal class="h-4 w-4 mr-2" />
@@ -45,12 +47,12 @@ const emit = defineEmits<{
 
       <DropdownMenuItem @click.stop="emit('set-breakpoint', entry)">
         <PauseCircle class="h-4 w-4 mr-2" />
-        Breakpoint Request
+        {{ matchesBreakpoint ? 'Rewrite Breakpoint' : 'Breakpoint Request' }}
       </DropdownMenuItem>    
       
       <DropdownMenuItem @click.stop="emit('mock-response', entry)">
         <Shuffle class="h-4 w-4 mr-2" />
-        Mock Response
+        {{ matchesMock ? 'Rewrite Mock' : 'Mock Response' }}
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>

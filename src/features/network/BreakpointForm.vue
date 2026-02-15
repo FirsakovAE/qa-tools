@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ArrowLeft, Check, CirclePause } from 'lucide-vue-next'
+
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,12 +19,16 @@ import { parseUrl, buildUrlPreview, getStatusClass, generateId } from './utils'
 
 const props = defineProps<{
   entry: NetworkEntry
+  existingBreakpoint?: BreakpointItem
 }>()
 
 const emit = defineEmits<{
   (e: 'back'): void
   (e: 'confirm', breakpoint: BreakpointItem): void
 }>()
+
+// Whether we're editing an existing breakpoint
+const isRewrite = computed(() => !!props.existingBreakpoint)
 
 // Active section
 type SectionId = 'matching'
@@ -46,9 +51,20 @@ function fillFromEntry(entry: NetworkEntry) {
   query.value = parsed.query
 }
 
-// Watch for entry changes
-watch(() => props.entry, (entry) => {
-  if (entry) {
+// Function to fill form from existing breakpoint
+function fillFromExisting(bp: BreakpointItem) {
+  scheme.value = bp.scheme || ''
+  host.value = bp.host || ''
+  port.value = bp.port || ''
+  path.value = bp.path || ''
+  query.value = bp.query || ''
+}
+
+// Watch for entry/existingBreakpoint changes
+watch([() => props.entry, () => props.existingBreakpoint], ([entry, existing]) => {
+  if (existing) {
+    fillFromExisting(existing)
+  } else if (entry) {
     fillFromEntry(entry)
   }
 }, { immediate: true })
@@ -58,14 +74,14 @@ function handleConfirm() {
   if (!props.entry || !isValid.value) return
   
   const breakpoint: BreakpointItem = {
-    id: generateId('bp'),
+    id: props.existingBreakpoint?.id ?? generateId('bp'),
     scheme: scheme.value,
     host: host.value,
     port: port.value || undefined,
     path: path.value,
     query: query.value || undefined,
-    trigger: 'request',
-    enabled: true,
+    trigger: props.existingBreakpoint?.trigger ?? 'request',
+    enabled: props.existingBreakpoint?.enabled ?? true,
     timestamp: new Date().toISOString()
   }
   
@@ -120,7 +136,7 @@ const sections: Array<{ id: SectionId; label: string }> = [
           </div>
         </div>
         
-        <!-- Create Breakpoint button -->
+        <!-- Save Breakpoint button -->
         <Tooltip>
           <TooltipTrigger as-child>
             <Button
@@ -131,11 +147,11 @@ const sections: Array<{ id: SectionId; label: string }> = [
               @click="handleConfirm"
             >
               <Check class="h-3.5 w-3.5" />
-              Set Breakpoint
+              Save Breakpoint
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            Create breakpoint to intercept matching requests
+            {{ isRewrite ? 'Update existing breakpoint' : 'Create breakpoint to intercept matching requests' }}
           </TooltipContent>
         </Tooltip>
       </div>

@@ -145,6 +145,8 @@ function matchesMockPattern(entryId: string): boolean {
             <TableCell class="w-[28px] py-2 pr-2">
               <NetworkRowActions
                 :entry="entry"
+                :matches-breakpoint="matchesBreakpointPattern(entry.id)"
+                :matches-mock="matchesMockPattern(entry.id)"
                 @set-breakpoint="emit('setBreakpoint', entry)"
                 @copy-curl="emit('copyCurl', entry)"
                 @mock-response="emit('mockResponse', entry)"

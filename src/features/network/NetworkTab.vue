@@ -26,6 +26,7 @@ import {
   useNetworkUIState,
   type BreakpointDraft
 } from './composables'
+import { findMatchingBreakpoint, findMatchingMock } from './composables/useBreakpointMatching'
 import { deepClone } from './utils'
 
 // ============================================================================
@@ -138,8 +139,10 @@ const { selectedEntryId } = useNetworkUIState()
 
 const mockFormMode = ref(false)
 const mockFormEntry = ref<NetworkEntry | null>(null)
+const mockFormExisting = ref<MockRule | null>(null)
 const breakpointFormMode = ref(false)
 const breakpointFormEntry = ref<NetworkEntry | null>(null)
+const breakpointFormExisting = ref<BreakpointItem | null>(null)
 
 // Pending breakpoint from Navigation
 const pendingBreakpointToProcess = ref<PendingBreakpointFromNav | null>(null)
@@ -313,10 +316,12 @@ function selectEntry(id: string) {
   if (mockFormMode.value && mockFormEntry.value?.id !== id) {
     mockFormMode.value = false
     mockFormEntry.value = null
+    mockFormExisting.value = null
   }
   if (breakpointFormMode.value && breakpointFormEntry.value?.id !== id) {
     breakpointFormMode.value = false
     breakpointFormEntry.value = null
+    breakpointFormExisting.value = null
   }
   selectedEntryId.value = id
 }
@@ -335,8 +340,10 @@ function selectFirstPendingBreakpoint() {
     // Close any open forms
     mockFormMode.value = false
     mockFormEntry.value = null
+    mockFormExisting.value = null
     breakpointFormMode.value = false
     breakpointFormEntry.value = null
+    breakpointFormExisting.value = null
     // Select the first pending breakpoint
     selectedEntryId.value = pendingBreakpointIds.value[0]
   }
@@ -345,30 +352,50 @@ function selectFirstPendingBreakpoint() {
 function handleSetBreakpoint(entry: NetworkEntry) {
   selectedEntryId.value = entry.id
   breakpointFormEntry.value = entry
+  // Find matching existing breakpoint for rewrite
+  const matchingBp = findMatchingBreakpoint(entry, activeBreakpoints.value)
+  breakpointFormExisting.value = matchingBp
   breakpointFormMode.value = true
 }
 
 function handleBreakpointFormBack() {
   breakpointFormMode.value = false
   breakpointFormEntry.value = null
+  breakpointFormExisting.value = null
 }
 
 function handleBreakpointConfirm(breakpoint: BreakpointItem) {
   if (!settings.value?.breakpoints) return
-  settings.value.breakpoints.active.push(breakpoint)
+  
+  // Check if this is a rewrite (existing breakpoint with same ID)
+  const existingIndex = settings.value.breakpoints.active.findIndex(bp => bp.id === breakpoint.id)
+  if (existingIndex !== -1) {
+    // Rewrite: replace existing breakpoint
+    settings.value.breakpoints.active[existingIndex] = breakpoint
+  } else {
+    // New: add breakpoint
+    settings.value.breakpoints.active.push(breakpoint)
+  }
+  
+  breakpointState.syncBreakpoints()
   breakpointFormMode.value = false
   breakpointFormEntry.value = null
+  breakpointFormExisting.value = null
 }
 
 function handleMockResponse(entry: NetworkEntry) {
   selectedEntryId.value = entry.id
   mockFormEntry.value = entry
+  // Find matching existing mock for rewrite
+  const matchingMock = findMatchingMock(entry, activeMocks.value)
+  mockFormExisting.value = matchingMock
   mockFormMode.value = true
 }
 
 function handleMockFormBack() {
   mockFormMode.value = false
   mockFormEntry.value = null
+  mockFormExisting.value = null
 }
 
 function handleMockConfirm(mock: MockRule) {
@@ -376,10 +403,21 @@ function handleMockConfirm(mock: MockRule) {
   if (!settings.value.mocks) {
     settings.value.mocks = { active: [], inactive: [] }
   }
-  settings.value.mocks.active.push(mock)
+  
+  // Check if this is a rewrite (existing mock with same ID)
+  const existingIndex = settings.value.mocks.active.findIndex(m => m.id === mock.id)
+  if (existingIndex !== -1) {
+    // Rewrite: replace existing mock
+    settings.value.mocks.active[existingIndex] = mock
+  } else {
+    // New: add mock
+    settings.value.mocks.active.push(mock)
+  }
+  
   mockState.syncMocks()
   mockFormMode.value = false
   mockFormEntry.value = null
+  mockFormExisting.value = null
 }
 
 function handleCopyCurl(entry: NetworkEntry) {
@@ -527,6 +565,7 @@ function handleDraftUpdate(updates: Partial<BreakpointDraft>) {
         <MockForm
           v-if="mockFormMode && mockFormEntry"
           :entry="mockFormEntry"
+          :existing-mock="mockFormExisting ?? undefined"
           @back="handleMockFormBack"
           @confirm="handleMockConfirm"
         />
@@ -534,6 +573,7 @@ function handleDraftUpdate(updates: Partial<BreakpointDraft>) {
         <BreakpointForm
           v-else-if="breakpointFormMode && breakpointFormEntry"
           :entry="breakpointFormEntry"
+          :existing-breakpoint="breakpointFormExisting ?? undefined"
           @back="handleBreakpointFormBack"
           @confirm="handleBreakpointConfirm"
         />

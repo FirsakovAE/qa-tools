@@ -48,12 +48,16 @@ const HTTP_STATUS_TEXT: Record<number, string> = {
 
 const props = defineProps<{
   entry: NetworkEntry
+  existingMock?: MockRule
 }>()
 
 const emit = defineEmits<{
   (e: 'back'): void
   (e: 'confirm', mock: MockRule): void
 }>()
+
+// Whether we're editing an existing mock
+const isRewrite = computed(() => !!props.existingMock)
 
 // Active section
 type SectionId = 'matching' | 'response' | 'headers'
@@ -169,12 +173,48 @@ function fillFromEntry(entry: NetworkEntry) {
   description.value = `Mock for ${entry.method} ${entry.path}`
 }
 
-// Watch for entry changes
-watch(() => props.entry, (entry) => {
-  if (entry) {
-    fillFromEntry(entry)
-    activeSection.value = 'response'
+// Function to fill form from existing mock
+function fillFromExisting(mock: MockRule) {
+  scheme.value = mock.scheme || ''
+  host.value = mock.host || ''
+  port.value = mock.port || ''
+  path.value = mock.path || ''
+  query.value = mock.query || ''
+  method.value = mock.method || ''
+  
+  // Response status
+  status.value = mock.status || 200
+  const expectedText = HTTP_STATUS_TEXT[mock.status || 200]
+  if (mock.statusText && mock.statusText !== expectedText) {
+    statusText.value = mock.statusText
+    statusTextManuallyEdited.value = true
+  } else {
+    statusText.value = ''
+    statusTextManuallyEdited.value = false
   }
+  
+  // Response body
+  if (mock.body !== undefined) {
+    responseBody.value = formatJson(mock.body)
+  } else {
+    responseBody.value = ''
+  }
+  
+  // Response headers
+  responseHeaders.value = (mock.headers || []).map(h => ({ name: h.name, value: h.value }))
+  
+  delay.value = mock.delay || 0
+  description.value = mock.description || ''
+}
+
+// Watch for entry/existingMock changes
+watch([() => props.entry, () => props.existingMock], ([entry, existing]) => {
+  if (existing) {
+    fillFromExisting(existing)
+  } else if (entry) {
+    fillFromEntry(entry)
+  }
+  activeSection.value = 'response'
 }, { immediate: true })
 
 // Add/remove header
@@ -208,8 +248,8 @@ function handleConfirm() {
   })
   
   const mock: MockRule = {
-    id: generateId('mock'),
-    enabled: true,
+    id: props.existingMock?.id ?? generateId('mock'),
+    enabled: props.existingMock?.enabled ?? true,
     scheme: scheme.value || undefined,
     host: host.value || undefined,
     port: port.value || undefined,
@@ -279,7 +319,7 @@ const sections: Array<{ id: SectionId; label: string }> = [
           </div>
         </div>
         
-        <!-- Create Mock button -->
+        <!-- Save Mock button -->
         <Tooltip>
           <TooltipTrigger as-child>
             <Button
@@ -290,11 +330,11 @@ const sections: Array<{ id: SectionId; label: string }> = [
               @click="handleConfirm"
             >
               <Check class="h-3.5 w-3.5" />
-              Create Mock
+              Save Mock
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            Create mock rule to intercept matching requests
+            {{ isRewrite ? 'Update existing mock rule' : 'Create mock rule to intercept matching requests' }}
           </TooltipContent>
         </Tooltip>
       </div>
