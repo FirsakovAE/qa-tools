@@ -97,21 +97,31 @@ export interface SearchIndexEntry {
     valueStr: string
 }
 
+/** Per-module search settings */
+export interface SearchSettings {
+    byName: boolean
+    byLabel: boolean
+    byRootElement: boolean
+    byKey: boolean
+    byValue: boolean
+    debounce?: number
+    minLength?: number
+}
+
 export interface BaseInspectorSettings {
     blacklist: { active: string[]; inactive: string[] }
     favorites: FavoriteItem[]
     breakpoints: { active: BreakpointItem[]; inactive: BreakpointItem[] }
     /** Mock rules for Map Local feature - intercept requests and return fake responses */
     mocks: { active: MockRule[]; inactive: MockRule[] }
-    search: {
-        byName: boolean
-        byLabel: boolean
-        byRootElement: boolean
-        byKey: boolean
-        byValue: boolean
-        debounce?: number
-        minLength?: number
-    }
+    /** @deprecated Kept for migration from older versions. Use networkSearch/propsSearch/piniaSearch instead. */
+    search?: SearchSettings
+    /** Network tab search settings */
+    networkSearch: SearchSettings
+    /** Props tab search settings */
+    propsSearch: SearchSettings
+    /** Pinia Store tab search settings */
+    piniaSearch: SearchSettings
     json: {
         mode: 'text' | 'tree'
     }

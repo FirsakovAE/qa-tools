@@ -45,6 +45,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'clearPendingBreakpoint'): void
+  (e: 'navigateToOptions', anchor: string): void
 }>()
 
 // ============================================================================
@@ -54,12 +55,12 @@ const emit = defineEmits<{
 const settings = ref<BaseInspectorSettings | null>(null)
 
 const searchSettings = computed(() => ({
-  byName: settings.value?.search?.byName ?? true,
-  byLabel: settings.value?.search?.byLabel ?? false,
-  byKey: settings.value?.search?.byKey ?? false,
-  byValue: settings.value?.search?.byValue ?? false,
-  debounce: settings.value?.search?.debounce ?? 300,
-  minLength: settings.value?.search?.minLength ?? 2
+  byName: settings.value?.networkSearch?.byName ?? true,
+  byLabel: settings.value?.networkSearch?.byLabel ?? false,
+  byKey: settings.value?.networkSearch?.byKey ?? false,
+  byValue: settings.value?.networkSearch?.byValue ?? false,
+  debounce: settings.value?.networkSearch?.debounce ?? 300,
+  minLength: settings.value?.networkSearch?.minLength ?? 2
 }))
 
 const activeBreakpoints = computed<BreakpointItem[]>(() => 
@@ -494,6 +495,22 @@ function handleDraftUpdate(updates: Partial<BreakpointDraft>) {
           @click="selectFirstPendingBreakpoint"
         >
           {{ pendingBreakpointIds.length }} breakpoint{{ pendingBreakpointIds.length > 1 ? 's' : '' }}
+        </Badge>
+        <Badge 
+          v-if="activeBreakpoints.length > 0" 
+          variant="outline" 
+          class="text-amber-500 border-amber-500/30 cursor-pointer hover:bg-amber-500/10 transition-colors"
+          @click="emit('navigateToOptions', 'breakpoints-section')"
+        >
+          {{ activeBreakpoints.length }} bp
+        </Badge>
+        <Badge 
+          v-if="activeMocks.length > 0" 
+          variant="outline" 
+          class="text-purple-500 border-purple-500/30 cursor-pointer hover:bg-purple-500/10 transition-colors"
+          @click="emit('navigateToOptions', 'mocks-section')"
+        >
+          {{ activeMocks.length }} mock{{ activeMocks.length > 1 ? 's' : '' }}
         </Badge>
         <Badge v-if="paused" variant="outline" class="text-orange-500 border-orange-500/30">
           Paused

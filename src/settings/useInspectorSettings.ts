@@ -63,8 +63,30 @@ async function loadFromStorage(): Promise<void> {
     })
 }
 
+// Миграция: из единого search в per-module search settings
+function migrateSearchSettings(saved: any): void {
+    if (saved.search && typeof saved.search === 'object') {
+        const oldSearch = saved.search
+        // Копируем старые search настройки в каждый модуль, если модуль ещё не существует
+        if (!saved.networkSearch) {
+            saved.networkSearch = { ...oldSearch }
+        }
+        if (!saved.propsSearch) {
+            saved.propsSearch = { ...oldSearch }
+        }
+        if (!saved.piniaSearch) {
+            saved.piniaSearch = { ...oldSearch }
+        }
+        // Удаляем deprecated поле
+        delete saved.search
+    }
+}
+
 // Мердж настроек
 function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSettings>) {
+    // Применяем миграции перед мерджем
+    migrateSearchSettings(saved)
+
     const result = structuredClone(defaults)
 
     function mergeDeep(target: any, source: any) {

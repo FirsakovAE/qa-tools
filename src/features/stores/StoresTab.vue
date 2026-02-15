@@ -66,11 +66,11 @@ onMounted(async () => {
 
 // Search settings from inspector settings
 const searchSettings = computed(() => ({
-  byName: settings.value?.search?.byName ?? true,
-  byKey: settings.value?.search?.byKey ?? false,
-  byValue: settings.value?.search?.byValue ?? false,
-  debounce: settings.value?.search?.debounce ?? 300,
-  minLength: settings.value?.search?.minLength ?? 2
+  byName: settings.value?.piniaSearch?.byName ?? true,
+  byKey: settings.value?.piniaSearch?.byKey ?? false,
+  byValue: settings.value?.piniaSearch?.byValue ?? false,
+  debounce: settings.value?.piniaSearch?.debounce ?? 300,
+  minLength: settings.value?.piniaSearch?.minLength ?? 2
 }))
 
 // ============================================================================

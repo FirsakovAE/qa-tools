@@ -333,6 +333,18 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     entry?: any // Raw entry data from injected script
   }
   const pendingBreakpoint = ref<PendingBreakpointInfo | null>(null)
+
+  // Scroll anchor for Options tab (from Network badge clicks)
+  const optionsScrollAnchor = ref<string | null>(null)
+
+  function handleNavigateToOptions(anchor: string) {
+    optionsScrollAnchor.value = anchor
+    activeTab.value = 'options'
+  }
+
+  function clearScrollAnchor() {
+    optionsScrollAnchor.value = null
+  }
   
   /* ============================================================================
    * Tabs watcher
@@ -432,6 +444,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           <NetworkTab 
             :pending-breakpoint="pendingBreakpoint"
             @clear-pending-breakpoint="clearPendingBreakpoint"
+            @navigate-to-options="handleNavigateToOptions"
           />
         </div>
 
@@ -440,7 +453,10 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           v-else-if="activeTab === 'options'"
           class="h-full overflow-hidden p-2"
         >
-          <OptionsTab />
+          <OptionsTab 
+            :scroll-to-anchor="optionsScrollAnchor"
+            @clear-scroll-anchor="clearScrollAnchor"
+          />
         </div>
       </main>
     </div>

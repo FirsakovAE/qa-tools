@@ -57,13 +57,13 @@ const favorites = computed(() => {
 
 // Search settings from inspector settings
 const searchSettings = computed(() => ({
-  byName: settings.value?.search?.byName ?? true,
-  byLabel: settings.value?.search?.byLabel ?? false,
-  byRootElement: settings.value?.search?.byRootElement ?? false,
-  byKey: settings.value?.search?.byKey ?? false,
-  byValue: settings.value?.search?.byValue ?? false,
-  debounce: settings.value?.search?.debounce ?? 300,
-  minLength: settings.value?.search?.minLength ?? 2
+  byName: settings.value?.propsSearch?.byName ?? true,
+  byLabel: settings.value?.propsSearch?.byLabel ?? false,
+  byRootElement: settings.value?.propsSearch?.byRootElement ?? false,
+  byKey: settings.value?.propsSearch?.byKey ?? false,
+  byValue: settings.value?.propsSearch?.byValue ?? false,
+  debounce: settings.value?.propsSearch?.debounce ?? 300,
+  minLength: settings.value?.propsSearch?.minLength ?? 2
 }))
 
 // ============================================================================

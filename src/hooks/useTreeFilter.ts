@@ -41,7 +41,7 @@ export function useTreeFilter(treeData: TreeNodeModel[]) {
             if (propsOnly.value && (!node.props || Object.keys(node.props).length === 0)) return null
 
             if (q) {
-                const s = settings.value!.search
+                const s = settings.value!.propsSearch
                 let matched = false
                 if (s.byName) matched ||= node.name.toLowerCase().includes(q)
                 if (s.byLabel && node.label) matched ||= node.label.toLowerCase().includes(q)

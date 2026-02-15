@@ -152,8 +152,8 @@ export function useComponentsTab(
         editedProps.value = {}
     }
 
-    const debounceDelay = computed(() => settingsRef.value?.search?.debounce ?? 300)
-    const minLength = computed(() => settingsRef.value?.search?.minLength ?? 2)
+    const debounceDelay = computed(() => settingsRef.value?.propsSearch?.debounce ?? 300)
+    const minLength = computed(() => settingsRef.value?.propsSearch?.minLength ?? 2)
 
     // Создаем ref для текущей debounced функции
     const debouncedApply = ref<any>(null)
@@ -253,7 +253,7 @@ export function useComponentsTab(
 
     const filteredTree = computed((): TreeNodeModel[] => {
         const q = debouncedTerm.value.trim().toLowerCase()
-        const searchSettings = settingsRef.value?.search
+        const searchSettings = settingsRef.value?.propsSearch
 
         const filterRecursive = (nodes: TreeNodeModel[]): TreeNodeModel[] => {
             return nodes
