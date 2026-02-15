@@ -40,9 +40,6 @@ async function loadFromStorage(): Promise<void> {
                 const savedSettings = response
 
                 if (savedSettings && typeof savedSettings === 'object') {
-                    if (savedSettings.version !== defaultInspectorSettings.version) {
-                    }
-
                     const mergedSettings = mergeSettings(defaultInspectorSettings, savedSettings)
                     Object.assign(state, mergedSettings)
 
@@ -80,6 +77,49 @@ function migrateSearchSettings(saved: any): void {
         // Удаляем deprecated поле
         delete saved.search
     }
+
+    // Миграция: debounce/minLength из per-module в глобальный searchParams
+    if (!saved.searchParams) {
+        const source = saved.networkSearch ?? saved.propsSearch ?? saved.piniaSearch
+        if (source && (source.debounce !== undefined || source.minLength !== undefined)) {
+            saved.searchParams = {
+                debounce: source.debounce ?? 300,
+                minLength: source.minLength ?? 2,
+            }
+        }
+    }
+    // Удаляем устаревшие поля из per-module settings
+    for (const key of ['networkSearch', 'propsSearch', 'piniaSearch']) {
+        if (saved[key]) {
+            delete saved[key].debounce
+            delete saved[key].minLength
+        }
+    }
+
+    // Миграция: удаляем byLabel/byRootElement из piniaSearch
+    if (saved.piniaSearch) {
+        delete saved.piniaSearch.byLabel
+        delete saved.piniaSearch.byRootElement
+    }
+
+    // Миграция: networkSearch — byLabel -> byMethod, byName -> byPath, добавляем byStatus, удаляем byRootElement
+    if (saved.networkSearch) {
+        if (saved.networkSearch.byLabel !== undefined && saved.networkSearch.byMethod === undefined) {
+            saved.networkSearch.byMethod = saved.networkSearch.byLabel
+        }
+        if (saved.networkSearch.byName !== undefined && saved.networkSearch.byPath === undefined) {
+            saved.networkSearch.byPath = saved.networkSearch.byName
+        }
+        delete saved.networkSearch.byLabel
+        delete saved.networkSearch.byName
+        delete saved.networkSearch.byRootElement
+        if (saved.networkSearch.byStatus === undefined) {
+            saved.networkSearch.byStatus = false
+        }
+    }
+
+    // Миграция: удаляем version из настроек
+    delete saved.version
 }
 
 // Мердж настроек

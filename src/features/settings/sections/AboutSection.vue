@@ -1,11 +1,25 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import { Button } from '@/components/ui/button'
 import { ExternalLink, Github } from 'lucide-vue-next'
+import { useRuntime } from '@/runtime'
 
 defineProps<{
   settings: InspectorSettings
 }>()
+
+const runtime = useRuntime()
+
+const appVersion = computed(() => {
+  const manifest = runtime.getManifest()
+  const version = manifest?.version
+  if (!version || version === '1.0.0') {
+    // Standalone mode returns mock manifest with version '1.0.0'
+    return runtime.capabilities.mode === 'standalone' ? 'standalone_latest' : 'unknown'
+  }
+  return version
+})
 </script>
 
 <template>
@@ -18,7 +32,7 @@ defineProps<{
           components, props, Pinia stores, and network requests.
         </p>
         <p>
-          Version: <span class="font-mono">{{ settings.version || 'unknown' }}</span>
+          Version: <span class="font-mono">{{ appVersion }}</span>
         </p>
       </div>
     </div>

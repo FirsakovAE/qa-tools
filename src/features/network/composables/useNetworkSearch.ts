@@ -11,8 +11,9 @@ import { useDebounceFn } from '@vueuse/core'
 import type { NetworkEntry } from '@/types/network'
 
 export interface SearchSettings {
-  byName: boolean
-  byLabel: boolean // Method
+  byPath: boolean
+  byMethod: boolean
+  byStatus: boolean
   byKey: boolean
   byValue: boolean
   debounce: number
@@ -23,6 +24,7 @@ interface SearchIndexEntry {
   entryId: string
   name: string
   method: string
+  status: string
   requestBodyKeys: string[]
   requestBodyValues: string[]
   responseBodyKeys: string[]
@@ -101,6 +103,7 @@ function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
     entryId: entry.id,
     name: entry.path.toLowerCase(),
     method: entry.method.toLowerCase(),
+    status: String(entry.status),
     requestBodyKeys,
     requestBodyValues,
     responseBodyKeys,
@@ -159,11 +162,15 @@ export function useNetworkSearch(
     for (const idx of searchIndex.value) {
       let matched = false
       
-      if (settings.byName && idx.name.includes(q)) {
+      if (settings.byPath && idx.name.includes(q)) {
         matched = true
       }
       
-      if (!matched && settings.byLabel && idx.method.includes(q)) {
+      if (!matched && settings.byMethod && idx.method.includes(q)) {
+        matched = true
+      }
+
+      if (!matched && settings.byStatus && idx.status.includes(q)) {
         matched = true
       }
       
@@ -193,8 +200,9 @@ export function useNetworkSearch(
   const activeSearchTypes = computed(() => {
     const settings = getSettings()
     const types: string[] = []
-    if (settings.byName) types.push('Name')
-    if (settings.byLabel) types.push('Method')
+    if (settings.byPath) types.push('Path')
+    if (settings.byMethod) types.push('Method')
+    if (settings.byStatus) types.push('Status')
     if (settings.byKey) types.push('Key')
     if (settings.byValue) types.push('Value')
     return types

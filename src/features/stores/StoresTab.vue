@@ -70,12 +70,13 @@ const searchSettings = computed(() => ({
   byName: settings.value?.piniaSearch?.byName ?? true,
   byKey: settings.value?.piniaSearch?.byKey ?? false,
   byValue: settings.value?.piniaSearch?.byValue ?? false,
-  debounce: settings.value?.piniaSearch?.debounce ?? 300,
-  minLength: settings.value?.piniaSearch?.minLength ?? 2
+  debounce: settings.value?.searchParams?.debounce ?? 300,
+  minLength: settings.value?.searchParams?.minLength ?? 2
 }))
 
 // Search type options for FacetedFilter
-const piniaSearchTypeMap: Record<string, keyof typeof searchSettings.value> = {
+type PiniaSearchKey = 'byName' | 'byKey' | 'byValue'
+const piniaSearchTypeMap: Record<string, PiniaSearchKey> = {
   'Name': 'byName',
   'Key': 'byKey',
   'Value': 'byValue',

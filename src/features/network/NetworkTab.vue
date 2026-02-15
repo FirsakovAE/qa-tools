@@ -56,12 +56,13 @@ const emit = defineEmits<{
 const settings = ref<BaseInspectorSettings | null>(null)
 
 const searchSettings = computed(() => ({
-  byName: settings.value?.networkSearch?.byName ?? true,
-  byLabel: settings.value?.networkSearch?.byLabel ?? false,
+  byPath: settings.value?.networkSearch?.byPath ?? true,
+  byMethod: settings.value?.networkSearch?.byMethod ?? true,
+  byStatus: settings.value?.networkSearch?.byStatus ?? false,
   byKey: settings.value?.networkSearch?.byKey ?? false,
   byValue: settings.value?.networkSearch?.byValue ?? false,
-  debounce: settings.value?.networkSearch?.debounce ?? 300,
-  minLength: settings.value?.networkSearch?.minLength ?? 2
+  debounce: settings.value?.searchParams?.debounce ?? 300,
+  minLength: settings.value?.searchParams?.minLength ?? 2
 }))
 
 const activeBreakpoints = computed<BreakpointItem[]>(() => 
@@ -99,9 +100,11 @@ const {
 })
 
 // Search type options for FacetedFilter
-const searchTypeMap: Record<string, keyof typeof searchSettings.value> = {
-  'Name': 'byName',
-  'Label': 'byLabel',
+type NetworkSearchKey = 'byPath' | 'byMethod' | 'byStatus' | 'byKey' | 'byValue'
+const searchTypeMap: Record<string, NetworkSearchKey> = {
+  'Path': 'byPath',
+  'Method': 'byMethod',
+  'Status code': 'byStatus',
   'Key': 'byKey',
   'Value': 'byValue',
 }

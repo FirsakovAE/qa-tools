@@ -97,15 +97,35 @@ export interface SearchIndexEntry {
     valueStr: string
 }
 
-/** Per-module search settings */
-export interface SearchSettings {
+/** Network tab search settings */
+export interface NetworkSearchSettings {
+    byPath: boolean
+    byMethod: boolean
+    byStatus: boolean
+    byKey: boolean
+    byValue: boolean
+}
+
+/** Props tab search settings */
+export interface PropsSearchSettings {
     byName: boolean
     byLabel: boolean
     byRootElement: boolean
     byKey: boolean
     byValue: boolean
-    debounce?: number
-    minLength?: number
+}
+
+/** Pinia-specific search settings (no byLabel/byRootElement — not applicable to stores) */
+export interface PiniaSearchSettings {
+    byName: boolean
+    byKey: boolean
+    byValue: boolean
+}
+
+/** Global search parameters shared across all modules */
+export interface GlobalSearchSettings {
+    debounce: number
+    minLength: number
 }
 
 export interface BaseInspectorSettings {
@@ -114,18 +134,19 @@ export interface BaseInspectorSettings {
     breakpoints: { active: BreakpointItem[]; inactive: BreakpointItem[] }
     /** Mock rules for Map Local feature - intercept requests and return fake responses */
     mocks: { active: MockRule[]; inactive: MockRule[] }
-    /** @deprecated Kept for migration from older versions. Use networkSearch/propsSearch/piniaSearch instead. */
-    search?: SearchSettings
+    /** @deprecated Kept for migration from older versions */
+    search?: any
     /** Network tab search settings */
-    networkSearch: SearchSettings
+    networkSearch: NetworkSearchSettings
     /** Props tab search settings */
-    propsSearch: SearchSettings
+    propsSearch: PropsSearchSettings
     /** Pinia Store tab search settings */
-    piniaSearch: SearchSettings
+    piniaSearch: PiniaSearchSettings
+    /** Global search parameters (debounce, minLength) shared across all modules */
+    searchParams: GlobalSearchSettings
     json: {
         mode: 'text' | 'tree'
     }
     updates?: { refreshIntervalMs?: number; autoRefresh?: boolean; autoRefreshInterval?: number }
     data?: { maxComponents?: number; preserveState?: boolean }
-    version?: string
 }

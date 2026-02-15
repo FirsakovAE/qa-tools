@@ -57,7 +57,7 @@ class SettingsStorage {
       const record: SettingsRecord = {
         id: 'user-settings',
         settings: settings,
-        version: settings.version || '1.0.0',
+        version: chrome.runtime.getManifest?.()?.version || '1.0.0',
         timestamp: Date.now()
       }
 
@@ -125,7 +125,7 @@ async function syncSettingsToChromeStorage(settings: any) {
   try {
     await chrome.storage.local.set({
       'vue-inspector-settings': settings,
-      'vue-inspector-settings-version': settings.version || '1.0.0'
+      'vue-inspector-settings-version': chrome.runtime.getManifest?.()?.version || '1.0.0'
     })
   } catch (error) {
   }

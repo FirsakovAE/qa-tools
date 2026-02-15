@@ -7,12 +7,10 @@ const props = defineProps<{
   settings: InspectorSettings
 }>()
 
-type SearchKey = 'byName' | 'byLabel' | 'byRootElement' | 'byKey' | 'byValue'
+type SearchKey = 'byName' | 'byKey' | 'byValue'
 
 const searchItems: Array<{ key: SearchKey; label: string }> = [
-  { key: 'byName', label: 'Search by component name' },
-  { key: 'byLabel', label: 'Search by component label' },
-  { key: 'byRootElement', label: 'Search by root element' },
+  { key: 'byName', label: 'Search by store name' },
   { key: 'byKey', label: 'Search by key' },
   { key: 'byValue', label: 'Search by value' },
 ]

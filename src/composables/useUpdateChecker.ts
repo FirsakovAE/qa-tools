@@ -163,6 +163,11 @@ export function useUpdateChecker() {
   const checkForUpdates = async (force = false) => {
     if (isChecking.value) return
 
+    // Disable update check for standalone mode (no real manifest version)
+    if (runtime.capabilities.mode === 'standalone') {
+      return
+    }
+
     // Проверяем, нужно ли выполнять проверку (если не force)
     if (!force) {
       const shouldCheck = await shouldCheckForUpdates()

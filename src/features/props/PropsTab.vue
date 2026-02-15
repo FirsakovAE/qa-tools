@@ -63,12 +63,13 @@ const searchSettings = computed(() => ({
   byRootElement: settings.value?.propsSearch?.byRootElement ?? false,
   byKey: settings.value?.propsSearch?.byKey ?? false,
   byValue: settings.value?.propsSearch?.byValue ?? false,
-  debounce: settings.value?.propsSearch?.debounce ?? 300,
-  minLength: settings.value?.propsSearch?.minLength ?? 2
+  debounce: settings.value?.searchParams?.debounce ?? 300,
+  minLength: settings.value?.searchParams?.minLength ?? 2
 }))
 
 // Search type options for FacetedFilter
-const propsSearchTypeMap: Record<string, keyof typeof searchSettings.value> = {
+type PropsSearchKey = 'byName' | 'byLabel' | 'byRootElement' | 'byKey' | 'byValue'
+const propsSearchTypeMap: Record<string, PropsSearchKey> = {
   'Name': 'byName',
   'Label': 'byLabel',
   'Root': 'byRootElement',

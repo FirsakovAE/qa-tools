@@ -22,20 +22,16 @@ const props = defineProps<{
   settings: InspectorSettings
 }>()
 
-// Debounce and MinLength — sync across all modules
-const debounceValue = ref(props.settings.networkSearch.debounce ?? 300)
-const minLengthValue = ref(props.settings.networkSearch.minLength ?? 2)
+// Debounce and MinLength — global search params
+const debounceValue = ref(props.settings.searchParams.debounce ?? 300)
+const minLengthValue = ref(props.settings.searchParams.minLength ?? 2)
 
 watch(debounceValue, (val) => {
-  props.settings.networkSearch.debounce = val
-  props.settings.propsSearch.debounce = val
-  props.settings.piniaSearch.debounce = val
+  props.settings.searchParams.debounce = val
 })
 
 watch(minLengthValue, (val) => {
-  props.settings.networkSearch.minLength = val
-  props.settings.propsSearch.minLength = val
-  props.settings.piniaSearch.minLength = val
+  props.settings.searchParams.minLength = val
 })
 
 // JSON mode
@@ -56,17 +52,6 @@ const refreshIntervals = [
 
 <template>
   <div class="space-y-6">
-    <!-- UPDATE APPLICATION -->
-    <div class="space-y-2">
-      <h4 class="text-sm font-semibold">Update Application</h4>
-      <p class="text-xs text-muted-foreground">
-        Check for new versions of the inspector.
-      </p>
-      <div class="text-sm text-muted-foreground">
-        Current version: <span class="font-mono">{{ settings.version || 'unknown' }}</span>
-      </div>
-    </div>
-
     <!-- SEARCH DEBOUNCE & MIN LENGTH -->
     <div class="space-y-4 border-t pt-4">
       <h4 class="text-sm font-semibold">Search Parameters</h4>
