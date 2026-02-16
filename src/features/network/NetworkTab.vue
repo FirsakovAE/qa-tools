@@ -27,7 +27,12 @@ import {
   useNetworkUIState,
   type BreakpointDraft
 } from './composables'
-import { findMatchingBreakpoint, findMatchingMock } from './composables/useBreakpointMatching'
+import {
+  findMatchingBreakpoint,
+  findMatchingMock,
+  matchesBreakpoint as matchesBreakpointFn,
+  matchesMock as matchesMockFn
+} from './composables/useBreakpointMatching'
 import { deepClone } from './utils'
 
 // ============================================================================
@@ -72,6 +77,16 @@ const activeBreakpoints = computed<BreakpointItem[]>(() =>
 const activeMocks = computed<MockRule[]>(() => 
   settings.value?.mocks?.active ?? []
 )
+
+const allBreakpointsWithStatus = computed(() => [
+  ...(settings.value?.breakpoints?.active ?? []).map(bp => ({ ...bp, isActive: true })),
+  ...(settings.value?.breakpoints?.inactive ?? []).map(bp => ({ ...bp, isActive: false })),
+])
+
+const allMocksWithStatus = computed(() => [
+  ...(settings.value?.mocks?.active ?? []).map(m => ({ ...m, isActive: true })),
+  ...(settings.value?.mocks?.inactive ?? []).map(m => ({ ...m, isActive: false })),
+])
 
 // ============================================================================
 // Composables
@@ -452,6 +467,72 @@ function handleCopyCurl(entry: NetworkEntry) {
   copyCurl(entry)
 }
 
+function handleToggleBreakpoint(entry: NetworkEntry) {
+  if (!settings.value?.breakpoints) return
+  const bps = settings.value.breakpoints
+  
+  // Look in active first
+  const activeIdx = bps.active.findIndex(bp => {
+    const test = { ...bp, enabled: true }
+    return matchesBreakpointFn(entry, test)
+  })
+  if (activeIdx !== -1) {
+    const [bp] = bps.active.splice(activeIdx, 1)
+    bps.inactive.push(bp)
+    breakpointState.syncBreakpoints()
+    return
+  }
+  
+  // Then in inactive
+  const inactiveIdx = bps.inactive.findIndex(bp => {
+    const test = { ...bp, enabled: true }
+    return matchesBreakpointFn(entry, test)
+  })
+  if (inactiveIdx !== -1) {
+    const [bp] = bps.inactive.splice(inactiveIdx, 1)
+    bps.active.push(bp)
+    breakpointState.syncBreakpoints()
+  }
+}
+
+function handleDeleteBreakpoint(entry: NetworkEntry) {
+  if (!settings.value?.breakpoints) return
+  const bps = settings.value.breakpoints
+  bps.active = bps.active.filter(bp => !matchesBreakpointFn(entry, { ...bp, enabled: true }))
+  bps.inactive = bps.inactive.filter(bp => !matchesBreakpointFn(entry, { ...bp, enabled: true }))
+  breakpointState.syncBreakpoints()
+}
+
+function handleToggleMock(entry: NetworkEntry) {
+  if (!settings.value?.mocks) return
+  const mocks = settings.value.mocks
+  
+  // Look in active first
+  const activeIdx = mocks.active.findIndex(m => matchesMockFn(entry, { ...m, enabled: true }))
+  if (activeIdx !== -1) {
+    const [mock] = mocks.active.splice(activeIdx, 1)
+    mocks.inactive.push(mock)
+    mockState.syncMocks()
+    return
+  }
+  
+  // Then in inactive
+  const inactiveIdx = mocks.inactive.findIndex(m => matchesMockFn(entry, { ...m, enabled: true }))
+  if (inactiveIdx !== -1) {
+    const [mock] = mocks.inactive.splice(inactiveIdx, 1)
+    mocks.active.push(mock)
+    mockState.syncMocks()
+  }
+}
+
+function handleDeleteMock(entry: NetworkEntry) {
+  if (!settings.value?.mocks) return
+  const mocks = settings.value.mocks
+  mocks.active = mocks.active.filter(m => !matchesMockFn(entry, { ...m, enabled: true }))
+  mocks.inactive = mocks.inactive.filter(m => !matchesMockFn(entry, { ...m, enabled: true }))
+  mockState.syncMocks()
+}
+
 function handleApplyBreakpoint(data: BreakpointEditData) {
   breakpointState.applyBreakpoint(data.entryId)
   // After applying, switch to next pending breakpoint or deselect
@@ -594,10 +675,16 @@ function handleDraftUpdate(updates: Partial<BreakpointDraft>) {
           :breakpoint-entry-ids="breakpointState.breakpointEntryIds.value"
           :breakpoint-matching-ids="breakpointState.entriesMatchingBreakpoints.value"
           :mock-matching-ids="mockState.entriesMatchingMocks.value"
+          :all-breakpoints="allBreakpointsWithStatus"
+          :all-mocks="allMocksWithStatus"
           @select="selectEntry"
           @set-breakpoint="handleSetBreakpoint"
           @copy-curl="handleCopyCurl"
           @mock-response="handleMockResponse"
+          @toggle-breakpoint="handleToggleBreakpoint"
+          @delete-breakpoint="handleDeleteBreakpoint"
+          @toggle-mock="handleToggleMock"
+          @delete-mock="handleDeleteMock"
         />
       </div>
       

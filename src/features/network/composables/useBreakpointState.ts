@@ -243,6 +243,7 @@ export function useBreakpointState(
       port: bp.port,
       path: bp.path,
       query: bp.query,
+      method: bp.method,
       trigger: bp.trigger,
       enabled: bp.enabled
     }))

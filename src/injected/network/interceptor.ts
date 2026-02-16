@@ -540,7 +540,7 @@ function interceptFetch(): void {
     let effectiveInit: RequestInit | undefined = init
         
     if (callbacks?.onBreakpointCheck) {
-      const match = callbacks.onBreakpointCheck(url, 'request')
+      const match = callbacks.onBreakpointCheck(url, 'request', method.toUpperCase())
       
       if (match) {
         // ACTUALLY PAUSE HERE - request has NOT been sent yet!
@@ -613,7 +613,7 @@ function interceptFetch(): void {
       let finalResponse = response
 
       if (callbacks?.onBreakpointCheck) {
-        const match = callbacks.onBreakpointCheck(url, 'response')
+        const match = callbacks.onBreakpointCheck(url, 'response', method.toUpperCase())
 
         if (match) {
           
@@ -1107,7 +1107,7 @@ function interceptXHR(): void {
     // ========================================
     
     if (callbacks?.onBreakpointCheck) {
-      const match = callbacks.onBreakpointCheck(data.url, 'request')
+      const match = callbacks.onBreakpointCheck(data.url, 'request', data.method)
       
       if (match) {
         
@@ -1280,7 +1280,7 @@ function interceptXHR(): void {
       // ========================================
 
       if (callbacks?.onBreakpointCheck) {
-        const match = callbacks.onBreakpointCheck(data.url, 'response')
+        const match = callbacks.onBreakpointCheck(data.url, 'response', data.method)
 
         if (match) {
           

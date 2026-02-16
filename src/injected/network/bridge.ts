@@ -205,10 +205,11 @@ function matchUrl(url: string, pattern: { scheme?: string; host?: string; port?:
 // Breakpoint Logic
 // ============================================================================
 
-function checkBreakpoint(url: string, trigger: 'request' | 'response'): BreakpointMatch | null {
+function checkBreakpoint(url: string, trigger: 'request' | 'response', method?: string): BreakpointMatch | null {
   for (const bp of activeBreakpoints) {
     if (!bp.enabled) continue
     if (bp.trigger !== 'both' && bp.trigger !== trigger) continue
+    if (bp.method && method && bp.method.toUpperCase() !== method.toUpperCase()) continue
     if (matchUrl(url, bp)) {
       return { breakpointId: bp.id, trigger }
     }

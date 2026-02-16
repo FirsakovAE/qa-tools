@@ -30,6 +30,10 @@ import PropsSection from './sections/PropsSection.vue'
 import PiniaSection from './sections/PiniaSection.vue'
 import AboutSection from './sections/AboutSection.vue'
 import SettingsDetails from './SettingsDetails.vue'
+import BreakpointForm from '@/features/network/BreakpointForm.vue'
+import MockForm from '@/features/network/MockForm.vue'
+import type { BreakpointItem, MockRule } from '@/types/inspector'
+import type { NetworkEntry } from '@/types/network'
 
 import type { GitHubRelease, ReleaseDisplayInfo } from '@/services/githubReleaseService'
 import { compareVersions } from '@/services/githubReleaseService'
@@ -79,6 +83,128 @@ watch(activeSection, () => {
 
 function onSelectItem(item: { type: SelectedItemType; id: string }) {
   selectedItem.value = item
+}
+
+// -------------------- EDIT MODE --------------------
+const editMode = ref<'breakpoint' | 'mock' | null>(null)
+const editEntry = ref<NetworkEntry | null>(null)
+const editExistingBreakpoint = ref<BreakpointItem | null>(null)
+const editExistingMock = ref<MockRule | null>(null)
+
+function buildEntryFromBreakpoint(bp: BreakpointItem): NetworkEntry {
+  const url = `${bp.scheme}://${bp.host}${bp.port ? ':' + bp.port : ''}${bp.path}${bp.query ? '?' + bp.query : ''}`
+  return {
+    id: bp.id, version: 1, timestamp: bp.timestamp,
+    method: bp.method || 'GET', url, path: bp.path,
+    name: bp.path.split('/').pop() || bp.path,
+    status: 0, statusText: '', duration: 0, size: 0,
+    requestHeaders: [], responseHeaders: [], params: [],
+    authorization: { type: 'None' },
+    requestBody: null, responseBody: null,
+    pending: false, initiator: 'fetch'
+  }
+}
+
+function buildEntryFromMock(mock: MockRule): NetworkEntry {
+  const url = `${mock.scheme || 'https'}://${mock.host || 'example.com'}${mock.port ? ':' + mock.port : ''}${mock.path || '/'}${mock.query ? '?' + mock.query : ''}`
+  return {
+    id: mock.id, version: 1, timestamp: mock.timestamp,
+    method: mock.method || 'GET', url, path: mock.path || '/',
+    name: (mock.path || '/').split('/').pop() || '/',
+    status: mock.status, statusText: mock.statusText || '', duration: 0, size: 0,
+    requestHeaders: [],
+    responseHeaders: mock.headers.map(h => ({ name: h.name, value: h.value })),
+    params: [], authorization: { type: 'None' },
+    requestBody: null,
+    responseBody: mock.body !== undefined ? { text: mock.body || '', contentType: 'application/json', originalSize: (mock.body || '').length, truncated: false, isBinary: false } : null,
+    pending: false, initiator: 'fetch'
+  }
+}
+
+function findBreakpointById(id: string): BreakpointItem | null {
+  if (!settings.value?.breakpoints) return null
+  return settings.value.breakpoints.active.find(bp => bp.id === id)
+    || settings.value.breakpoints.inactive.find(bp => bp.id === id)
+    || null
+}
+
+function findMockById(id: string): MockRule | null {
+  if (!settings.value?.mocks) return null
+  return settings.value.mocks.active.find(m => m.id === id)
+    || settings.value.mocks.inactive.find(m => m.id === id)
+    || null
+}
+
+function handleEditBreakpoint(id: string) {
+  const bp = findBreakpointById(id)
+  if (!bp) return
+  editExistingBreakpoint.value = bp
+  editEntry.value = buildEntryFromBreakpoint(bp)
+  editMode.value = 'breakpoint'
+}
+
+function handleEditMock(id: string) {
+  const mock = findMockById(id)
+  if (!mock) return
+  editExistingMock.value = mock
+  editEntry.value = buildEntryFromMock(mock)
+  editMode.value = 'mock'
+}
+
+function handleEditFromDetails() {
+  if (!selectedItem.value) return
+  if (selectedItem.value.type === 'breakpoint') {
+    handleEditBreakpoint(selectedItem.value.id)
+  } else if (selectedItem.value.type === 'mock') {
+    handleEditMock(selectedItem.value.id)
+  }
+}
+
+function handleEditFormBack() {
+  editMode.value = null
+  editEntry.value = null
+  editExistingBreakpoint.value = null
+  editExistingMock.value = null
+}
+
+function handleBreakpointEditConfirm(breakpoint: BreakpointItem) {
+  if (!settings.value?.breakpoints) return
+  const bps = settings.value.breakpoints
+
+  // Update in active list
+  const activeIdx = bps.active.findIndex(bp => bp.id === breakpoint.id)
+  if (activeIdx !== -1) {
+    bps.active[activeIdx] = breakpoint
+  } else {
+    // Update in inactive list
+    const inactiveIdx = bps.inactive.findIndex(bp => bp.id === breakpoint.id)
+    if (inactiveIdx !== -1) {
+      bps.inactive[inactiveIdx] = breakpoint
+    }
+  }
+
+  syncBreakpoints()
+  handleEditFormBack()
+}
+
+function handleMockEditConfirm(mock: MockRule) {
+  if (!settings.value?.mocks) return
+  const mocks = settings.value.mocks
+
+  // Update in active list
+  const activeIdx = mocks.active.findIndex(m => m.id === mock.id)
+  if (activeIdx !== -1) {
+    mocks.active[activeIdx] = mock
+  } else {
+    // Update in inactive list
+    const inactiveIdx = mocks.inactive.findIndex(m => m.id === mock.id)
+    if (inactiveIdx !== -1) {
+      mocks.inactive[inactiveIdx] = mock
+    }
+  }
+
+  syncMocks()
+  handleEditFormBack()
 }
 
 // -------------------- RELEASE INFO --------------------
@@ -371,6 +497,8 @@ onMounted(async () => {
               :settings="settings"
               :selected-item-id="selectedItem?.type === 'breakpoint' || selectedItem?.type === 'mock' ? selectedItem.id : null"
               @select="onSelectItem"
+              @edit-breakpoint="handleEditBreakpoint"
+              @edit-mock="handleEditMock"
             />
             <PropsSection
               v-else-if="activeSection === 'props'"
@@ -391,9 +519,29 @@ onMounted(async () => {
         </ScrollArea>
       </div>
 
-      <!-- Right: Details Panel -->
-      <div class="h-full min-h-0 overflow-hidden border rounded-lg">
+      <!-- Right: Details Panel / Edit Forms -->
+      <div class="h-full min-h-0 overflow-hidden border rounded-lg" :class="{
+        'ring-2 ring-amber-500': editMode === 'breakpoint',
+        'ring-2 ring-purple-500': editMode === 'mock'
+      }">
+        <BreakpointForm
+          v-if="editMode === 'breakpoint' && editEntry"
+          :entry="editEntry"
+          :existing-breakpoint="editExistingBreakpoint ?? undefined"
+          @back="handleEditFormBack"
+          @confirm="handleBreakpointEditConfirm"
+        />
+
+        <MockForm
+          v-else-if="editMode === 'mock' && editEntry"
+          :entry="editEntry"
+          :existing-mock="editExistingMock ?? undefined"
+          @back="handleEditFormBack"
+          @confirm="handleMockEditConfirm"
+        />
+
         <SettingsDetails
+          v-else
           :settings="settings"
           :selected-item="selectedItem"
           :release-info="activeSection === 'about' ? releaseInfo : null"
@@ -401,6 +549,7 @@ onMounted(async () => {
           @close-release="handleCloseRelease"
           @ignore-version="handleIgnoreVersion"
           @download-update="handleDownloadUpdate"
+          @edit="handleEditFromDetails"
         />
       </div>
     </div>

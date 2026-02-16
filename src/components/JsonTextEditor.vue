@@ -112,12 +112,12 @@ function onInput(e: Event) {
       {{ copied ? 'Copied' : 'Copy' }}
     </Button>
 
-    <ScrollArea :class="fullHeight ? 'flex-1 min-h-0' : 'h-[330px]'">
-      <div class="p-2">
+    <ScrollArea :class="[fullHeight ? 'flex-1 min-h-0 full-height-scroll' : 'h-[330px]']">
+      <div :class="['p-2', fullHeight ? 'h-full w-full' : '']">
         <pre
           v-if="editable"
           ref="editableRef"
-          class="json-editor h-full font-sans leading-relaxed overflow-auto
+          class="json-editor h-full font-sans leading-relaxed
                  whitespace-pre-wrap break-all
                  bg-transparent outline-none focus:outline-none
                  cursor-text"
@@ -135,7 +135,7 @@ function onInput(e: Event) {
 
         <pre
           v-else
-          class="json-viewer h-full p-2 leading-relaxed overflow-auto
+          class="json-viewer h-full p-2 leading-relaxed
                  whitespace-pre-wrap break-words"
           :class="fullHeight ? '' : 'min-h-[300px]'"
         ><code ref="codeRef" class="language-json"></code></pre>
@@ -146,4 +146,8 @@ function onInput(e: Event) {
 </template>
 
 <style scoped>
+.full-height-scroll :deep([data-reka-scroll-area-viewport] > div) {
+  height: 100%;
+  width: 100%;
+}
 </style>

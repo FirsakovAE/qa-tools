@@ -16,7 +16,7 @@ export interface InterceptorCallbacks {
   onResponse: (id: string, response: ResponseData) => void
   onError: (id: string, error: string) => void
   /** Called to check if a breakpoint should trigger */
-  onBreakpointCheck?: (url: string, trigger: 'request' | 'response') => BreakpointMatch | null
+  onBreakpointCheck?: (url: string, trigger: 'request' | 'response', method?: string) => BreakpointMatch | null
   /** Called when a breakpoint is hit */
   onBreakpointHit?: (requestId: string, breakpointId: string, trigger: 'request' | 'response') => void
   /** Called to check if a mock should be returned instead of real network call (Map Local) */
@@ -44,6 +44,7 @@ export interface BreakpointConfig {
   port?: string
   path: string
   query?: string
+  method?: string
   trigger: 'request' | 'response' | 'both'
   enabled: boolean
 }

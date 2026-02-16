@@ -11,9 +11,14 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { NetworkEntry } from '@/types/network'
+import type { BreakpointItem, MockRule } from '@/types/inspector'
 import { formatBytes, formatDuration } from '@/types/network'
 import NetworkRowActions from './NetworkRowActions.vue'
 import { getStatusClass } from './utils'
+import { matchesBreakpoint, matchesMock } from './composables/useBreakpointMatching'
+
+type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
+type MockWithStatus = MockRule & { isActive: boolean }
 
 const props = defineProps<{
   entries: NetworkEntry[]
@@ -21,6 +26,8 @@ const props = defineProps<{
   breakpointEntryIds?: Set<string>
   breakpointMatchingIds?: Set<string>
   mockMatchingIds?: Set<string>
+  allBreakpoints?: BreakpointWithStatus[]
+  allMocks?: MockWithStatus[]
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +35,10 @@ const emit = defineEmits<{
   (e: 'setBreakpoint', entry: NetworkEntry): void
   (e: 'copyCurl', entry: NetworkEntry): void
   (e: 'mockResponse', entry: NetworkEntry): void
+  (e: 'toggleBreakpoint', entry: NetworkEntry): void
+  (e: 'deleteBreakpoint', entry: NetworkEntry): void
+  (e: 'toggleMock', entry: NetworkEntry): void
+  (e: 'deleteMock', entry: NetworkEntry): void
 }>()
 
 // Method badge variant based on HTTP method
@@ -65,6 +76,34 @@ function matchesBreakpointPattern(entryId: string): boolean {
 // Check if entry matches a mock pattern
 function matchesMockPattern(entryId: string): boolean {
   return props.mockMatchingIds?.has(entryId) ?? false
+}
+
+/**
+ * Find matching breakpoint active status for an entry (checks both active and inactive).
+ * Returns true if active, false if inactive, null if no match.
+ */
+function getMatchingBreakpointActive(entry: NetworkEntry): boolean | null {
+  if (!props.allBreakpoints?.length) return null
+  for (const bp of props.allBreakpoints) {
+    if (matchesBreakpoint(entry, { ...bp, enabled: true })) {
+      return bp.isActive
+    }
+  }
+  return null
+}
+
+/**
+ * Find matching mock active status for an entry (checks both active and inactive).
+ * Returns true if active, false if inactive, null if no match.
+ */
+function getMatchingMockActive(entry: NetworkEntry): boolean | null {
+  if (!props.allMocks?.length) return null
+  for (const mock of props.allMocks) {
+    if (matchesMock(entry, { ...mock, enabled: true })) {
+      return mock.isActive
+    }
+  }
+  return null
 }
 </script>
 
@@ -147,9 +186,15 @@ function matchesMockPattern(entryId: string): boolean {
                 :entry="entry"
                 :matches-breakpoint="matchesBreakpointPattern(entry.id)"
                 :matches-mock="matchesMockPattern(entry.id)"
+                :matching-breakpoint-active="getMatchingBreakpointActive(entry)"
+                :matching-mock-active="getMatchingMockActive(entry)"
                 @set-breakpoint="emit('setBreakpoint', entry)"
                 @copy-curl="emit('copyCurl', entry)"
                 @mock-response="emit('mockResponse', entry)"
+                @toggle-breakpoint="emit('toggleBreakpoint', entry)"
+                @delete-breakpoint="emit('deleteBreakpoint', entry)"
+                @toggle-mock="emit('toggleMock', entry)"
+                @delete-mock="emit('deleteMock', entry)"
               />
             </TableCell>
           </TableRow>

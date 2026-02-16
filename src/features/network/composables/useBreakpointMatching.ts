@@ -69,6 +69,11 @@ export function matchesBreakpoint(entry: NetworkEntry, bp: BreakpointItem): bool
       }
     }
     
+    // Check method (optional - if set, must match)
+    if (bp.method && entry.method.toUpperCase() !== bp.method.toUpperCase()) {
+      return false
+    }
+    
     return true
   } catch {
     return false

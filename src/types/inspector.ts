@@ -29,12 +29,16 @@ export interface BreakpointItem {
     path: string
     /** Query string pattern (optional) */
     query?: string
+    /** HTTP method (GET, POST, etc.) - optional, matches all if not set */
+    method?: string
     /** When to trigger: request, response, or both */
     trigger: BreakpointTrigger
     /** Whether this breakpoint is active */
     enabled: boolean
     /** Creation timestamp */
     timestamp: string
+    /** Description/note for this breakpoint */
+    description?: string
 }
 
 /**

@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
-import { MoreHorizontal, Power, Trash } from 'lucide-vue-next'
+import { MoreHorizontal, Power, Trash, Pencil } from 'lucide-vue-next'
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -30,6 +30,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select', item: { type: 'breakpoint' | 'mock'; id: string }): void
+  (e: 'edit-breakpoint', id: string): void
+  (e: 'edit-mock', id: string): void
 }>()
 
 // -------------------- SEARCH SETTINGS --------------------
@@ -151,16 +153,15 @@ function formatMockUrl(mock: MockRule): string {
         Network requests matching these patterns will be paused for inspection.
       </p>
 
-      <div class="flex flex-col border rounded-lg overflow-hidden">
+      <div class="flex flex-col border rounded-lg">
         <!-- Fixed Header -->
         <div class="shrink-0 border-b bg-muted/30">
-          <Table>
+          <Table class="table-fixed">
             <TableHeader>
               <TableRow class="hover:bg-transparent">
-                <TableHead class="text-xs font-semibold">URL Pattern</TableHead>
-                <TableHead class="text-xs font-semibold w-[80px] text-center">Trigger</TableHead>
+                <TableHead class="text-xs font-semibold">Description</TableHead>
                 <TableHead class="text-xs font-semibold w-[70px] text-center">Status</TableHead>
-                <TableHead class="w-[28px]" />
+                <TableHead class="w-[48px] text-center p-0" />
               </TableRow>
             </TableHeader>
           </Table>
@@ -168,41 +169,44 @@ function formatMockUrl(mock: MockRule): string {
 
         <!-- Scrollable Body -->
         <ScrollArea class="max-h-[200px]">
-          <Table>
+          <Table class="table-fixed">
             <TableBody>
               <TableRow
+                class="h-[41px] cursor-pointer transition-colors"
                 v-for="row in breakpointRows"
                 :key="row.id"
-                class="cursor-pointer transition-colors"
                 :class="{ 'bg-muted': selectedItemId === row.id }"
                 @click="emit('select', { type: 'breakpoint', id: row.id })"
               >
-                <TableCell class="py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm truncate" :title="formatBreakpointUrl(row)">
-                    {{ formatBreakpointUrl(row) }}
+                <TableCell class="overflow-hidden !py-2">
+                  <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatBreakpointUrl(row)">
+                    {{ row.description || formatBreakpointUrl(row) }}
                   </div>
                 </TableCell>
 
-                <TableCell class="w-[80px] text-center py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
-                    {{ formatTrigger(row.trigger) }}
-                  </div>
-                </TableCell>
-
-                <TableCell class="w-[70px] text-center py-2">
+                <TableCell class="w-[70px] text-center !py-2">
                   <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
                     {{ row.active ? 'Active' : 'Off' }}
                   </div>
                 </TableCell>
 
-                <TableCell class="w-[28px] py-2 pr-2">
-                  <DropdownMenu>
+                <TableCell class="w-[48px] text-center p-0">
+                  <div class="flex justify-center items-center">
+                    <DropdownMenu>
                     <DropdownMenuTrigger as-child>
-                      <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                        <MoreHorizontal class="h-4 w-4" />
-                      </Button>
+                      <Button
+                      variant="ghost"
+                      class="h-6 w-6 p-0"
+                      @click.stop
+                    >
+                      <MoreHorizontal class="h-3.5 w-3.5" />
+                    </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" class="w-44">
+                      <DropdownMenuItem @click.stop="emit('edit-breakpoint', row.id)">
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
                       <DropdownMenuItem @click.stop="toggleBreakpoint(row.id, row.active)">
                         <Power class="h-4 w-4 mr-2" />
                         {{ row.active ? 'Disable' : 'Enable' }}
@@ -214,11 +218,12 @@ function formatMockUrl(mock: MockRule): string {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  </div>
                 </TableCell>
               </TableRow>
 
               <TableRow v-if="!breakpointRows.length">
-                <TableCell colspan="4" class="text-center text-muted-foreground py-8">
+                <TableCell colspan="3" class="text-center text-muted-foreground py-8">
                   No breakpoints configured. Set breakpoints from the Network tab.
                 </TableCell>
               </TableRow>
@@ -235,17 +240,17 @@ function formatMockUrl(mock: MockRule): string {
         Matching requests will return fake responses without hitting the network.
       </p>
 
-      <div class="flex flex-col border rounded-lg overflow-hidden">
+      <div class="flex flex-col border rounded-lg">
         <!-- Fixed Header -->
         <div class="shrink-0 border-b bg-muted/30">
-          <Table>
+          <Table class="table-fixed">
             <TableHeader>
               <TableRow class="hover:bg-transparent">
-                <TableHead class="text-xs font-semibold">URL Pattern</TableHead>
+                <TableHead class="text-xs font-semibold">Description</TableHead>
                 <TableHead class="text-xs font-semibold w-[60px] text-center">Code</TableHead>
                 <TableHead class="text-xs font-semibold w-[60px] text-center">Delay</TableHead>
                 <TableHead class="text-xs font-semibold w-[60px] text-center">Status</TableHead>
-                <TableHead class="w-[28px]" />
+                <TableHead class="w-[48px] text-center p-0" />
               </TableRow>
             </TableHeader>
           </Table>
@@ -253,22 +258,22 @@ function formatMockUrl(mock: MockRule): string {
 
         <!-- Scrollable Body -->
         <ScrollArea class="max-h-[200px]">
-          <Table>
+          <Table class="table-fixed">
             <TableBody>
               <TableRow
+                class="h-[41px] cursor-pointer transition-colors"
                 v-for="row in mockRows"
                 :key="row.id"
-                class="cursor-pointer transition-colors"
                 :class="{ 'bg-muted': selectedItemId === row.id }"
                 @click="emit('select', { type: 'mock', id: row.id })"
               >
-                <TableCell class="py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm truncate" :title="formatMockUrl(row)">
-                    {{ formatMockUrl(row) }}
+                <TableCell class="overflow-hidden !py-2">
+                  <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatMockUrl(row)">
+                    {{ row.description || formatMockUrl(row) }}
                   </div>
                 </TableCell>
 
-                <TableCell class="w-[60px] text-center py-2">
+                <TableCell class="w-[60px] text-center !py-2">
                   <div
                     :class="[
                       !row.active ? 'opacity-50' : '',
@@ -282,37 +287,47 @@ function formatMockUrl(mock: MockRule): string {
                   </div>
                 </TableCell>
 
-                <TableCell class="w-[60px] text-center py-2">
+                <TableCell class="w-[60px] text-center !py-2">
                   <div :class="!row.active ? 'opacity-50' : ''" class="text-xs text-muted-foreground">
                     {{ row.delay ? `${row.delay}ms` : '-' }}
                   </div>
                 </TableCell>
 
-                <TableCell class="w-[60px] text-center py-2">
+                <TableCell class="w-[60px] text-center !py-2">
                   <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
                     {{ row.active ? 'Active' : 'Off' }}
                   </div>
                 </TableCell>
 
-                <TableCell class="w-[28px] py-2 pr-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                        <MoreHorizontal class="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-44">
-                      <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
-                        <Power class="h-4 w-4 mr-2" />
-                        {{ row.active ? 'Disable' : 'Enable' }}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem class="text-destructive" @click.stop="removeMock(row.id)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <TableCell class="w-[48px] text-center p-0">
+                  <div class="flex justify-center items-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          class="h-6 w-6 p-0"
+                          @click.stop
+                        >
+                          <MoreHorizontal class="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" class="w-44">
+                        <DropdownMenuItem @click.stop="emit('edit-mock', row.id)">
+                          <Pencil class="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
+                          <Power class="h-4 w-4 mr-2" />
+                          {{ row.active ? 'Disable' : 'Enable' }}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem class="text-destructive" @click.stop="removeMock(row.id)">
+                          <Trash class="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </TableCell>
               </TableRow>
 
@@ -328,3 +343,4 @@ function formatMockUrl(mock: MockRule): string {
     </div>
   </div>
 </template>
+

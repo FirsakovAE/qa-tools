@@ -40,6 +40,8 @@ const host = ref('')
 const port = ref('')
 const path = ref('')
 const query = ref('')
+const method = ref('')
+const description = ref('')
 
 // Function to fill form from entry
 function fillFromEntry(entry: NetworkEntry) {
@@ -49,6 +51,8 @@ function fillFromEntry(entry: NetworkEntry) {
   port.value = parsed.port
   path.value = parsed.path
   query.value = parsed.query
+  method.value = entry.method || ''
+  description.value = `Breakpoint for ${entry.method} ${entry.path}`
 }
 
 // Function to fill form from existing breakpoint
@@ -58,6 +62,8 @@ function fillFromExisting(bp: BreakpointItem) {
   port.value = bp.port || ''
   path.value = bp.path || ''
   query.value = bp.query || ''
+  method.value = bp.method || ''
+  description.value = bp.description || ''
 }
 
 // Watch for entry/existingBreakpoint changes
@@ -80,9 +86,11 @@ function handleConfirm() {
     port: port.value || undefined,
     path: path.value,
     query: query.value || undefined,
+    method: method.value || undefined,
     trigger: props.existingBreakpoint?.trigger ?? 'request',
     enabled: props.existingBreakpoint?.enabled ?? true,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    description: description.value || undefined
   }
   
   emit('confirm', breakpoint)
@@ -185,7 +193,16 @@ const sections: Array<{ id: SectionId; label: string }> = [
               </p>
             </div>
             
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-3 gap-3">
+              <div class="space-y-1.5">
+                <Label for="bp-method" class="text-xs">Method</Label>
+                <Input
+                  id="bp-method"
+                  v-model="method"
+                  placeholder="All"
+                  class="h-8 text-sm font-mono"
+                />
+              </div>
               <div class="space-y-1.5">
                 <Label for="scheme" class="text-xs">Scheme</Label>
                 <Input
@@ -233,6 +250,16 @@ const sections: Array<{ id: SectionId; label: string }> = [
                 v-model="query"
                 placeholder="page=*"
                 class="h-8 text-sm font-mono"
+              />
+            </div>
+            
+            <div class="space-y-1.5">
+              <Label for="bp-description" class="text-xs">Description</Label>
+              <Input
+                id="bp-description"
+                v-model="description"
+                placeholder="Breakpoint for user API"
+                class="h-8 text-sm"
               />
             </div>
             

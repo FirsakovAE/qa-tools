@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowUpCircle,
+  Pencil,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   (e: 'close-release'): void
   (e: 'ignore-version', version: string): void
   (e: 'download-update', url: string): void
+  (e: 'edit'): void
 }>()
 
 // -------------------- LOOKUP DATA --------------------
@@ -188,6 +190,17 @@ function formatTrigger(trigger: string): string {
           <ArrowLeft class="h-4 w-4" />
         </Button>
         <span class="text-sm font-semibold capitalize">{{ selectedItem.type }} Details</span>
+        <div class="flex-1" />
+        <Button
+          v-if="selectedItem.type === 'breakpoint' || selectedItem.type === 'mock'"
+          variant="outline"
+          size="sm"
+          class="h-7 text-xs gap-1.5"
+          @click="emit('edit')"
+        >
+          <Pencil class="h-3.5 w-3.5" />
+          Edit
+        </Button>
       </div>
 
       <!-- Content -->
@@ -204,8 +217,8 @@ function formatTrigger(trigger: string): string {
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <span class="text-xs text-muted-foreground">Trigger</span>
-                  <p class="text-sm mt-1">{{ formatTrigger(breakpointData.trigger) }}</p>
+                  <span class="text-xs text-muted-foreground">Method</span>
+                  <p class="text-sm font-mono mt-1">{{ breakpointData.method || 'All' }}</p>
                 </div>
                 <div>
                   <span class="text-xs text-muted-foreground">Status</span>
