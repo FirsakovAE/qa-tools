@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+  import type { GitHubRelease } from '@/services/githubReleaseService'
   import {
     Braces,
     DatabaseIcon,
@@ -265,6 +266,9 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     
     // Listen for breakpoint hits to switch to Network tab
     window.addEventListener('message', handleBreakpointMessage)
+
+    // Listen for toast "Preview" → navigate to Options > About
+    window.addEventListener('vue-inspector:navigate-about', handleNavigateToAbout)
     
     // Request initial flags
     window.parent?.postMessage(
@@ -279,6 +283,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
   onUnmounted(() => {
     window.removeEventListener('message', handleDetectionMessage)
     window.removeEventListener('message', handleBreakpointMessage)
+    window.removeEventListener('vue-inspector:navigate-about', handleNavigateToAbout)
   })
   
   /* ============================================================================
@@ -344,6 +349,21 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
 
   function clearScrollAnchor() {
     optionsScrollAnchor.value = null
+  }
+
+  // Pending About release data (from toast "Preview" button)
+  const pendingAboutRelease = ref<GitHubRelease | null>(null)
+
+  function handleNavigateToAbout(event: Event) {
+    const release = (event as CustomEvent).detail?.release as GitHubRelease
+    if (release) {
+      pendingAboutRelease.value = release
+      activeTab.value = 'options'
+    }
+  }
+
+  function clearPendingAboutRelease() {
+    pendingAboutRelease.value = null
   }
   
   /* ============================================================================
@@ -455,7 +475,9 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
         >
           <OptionsTab 
             :scroll-to-anchor="optionsScrollAnchor"
+            :pending-about-release="pendingAboutRelease"
             @clear-scroll-anchor="clearScrollAnchor"
+            @clear-pending-about-release="clearPendingAboutRelease"
           />
         </div>
       </main>

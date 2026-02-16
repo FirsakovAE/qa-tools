@@ -6,8 +6,7 @@
     title: string
     description: string
     version: string
-    actionText: string
-    onDownload: () => void
+    onPreview: () => void
     onDismiss: () => void
   }
   
@@ -44,9 +43,9 @@
         <Button
           size="xs"
           class="bg-white/10 hover:bg-white/20 border-white/20 text-white"
-          @click="props.data.onDownload"
+          @click="props.data.onPreview"
         >
-          Download
+          Preview
         </Button>
   
         <Button
@@ -55,9 +54,8 @@
           class="bg-black/10 hover:bg-black/20 border-white/20 text-white"
           @click="props.data.onDismiss"
         >
-          {{ props.data.actionText }}
+          Later
         </Button>
       </div>
     </div>
   </template>
-  

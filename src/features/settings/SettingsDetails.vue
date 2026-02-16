@@ -2,17 +2,29 @@
 import { computed } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { BreakpointItem, MockRule, FavoriteItem } from '@/types/inspector'
+import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  Download,
+  EyeOff,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowUpCircle,
+} from 'lucide-vue-next'
 
 const props = defineProps<{
   settings: InspectorSettings
   selectedItem: { type: 'breakpoint' | 'mock' | 'blacklist' | 'favorite'; id: string } | null
+  releaseInfo?: ReleaseDisplayInfo | null
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'close-release'): void
+  (e: 'ignore-version', version: string): void
+  (e: 'download-update', url: string): void
 }>()
 
 // -------------------- LOOKUP DATA --------------------
@@ -66,8 +78,110 @@ function formatTrigger(trigger: string): string {
 
 <template>
   <div class="h-full flex flex-col">
-    <!-- Has selection -->
-    <template v-if="selectedItem">
+
+    <!-- ===== Release Info Panel ===== -->
+    <template v-if="releaseInfo && !selectedItem">
+
+      <!-- Header -->
+      <div class="shrink-0 flex items-center gap-2 p-2 border-b">
+        <Button variant="ghost" size="icon" class="h-7 w-7" @click="emit('close-release')">
+          <ArrowLeft class="h-4 w-4" />
+        </Button>
+        <span v-if="releaseInfo.type === 'update-available'" class="text-sm font-semibold">
+          Update Available
+        </span>
+        <span v-else-if="releaseInfo.type === 'up-to-date'" class="text-sm font-semibold">
+          Up to Date
+        </span>
+        <span v-else class="text-sm font-semibold">
+          Release Notes
+        </span>
+      </div>
+
+      <ScrollArea class="flex-1 min-h-0">
+        <div class="p-4 space-y-4">
+
+          <!-- Error -->
+          <template v-if="releaseInfo.error">
+            <div class="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
+              <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
+              <p class="text-sm">{{ releaseInfo.error }}</p>
+            </div>
+          </template>
+
+          <!-- Update Available -->
+          <template v-else-if="releaseInfo.type === 'update-available'">
+            <div class="space-y-4">
+              <div class="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <ArrowUpCircle class="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p class="text-sm font-semibold">Update Available</p>
+                  <p class="text-sm text-muted-foreground">
+                    Download new version {{ releaseInfo.version }}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <span class="text-xs text-muted-foreground">What's New</span>
+                <pre class="mt-2 text-sm whitespace-pre-wrap break-words font-sans leading-relaxed">{{ releaseInfo.body }}</pre>
+              </div>
+
+              <div class="flex gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="gap-1.5"
+                  @click="emit('ignore-version', releaseInfo!.version)"
+                >
+                  <EyeOff class="w-3.5 h-3.5" />
+                  Ignore
+                </Button>
+                <Button
+                  size="sm"
+                  class="gap-1.5"
+                  :disabled="!releaseInfo.downloadUrl"
+                  @click="releaseInfo!.downloadUrl && emit('download-update', releaseInfo!.downloadUrl)"
+                >
+                  <Download class="w-3.5 h-3.5" />
+                  Download
+                </Button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Up to Date -->
+          <template v-else-if="releaseInfo.type === 'up-to-date'">
+            <div class="flex items-start gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+              <CheckCircle2 class="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
+              <div>
+                <p class="text-sm font-semibold">You're up to date!</p>
+                <p class="text-sm text-muted-foreground">
+                  Version {{ releaseInfo.version }} is the latest.
+                </p>
+              </div>
+            </div>
+
+            <div v-if="releaseInfo.body">
+              <span class="text-xs text-muted-foreground">Current Release Notes</span>
+              <pre class="mt-2 text-sm whitespace-pre-wrap break-words font-sans leading-relaxed">{{ releaseInfo.body }}</pre>
+            </div>
+          </template>
+
+          <!-- Release Notes -->
+          <template v-else>
+            <div v-if="releaseInfo.version" class="text-xs text-muted-foreground">
+              Version {{ releaseInfo.version }}
+            </div>
+            <pre class="text-sm whitespace-pre-wrap break-words font-sans leading-relaxed">{{ releaseInfo.body }}</pre>
+          </template>
+
+        </div>
+      </ScrollArea>
+    </template>
+
+    <!-- ===== Selected Item Details ===== -->
+    <template v-else-if="selectedItem">
       <!-- Header -->
       <div class="shrink-0 flex items-center gap-2 p-2 border-b">
         <Button variant="ghost" size="icon" class="h-7 w-7" @click="emit('close')">

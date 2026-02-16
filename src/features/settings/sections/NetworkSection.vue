@@ -37,7 +37,7 @@ type SearchKey = 'byPath' | 'byMethod' | 'byStatus' | 'byKey' | 'byValue'
 
 const searchItems: Array<{ key: SearchKey; label: string }> = [
   { key: 'byPath', label: 'Search by path' },
-  { key: 'byMethod', label: 'Search by HTTP method' },
+  { key: 'byMethod', label: 'Search by method' },
   { key: 'byStatus', label: 'Search by status code' },
   { key: 'byKey', label: 'Search by key' },
   { key: 'byValue', label: 'Search by value' },

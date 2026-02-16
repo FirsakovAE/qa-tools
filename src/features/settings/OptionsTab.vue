@@ -31,14 +31,24 @@ import PiniaSection from './sections/PiniaSection.vue'
 import AboutSection from './sections/AboutSection.vue'
 import SettingsDetails from './SettingsDetails.vue'
 
+import type { GitHubRelease, ReleaseDisplayInfo } from '@/services/githubReleaseService'
+import { compareVersions } from '@/services/githubReleaseService'
+import { ignoreVersion } from '@/composables/useUpdateChecker'
+import { useRuntime } from '@/runtime'
+
 // -------------------- PROPS --------------------
 const props = defineProps<{
   scrollToAnchor?: string | null
+  pendingAboutRelease?: GitHubRelease | null
 }>()
 
 const emit = defineEmits<{
   (e: 'clearScrollAnchor'): void
+  (e: 'clearPendingAboutRelease'): void
 }>()
+
+// -------------------- RUNTIME --------------------
+const runtime = useRuntime()
 
 // -------------------- STATE --------------------
 const settings = ref<InspectorSettings | null>(null)
@@ -62,11 +72,61 @@ const selectedItem = ref<{ type: SelectedItemType; id: string } | null>(null)
 
 watch(activeSection, () => {
   selectedItem.value = null
+  if (activeSection.value !== 'about') {
+    releaseInfo.value = null
+  }
 })
 
 function onSelectItem(item: { type: SelectedItemType; id: string }) {
   selectedItem.value = item
 }
+
+// -------------------- RELEASE INFO --------------------
+const releaseInfo = ref<ReleaseDisplayInfo | null>(null)
+
+function handleShowRelease(info: ReleaseDisplayInfo) {
+  selectedItem.value = null
+  releaseInfo.value = info
+}
+
+function handleCloseRelease() {
+  releaseInfo.value = null
+}
+
+async function handleIgnoreVersion(version: string) {
+  await ignoreVersion(version)
+  releaseInfo.value = null
+}
+
+function handleDownloadUpdate(url: string) {
+  const link = document.createElement('a')
+  link.href = url
+  link.download = ''
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+// Handle navigation from toast "Preview" button
+watch(() => props.pendingAboutRelease, (release) => {
+  if (!release) return
+
+  activeSection.value = 'about'
+
+  const localVersion = runtime.getManifest()?.version || '0.0.0'
+  const remoteVersion = release.tag_name.replace(/^v/, '')
+  const hasUpdate = compareVersions(remoteVersion, localVersion) > 0
+
+  releaseInfo.value = {
+    type: hasUpdate ? 'update-available' : 'release-notes',
+    body: release.body || 'No release notes available.',
+    version: remoteVersion,
+    downloadUrl: release.assets?.[0]?.browser_download_url ?? null,
+  }
+
+  emit('clearPendingAboutRelease')
+}, { immediate: true })
 
 // -------------------- NETWORK SYNC --------------------
 function sendNetworkCommand(type: string, data: Record<string, any> = {}): void {
@@ -282,7 +342,7 @@ onMounted(async () => {
       <div class="h-full min-h-0 flex overflow-hidden gap-2">
 
         <!-- Sidebar Nav -->
-        <div class="shrink-0 w-[240px] p-1 flex flex-col gap-1 bg-muted/40 backdrop-blur-sm rounded-lg">
+        <div class="shrink-0 w-[240px] p-1 flex flex-col gap-1 bg-muted/50 rounded-lg">
           <Button
             v-for="section in sections"
             :key="section.id"
@@ -325,6 +385,7 @@ onMounted(async () => {
             <AboutSection
               v-else-if="activeSection === 'about'"
               :settings="settings"
+              @show-release="handleShowRelease"
             />
           </div>
         </ScrollArea>
@@ -335,7 +396,11 @@ onMounted(async () => {
         <SettingsDetails
           :settings="settings"
           :selected-item="selectedItem"
+          :release-info="activeSection === 'about' ? releaseInfo : null"
           @close="selectedItem = null"
+          @close-release="handleCloseRelease"
+          @ignore-version="handleIgnoreVersion"
+          @download-update="handleDownloadUpdate"
         />
       </div>
     </div>

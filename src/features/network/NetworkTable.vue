@@ -76,7 +76,7 @@ function matchesMockPattern(entryId: string): boolean {
           <TableRow class="hover:bg-transparent">
             <TableHead class="w-[70px] text-xs font-semibold">Status</TableHead>
             <TableHead class="w-[70px] text-xs font-semibold">Method</TableHead>
-            <TableHead class="text-xs font-semibold">Name</TableHead>
+            <TableHead class="text-xs font-semibold">Path</TableHead>
             <TableHead class="w-[80px] text-xs font-semibold text-right">Time</TableHead>
             <TableHead class="w-[80px] text-xs font-semibold text-right">Size</TableHead>
             <TableHead class="w-[28px]"></TableHead>
