@@ -113,6 +113,16 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
         setStaticSiteDetection(detection)
       }
 
+      // Report static site status to background so DevTools can query it
+      try {
+        if (chrome?.runtime?.id) {
+          chrome.runtime.sendMessage({
+            type: 'SET_STATIC_SITE',
+            isStatic: detection.isLikelyStatic
+          }).catch(() => {})
+        }
+      } catch {}
+
       // Show overlay ONLY in overlay mode, on non-static sites
       if (displayMode === 'overlay' && !detection.isLikelyStatic && !uiInjected) {
         setUiInjected(true)

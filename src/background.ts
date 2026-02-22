@@ -120,6 +120,13 @@ class SettingsStorage {
 // Глобальный экземпляр хранилища настроек
 const settingsStorage = new SettingsStorage()
 
+// Per-tab static site flags
+const staticSiteTabs = new Map<number, boolean>()
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  staticSiteTabs.delete(tabId)
+})
+
 // Функция для синхронизации настроек между IndexedDB и chrome.storage.local
 async function syncSettingsToChromeStorage(settings: any) {
   try {
@@ -280,6 +287,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 // Receiver не существует - это нормально
             }
             break
+
+        case 'SET_STATIC_SITE':
+            if (sender.tab?.id != null) {
+                staticSiteTabs.set(sender.tab.id, !!message.isStatic)
+            }
+            break
+
+        case 'IS_STATIC_SITE':
+            sendResponse({ isStatic: staticSiteTabs.get(message.tabId) ?? false })
+            return false
 
         case 'GET_DISPLAY_MODE':
             loadSettingsWithFallback()

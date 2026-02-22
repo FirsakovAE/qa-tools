@@ -85,7 +85,7 @@ const refreshIntervals = [
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="overlay" id="mode-overlay" />
           <Label for="mode-overlay" class="text-sm font-normal cursor-pointer">
-            Overlay (in-page panel)
+            Overlay
           </Label>
         </div>
         <div class="flex items-center space-x-2">
