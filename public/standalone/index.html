@@ -557,6 +557,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
+    // Настройка marked
+    marked.setOptions({
+      gfm: true,
+      breaks: true
+    });
     // Определяем текущий origin как базовый URL
     const currentOrigin = window.location.origin;
     document.getElementById('baseUrl').value = currentOrigin;
@@ -594,7 +599,14 @@
         if (data && data.tag_name) {
           updateVersion.textContent = data.tag_name;
           
-          const description = data.body || 'Нет описания';
+          let description = data.body || 'Нет описания';
+
+          // Нормализуем переносы
+          description = description.replace(/\r\n/g, '\n');
+
+          // Превращаем одиночные переносы в абзацы
+          description = description.replace(/\n/g, '\n\n');
+
           updateDescription.innerHTML = marked.parse(description);
           
           // Форматируем дату

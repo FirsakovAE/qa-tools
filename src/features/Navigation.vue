@@ -2,7 +2,7 @@
   import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
   import type { GitHubRelease } from '@/services/githubReleaseService'
   import {
-    Braces,
+    Box,
     DatabaseIcon,
     GlobeIcon,
     SettingsIcon,
@@ -310,7 +310,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     {
       id: 'props',
       title: 'Props',
-      icon: Braces,
+      icon: Box,
       requiresFlag: 'hasVue' as const,
     },
     {
