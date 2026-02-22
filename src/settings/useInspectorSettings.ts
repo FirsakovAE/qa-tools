@@ -1,63 +1,66 @@
 import { reactive, watch, toRaw } from 'vue'
 import { defaultInspectorSettings, type InspectorSettings } from '@/settings/inspectorSettings'
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
+import { getRuntimeAdapter } from '@/runtime'
 
+const SETTINGS_STORAGE_KEY = 'inspector-settings'
 
 // Реактивное состояние
 const state = reactive<InspectorSettings>(structuredClone(defaultInspectorSettings))
 let isLoaded = false
 let saveTimeout: number | null = null
 
-// Сохранение через background script (IndexedDB + chrome.storage.local)
+function isStandaloneMode(): boolean {
+    const adapter = getRuntimeAdapter()
+    return adapter?.capabilities.mode === 'standalone'
+}
+
 async function saveToStorage() {
     try {
-        // Безопасное клонирование с обработкой ошибок
         let settingsToSave
         try {
             settingsToSave = structuredClone(toRaw(state))
-        } catch (cloneError) {
-            // Fallback: создаем копию вручную, исключая проблемные поля
+        } catch {
             settingsToSave = JSON.parse(JSON.stringify(toRaw(state)))
         }
 
-        // Отправляем настройки в background script для сохранения в IndexedDB
-        await safeSendMessage({
-            type: 'UPDATE_SETTINGS',
-            settings: settingsToSave
-        })
-
-
-    } catch (error) {
+        if (isStandaloneMode()) {
+            const adapter = getRuntimeAdapter()
+            await adapter?.storage.set(SETTINGS_STORAGE_KEY, settingsToSave)
+        } else {
+            await safeSendMessage({
+                type: 'UPDATE_SETTINGS',
+                settings: settingsToSave
+            })
+        }
+    } catch {
+        // Silent fail
     }
 }
 
-// Загрузка через background script (IndexedDB с fallback на chrome.storage.local)
 async function loadFromStorage(): Promise<void> {
-    return new Promise((resolve) => {
-        // Запрашиваем настройки у background script
-        safeSendMessage({ type: 'GET_SETTINGS' }).then((response) => {
-            try {
-                const savedSettings = response
+    try {
+        let savedSettings: any = null
 
-                if (savedSettings && typeof savedSettings === 'object') {
-                    const mergedSettings = mergeSettings(defaultInspectorSettings, savedSettings)
-                    Object.assign(state, mergedSettings)
+        if (isStandaloneMode()) {
+            const adapter = getRuntimeAdapter()
+            savedSettings = await adapter?.storage.get(SETTINGS_STORAGE_KEY)
+        } else {
+            savedSettings = await safeSendMessage({ type: 'GET_SETTINGS' })
+        }
 
-                } else {
-                    // При первом запуске применяем настройки по умолчанию и сохраняем их
-                    Object.assign(state, structuredClone(defaultInspectorSettings))
-                    // Сохраняем настройки по умолчанию при первом запуске
-                    saveToStorage()
-                }
-    } catch (error) {
-        // Fallback на настройки по умолчанию
+        if (savedSettings && typeof savedSettings === 'object') {
+            const mergedSettings = mergeSettings(defaultInspectorSettings, savedSettings)
+            Object.assign(state, mergedSettings)
+        } else {
+            Object.assign(state, structuredClone(defaultInspectorSettings))
+            saveToStorage()
+        }
+    } catch {
         Object.assign(state, structuredClone(defaultInspectorSettings))
     }
 
-            isLoaded = true
-            resolve()
-        })
-    })
+    isLoaded = true
 }
 
 // Миграция: из единого search в per-module search settings
@@ -198,14 +201,15 @@ export async function useInspectorSettings(): Promise<InspectorSettings> {
 export async function resetInspectorSettings() {
     Object.assign(state, structuredClone(defaultInspectorSettings))
 
-    // Отправляем запрос на сброс в background script
     try {
-        await safeSendMessage({ type: 'RESET_SETTINGS' })
-    } catch (error) {
-        // Fallback: сохраняем локально
+        if (isStandaloneMode()) {
+            await saveToStorage()
+        } else {
+            await safeSendMessage({ type: 'RESET_SETTINGS' })
+        }
+    } catch {
         await saveToStorage()
     }
-
 }
 
 export async function exportSettings(): Promise<string> {

@@ -2,7 +2,8 @@
  * Standalone Runtime Adapter
  * 
  * Реализация RuntimeAdapter для standalone режима (без расширения).
- * Использует postMessage для коммуникации, localStorage для storage.
+ * Использует postMessage для коммуникации, sessionStorage для storage.
+ * sessionStorage выбран намеренно: настройки живут до перезагрузки страницы (F5).
  */
 
 import type { 
@@ -20,7 +21,7 @@ const MESSAGE_PREFIX = '__VUE_INSPECTOR__'
 class StandaloneStorage implements RuntimeStorage {
   async get<T = unknown>(key: string): Promise<T | null> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = sessionStorage.getItem(STORAGE_KEY)
       const data = stored ? JSON.parse(stored) : {}
       return (data[key] as T) ?? null
     } catch {
@@ -30,10 +31,10 @@ class StandaloneStorage implements RuntimeStorage {
 
   async set(key: string, value: unknown): Promise<void> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = sessionStorage.getItem(STORAGE_KEY)
       const data = stored ? JSON.parse(stored) : {}
       data[key] = value
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Silent fail
     }
@@ -41,10 +42,10 @@ class StandaloneStorage implements RuntimeStorage {
 
   async remove(key: string): Promise<void> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = sessionStorage.getItem(STORAGE_KEY)
       const data = stored ? JSON.parse(stored) : {}
       delete data[key]
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Silent fail
     }

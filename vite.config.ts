@@ -26,7 +26,8 @@ export default defineConfig({
       name: 'copy-injected-ui-html',
       closeBundle() {
         const distPath = join(process.cwd(), 'dist')
-        // Vite гарантированно кладет HTML entry по пути: dist/{inputPathRelativeToSrc}
+        // Vite puts the HTML entry at dist/src/injected-ui/index.html (mirroring input path)
+        // but the extension expects it at dist/injected_ui/index.html
         const srcHtml = join(distPath, 'src', 'injected-ui', 'index.html')
         const destDir = join(distPath, 'injected_ui')
         const destHtml = join(destDir, 'index.html')
@@ -35,7 +36,13 @@ export default defineConfig({
           if (!existsSync(destDir)) {
             mkdirSync(destDir, { recursive: true })
           }
-          copyFileSync(srcHtml, destHtml)
+          let content = readFileSync(srcHtml, 'utf-8')
+          // Fix relative paths: the source HTML is 2 dirs deep (dist/src/injected-ui/),
+          // but the destination is 1 dir deep (dist/injected_ui/)
+          content = content
+            .replace(/src="\.\.\/\.\.\/injected_ui\/index\.js"/g, 'src="./index.js"')
+            .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
+          writeFileSync(destHtml, content, 'utf-8')
         }
       }
     },

@@ -149,7 +149,7 @@
         iframeLoaded = true;
         // Используем injected_ui который работает через postMessage
         // Передаём standalone флаг через URL hash (избегаем CORS проблем)
-        iframe.src = baseURL + '/injected_ui/index.html#standalone=' + encodeURIComponent(baseURL);
+        iframe.src = baseURL + '/injected_ui/#standalone=' + encodeURIComponent(baseURL);
       }
       
       updateState();
@@ -228,8 +228,126 @@
 
     // Запускаем message relay после создания UI
     setupMessageRelay(iframe);
+
+    // Breakpoint auto-expand: listen for hits from injected script
+    var pendingNetworkMessages = [];
+
+    function expandAndLoadIframe() {
+      if (!isCollapsed) return;
+      isCollapsed = false;
+      chevron.style.transform = 'rotate(0deg)';
+      if (!iframeLoaded) {
+        iframeLoaded = true;
+        iframe.src = baseURL + '/injected_ui/#standalone=' + encodeURIComponent(baseURL);
+      }
+      updateState();
+    }
+
+    iframe.addEventListener('load', function() {
+      if (pendingNetworkMessages.length === 0) return;
+      var replayed = false;
+      var doReplay = function() {
+        if (replayed) return;
+        replayed = true;
+        window.removeEventListener('message', readyListener);
+        var msgs = pendingNetworkMessages.splice(0);
+        for (var i = 0; i < msgs.length; i++) {
+          if (iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              __VUE_INSPECTOR__: true,
+              broadcast: true,
+              message: msgs[i]
+            }, '*');
+          }
+        }
+      };
+      var readyListener = function(event) {
+        if (event.data && event.data.__VUE_INSPECTOR__ && event.source === iframe.contentWindow) {
+          setTimeout(doReplay, 100);
+        }
+      };
+      window.addEventListener('message', readyListener);
+      setTimeout(doReplay, 1000);
+    });
+
+    window.addEventListener('message', function(event) {
+      var data = event.data;
+      if (!data) return;
+
+      // EXPAND_INSPECTOR from iframe
+      if (data.__VUE_INSPECTOR__ && data.message && data.message.type === 'EXPAND_INSPECTOR' &&
+          event.source === iframe.contentWindow) {
+        expandAndLoadIframe();
+        return;
+      }
+
+      // Network breakpoint hit from injected script
+      if (data.__FROM_VUE_INSPECTOR__ && data.__NETWORK__ &&
+          data.type === 'NETWORK_BREAKPOINT_HIT') {
+        pendingNetworkMessages.push(data);
+        expandAndLoadIframe();
+      }
+    });
   }
   
+  // ===== Element Highlight System =====
+  var _highlightOverlay = null;
+  var _highlightedElement = null;
+  var _highlightRafId = null;
+  var ELEMENT_UID_ATTR = 'data-vue-inspector-uid';
+
+  function ensureHighlightOverlay() {
+    if (_highlightOverlay) return;
+    var el = document.createElement('div');
+    el.id = 'vue-inspector-highlight-overlay';
+    el.style.cssText = [
+      'position: fixed',
+      'pointer-events: none',
+      'z-index: 999998',
+      'border: 3px solid #8b5cf6',
+      'background-color: rgba(139,92,246,0.1)',
+      'box-shadow: 0 0 0 1px rgba(139,92,246,0.4), 0 0 20px rgba(139,92,246,0.3), inset 0 0 20px rgba(139,92,246,0.1)',
+      'transition: all 0.2s ease-in-out',
+      'border-radius: 4px',
+      'display: none'
+    ].join(';');
+    document.body.appendChild(el);
+    _highlightOverlay = el;
+
+    window.addEventListener('scroll', updateOverlayPosition, true);
+    window.addEventListener('resize', updateOverlayPosition);
+  }
+
+  function updateOverlayPosition() {
+    if (!_highlightedElement || !_highlightOverlay) return;
+    if (_highlightRafId) return;
+    _highlightRafId = requestAnimationFrame(function() {
+      _highlightRafId = null;
+      if (!_highlightedElement || !_highlightOverlay) return;
+      if (!_highlightedElement.isConnected) { hideOverlay(); return; }
+      var rect = _highlightedElement.getBoundingClientRect();
+      _highlightOverlay.style.display = 'block';
+      _highlightOverlay.style.left = rect.left + 'px';
+      _highlightOverlay.style.top = rect.top + 'px';
+      _highlightOverlay.style.width = rect.width + 'px';
+      _highlightOverlay.style.height = rect.height + 'px';
+    });
+  }
+
+  function highlightByUid(uid) {
+    var el = document.querySelector('[' + ELEMENT_UID_ATTR + '="' + uid + '"]');
+    if (!el || !el.isConnected) return false;
+    ensureHighlightOverlay();
+    _highlightedElement = el;
+    updateOverlayPosition();
+    return true;
+  }
+
+  function hideOverlay() {
+    if (_highlightOverlay) _highlightOverlay.style.display = 'none';
+    _highlightedElement = null;
+  }
+
   /**
    * Message Relay - мост между UI iframe и injected script
    * UI использует __VUE_INSPECTOR__ формат
@@ -302,6 +420,30 @@
               __VUE_INSPECTOR__: true,
               responseId: requestId,
               response: { pong: true }
+            }, '*');
+          }
+          return;
+        }
+
+        // Highlight — обрабатываем локально (аналог content script)
+        if (message.type === 'HIGHLIGHT_BY_UID') {
+          var success = highlightByUid(message.uid);
+          if (requestId && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              __VUE_INSPECTOR__: true,
+              responseId: requestId,
+              response: { success: success }
+            }, '*');
+          }
+          return;
+        }
+        if (message.type === 'UNHIGHLIGHT_ELEMENT') {
+          hideOverlay();
+          if (requestId && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              __VUE_INSPECTOR__: true,
+              responseId: requestId,
+              response: { success: true }
             }, '*');
           }
           return;

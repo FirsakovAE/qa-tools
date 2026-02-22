@@ -177,7 +177,16 @@ onMounted(async () => {
   } catch { /* use defaults */ }
 })
 
-// Watch for settings changes in storage
+// Sync favorite flags on any favorites mutation (add/remove from table,
+// details panel, settings load, or external storage change).
+// Works identically in all modes (extension, devtools, standalone).
+watch(favorites, () => {
+  if (rows.value.length) {
+    updateFavoriteFlags()
+  }
+}, { deep: true })
+
+// Watch for settings changes in storage (extension / devtools cross-tab sync)
 const storage = safeStorage()
 let storageListener: ((changes: any) => void) | null = null
 
@@ -187,8 +196,6 @@ if (storage?.onChanged) {
     if (changes[settingsKey]) {
       useInspectorSettings().then(newSettings => {
         settings.value = newSettings
-        // Update favorite flags on rows
-        updateFavoriteFlags()
       }).catch(() => {})
     }
   }
