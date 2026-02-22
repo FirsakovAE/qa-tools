@@ -29,6 +29,7 @@ import { removeUIMessageBridge } from './ui-bridge'
 import { setupRuntimeMessageListener } from './handlers'
 import { detectStaticSite } from './static-detection'
 import { injectInspectorUI } from './inspector-ui'
+import { setupDevtoolsBridge } from './devtools-bridge'
 
 // === GLOBAL GUARD ===
 if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
@@ -89,8 +90,21 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
     /**
      * Main initialization function
      */
-    function initializeContentScript(): void {
+    async function initializeContentScript(): Promise<void> {
       init()
+
+      // Check display mode setting before injecting overlay
+      let displayMode: string = 'overlay'
+      try {
+        if (chrome?.runtime?.id) {
+          const response = await chrome.runtime.sendMessage({ type: 'GET_DISPLAY_MODE' })
+          if (response?.displayMode) {
+            displayMode = response.displayMode
+          }
+        }
+      } catch {
+        // Fallback to overlay
+      }
 
       // Detect static site before creating UI
       let detection = staticSiteDetection
@@ -99,15 +113,17 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
         setStaticSiteDetection(detection)
       }
 
-      // Show UI ONLY if site is not static
-      // On static sites (Hugo/MPA) don't show chevron to prevent memory leaks
-      if (!detection.isLikelyStatic && !uiInjected) {
+      // Show overlay ONLY in overlay mode, on non-static sites
+      if (displayMode === 'overlay' && !detection.isLikelyStatic && !uiInjected) {
         setUiInjected(true)
         injectInspectorUI()
       }
 
       setupHighlightEventListeners()
       setupRuntimeMessageListener()
+
+      // Always set up DevTools bridge so the panel can connect when opened
+      setupDevtoolsBridge()
 
       window.addEventListener('beforeunload', cleanup)
     }

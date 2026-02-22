@@ -9,6 +9,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { NetworkEntry, NetworkConfig } from '@/types/network'
 import { DEFAULT_NETWORK_CONFIG } from '@/types/network'
+import { postToContentScript } from '@/utils/postToContentScript'
 
 export interface NetworkEntriesOptions {
   onBreakpointHit?: (requestId: string, trigger: 'request' | 'response', entry?: any) => void
@@ -37,15 +38,12 @@ const breakpointHitCallbacks = new Set<(requestId: string, trigger: 'request' | 
  * Send command to injected network module via content script
  */
 function sendCommand(type: string, data: Record<string, any> = {}): void {
-  window.parent?.postMessage({
+  postToContentScript({
+    type,
     __VUE_INSPECTOR__: true,
-    message: {
-      type,
-      __VUE_INSPECTOR__: true,
-      __NETWORK_CMD__: true,
-      ...data
-    }
-  }, '*')
+    __NETWORK_CMD__: true,
+    ...data
+  })
 }
 
 /**

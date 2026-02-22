@@ -8,6 +8,7 @@
 
 import { ref, computed, watch } from 'vue'
 import type { NetworkEntry } from '@/types/network'
+import { postToContentScript } from '@/utils/postToContentScript'
 import type { BreakpointItem } from '@/types/inspector'
 import { matchesBreakpoint, getMatchingEntryIds } from './useBreakpointMatching'
 import { parseUrl, deepClone } from '../utils'
@@ -137,14 +138,11 @@ export function useBreakpointState(
     breakpointMode.value = true
     breakpointTrigger.value = trigger
 
-    // Try to expand the app if minimized
-    window.parent?.postMessage({
-      __VUE_INSPECTOR__: true,
-      message: {
-        type: 'EXPAND_INSPECTOR',
-        __VUE_INSPECTOR__: true
-      }
-    }, '*')
+    // Try to expand the app if minimized (no-op in DevTools mode)
+    postToContentScript({
+      type: 'EXPAND_INSPECTOR',
+      __VUE_INSPECTOR__: true
+    })
   }
 
   /**

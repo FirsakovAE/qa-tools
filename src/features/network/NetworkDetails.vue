@@ -374,23 +374,27 @@ const displayUrl = computed(() => {
 // Request/Response JSON for JsonEditor
 // ============================================================================
 
+const LARGE_BODY_THRESHOLD = 200 * 1024
+
 const requestBodyJson = computed(() => {
   if (!props.entry.requestBody?.text) return '{}'
+  const raw = props.entry.requestBody.text
+  if (raw.length > LARGE_BODY_THRESHOLD) return raw
   try {
-    const parsed = JSON.parse(props.entry.requestBody.text)
-    return JSON.stringify(parsed, null, 2)
+    return JSON.stringify(JSON.parse(raw), null, 2)
   } catch {
-    return props.entry.requestBody.text
+    return raw
   }
 })
 
 const responseBodyJson = computed(() => {
   if (!props.entry.responseBody?.text) return '{}'
+  const raw = props.entry.responseBody.text
+  if (raw.length > LARGE_BODY_THRESHOLD) return raw
   try {
-    const parsed = JSON.parse(props.entry.responseBody.text)
-    return JSON.stringify(parsed, null, 2)
+    return JSON.stringify(JSON.parse(raw), null, 2)
   } catch {
-    return props.entry.responseBody.text
+    return raw
   }
 })
 

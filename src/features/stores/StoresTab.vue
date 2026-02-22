@@ -264,17 +264,23 @@ watch(() => settings.value?.updates?.autoRefreshInterval, (newValue, oldValue) =
   }
 })
 
-// Visibility handler
+// Visibility and reconnect handler
 let isVisible = true
-const visibilityHandler = (event: MessageEvent) => {
-  if (event.data?.__VUE_INSPECTOR__ && event.data.broadcast && 
-      event.data.message?.type === 'VUE_INSPECTOR_VISIBILITY_CHANGED') {
+const broadcastHandler = (event: MessageEvent) => {
+  if (!event.data?.__VUE_INSPECTOR__ || !event.data.broadcast) return
+  const msgType = event.data.message?.type
+
+  if (msgType === 'VUE_INSPECTOR_VISIBILITY_CHANGED') {
     isVisible = event.data.message.visible
     if (isVisible && settings.value?.updates?.autoRefresh) {
       startAutoRefresh()
     } else {
       stopAutoRefresh()
     }
+  }
+
+  if (msgType === 'DEVTOOLS_RECONNECTED') {
+    loadStoresSummary()
   }
 }
 
@@ -385,7 +391,7 @@ async function handleRefresh() {
 // ============================================================================
 
 onMounted(() => {
-  window.addEventListener('message', visibilityHandler)
+  window.addEventListener('message', broadcastHandler)
   loadStoresSummary()
   
   // Start auto-refresh if enabled
@@ -395,7 +401,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('message', visibilityHandler)
+  window.removeEventListener('message', broadcastHandler)
   stopAutoRefresh()
 })
 </script>

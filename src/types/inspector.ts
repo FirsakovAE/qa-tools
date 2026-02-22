@@ -132,7 +132,10 @@ export interface GlobalSearchSettings {
     minLength: number
 }
 
+export type DisplayMode = 'overlay' | 'devtools'
+
 export interface BaseInspectorSettings {
+    displayMode: DisplayMode
     blacklist: { active: string[]; inactive: string[] }
     favorites: FavoriteItem[]
     breakpoints: { active: BreakpointItem[]; inactive: BreakpointItem[] }

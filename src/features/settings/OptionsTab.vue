@@ -39,6 +39,7 @@ import type { GitHubRelease, ReleaseDisplayInfo } from '@/services/githubRelease
 import { compareVersions } from '@/services/githubReleaseService'
 import { ignoreVersion } from '@/composables/useUpdateChecker'
 import { useRuntime } from '@/runtime'
+import { postToContentScript } from '@/utils/postToContentScript'
 
 // -------------------- PROPS --------------------
 const props = defineProps<{
@@ -256,15 +257,12 @@ watch(() => props.pendingAboutRelease, (release) => {
 
 // -------------------- NETWORK SYNC --------------------
 function sendNetworkCommand(type: string, data: Record<string, any> = {}): void {
-  window.parent?.postMessage({
+  postToContentScript({
+    type,
     __VUE_INSPECTOR__: true,
-    message: {
-      type,
-      __VUE_INSPECTOR__: true,
-      __NETWORK_CMD__: true,
-      ...data
-    }
-  }, '*')
+    __NETWORK_CMD__: true,
+    ...data
+  })
 }
 
 function syncBreakpoints() {

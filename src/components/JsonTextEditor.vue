@@ -6,6 +6,11 @@ import { Copy, Check } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 
+// Skip Prism highlighting for payloads larger than this (bytes).
+// Prism wraps every token in a <span>, which creates 10k+ DOM nodes on big JSON
+// and freezes the UI. Plain text rendering is instant regardless of size.
+const HIGHLIGHT_SIZE_LIMIT = 200 * 1024
+
 const props = withDefaults(defineProps<{
   modelValue: string
   editable?: boolean
@@ -24,7 +29,10 @@ const copied = ref(false)
 
 watch(() => props.modelValue, v => {
   editedJson.value = v.trim()
+  highlight()
 })
+
+const isLargePayload = computed(() => editedJson.value.length > HIGHLIGHT_SIZE_LIMIT)
 
 const isJsonValid = computed(() => {
   try { JSON.parse(editedJson.value); return true } catch { return false }
@@ -37,7 +45,9 @@ function highlight() {
   nextTick(() => {
     if (codeRef.value && !props.editable) {
       codeRef.value.textContent = editedJson.value
-      Prism.highlightElement(codeRef.value)
+      if (!isLargePayload.value) {
+        Prism.highlightElement(codeRef.value)
+      }
     }
   })
 }
@@ -61,16 +71,15 @@ watch(() => props.editable, () => {
 })
 
 function copyToClipboard() {
-  // Format JSON properly before copying
   let textToCopy = editedJson.value
-  try {
-    const parsed = JSON.parse(editedJson.value)
-    textToCopy = JSON.stringify(parsed, null, 2)
-  } catch {
-    // Keep original if not valid JSON
+
+  if (textToCopy.length <= HIGHLIGHT_SIZE_LIMIT) {
+    try {
+      const parsed = JSON.parse(textToCopy)
+      textToCopy = JSON.stringify(parsed, null, 2)
+    } catch { /* keep original */ }
   }
-  
-  // Use execCommand first (works in iframes without permissions policy issues)
+
   try {
     const textArea = document.createElement('textarea')
     textArea.value = textToCopy

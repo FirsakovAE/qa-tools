@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import type { InspectorSettings } from '@/settings/inspectorSettings'
+import type { InspectorSettings, DisplayMode } from '@/settings/inspectorSettings'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,10 +17,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import RadioGroup from '@/components/ui/RadioGroup/RadioGroup.vue'
+import RadioGroupItem from '@/components/ui/RadioGroup/RadioGroupItem.vue'
+import { Info } from 'lucide-vue-next'
+import { getRuntimeAdapter } from '@/runtime'
 
 const props = defineProps<{
   settings: InspectorSettings
 }>()
+
+const isRunningInDevtools = getRuntimeAdapter()?.id === 'devtools'
+
+const displayMode = computed({
+  get: () => props.settings.displayMode ?? 'overlay',
+  set: (val: DisplayMode) => { props.settings.displayMode = val }
+})
+
+const showDevtoolsHint = computed(
+  () => displayMode.value === 'devtools' && !isRunningInDevtools
+)
+const showOverlayHint = computed(
+  () => displayMode.value === 'overlay' && isRunningInDevtools
+)
 
 // Debounce and MinLength — global search params
 const debounceValue = ref(props.settings.searchParams.debounce ?? 300)
@@ -52,6 +70,45 @@ const refreshIntervals = [
 
 <template>
   <div class="space-y-6">
+    <!-- DISPLAY MODE -->
+    <div class="space-y-4">
+      <h4 class="text-sm font-semibold">Display Mode</h4>
+
+      <RadioGroup v-model="displayMode" class="gap-3">
+        <div class="flex items-center space-x-2">
+          <RadioGroupItem value="overlay" id="mode-overlay" />
+          <Label for="mode-overlay" class="text-sm font-normal cursor-pointer">
+            Overlay (in-page panel)
+          </Label>
+        </div>
+        <div class="flex items-center space-x-2">
+          <RadioGroupItem value="devtools" id="mode-devtools" />
+          <Label for="mode-devtools" class="text-sm font-normal cursor-pointer">
+            DevTools tab
+          </Label>
+        </div>
+      </RadioGroup>
+
+      <div
+        v-if="showDevtoolsHint"
+        class="flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-400"
+      >
+        <Info class="h-4 w-4 shrink-0 mt-0.5" />
+        <div>
+          <p>Reload the page to apply changes.</p>
+          <p class="mt-0.5">Open DevTools (F12) to access the panel.</p>
+        </div>
+      </div>
+
+      <div
+        v-if="showOverlayHint"
+        class="flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-400"
+      >
+        <Info class="h-4 w-4 shrink-0 mt-0.5" />
+        <p>Reload the page to apply changes.</p>
+      </div>
+    </div>
+
     <!-- SEARCH DEBOUNCE & MIN LENGTH -->
     <div class="space-y-4 border-t pt-4">
       <h4 class="text-sm font-semibold">Search Parameters</h4>

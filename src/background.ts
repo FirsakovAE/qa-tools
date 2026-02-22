@@ -281,6 +281,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
             break
 
+        case 'GET_DISPLAY_MODE':
+            loadSettingsWithFallback()
+                .then(settings => {
+                    sendResponse({ displayMode: settings?.displayMode || 'overlay' })
+                })
+                .catch(() => {
+                    sendResponse({ displayMode: 'overlay' })
+                })
+            return true
+
         case 'GET_SETTINGS':
             // Загружаем настройки из IndexedDB с fallback на chrome.storage.local
             loadSettingsWithFallback()

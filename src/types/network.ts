@@ -140,7 +140,7 @@ export interface NetworkConfig {
  */
 export const DEFAULT_NETWORK_CONFIG: NetworkConfig = {
   maxEntries: 500,
-  maxBodySize: 100 * 1024, // 100KB
+  maxBodySize: 20 * 1024 * 1024, // 20MB
   captureRequestBody: true,
   captureResponseBody: true
 }

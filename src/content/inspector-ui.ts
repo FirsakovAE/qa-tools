@@ -6,10 +6,11 @@ import {
   featureFlags,
   injectedScriptLoaded,
   setInjectedScriptLoaded,
-  resetDetectionState
+  resetDetectionState,
+  uiBridgeInitialized
 } from './state'
 import { injectScript } from './script-injector'
-import { setupUIMessageBridge, removeUIMessageBridge, sendFlagsToUI, UI_MESSAGE_PREFIX } from './ui-bridge'
+import { setupUIMessageBridge, removeUIMessageBridge, sendFlagsToUI, broadcastToUI, UI_MESSAGE_PREFIX } from './ui-bridge'
 import { addMessageListenerIfNeeded } from './detection'
 
 /**
@@ -24,6 +25,7 @@ export function injectInspectorUI(): void {
   const MIN_HEIGHT = 120
   const MAX_OFFSET = 80
   let iframeLoaded = false // IMPORTANT: iframe is loaded lazily!
+  const pendingNetworkMessages: any[] = []
 
   // Create root wrapper
   const root = document.createElement('div')
@@ -124,6 +126,29 @@ export function injectInspectorUI(): void {
       
       // Request detection
       window.postMessage({ type: 'VUE_INSPECTOR_CHECK_VUE' }, '*')
+      
+      // Replay queued network messages (breakpoint hits received while iframe was unloaded)
+      if (pendingNetworkMessages.length > 0) {
+        let replayed = false
+        const doReplay = () => {
+          if (replayed) return
+          replayed = true
+          window.removeEventListener('message', readyListener)
+          const messages = pendingNetworkMessages.splice(0)
+          for (const msg of messages) {
+            broadcastToUI(msg)
+          }
+        }
+        // Wait for first message from iframe (signals Vue app is mounted)
+        const readyListener = (event: MessageEvent) => {
+          if (event.data?.[UI_MESSAGE_PREFIX] && event.source === iframe.contentWindow) {
+            setTimeout(doReplay, 100)
+          }
+        }
+        window.addEventListener('message', readyListener)
+        // Fallback: replay after 1s even if no signal received
+        setTimeout(doReplay, 1000)
+      }
     }
   }
   
@@ -276,4 +301,35 @@ export function injectInspectorUI(): void {
   root.appendChild(host)
   root.appendChild(toggle)
   document.documentElement.appendChild(root)
+
+  // Persistent sentinel: handles breakpoint hits when iframe is unloaded,
+  // and EXPAND_INSPECTOR requests from the iframe when collapsed
+  window.addEventListener('message', (event: MessageEvent) => {
+    const data = event.data
+    if (!data) return
+    
+    // Handle EXPAND_INSPECTOR from iframe (Vue site, iframe loaded but collapsed)
+    if (data[UI_MESSAGE_PREFIX] && data.message?.type === 'EXPAND_INSPECTOR' &&
+        event.source === iframe.contentWindow) {
+      if (isCollapsed) {
+        isCollapsed = false
+        chevron.style.transform = 'rotate(0deg)'
+        updateCollapsedState()
+      }
+      return
+    }
+    
+    // Handle network breakpoint hit when bridge is inactive (iframe unloaded on non-Vue sites)
+    if (data.__FROM_VUE_INSPECTOR__ && data.__NETWORK__ && !uiBridgeInitialized) {
+      if (data.type === 'NETWORK_BREAKPOINT_HIT') {
+        pendingNetworkMessages.push(data)
+        
+        // Auto-expand and reload iframe so user can interact with the breakpoint
+        isCollapsed = false
+        chevron.style.transform = 'rotate(0deg)'
+        loadResourcesIfNeeded()
+        updateCollapsedState()
+      }
+    }
+  })
 }

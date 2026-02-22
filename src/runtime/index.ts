@@ -25,6 +25,7 @@ export {
 // Adapters (для bootstrap)
 export { createExtensionAdapter } from './extension/adapter'
 export { createStandaloneAdapter } from './standalone/adapter'
+export { createDevtoolsAdapter } from './devtools/adapter'
 export type { StandaloneAdapterConfig } from './standalone/adapter'
 
 // Bootstrap (internal - используется только в entry points)

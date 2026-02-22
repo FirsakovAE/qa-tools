@@ -163,7 +163,7 @@ const pendingRequests = new Map<string, Partial<NetworkEntry>>()
 let entries: NetworkEntry[] = []
 let config: NetworkConfig = {
   maxEntries: 500,
-  maxBodySize: 100 * 1024,
+  maxBodySize: 20 * 1024 * 1024,
   captureRequestBody: true,
   captureResponseBody: true
 }

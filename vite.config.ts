@@ -17,7 +17,9 @@ export default defineConfig({
         { src: 'public/icons/*', dest: 'icons' },
         { src: 'public/defaultSettings.json', dest: '.' },
         // Standalone mode files
-        { src: 'public/standalone/*', dest: 'standalone' }
+        { src: 'public/standalone/*', dest: 'standalone' },
+        // DevTools page
+        { src: 'src/devtools/devtools.html', dest: 'devtools' }
       ]
     }),
     {
@@ -284,11 +286,12 @@ document.addEventListener('DOMContentLoaded', () => {
         injected_ui_html: 'src/injected-ui/index.html',
         content: 'src/content/index.ts',
         background: 'src/background.ts',
-        injected: 'src/injected/main.ts'
+        injected: 'src/injected/main.ts',
+        devtools: 'src/devtools/devtools.ts'
       },
       output: {
         entryFileNames: (chunkInfo) => {
-          if (['content', 'background', 'injected'].includes(chunkInfo.name)) {
+          if (['content', 'background', 'injected', 'devtools'].includes(chunkInfo.name)) {
             return 'js/[name].js'
           }
           if (chunkInfo.name === 'injected_ui_html') {
@@ -303,7 +306,8 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       // Prevent code splitting that would break injected scripts
       preserveEntrySignatures: 'strict'
-    }
+    },
+    chunkSizeWarningLimit: 600
   },
   publicDir: false
 })

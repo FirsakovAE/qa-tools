@@ -124,7 +124,11 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
       </Table>
     </div>
     
-    <ScrollArea class="flex-1 min-h-0">
+    <div v-if="entries.length === 0" class="flex-1 min-h-0 flex items-center justify-center text-muted-foreground">
+      No network requests captured yet
+    </div>
+
+    <ScrollArea v-else class="flex-1 min-h-0">
       <Table>
         <TableBody>
           <TableRow
@@ -196,12 +200,6 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                 @toggle-mock="emit('toggleMock', entry)"
                 @delete-mock="emit('deleteMock', entry)"
               />
-            </TableCell>
-          </TableRow>
-          
-          <TableRow v-if="entries.length === 0">
-            <TableCell colspan="6" class="h-32 text-center text-muted-foreground">
-              No network requests captured yet
             </TableCell>
           </TableRow>
         </TableBody>

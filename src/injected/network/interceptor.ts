@@ -36,8 +36,8 @@ const EXTENSION_PATTERNS = [
   'webkit-resource://'
 ]
 
-// Maximum body size to capture (100KB default)
-let maxBodySize = 100 * 1024
+// Maximum body size to capture (20MB default)
+let maxBodySize = 20 * 1024 * 1024
 
 // Callbacks for intercepted events
 let callbacks: InterceptorCallbacks | null = null

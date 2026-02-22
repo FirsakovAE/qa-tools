@@ -20,6 +20,7 @@ import { PropsTab } from '@/features/props'
 import { StoresTab, usePiniaStores } from '@/features/stores'
 import { OptionsTab } from '@/features/settings'
 import { NetworkTab } from '@/features/network'
+import { postToContentScript } from '@/utils/postToContentScript'
   
   /* ============================================================================
    * Pinia
@@ -271,13 +272,21 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     window.addEventListener('vue-inspector:navigate-about', handleNavigateToAbout)
     
     // Request initial flags
-    window.parent?.postMessage(
-      {
-        __VUE_INSPECTOR__: true,
-        message: { type: 'VUE_INSPECTOR_GET_FLAGS' },
-      },
-      '*',
-    )
+    postToContentScript({ type: 'VUE_INSPECTOR_GET_FLAGS' })
+
+    // DevTools reconnect handler — re-request flags after page reload
+    const handleReconnect = (event: MessageEvent) => {
+      if (event.data?.__VUE_INSPECTOR__ && event.data.broadcast &&
+          event.data.message?.type === 'DEVTOOLS_RECONNECTED') {
+        storesLoaded = false
+        postToContentScript({ type: 'VUE_INSPECTOR_GET_FLAGS' })
+      }
+    }
+    window.addEventListener('message', handleReconnect)
+
+    onUnmounted(() => {
+      window.removeEventListener('message', handleReconnect)
+    })
   })
   
   onUnmounted(() => {
