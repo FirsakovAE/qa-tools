@@ -110,9 +110,40 @@
     .update-description {
       font-size: 0.875rem;
       line-height: 1.5;
-      white-space: pre-line;
       margin-top: 0.5rem;
     }
+
+    .update-description h1 { font-size: 1.25rem; font-weight: 700; margin: 0.75rem 0 0.375rem; }
+    .update-description h2 { font-size: 1.1rem; font-weight: 600; margin: 0.625rem 0 0.25rem; }
+    .update-description h3 { font-size: 1rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+    .update-description h4 { font-size: 0.875rem; font-weight: 600; margin: 0.375rem 0 0.125rem; }
+    .update-description p { margin: 0.375rem 0; }
+    .update-description ul,
+    .update-description ol { padding-left: 1.25rem; margin: 0.375rem 0; }
+    .update-description li { margin: 0.125rem 0; }
+    .update-description code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 0.125rem 0.375rem;
+      border-radius: 4px;
+      font-size: 0.8em;
+    }
+    .update-description pre {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.75rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+    }
+    .update-description pre code { background: none; padding: 0; }
+    .update-description a { color: var(--accent); text-decoration: underline; }
+    .update-description blockquote {
+      border-left: 3px solid var(--border);
+      padding-left: 0.75rem;
+      color: var(--text-muted);
+      margin: 0.5rem 0;
+    }
+    .update-description hr { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+    .update-description > *:first-child { margin-top: 0; }
     
     .release-date {
       font-size: 0.75rem;
@@ -524,6 +555,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="./main.js"></script>
 </body>
 </html>

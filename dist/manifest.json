@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Vue Inspector",
-  "version": "2.1.0",
+  "version": "2.0.0",
   "description": "Pinia store and props inspector for Vue.js applications",
   "author": "AdamBarmy",
   "icons": {
@@ -15,6 +15,7 @@
     "storage"
   ],
   "host_permissions": ["<all_urls>"],
+  "devtools_page": "devtools/devtools.html",
   "background": {
     "service_worker": "js/background.js"
   },
@@ -31,7 +32,8 @@
         "assets/*",
         "js/*",
         "icons/*",
-        "injected_ui/*"
+        "injected_ui/*",
+        "devtools/*"
       ],
       "matches": ["<all_urls>"]
     }

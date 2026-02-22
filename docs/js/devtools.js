@@ -1,0 +1,1 @@
+const e=chrome.devtools.inspectedWindow.tabId;chrome.runtime.sendMessage({type:"GET_DISPLAY_MODE"},t=>{t?.displayMode==="devtools"&&chrome.runtime.sendMessage({type:"IS_STATIC_SITE",tabId:e},o=>{o?.isStatic||chrome.devtools.panels.create("Vue Inspector","icons/icon32.png",`injected_ui/index.html?devtools=1&tabId=${e}`)})});
