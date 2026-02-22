@@ -19,11 +19,18 @@ import {
 } from '@/components/ui/select'
 import RadioGroup from '@/components/ui/RadioGroup/RadioGroup.vue'
 import RadioGroupItem from '@/components/ui/RadioGroup/RadioGroupItem.vue'
-import { Info } from 'lucide-vue-next'
+import { Info, Download, Upload, RotateCcw } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 import { getRuntimeAdapter } from '@/runtime'
 
 const props = defineProps<{
   settings: InspectorSettings
+}>()
+
+const emit = defineEmits<{
+  (e: 'import'): void
+  (e: 'export'): void
+  (e: 'reset'): void
 }>()
 
 const isRunningInDevtools = getRuntimeAdapter()?.id === 'devtools'
@@ -185,6 +192,25 @@ const refreshIntervals = [
           </div>
         </TabsContent>
       </Tabs>
+    </div>
+
+    <!-- IMPORT / EXPORT / RESET -->
+    <div class="space-y-4 border-t pt-4">
+      <h4 class="text-sm font-semibold">Settings Management</h4>
+      <div class="flex items-center gap-2">
+        <Button size="sm" variant="outline" class="h-8 gap-1.5" @click="emit('import')">
+          <Download class="w-3.5 h-3.5" />
+          Import
+        </Button>
+        <Button size="sm" variant="outline" class="h-8 gap-1.5" @click="emit('export')">
+          <Upload class="w-3.5 h-3.5" />
+          Export
+        </Button>
+        <Button size="sm" variant="destructive" class="h-8 gap-1.5" @click="emit('reset')">
+          <RotateCcw class="w-3.5 h-3.5" />
+          Reset
+        </Button>
+      </div>
     </div>
   </div>
 </template>

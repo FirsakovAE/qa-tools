@@ -14,9 +14,6 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import {
-  Download,
-  Upload,
-  RotateCcw,
   Settings,
   Globe,
   Box,
@@ -426,24 +423,6 @@ onMounted(async () => {
     <div class="shrink-0 flex items-center gap-2 p-2 border-b">
       <Settings class="h-5 w-5 text-muted-foreground" />
       <h3 class="text-lg font-semibold">Options</h3>
-
-      <div class="flex-1" />
-
-      <!-- Quick actions -->
-      <div class="flex items-center gap-2">
-        <Button size="sm" variant="outline" @click="handleImport" :disabled="!settings" class="h-8 gap-1.5">
-          <Download class="w-3.5 h-3.5" />
-          Import
-        </Button>
-        <Button size="sm" variant="outline" @click="handleExport" :disabled="!settings" class="h-8 gap-1.5">
-          <Upload class="w-3.5 h-3.5" />
-          Export
-        </Button>
-        <Button size="sm" variant="destructive" @click="handleReset" :disabled="!settings" class="h-8 gap-1.5">
-          <RotateCcw class="w-3.5 h-3.5" />
-          Reset
-        </Button>
-      </div>
     </div>
 
     <!-- Loading -->
@@ -473,7 +452,7 @@ onMounted(async () => {
             variant="ghost"
             size="sm"
             :class="[
-              'justify-start h-10 text-sm',
+              'w-full justify-start h-10 text-sm',
               activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
             ]"
             @click="activeSection = section.id"
@@ -489,6 +468,9 @@ onMounted(async () => {
             <GeneralSection
               v-if="activeSection === 'general'"
               :settings="settings"
+              @import="handleImport"
+              @export="handleExport"
+              @reset="handleReset"
             />
             <NetworkSection
               v-else-if="activeSection === 'network'"

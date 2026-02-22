@@ -480,7 +480,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
         <!-- ===== Options tab ===== -->
         <div
           v-else-if="activeTab === 'options'"
-          class="h-full overflow-hidden p-2"
+          class="h-full overflow-hidden"
         >
           <OptionsTab 
             :scroll-to-anchor="optionsScrollAnchor"
