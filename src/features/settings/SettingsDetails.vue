@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { marked } from 'marked'
+import '@/assets/markdown.css'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { BreakpointItem, MockRule, FavoriteItem } from '@/types/inspector'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
@@ -14,6 +16,14 @@ import {
   ArrowUpCircle,
   Pencil,
 } from 'lucide-vue-next'
+
+marked.setOptions({ breaks: true, gfm: true })
+
+const renderedBody = computed(() => {
+  const body = props.releaseInfo?.body
+  if (!body) return ''
+  return marked.parse(body) as string
+})
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -126,7 +136,7 @@ function formatTrigger(trigger: string): string {
 
               <div>
                 <span class="text-xs text-muted-foreground">What's New</span>
-                <pre class="mt-2 text-sm whitespace-pre-wrap break-words font-sans leading-relaxed">{{ releaseInfo.body }}</pre>
+                <div class="mt-2 text-sm break-words font-sans leading-relaxed markdown-body" v-html="renderedBody" />
               </div>
 
               <div class="flex gap-2 pt-2 border-t">
@@ -166,7 +176,7 @@ function formatTrigger(trigger: string): string {
 
             <div v-if="releaseInfo.body">
               <span class="text-xs text-muted-foreground">Current Release Notes</span>
-              <pre class="mt-2 text-sm whitespace-pre-wrap break-words font-sans leading-relaxed">{{ releaseInfo.body }}</pre>
+              <div class="mt-2 text-sm break-words font-sans leading-relaxed markdown-body" v-html="renderedBody" />
             </div>
           </template>
 
@@ -175,7 +185,7 @@ function formatTrigger(trigger: string): string {
             <div v-if="releaseInfo.version" class="text-xs text-muted-foreground">
               Version {{ releaseInfo.version }}
             </div>
-            <pre class="text-sm whitespace-pre-wrap break-words font-sans leading-relaxed">{{ releaseInfo.body }}</pre>
+            <div class="text-sm break-words font-sans leading-relaxed markdown-body" v-html="renderedBody" />
           </template>
 
         </div>
