@@ -315,7 +315,9 @@ function formatTrigger(trigger: string): string {
 
               <div v-if="mockData.body !== undefined">
                 <span class="text-xs text-muted-foreground">Body</span>
-                <pre class="mt-1 text-xs font-mono bg-muted/50 rounded p-2 max-h-[200px] overflow-auto whitespace-pre-wrap break-all">{{ mockData.body || '(empty)' }}</pre>
+                <ScrollArea class="mt-1 rounded bg-muted/50 mock-body-scroll">
+                  <pre class="text-xs font-mono p-2 whitespace-pre-wrap break-all">{{ mockData.body || '(empty)' }}</pre>
+                </ScrollArea>
               </div>
 
               <div v-if="mockData.description">
@@ -381,3 +383,10 @@ function formatTrigger(trigger: string): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+.mock-body-scroll :deep([data-reka-scroll-area-viewport]) {
+  max-height: 200px;
+  height: auto !important;
+}
+</style>
