@@ -7,10 +7,10 @@
 const tabId = chrome.devtools.inspectedWindow.tabId
 
 chrome.runtime.sendMessage({ type: 'GET_DISPLAY_MODE' }, (modeResp) => {
-  if (modeResp?.displayMode !== 'devtools') return
+  if (chrome.runtime.lastError || modeResp?.displayMode !== 'devtools') return
 
   chrome.runtime.sendMessage({ type: 'IS_STATIC_SITE', tabId }, (staticResp) => {
-    if (staticResp?.isStatic) return
+    if (chrome.runtime.lastError || staticResp?.isStatic) return
 
     chrome.devtools.panels.create(
       'Vue Inspector',

@@ -69,7 +69,7 @@ const sections = [
 ]
 
 // -------------------- SELECTED ITEM --------------------
-type SelectedItemType = 'breakpoint' | 'mock' | 'blacklist' | 'favorite'
+type SelectedItemType = 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'saved-file'
 const selectedItem = ref<{ type: SelectedItemType; id: string } | null>(null)
 
 watch(activeSection, () => {
@@ -475,7 +475,7 @@ onMounted(async () => {
             <NetworkSection
               v-else-if="activeSection === 'network'"
               :settings="settings"
-              :selected-item-id="selectedItem?.type === 'breakpoint' || selectedItem?.type === 'mock' ? selectedItem.id : null"
+              :selected-item-id="selectedItem?.type === 'breakpoint' || selectedItem?.type === 'mock' || selectedItem?.type === 'saved-file' ? selectedItem.id : null"
               @select="onSelectItem"
               @edit-breakpoint="handleEditBreakpoint"
               @edit-mock="handleEditMock"

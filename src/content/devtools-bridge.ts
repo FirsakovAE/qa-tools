@@ -152,7 +152,7 @@ export function setupDevtoolsBridge(): void {
     setTimeout(() => {
       try {
         chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (settings) => {
-          if (!settings || typeof settings !== 'object') return
+          if (chrome.runtime.lastError || !settings || typeof settings !== 'object') return
 
           const activeBps = settings.breakpoints?.active
           if (Array.isArray(activeBps) && activeBps.length > 0) {

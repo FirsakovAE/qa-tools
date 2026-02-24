@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { marked } from 'marked'
 import '@/assets/markdown.css'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { BreakpointItem, MockRule, FavoriteItem } from '@/types/inspector'
+import type { BreakpointItem, MockRule, FavoriteItem, SavedFile } from '@/types/inspector'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   ArrowUpCircle,
   Pencil,
+  FileSpreadsheet,
+  FileText,
 } from 'lucide-vue-next'
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -27,7 +29,7 @@ const renderedBody = computed(() => {
 
 const props = defineProps<{
   settings: InspectorSettings
-  selectedItem: { type: 'breakpoint' | 'mock' | 'blacklist' | 'favorite'; id: string } | null
+  selectedItem: { type: 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'saved-file'; id: string } | null
   releaseInfo?: ReleaseDisplayInfo | null
 }>()
 
@@ -71,6 +73,113 @@ const blacklistData = computed<{ name: string; active: boolean } | null>(() => {
 const favoriteData = computed<FavoriteItem | null>(() => {
   if (props.selectedItem?.type !== 'favorite') return null
   return props.settings.favorites.find(f => f.id === props.selectedItem!.id) || null
+})
+
+const savedFileData = computed<SavedFile | null>(() => {
+  if (props.selectedItem?.type !== 'saved-file') return null
+  return props.settings.savedFiles?.find(f => f.id === props.selectedItem!.id) || null
+})
+
+// -------------------- FILE PREVIEW HELPERS --------------------
+function isImageFile(mime: string): boolean {
+  return mime.startsWith('image/')
+}
+
+function isAudioFile(mime: string): boolean {
+  return mime.startsWith('audio/')
+}
+
+function isVideoFile(mime: string): boolean {
+  return mime.startsWith('video/')
+}
+
+function isTextFile(mime: string): boolean {
+  const textPrefixes = [
+    'text/', 'application/json', 'application/xml', 'application/javascript',
+    'application/typescript', 'application/x-yaml', 'application/yaml',
+    'application/csv', 'application/x-sh', 'application/sql',
+  ]
+  return textPrefixes.some(t => mime.startsWith(t))
+}
+
+function decodeTextDataUri(dataUri: string): string {
+  try {
+    const base64 = dataUri.split(',')[1]
+    if (!base64) return '(empty)'
+    return decodeURIComponent(escape(atob(base64)))
+  } catch {
+    try {
+      return atob(dataUri.split(',')[1] || '')
+    } catch {
+      return '(unable to decode)'
+    }
+  }
+}
+
+function isOfficeFile(mime: string): boolean {
+  const officeTypes = [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/msword',
+    'application/vnd.ms-excel',
+    'application/vnd.ms-powerpoint',
+  ]
+  return officeTypes.includes(mime)
+}
+
+function getOfficeFileLabel(mime: string): string {
+  if (mime.includes('word') || mime.includes('document')) return 'Word Document'
+  if (mime.includes('excel') || mime.includes('sheet')) return 'Excel Spreadsheet'
+  if (mime.includes('powerpoint') || mime.includes('presentation')) return 'PowerPoint Presentation'
+  return 'Office Document'
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const kb = bytes / 1024
+  if (kb < 1024) return `${kb.toFixed(1)} KB`
+  return `${(kb / 1024).toFixed(1)} MB`
+}
+
+function dataUriToBlob(dataUri: string): Blob {
+  const [header, base64] = dataUri.split(',')
+  const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream'
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: mime })
+}
+
+function downloadSavedFile(file: SavedFile) {
+  const blob = dataUriToBlob(file.dataUri)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = file.name
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+const officeBlobUrl = ref<string | null>(null)
+
+watch(savedFileData, (file) => {
+  if (officeBlobUrl.value) {
+    URL.revokeObjectURL(officeBlobUrl.value)
+    officeBlobUrl.value = null
+  }
+  if (file && isOfficeFile(file.mimeType)) {
+    const blob = dataUriToBlob(file.dataUri)
+    officeBlobUrl.value = URL.createObjectURL(blob)
+  }
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  if (officeBlobUrl.value) {
+    URL.revokeObjectURL(officeBlobUrl.value)
+  }
 })
 
 // -------------------- FORMATTERS --------------------
@@ -199,7 +308,9 @@ function formatTrigger(trigger: string): string {
         <Button variant="ghost" size="icon" class="h-7 w-7" @click="emit('close')">
           <ArrowLeft class="h-4 w-4" />
         </Button>
-        <span class="text-sm font-semibold capitalize">{{ selectedItem.type }} Details</span>
+        <span class="text-sm font-semibold">
+          {{ selectedItem.type === 'saved-file' ? 'File Preview' : selectedItem.type.charAt(0).toUpperCase() + selectedItem.type.slice(1) + ' Details' }}
+        </span>
         <div class="flex-1" />
         <Button
           v-if="selectedItem.type === 'breakpoint' || selectedItem.type === 'mock'"
@@ -366,6 +477,127 @@ function formatTrigger(trigger: string): string {
             </div>
           </template>
 
+          <!-- Saved File Preview -->
+          <template v-else-if="selectedItem.type === 'saved-file' && savedFileData">
+            <div class="space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <span class="text-xs text-muted-foreground">Name</span>
+                  <p class="text-sm font-mono mt-1 break-all">{{ savedFileData.name }}</p>
+                </div>
+                <div>
+                  <span class="text-xs text-muted-foreground">Size</span>
+                  <p class="text-sm mt-1">{{ formatFileSize(savedFileData.size) }}</p>
+                </div>
+              </div>
+              <div>
+                <span class="text-xs text-muted-foreground">Type</span>
+                <p class="text-sm font-mono mt-1">{{ savedFileData.mimeType }}</p>
+              </div>
+
+              <!-- Image -->
+              <div v-if="isImageFile(savedFileData.mimeType)">
+                <span class="text-xs text-muted-foreground">Preview</span>
+                <div class="mt-2 rounded-lg border overflow-hidden bg-muted/20 flex items-center justify-center p-2">
+                  <img
+                    :src="savedFileData.dataUri"
+                    :alt="savedFileData.name"
+                    class="max-w-full max-h-[300px] object-contain rounded"
+                  />
+                </div>
+              </div>
+
+              <!-- Audio -->
+              <div v-else-if="isAudioFile(savedFileData.mimeType)">
+                <span class="text-xs text-muted-foreground">Preview</span>
+                <audio :src="savedFileData.dataUri" controls class="w-full mt-2" />
+              </div>
+
+              <!-- Video -->
+              <div v-else-if="isVideoFile(savedFileData.mimeType)">
+                <span class="text-xs text-muted-foreground">Preview</span>
+                <video
+                  :src="savedFileData.dataUri"
+                  controls
+                  class="w-full mt-2 rounded-lg max-h-[300px]"
+                />
+              </div>
+
+              <!-- Text / JSON / XML / Code -->
+              <div v-else-if="isTextFile(savedFileData.mimeType)">
+                <span class="text-xs text-muted-foreground">Preview</span>
+                <ScrollArea class="mt-2 rounded bg-muted/50 saved-file-text-scroll">
+                  <pre class="text-xs font-mono p-3 whitespace-pre-wrap break-all">{{ decodeTextDataUri(savedFileData.dataUri) }}</pre>
+                </ScrollArea>
+              </div>
+
+              <!-- PDF -->
+              <div v-else-if="savedFileData.mimeType === 'application/pdf'">
+                <span class="text-xs text-muted-foreground">Preview</span>
+                <iframe
+                  :src="savedFileData.dataUri"
+                  class="w-full h-[300px] mt-2 rounded-lg border"
+                />
+              </div>
+
+              <!-- Word / Excel / PowerPoint -->
+              <div v-else-if="isOfficeFile(savedFileData.mimeType)">
+                <span class="text-xs text-muted-foreground">Preview</span>
+                <div class="mt-2 rounded-lg border bg-muted/20 overflow-hidden">
+                  <div class="flex flex-col items-center justify-center py-8 px-4 gap-3">
+                    <component
+                      :is="savedFileData.mimeType.includes('sheet') || savedFileData.mimeType.includes('excel') ? FileSpreadsheet : FileText"
+                      class="h-12 w-12 text-muted-foreground/60"
+                    />
+                    <div class="text-center">
+                      <p class="text-sm font-medium">{{ getOfficeFileLabel(savedFileData.mimeType) }}</p>
+                      <p class="text-xs text-muted-foreground mt-1">{{ savedFileData.name }}</p>
+                    </div>
+                    <div class="flex gap-2 mt-2">
+                      <Button
+                        v-if="officeBlobUrl"
+                        variant="outline"
+                        size="sm"
+                        class="gap-1.5 text-xs"
+                        as="a"
+                        :href="officeBlobUrl"
+                        target="_blank"
+                      >
+                        Open
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="gap-1.5 text-xs"
+                        @click="downloadSavedFile(savedFileData!)"
+                      >
+                        <Download class="h-3.5 w-3.5" />
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SVG (may not start with image/) -->
+              <div v-else-if="savedFileData.mimeType === 'image/svg+xml'">
+                <span class="text-xs text-muted-foreground">Preview</span>
+                <div class="mt-2 rounded-lg border overflow-hidden bg-muted/20 flex items-center justify-center p-2">
+                  <img
+                    :src="savedFileData.dataUri"
+                    :alt="savedFileData.name"
+                    class="max-w-full max-h-[300px] object-contain"
+                  />
+                </div>
+              </div>
+
+              <!-- Unsupported type -->
+              <div v-else class="mt-3 text-sm text-muted-foreground text-center py-6 border rounded-lg bg-muted/20">
+                Preview not available for this file type
+              </div>
+            </div>
+          </template>
+
           <!-- Item was deleted -->
           <template v-else>
             <div class="text-center py-8 text-muted-foreground">
@@ -387,6 +619,10 @@ function formatTrigger(trigger: string): string {
 <style scoped>
 .mock-body-scroll :deep([data-reka-scroll-area-viewport]) {
   max-height: 200px;
+  height: auto !important;
+}
+.saved-file-text-scroll :deep([data-reka-scroll-area-viewport]) {
+  max-height: 300px;
   height: auto !important;
 }
 </style>

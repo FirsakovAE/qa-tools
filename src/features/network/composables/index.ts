@@ -7,6 +7,10 @@
  * - useBreakpointState: Breakpoint mode, drafts, and sync
  * - useMockState: Mock (Map Local) sync to injected script
  * - useBreakpointMatching: URL pattern matching utilities
+ * - useBreakpointEditor: Editable state for breakpoint detail panel
+ * - useFormDataEditor: Form-data editing in breakpoint mode
+ * - useNetworkHandlers: Handlers for network tab actions
+ * - useMockFormState: Mock form state and logic
  */
 
 export { useNetworkEntries, type NetworkEntriesOptions } from './useNetworkEntries'
@@ -27,3 +31,7 @@ export {
   findMatchingMock,
   getMockMatchingEntryIds
 } from './useBreakpointMatching'
+export { useBreakpointEditor, type BreakpointEditData, type BreakpointDraftShape } from './useBreakpointEditor'
+export { useFormDataEditor } from './useFormDataEditor'
+export { useNetworkHandlers } from './useNetworkHandlers'
+export { useMockFormState, HTTP_STATUS_TEXT } from './useMockFormState'

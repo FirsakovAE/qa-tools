@@ -12,7 +12,7 @@ import {
   TooltipTrigger
 } from '@/components/ui/tooltip'
 import NetworkTable from './NetworkTable.vue'
-import NetworkDetails, { type BreakpointEditData } from './NetworkDetails.vue'
+import NetworkDetails from './NetworkDetails.vue'
 import MockForm from './MockForm.vue'
 import BreakpointForm from './BreakpointForm.vue'
 import type { NetworkEntry } from '@/types/network'
@@ -25,14 +25,10 @@ import {
   useBreakpointState,
   useMockState,
   useNetworkUIState,
-  type BreakpointDraft
+  useNetworkHandlers,
+  type BreakpointDraft,
+  type BreakpointEditData,
 } from './composables'
-import {
-  findMatchingBreakpoint,
-  findMatchingMock,
-  matchesBreakpoint as matchesBreakpointFn,
-  matchesMock as matchesMockFn
-} from './composables/useBreakpointMatching'
 import { deepClone } from './utils'
 
 // ============================================================================
@@ -92,7 +88,6 @@ const allMocksWithStatus = computed(() => [
 // Composables
 // ============================================================================
 
-// Network entries management
 const {
   entries,
   paused,
@@ -114,7 +109,6 @@ const {
   }
 })
 
-// Search type options for FacetedFilter
 type NetworkSearchKey = 'byPath' | 'byMethod' | 'byStatus' | 'byKey' | 'byValue'
 const searchTypeMap: Record<string, NetworkSearchKey> = {
   'Path': 'byPath',
@@ -139,7 +133,6 @@ const selectedSearchTypes = computed<string[]>({
   }
 })
 
-// Search
 const {
   searchTerm,
   filteredEntries,
@@ -153,39 +146,20 @@ const {
   () => searchSettings.value
 )
 
-// Breakpoint state
 const breakpointState = useBreakpointState(
   () => activeBreakpoints.value,
   () => entries.value,
-  {
-    sendCommand,
-    getEntry
-  }
+  { sendCommand, getEntry }
 )
 
-// Mock state
 const mockState = useMockState(
   () => activeMocks.value,
   { sendCommand },
   () => entries.value
 )
 
-// cURL copy
 const { copyCurl } = useCurlCopy()
-
-// UI State (persisted at module level)
 const { selectedEntryId } = useNetworkUIState()
-
-// ============================================================================
-// UI State
-// ============================================================================
-
-const mockFormMode = ref(false)
-const mockFormEntry = ref<NetworkEntry | null>(null)
-const mockFormExisting = ref<MockRule | null>(null)
-const breakpointFormMode = ref(false)
-const breakpointFormEntry = ref<NetworkEntry | null>(null)
-const breakpointFormExisting = ref<BreakpointItem | null>(null)
 
 // Pending breakpoint from Navigation
 const pendingBreakpointToProcess = ref<PendingBreakpointFromNav | null>(null)
@@ -194,40 +168,26 @@ const pendingBreakpointToProcess = ref<PendingBreakpointFromNav | null>(null)
 // Computed
 // ============================================================================
 
-// Get all pending breakpoint IDs in order of arrival (by timestamp)
 const pendingBreakpointIds = computed(() => {
   const pending = Array.from(breakpointState.pendingBreakpoints.value.entries())
   pending.sort((a, b) => a[1].timestamp - b[1].timestamp)
   return pending.map(([id]) => id)
 })
 
-// The entry that should be shown in the right panel
-// User can browse other entries, but breakpoints need attention
 const activeEntryId = computed(() => {
-  // If user has selected an entry, show it (even if there are pending breakpoints)
-  if (selectedEntryId.value) {
-    return selectedEntryId.value
-  }
-  // If no selection but there are pending breakpoints, auto-show first one
-  if (pendingBreakpointIds.value.length > 0) {
-    return pendingBreakpointIds.value[0]
-  }
+  if (selectedEntryId.value) return selectedEntryId.value
+  if (pendingBreakpointIds.value.length > 0) return pendingBreakpointIds.value[0]
   return null
 })
 
 const selectedEntry = computed(() => {
   if (!activeEntryId.value) return null
-  
-  // First try to find in entries
   const entry = entries.value.find(e => e.id === activeEntryId.value)
   if (entry) {
     return deepClone({ ...entry, version: entry.version ?? 1 }) as NetworkEntry
   }
-  
-  // If not found but we have a pending breakpoint, construct entry from draft
   const draft = breakpointState.getBreakpointDraft(activeEntryId.value)
   if (draft) {
-    // Construct a minimal entry from draft for display
     const fullUrl = `${draft.scheme}://${draft.host}${draft.path}`
     const constructedEntry: NetworkEntry = {
       id: draft.entryId,
@@ -252,7 +212,6 @@ const selectedEntry = computed(() => {
     }
     return constructedEntry
   }
-  
   return null
 })
 
@@ -263,21 +222,61 @@ const currentBreakpointDraft = computed<BreakpointDraft | null>(() => {
   return breakpointState.getBreakpointDraft(activeEntryId.value)
 })
 
-// Check if currently showing a pending breakpoint
 const isShowingPendingBreakpoint = computed(() => {
   return !!(activeEntryId.value && breakpointState.pendingBreakpoints.value.has(activeEntryId.value))
 })
 
 // ============================================================================
+// Handlers (composable)
+// ============================================================================
+
+const handlers = useNetworkHandlers({
+  settings,
+  selectedEntryId,
+  pendingBreakpointIds,
+  activeBreakpoints,
+  activeMocks,
+  breakpointState,
+  mockState,
+  clearEntriesBase,
+  clearIndex,
+  copyCurl,
+  activeEntryId,
+})
+
+const {
+  mockFormMode,
+  mockFormEntry,
+  mockFormExisting,
+  breakpointFormMode,
+  breakpointFormEntry,
+  breakpointFormExisting,
+  clearEntries,
+  selectEntry,
+  deselectEntry,
+  selectFirstPendingBreakpoint,
+  handleSetBreakpoint,
+  handleBreakpointFormBack,
+  handleBreakpointConfirm,
+  handleMockResponse,
+  handleMockFormBack,
+  handleMockConfirm,
+  handleCopyCurl,
+  handleToggleBreakpoint,
+  handleDeleteBreakpoint,
+  handleToggleMock,
+  handleDeleteMock,
+  handleApplyBreakpoint,
+  handleCancelBreakpoint,
+  handleDraftUpdate,
+} = handlers
+
+// ============================================================================
 // Watchers
 // ============================================================================
 
-// Rebuild search index when entries change
-watch(entries, () => {
-  rebuildIndex()
-}, { deep: true })
+watch(entries, () => { rebuildIndex() }, { deep: true })
 
-// Handle pending breakpoint from Navigation
 watch(() => props.pendingBreakpoint, (pending) => {
   if (pending) {
     pendingBreakpointToProcess.value = pending
@@ -285,7 +284,6 @@ watch(() => props.pendingBreakpoint, (pending) => {
   }
 }, { immediate: true })
 
-// Process pending breakpoint after ready
 watch([isReady, pendingBreakpointToProcess], ([ready, pending]) => {
   if (ready && pending) {
     if (pending.entry) {
@@ -301,23 +299,13 @@ watch([isReady, pendingBreakpointToProcess], ([ready, pending]) => {
   }
 }, { immediate: true })
 
-// Sync breakpoints when settings change
-watch(activeBreakpoints, () => {
-  breakpointState.syncBreakpoints()
-}, { deep: true })
+watch(activeBreakpoints, () => { breakpointState.syncBreakpoints() }, { deep: true })
+watch(activeMocks, () => { mockState.syncMocks() }, { deep: true })
 
-// Sync mocks when settings change
-watch(activeMocks, () => {
-  mockState.syncMocks()
-}, { deep: true })
-
-// Auto-select first pending breakpoint when new breakpoints arrive
 watch(pendingBreakpointIds, (newIds, oldIds) => {
-  // If a new breakpoint was added
   if (newIds.length > (oldIds?.length ?? 0)) {
     const newBreakpointId = newIds.find(id => !oldIds?.includes(id))
     if (newBreakpointId) {
-      // If no entry is selected or current selection is not a pending breakpoint, select the new one
       if (!selectedEntryId.value || !newIds.includes(selectedEntryId.value)) {
         selectedEntryId.value = newBreakpointId
       }
@@ -335,7 +323,6 @@ onMounted(async () => {
     if (settings.value && !settings.value.mocks) {
       settings.value.mocks = { active: [], inactive: [] }
     }
-    // Initial sync after settings load
     setTimeout(() => {
       breakpointState.syncBreakpoints()
       mockState.syncMocks()
@@ -344,223 +331,6 @@ onMounted(async () => {
     // Use defaults
   }
 })
-
-// ============================================================================
-// Handlers
-// ============================================================================
-
-function clearEntries() {
-  clearEntriesBase()
-  selectedEntryId.value = null
-  clearIndex()
-}
-
-function selectEntry(id: string) {
-  if (mockFormMode.value && mockFormEntry.value?.id !== id) {
-    mockFormMode.value = false
-    mockFormEntry.value = null
-    mockFormExisting.value = null
-  }
-  if (breakpointFormMode.value && breakpointFormEntry.value?.id !== id) {
-    breakpointFormMode.value = false
-    breakpointFormEntry.value = null
-    breakpointFormExisting.value = null
-  }
-  selectedEntryId.value = id
-}
-
-function deselectEntry() {
-  // If there are pending breakpoints, switch to the first one instead of fully deselecting
-  if (pendingBreakpointIds.value.length > 0) {
-    selectedEntryId.value = pendingBreakpointIds.value[0]
-  } else {
-    selectedEntryId.value = null
-  }
-}
-
-function selectFirstPendingBreakpoint() {
-  if (pendingBreakpointIds.value.length > 0) {
-    // Close any open forms
-    mockFormMode.value = false
-    mockFormEntry.value = null
-    mockFormExisting.value = null
-    breakpointFormMode.value = false
-    breakpointFormEntry.value = null
-    breakpointFormExisting.value = null
-    // Select the first pending breakpoint
-    selectedEntryId.value = pendingBreakpointIds.value[0]
-  }
-}
-
-function handleSetBreakpoint(entry: NetworkEntry) {
-  selectedEntryId.value = entry.id
-  breakpointFormEntry.value = entry
-  // Find matching existing breakpoint for rewrite
-  const matchingBp = findMatchingBreakpoint(entry, activeBreakpoints.value)
-  breakpointFormExisting.value = matchingBp
-  breakpointFormMode.value = true
-}
-
-function handleBreakpointFormBack() {
-  breakpointFormMode.value = false
-  breakpointFormEntry.value = null
-  breakpointFormExisting.value = null
-}
-
-function handleBreakpointConfirm(breakpoint: BreakpointItem) {
-  if (!settings.value?.breakpoints) return
-  
-  // Check if this is a rewrite (existing breakpoint with same ID)
-  const existingIndex = settings.value.breakpoints.active.findIndex(bp => bp.id === breakpoint.id)
-  if (existingIndex !== -1) {
-    // Rewrite: replace existing breakpoint
-    settings.value.breakpoints.active[existingIndex] = breakpoint
-  } else {
-    // New: add breakpoint
-    settings.value.breakpoints.active.push(breakpoint)
-  }
-  
-  breakpointState.syncBreakpoints()
-  breakpointFormMode.value = false
-  breakpointFormEntry.value = null
-  breakpointFormExisting.value = null
-}
-
-function handleMockResponse(entry: NetworkEntry) {
-  selectedEntryId.value = entry.id
-  mockFormEntry.value = entry
-  // Find matching existing mock for rewrite
-  const matchingMock = findMatchingMock(entry, activeMocks.value)
-  mockFormExisting.value = matchingMock
-  mockFormMode.value = true
-}
-
-function handleMockFormBack() {
-  mockFormMode.value = false
-  mockFormEntry.value = null
-  mockFormExisting.value = null
-}
-
-function handleMockConfirm(mock: MockRule) {
-  if (!settings.value) return
-  if (!settings.value.mocks) {
-    settings.value.mocks = { active: [], inactive: [] }
-  }
-  
-  // Check if this is a rewrite (existing mock with same ID)
-  const existingIndex = settings.value.mocks.active.findIndex(m => m.id === mock.id)
-  if (existingIndex !== -1) {
-    // Rewrite: replace existing mock
-    settings.value.mocks.active[existingIndex] = mock
-  } else {
-    // New: add mock
-    settings.value.mocks.active.push(mock)
-  }
-  
-  mockState.syncMocks()
-  mockFormMode.value = false
-  mockFormEntry.value = null
-  mockFormExisting.value = null
-}
-
-function handleCopyCurl(entry: NetworkEntry) {
-  copyCurl(entry)
-}
-
-function handleToggleBreakpoint(entry: NetworkEntry) {
-  if (!settings.value?.breakpoints) return
-  const bps = settings.value.breakpoints
-  
-  // Look in active first
-  const activeIdx = bps.active.findIndex(bp => {
-    const test = { ...bp, enabled: true }
-    return matchesBreakpointFn(entry, test)
-  })
-  if (activeIdx !== -1) {
-    const [bp] = bps.active.splice(activeIdx, 1)
-    bps.inactive.push(bp)
-    breakpointState.syncBreakpoints()
-    return
-  }
-  
-  // Then in inactive
-  const inactiveIdx = bps.inactive.findIndex(bp => {
-    const test = { ...bp, enabled: true }
-    return matchesBreakpointFn(entry, test)
-  })
-  if (inactiveIdx !== -1) {
-    const [bp] = bps.inactive.splice(inactiveIdx, 1)
-    bps.active.push(bp)
-    breakpointState.syncBreakpoints()
-  }
-}
-
-function handleDeleteBreakpoint(entry: NetworkEntry) {
-  if (!settings.value?.breakpoints) return
-  const bps = settings.value.breakpoints
-  bps.active = bps.active.filter(bp => !matchesBreakpointFn(entry, { ...bp, enabled: true }))
-  bps.inactive = bps.inactive.filter(bp => !matchesBreakpointFn(entry, { ...bp, enabled: true }))
-  breakpointState.syncBreakpoints()
-}
-
-function handleToggleMock(entry: NetworkEntry) {
-  if (!settings.value?.mocks) return
-  const mocks = settings.value.mocks
-  
-  // Look in active first
-  const activeIdx = mocks.active.findIndex(m => matchesMockFn(entry, { ...m, enabled: true }))
-  if (activeIdx !== -1) {
-    const [mock] = mocks.active.splice(activeIdx, 1)
-    mocks.inactive.push(mock)
-    mockState.syncMocks()
-    return
-  }
-  
-  // Then in inactive
-  const inactiveIdx = mocks.inactive.findIndex(m => matchesMockFn(entry, { ...m, enabled: true }))
-  if (inactiveIdx !== -1) {
-    const [mock] = mocks.inactive.splice(inactiveIdx, 1)
-    mocks.active.push(mock)
-    mockState.syncMocks()
-  }
-}
-
-function handleDeleteMock(entry: NetworkEntry) {
-  if (!settings.value?.mocks) return
-  const mocks = settings.value.mocks
-  mocks.active = mocks.active.filter(m => !matchesMockFn(entry, { ...m, enabled: true }))
-  mocks.inactive = mocks.inactive.filter(m => !matchesMockFn(entry, { ...m, enabled: true }))
-  mockState.syncMocks()
-}
-
-function handleApplyBreakpoint(data: BreakpointEditData) {
-  breakpointState.applyBreakpoint(data.entryId)
-  // After applying, switch to next pending breakpoint or deselect
-  switchToNextBreakpointOrDeselect(data.entryId)
-}
-
-function handleCancelBreakpoint(entryId: string) {
-  breakpointState.cancelBreakpoint(entryId)
-  // After cancelling, switch to next pending breakpoint or deselect
-  switchToNextBreakpointOrDeselect(entryId)
-}
-
-function switchToNextBreakpointOrDeselect(resolvedEntryId: string) {
-  // Get remaining pending breakpoints (excluding the one just resolved)
-  const remaining = pendingBreakpointIds.value.filter(id => id !== resolvedEntryId)
-  if (remaining.length > 0) {
-    // Switch to the next pending breakpoint
-    selectedEntryId.value = remaining[0]
-  } else {
-    // No more pending breakpoints, deselect
-    selectedEntryId.value = null
-  }
-}
-
-function handleDraftUpdate(updates: Partial<BreakpointDraft>) {
-  if (!activeEntryId.value) return
-  breakpointState.updateDraft(activeEntryId.value, updates)
-}
 </script>
 
 <template>

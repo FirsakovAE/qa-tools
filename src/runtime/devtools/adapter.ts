@@ -82,6 +82,7 @@ export class DevtoolsAdapter implements RuntimeAdapter {
     this.port.onMessage.addListener(this.portMessageHandler)
 
     this.port.onDisconnect.addListener(() => {
+      void chrome.runtime.lastError
       for (const { timeout, reject } of this.pendingRequests.values()) {
         clearTimeout(timeout)
         reject(new Error('Port disconnected'))

@@ -62,6 +62,10 @@ interface PendingBreakpoint {
 // Map of breakpoint ID -> resolver function
 const breakpointResolvers = new Map<string, PendingBreakpoint>()
 
+// Stores original FormData bodies by requestId so file entries can be
+// restored when the user clicks Apply without changing them.
+const originalFormDataBodies = new Map<string, FormData>()
+
 /**
  * Wait for breakpoint to be resumed
  * This ACTUALLY pauses the request execution
@@ -215,6 +219,38 @@ async function readResponseBody(response: Response, clone: Response): Promise<st
 }
 
 /**
+ * Serialize FormData into a JSON string with structured entries.
+ * Each entry has: key, type ('text' | 'file'), value, and optional file metadata.
+ */
+function serializeFormData(formData: FormData): string {
+  const entries: Array<{
+    key: string
+    type: 'text' | 'file'
+    value: string
+    fileName?: string
+    fileType?: string
+    fileSize?: number
+  }> = []
+
+  formData.forEach((value, key) => {
+    if (value instanceof File) {
+      entries.push({
+        key,
+        type: 'file',
+        value: `(binary)`,
+        fileName: value.name,
+        fileType: value.type || 'application/octet-stream',
+        fileSize: value.size,
+      })
+    } else {
+      entries.push({ key, type: 'text', value: String(value) })
+    }
+  })
+
+  return JSON.stringify({ __formData: true, entries })
+}
+
+/**
  * Serialize request body to string
  */
 function serializeRequestBody(body: BodyInit | null | undefined): string | null {
@@ -229,8 +265,7 @@ function serializeRequestBody(body: BodyInit | null | undefined): string | null 
   }
   
   if (body instanceof FormData) {
-    // FormData can't be easily serialized, provide placeholder
-    return '[FormData]'
+    return serializeFormData(body)
   }
   
   if (body instanceof Blob) {
@@ -315,12 +350,168 @@ function methodAllowsBody(method: string): boolean {
 }
 
 /**
+ * Normalize any user-provided file path into a file:// URI that fetch() can use.
+ *
+ * Supported inputs:
+ *   file:///C:/Users/.../file.jpg        → returned as-is
+ *   C:\Users\...\file.jpg                → file:///C:/Users/.../file.jpg
+ *   "C:\Users\...\file.jpg"              → (quotes stripped first)
+ *   C:/Users/.../file.jpg                → file:///C:/Users/.../file.jpg
+ *   \\server\share\file.jpg              → file://server/share/file.jpg
+ *   /Users/.../file.jpg                  → file:///Users/.../file.jpg
+ *   ~/Downloads/file.jpg                 → file:///Users/<home>/Downloads/file.jpg  (best-effort)
+ */
+function normalizeFilePathToUri(raw: string): string {
+  let p = raw.trim()
+  // Strip wrapping quotes
+  if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
+    p = p.slice(1, -1)
+  }
+  // Already a file:// URI
+  if (/^file:\/\//i.test(p)) return p
+
+  // UNC path  \\server\share\...  →  file://server/share/...
+  if (p.startsWith('\\\\')) {
+    return 'file:' + p.replace(/\\/g, '/')
+  }
+
+  // Normalise backslashes to forward slashes for the rest
+  p = p.replace(/\\/g, '/')
+
+  // Windows drive letter  C:/...  →  file:///C:/...
+  if (/^[A-Za-z]:\//.test(p)) {
+    return 'file:///' + p
+  }
+
+  // Home-dir shorthand ~/ (best-effort — won't work in every runtime)
+  if (p.startsWith('~/')) {
+    return 'file:///' + p.slice(2)
+  }
+
+  // Absolute Unix path /...
+  if (p.startsWith('/')) {
+    return 'file://' + p
+  }
+
+  // Fallback: return as-is (relative or already usable URL)
+  return p
+}
+
+/**
+ * Decode a base64 data URI (e.g. "data:image/jpeg;base64,/9j/4AAQ...") into a Blob.
+ */
+function dataUriToBlob(dataUri: string): Blob {
+  const commaIdx = dataUri.indexOf(',')
+  if (commaIdx === -1) return new Blob([], { type: 'application/octet-stream' })
+  const meta = dataUri.slice(0, commaIdx)
+  const base64 = dataUri.slice(commaIdx + 1)
+  const mimeMatch = meta.match(/data:([^;]+)/)
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream'
+  const byteString = atob(base64)
+  const ab = new ArrayBuffer(byteString.length)
+  const ia = new Uint8Array(ab)
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i)
+  }
+  return new Blob([ab], { type: mime })
+}
+
+/**
+ * Reconstruct the appropriate body from serialized string.
+ * If the string contains __formData marker, build a real FormData object.
+ *
+ * File entry resolution order:
+ *   1. value === "(binary)" + originalFD → restore original File
+ *   2. value starts with "data:" → decode base64 Data URI to Blob
+ *   3. value is a URL/path → attempt fetch (may fail for file:// in browsers)
+ *   4. Fallback → empty Blob with original filename
+ */
+async function deserializeBodyForRequest(
+  body: string | null,
+  originalFD?: FormData | null
+): Promise<BodyInit | null> {
+  if (!body) return body
+  try {
+    const parsed = JSON.parse(body)
+    if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
+      const fd = new FormData()
+      for (const entry of parsed.entries) {
+        if (entry.type === 'file') {
+          const rawValue: string = entry.value || ''
+
+          // 1. Value unchanged — restore original File from the captured FormData
+          if (rawValue === '(binary)' && originalFD) {
+            const original = originalFD.get(entry.key)
+            if (original instanceof File) {
+              fd.append(entry.key, original, original.name)
+              continue
+            }
+            if (original != null && typeof original !== 'string') {
+              fd.append(entry.key, original as Blob, entry.fileName || 'file')
+              continue
+            }
+            // Key-based lookup failed; try positional match (handles duplicate keys)
+            let found = false
+            const allValues = originalFD.getAll(entry.key)
+            for (const v of allValues) {
+              if (v instanceof File || (v != null && typeof v !== 'string')) {
+                fd.append(entry.key, v as Blob, v instanceof File ? v.name : (entry.fileName || 'file'))
+                found = true
+                break
+              }
+            }
+            if (found) continue
+          }
+
+          // (binary) without originalFD — send original body as-is (no modifications)
+          if (rawValue === '(binary)' && !originalFD) {
+            fd.append(entry.key, new Blob([], { type: entry.fileType || 'application/octet-stream' }), entry.fileName || 'file')
+            continue
+          }
+
+          // 2. Data URI from the built-in file picker (base64-encoded content)
+          if (rawValue.startsWith('data:')) {
+            const blob = dataUriToBlob(rawValue)
+            fd.append(entry.key, blob, entry.fileName || 'file')
+            continue
+          }
+
+          // 3. URL or file path — attempt fetch (works for http/https; file:// blocked by browsers)
+          if (rawValue) {
+            const fileUri = normalizeFilePathToUri(rawValue)
+            const fileName = rawValue.replace(/\\/g, '/').split('/').pop() || 'file'
+            let blob: Blob
+            try {
+              const resp = await originalFetch.call(window, fileUri)
+              blob = await resp.blob()
+            } catch {
+              console.warn('[VueInspector] Cannot fetch file from path (browser security restriction):', rawValue)
+              blob = new Blob([], { type: 'application/octet-stream' })
+            }
+            fd.append(entry.key, blob, fileName)
+            continue
+          }
+
+          // 4. Fallback: empty file
+          fd.append(entry.key, new Blob([], { type: 'application/octet-stream' }), entry.fileName || 'file')
+        } else {
+          fd.append(entry.key, entry.value ?? '')
+        }
+      }
+      return fd
+    }
+  } catch { /* not JSON — send as raw string */ }
+  return body
+}
+
+/**
  * Apply modifications to request init
  */
-function applyRequestModifications(
+async function applyRequestModifications(
   init: RequestInit | undefined,
-  modifications: BreakpointModifiedRequest
-): RequestInit {
+  modifications: BreakpointModifiedRequest,
+  originalFD?: FormData | null
+): Promise<RequestInit> {
   const modified: RequestInit = { ...init }
   
   // Apply method change
@@ -339,7 +530,11 @@ function applyRequestModifications(
   
   // Only set body if method allows it (GET/HEAD cannot have body)
   if (modifications.requestBody !== undefined && methodAllowsBody(effectiveMethod)) {
-    modified.body = modifications.requestBody
+    modified.body = await deserializeBodyForRequest(modifications.requestBody, originalFD)
+    // When sending FormData, let the browser set the Content-Type with boundary
+    if (modified.body instanceof FormData && modified.headers instanceof Headers) {
+      modified.headers.delete('content-type')
+    }
   } else if (!methodAllowsBody(effectiveMethod)) {
     // Ensure body is removed for GET/HEAD methods
     delete modified.body
@@ -518,7 +713,11 @@ function interceptFetch(): void {
     }
     
     // Extract request body (from init or Request object)
-    let requestBody = serializeRequestBody(init?.body || (input instanceof Request ? input.body as BodyInit : null))
+    const rawBody = init?.body || (input instanceof Request ? input.body as BodyInit : null)
+    if (rawBody instanceof FormData) {
+      originalFormDataBodies.set(requestId, rawBody)
+    }
+    let requestBody = serializeRequestBody(rawBody)
     
     // Notify about new request (only if not paused for logging)
     if (callbacks?.onRequest && !isPaused) {
@@ -552,8 +751,8 @@ function interceptFetch(): void {
         
         // Apply any modifications from user
         if (modifications) {
-          
-          const modifiedInit = applyRequestModifications(init, modifications)
+          const storedFD = originalFormDataBodies.get(requestId) || null
+          const modifiedInit = await applyRequestModifications(init, modifications, storedFD)
           
           // Apply URL modifications (scheme, host, path, params)
           // Note: empty params array also counts as URL modification (clears query string)
@@ -597,6 +796,7 @@ function interceptFetch(): void {
     // ========================================
     try {
       const response = await originalFetch.call(window, effectiveInput, effectiveInit)
+      originalFormDataBodies.delete(requestId)
       const endTime = performance.now()
       const duration = endTime - startTime
 
@@ -717,6 +917,7 @@ function interceptFetch(): void {
       
       return finalResponse
     } catch (error) {
+      originalFormDataBodies.delete(requestId)
       // Notify about error
       if (callbacks?.onError) {
         callbacks.onError(
@@ -900,6 +1101,9 @@ function interceptXHR(): void {
     }
     
     data.startTime = performance.now()
+    if (body instanceof FormData) {
+      originalFormDataBodies.set(data.id, body)
+    }
     data.requestBody = serializeRequestBody(body as BodyInit)
     
     // ========================================
@@ -1133,7 +1337,7 @@ function interceptXHR(): void {
         
         // Store resolver for this XHR - will be called when user clicks Apply
         breakpointResolvers.set(data.id, {
-          resolve: (modifications) => {
+          resolve: async (modifications) => {
             
             const reqMods = modifications as BreakpointModifiedRequest | undefined
 
@@ -1145,7 +1349,8 @@ function interceptXHR(): void {
             
             // Only apply body modifications if method allows body
             if (reqMods?.requestBody !== undefined && methodAllowsBody(effectiveMethod)) {
-              finalBody = reqMods.requestBody as XMLHttpRequestBodyInit
+              const storedFD = originalFormDataBodies.get(data.id) || null
+              finalBody = await deserializeBodyForRequest(reqMods.requestBody, storedFD) as XMLHttpRequestBodyInit
             } else if (!methodAllowsBody(effectiveMethod)) {
               // Clear body for GET/HEAD methods
               finalBody = null
@@ -1166,8 +1371,11 @@ function interceptXHR(): void {
               originalXHROpen.call(xhr, modifiedMethod, modifiedUrl, true)
               
               // Re-apply headers (use modified headers if available)
+              // Skip content-type when body is FormData — browser sets it with boundary
+              const isFormDataBody = finalBody instanceof FormData
               const headersToApply = reqMods.requestHeaders || data.requestHeaders
               headersToApply.forEach(h => {
+                if (isFormDataBody && h.name.toLowerCase() === 'content-type') return
                 try {
                   originalXHRSetRequestHeader.call(xhr, h.name, h.value)
                 } catch { /* Some headers can't be set */ }
@@ -1193,9 +1401,11 @@ function interceptXHR(): void {
 
             // Now actually send the request
             originalXHRSend.call(xhr, finalBody)
+            originalFormDataBodies.delete(data.id)
           },
           reject: (error) => {
             pendingXHRRequests.delete(data.id)
+            originalFormDataBodies.delete(data.id)
             // Abort the XHR
             xhr.abort()
           },
@@ -1561,4 +1771,5 @@ export function cleanupNetworkInterceptor(): void {
     pending.reject(new Error('Interceptor cleanup'))
   })
   breakpointResolvers.clear()
+  originalFormDataBodies.clear()
 }

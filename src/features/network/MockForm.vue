@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
 import { ArrowLeft, Check, Shuffle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,29 +21,8 @@ import {
 } from '@/components/ui/tooltip'
 import JsonEditor from '@/components/JsonEditor.vue'
 import type { NetworkEntry } from '@/types/network'
-import type { MockRule, MockHeaderEntry, BaseInspectorSettings } from '@/types/inspector'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
-import { parseUrl, buildUrlPreview, getStatusClass, formatJson, generateId } from './utils'
-
-// HTTP Status Text mapping (RFC 7231)
-const HTTP_STATUS_TEXT: Record<number, string> = {
-  200: 'OK',
-  201: 'Created',
-  202: 'Accepted',
-  204: 'No Content',
-  301: 'Moved Permanently',
-  302: 'Found',
-  304: 'Not Modified',
-  400: 'Bad Request',
-  401: 'Unauthorized',
-  403: 'Forbidden',
-  404: 'Not Found',
-  409: 'Conflict',
-  422: 'Unprocessable Entity',
-  500: 'Internal Server Error',
-  502: 'Bad Gateway',
-  503: 'Service Unavailable',
-}
+import type { MockRule } from '@/types/inspector'
+import { useMockFormState } from './composables'
 
 const props = defineProps<{
   entry: NetworkEntry
@@ -56,240 +34,39 @@ const emit = defineEmits<{
   (e: 'confirm', mock: MockRule): void
 }>()
 
-// Whether we're editing an existing mock
-const isRewrite = computed(() => !!props.existingMock)
-
-// Active section
-type SectionId = 'matching' | 'response' | 'headers'
-const activeSection = ref<SectionId>('response')
-
-// JSON mode setting
-const settings = ref<BaseInspectorSettings | null>(null)
-const jsonMode = ref<'text' | 'tree'>('text')
-
-// Load settings
-watch(() => props.entry, async () => {
-  try {
-    settings.value = await useInspectorSettings()
-    jsonMode.value = settings.value?.json?.mode ?? 'text'
-  } catch { /* use defaults */ }
-}, { immediate: true })
-
-// URL Matching fields
-const scheme = ref('')
-const host = ref('')
-const port = ref('')
-const path = ref('')
-const query = ref('')
-const method = ref('')
-
-// Response fields
-const status = ref(200)
-const statusText = ref('')
-const statusTextManuallyEdited = ref(false)
-const responseBody = ref('')
-
-const responseHeaders = ref<MockHeaderEntry[]>([])
-const delay = ref(0)
-const description = ref('')
-
-// Computed placeholder for status text based on status code
-const statusTextPlaceholder = computed(() => {
-  return HTTP_STATUS_TEXT[status.value] || 'OK'
+const {
+  activeSection,
+  jsonMode,
+  isRewrite,
+  scheme,
+  host,
+  port,
+  path,
+  query,
+  method,
+  status,
+  statusText,
+  statusTextPlaceholder,
+  effectiveStatusText,
+  responseBody,
+  responseHeaders,
+  delay,
+  description,
+  isValid,
+  urlPreview,
+  statusClass,
+  sections,
+  handleStatusTextChange,
+  handleStatusCodeChange,
+  addHeader,
+  removeHeader,
+  removeAllHeaders,
+  handleConfirm,
+} = useMockFormState({
+  entry: () => props.entry,
+  existingMock: () => props.existingMock,
+  emitConfirm: (mock) => emit('confirm', mock),
 })
-
-// Effective status text (user input or placeholder)
-const effectiveStatusText = computed(() => {
-  if (statusText.value.trim()) {
-    return statusText.value
-  }
-  return statusTextPlaceholder.value
-})
-
-// Handle status text change - mark as manually edited
-function handleStatusTextChange(value: string | number | undefined) {
-  const strValue = String(value ?? '')
-  statusText.value = strValue
-  if (strValue.trim()) {
-    statusTextManuallyEdited.value = true
-  }
-}
-
-// Handle status code change - only update placeholder, not the actual text if manually edited
-function handleStatusCodeChange(value: string | number | undefined) {
-  const strValue = String(value ?? '')
-  const numValue = parseInt(strValue, 10)
-  if (!isNaN(numValue) && numValue >= 100 && numValue <= 599) {
-    status.value = numValue
-  } else if (strValue === '') {
-    status.value = 200
-  }
-}
-
-// Function to fill form from entry
-function fillFromEntry(entry: NetworkEntry) {
-  // Parse URL
-  const parsed = parseUrl(entry.url)
-  scheme.value = parsed.scheme
-  host.value = parsed.host
-  port.value = parsed.port
-  path.value = parsed.path
-  query.value = parsed.query
-  
-  // Method
-  method.value = entry.method
-  
-  // Response status
-  status.value = entry.status || 200
-  // Don't set statusText directly - use placeholder unless entry had a non-standard text
-  const expectedText = HTTP_STATUS_TEXT[entry.status || 200]
-  if (entry.statusText && entry.statusText !== expectedText) {
-    // Entry had a custom status text, use it
-    statusText.value = entry.statusText
-    statusTextManuallyEdited.value = true
-  } else {
-    // Use placeholder (will show via computed)
-    statusText.value = ''
-    statusTextManuallyEdited.value = false
-  }
-  
-  // Response body - always show editor, empty means no body
-  if (entry.responseBody?.text) {
-    responseBody.value = formatJson(entry.responseBody.text)
-  } else {
-    responseBody.value = ''
-  }
-  
-  // Response headers
-  responseHeaders.value = entry.responseHeaders.map(h => ({ name: h.name, value: h.value }))
-  
-  // Ensure content-type header exists
-  const hasContentType = responseHeaders.value.some(h => h.name.toLowerCase() === 'content-type')
-  if (!hasContentType) {
-    responseHeaders.value.unshift({ name: 'Content-Type', value: 'application/json' })
-  }
-  
-  delay.value = 0
-  description.value = `Mock for ${entry.method} ${entry.path}`
-}
-
-// Function to fill form from existing mock
-function fillFromExisting(mock: MockRule) {
-  scheme.value = mock.scheme || ''
-  host.value = mock.host || ''
-  port.value = mock.port || ''
-  path.value = mock.path || ''
-  query.value = mock.query || ''
-  method.value = mock.method || ''
-  
-  // Response status
-  status.value = mock.status || 200
-  const expectedText = HTTP_STATUS_TEXT[mock.status || 200]
-  if (mock.statusText && mock.statusText !== expectedText) {
-    statusText.value = mock.statusText
-    statusTextManuallyEdited.value = true
-  } else {
-    statusText.value = ''
-    statusTextManuallyEdited.value = false
-  }
-  
-  // Response body
-  if (mock.body !== undefined) {
-    responseBody.value = formatJson(mock.body)
-  } else {
-    responseBody.value = ''
-  }
-  
-  // Response headers
-  responseHeaders.value = (mock.headers || []).map(h => ({ name: h.name, value: h.value }))
-  
-  delay.value = mock.delay || 0
-  description.value = mock.description || ''
-}
-
-// Watch for entry/existingMock changes
-watch([() => props.entry, () => props.existingMock], ([entry, existing]) => {
-  if (existing) {
-    fillFromExisting(existing)
-  } else if (entry) {
-    fillFromEntry(entry)
-  }
-  activeSection.value = 'response'
-}, { immediate: true })
-
-// Add/remove header
-function addHeader() {
-  responseHeaders.value.push({ name: '', value: '' })
-}
-
-function removeHeader(index: number) {
-  responseHeaders.value.splice(index, 1)
-}
-
-function removeAllHeaders() {
-  responseHeaders.value = []
-}
-
-// Handle confirm
-function handleConfirm() {
-  if (!props.entry || !isValid.value) return
-  
-  // Empty body means no body (undefined), otherwise use the content
-  const trimmedBody = responseBody.value.trim()
-  const hasBody = trimmedBody !== ''
-  const bodyValue = hasBody ? responseBody.value : undefined
-  
-  // Filter headers: remove empty names, and remove Content-Type if no body
-  const filteredHeaders = responseHeaders.value.filter(h => {
-    if (h.name.trim() === '') return false
-    // Remove Content-Type header if there's no body
-    if (!hasBody && h.name.toLowerCase() === 'content-type') return false
-    return true
-  })
-  
-  const mock: MockRule = {
-    id: props.existingMock?.id ?? generateId('mock'),
-    enabled: props.existingMock?.enabled ?? true,
-    scheme: scheme.value || undefined,
-    host: host.value || undefined,
-    port: port.value || undefined,
-    path: path.value || undefined,
-    query: query.value || undefined,
-    method: method.value || undefined,
-    status: status.value,
-    statusText: effectiveStatusText.value,
-    headers: filteredHeaders,
-    // Empty body = no body (undefined), otherwise use provided content
-    body: bodyValue,
-    delay: delay.value > 0 ? delay.value : undefined,
-    timestamp: new Date().toISOString(),
-    description: description.value || undefined
-  }
-  
-  emit('confirm', mock)
-}
-
-// Validation
-const isValid = computed(() => {
-  return host.value.trim() !== '' && status.value >= 100 && status.value < 600
-})
-
-// Preview URL pattern
-const urlPreview = computed(() => {
-  return buildUrlPreview(scheme.value, host.value, port.value, path.value, query.value)
-})
-
-// Status styling
-const statusClass = computed(() => {
-  return getStatusClass(props.entry.status, props.entry.pending)
-})
-
-// Section definitions
-const sections: Array<{ id: SectionId; label: string }> = [
-  { id: 'matching', label: 'URL Matching' },
-  { id: 'response', label: 'Response' },
-  { id: 'headers', label: 'Headers' }
-]
 </script>
 
 <template>

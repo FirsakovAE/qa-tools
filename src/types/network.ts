@@ -40,6 +40,21 @@ export interface UrlParam {
 }
 
 /**
+ * Single form-data field
+ */
+export interface FormDataEntry {
+  key: string
+  type: 'text' | 'file'
+  value: string
+  /** Original file name (for type=file) */
+  fileName?: string
+  /** MIME type (for type=file) */
+  fileType?: string
+  /** File size in bytes (for type=file) */
+  fileSize?: number
+}
+
+/**
  * Body content with truncation support
  */
 export interface BodyContent {
@@ -53,6 +68,8 @@ export interface BodyContent {
   contentType: string
   /** Whether this is binary content (not displayed) */
   isBinary: boolean
+  /** Parsed form-data entries (when contentType is multipart/form-data) */
+  formData?: FormDataEntry[]
 }
 
 /**

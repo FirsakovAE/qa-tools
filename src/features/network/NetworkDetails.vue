@@ -16,50 +16,37 @@ import {
   TableRow
 } from '@/components/ui/table'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger
 } from '@/components/ui/tooltip'
 import JsonEditor from '@/components/JsonEditor.vue'
-import type { NetworkEntry, HeaderEntry, UrlParam } from '@/types/network'
+import type { NetworkEntry } from '@/types/network'
 import { getStatusCategory, formatBytes, formatDuration } from '@/types/network'
 import { copyToClipboard } from '@/utils/networkUtils'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
 import type { BaseInspectorSettings } from '@/types/inspector'
+import {
+  useBreakpointEditor,
+  useFormDataEditor,
+  type BreakpointEditData,
+  type BreakpointDraftShape,
+} from './composables'
 
-export interface BreakpointEditData {
-  entryId: string
-  // URL data
-  method: string
-  scheme: string
-  host: string
-  path: string
-  // Other data
-  params: UrlParam[]
-  requestHeaders: HeaderEntry[]
-  requestBody: string | null
-  responseHeaders: HeaderEntry[]
-  responseBody: string | null
-}
+type BodyFormatMode = 'raw' | 'form-data'
 
-// Draft from NetworkTab - this is the SOURCE OF TRUTH for editing
-export interface BreakpointDraft {
-  entryId: string
-  trigger: 'request' | 'response'
-  // URL data
-  method: string
-  scheme: string
-  host: string
-  path: string
-  // Other data
-  params: Array<{ key: string; value: string }>
-  requestHeaders: Array<{ name: string; value: string }>
-  responseHeaders: Array<{ name: string; value: string }>
-  requestBody: string
-  responseBody: string
-}
+export type { BreakpointEditData }
+
+export interface BreakpointDraft extends BreakpointDraftShape {}
 
 const props = defineProps<{
   entry: NetworkEntry
@@ -75,213 +62,62 @@ const emit = defineEmits<{
   (e: 'updateDraft', updates: Partial<BreakpointDraft>): void
 }>()
 
-// Active section
-type SectionId = 'url' | 'params' | 'headers' | 'request' | 'response'
-const activeSection = ref<SectionId>('headers')
+// ============================================================================
+// Composables
+// ============================================================================
 
-// JSON mode setting
+const emitUpdateDraft = (updates: Partial<BreakpointDraft>) => emit('updateDraft', updates)
+
+const formData = useFormDataEditor({
+  entry: () => props.entry,
+  emitUpdateDraft,
+  editableRequestBody: () => editor.editableRequestBody.value,
+  settings: () => settings.value,
+})
+
+const editor = useBreakpointEditor({
+  entry: () => props.entry,
+  breakpointMode: () => props.breakpointMode,
+  breakpointTrigger: () => props.breakpointTrigger,
+  breakpointDraft: () => props.breakpointDraft,
+  emitUpdateDraft,
+  bodyFormatMode: formData.bodyFormatMode,
+  editableFormData: formData.editableFormData,
+  serializeFormDataToDraft: formData.serializeFormDataToDraft,
+})
+
+const {
+  activeSection,
+  editableMethod, editableScheme, editableHost, editablePath,
+  editableParams, editableRequestHeaders, editableResponseHeaders,
+  editableRequestBody, editableResponseBody,
+  canEditRequest, canEditResponse, methodAllowsBody,
+  displayMethod, displayUrl, fullUrlPreview,
+  updateUrlField, updateRequestHeader, updateResponseHeader,
+  updateParam, addParam, removeParam, removeAllParams,
+  addRequestHeader, removeRequestHeader, removeAllRequestHeaders,
+  updateRequestBody, updateResponseBody,
+  buildApplyData,
+} = editor
+
+const {
+  bodyFormatMode, editableFormData, copiedFormDataIndex,
+  isFormDataBody, readonlyFormData, hasFileOptions,
+  updateFormDataField, addFormDataEntry, removeFormDataEntry,
+  removeAllFormDataEntries, copyFormDataValue, handleBodyFormatChange,
+  handleFileSelected, getFileDisplayLabel,
+  getFileOptions, getSelectedFileOption, selectFileOption,
+} = formData
+
+// ============================================================================
+// Local UI state
+// ============================================================================
+
 const settings = ref<BaseInspectorSettings | null>(null)
 const jsonMode = ref<'text' | 'tree'>('text')
-
-// Copy states
 const copiedHeaderIndex = ref<number | null>(null)
 const copiedResponseHeaderIndex = ref<number | null>(null)
-
-// cURL copy functionality
 const { curlCopied, copyCurl: copyCurlCommand } = useCurlCopy()
-
-// Editable state for breakpoint mode
-const editableMethod = ref<string>('')
-const editableScheme = ref<string>('')
-const editableHost = ref<string>('')
-const editablePath = ref<string>('')
-const editableParams = ref<UrlParam[]>([])
-const editableRequestHeaders = ref<HeaderEntry[]>([])
-const editableResponseHeaders = ref<HeaderEntry[]>([])
-const editableRequestBody = ref<string>('')
-const editableResponseBody = ref<string>('')
-
-// Helper to format JSON string for editing
-function formatJsonForEdit(text: string | undefined | null): string {
-  if (!text) return ''
-  try {
-    const parsed = JSON.parse(text)
-    return JSON.stringify(parsed, null, 2)
-  } catch {
-    return text
-  }
-}
-
-// Track if we've already initialized from draft for this entry
-const initializedEntryId = ref<string | null>(null)
-
-// Initialize editable data from DRAFT (source of truth, isolated from entries[] updates)
-// Only initialize ONCE when entering breakpoint mode - not on every draft update
-watch(() => [props.breakpointMode, props.entry?.id, props.breakpointDraft?.entryId], () => {
-  // Only initialize when:
-  // 1. We're in breakpoint mode
-  // 2. We have a draft
-  // 3. We haven't already initialized for this entry
-  if (props.breakpointMode && props.breakpointDraft && initializedEntryId.value !== props.entry?.id) {
-    
-    // Mark as initialized for this entry
-    initializedEntryId.value = props.entry?.id || null
-    
-    // Load URL data from DRAFT
-    editableMethod.value = props.breakpointDraft.method || ''
-    editableScheme.value = props.breakpointDraft.scheme || ''
-    editableHost.value = props.breakpointDraft.host || ''
-    editablePath.value = props.breakpointDraft.path || ''
-    
-    // Load from DRAFT - this is isolated from entries[] updates
-    editableParams.value = JSON.parse(JSON.stringify(props.breakpointDraft.params || []))
-    editableRequestHeaders.value = JSON.parse(JSON.stringify(props.breakpointDraft.requestHeaders || []))
-    editableResponseHeaders.value = JSON.parse(JSON.stringify(props.breakpointDraft.responseHeaders || []))
-    // Format JSON properly for editing
-    editableRequestBody.value = formatJsonForEdit(props.breakpointDraft.requestBody)
-    editableResponseBody.value = formatJsonForEdit(props.breakpointDraft.responseBody)
-    
-    // Set active section to URL tab for request breakpoints
-    if (props.breakpointTrigger === 'response') {
-      activeSection.value = 'response'
-    } else if (props.breakpointTrigger === 'request') {
-      activeSection.value = 'url'
-    }
-  }
-  
-  // Reset initialized flag when exiting breakpoint mode
-  if (!props.breakpointMode) {
-    initializedEntryId.value = null
-  }
-}, { immediate: true })
-
-// Whether we can edit request or response based on trigger
-const canEditRequest = computed(() => {
-  return props.breakpointMode && (props.breakpointTrigger === 'request' || props.breakpointTrigger === undefined)
-})
-
-// Check if current method allows body (GET/HEAD don't allow body)
-const methodAllowsBody = computed(() => {
-  const method = (canEditRequest.value ? editableMethod.value : props.entry.method)?.toUpperCase()
-  return method !== 'GET' && method !== 'HEAD'
-})
-
-const canEditResponse = computed(() => {
-  return props.breakpointMode && props.breakpointTrigger === 'response'
-})
-
-// Handle back button - cancel breakpoint if active
-function handleBack() {
-  if (props.breakpointMode) {
-    emit('cancelBreakpoint', props.entry.id)
-  } else {
-    emit('back')
-  }
-}
-
-// Handle apply breakpoint
-function handleApplyBreakpoint() {
-  if (!props.breakpointMode) return
-  
-  emit('applyBreakpoint', {
-    entryId: props.entry.id,
-    method: editableMethod.value,
-    scheme: editableScheme.value,
-    host: editableHost.value,
-    path: editablePath.value,
-    params: editableParams.value,
-    requestHeaders: editableRequestHeaders.value,
-    requestBody: editableRequestBody.value || null,
-    responseHeaders: editableResponseHeaders.value,
-    responseBody: editableResponseBody.value || null
-  })
-}
-
-// Update URL field and emit to parent draft
-function updateUrlField(field: 'method' | 'scheme' | 'host' | 'path', newValue: string) {
-  if (field === 'method') {
-    editableMethod.value = newValue
-    emit('updateDraft', { method: newValue })
-  } else if (field === 'scheme') {
-    editableScheme.value = newValue
-    emit('updateDraft', { scheme: newValue })
-  } else if (field === 'host') {
-    editableHost.value = newValue
-    emit('updateDraft', { host: newValue })
-  } else if (field === 'path') {
-    editablePath.value = newValue
-    emit('updateDraft', { path: newValue })
-  }
-}
-
-// Update header value and emit to parent draft
-function updateRequestHeader(index: number, field: 'name' | 'value', newValue: string | number | undefined) {
-  if (editableRequestHeaders.value[index]) {
-    editableRequestHeaders.value[index][field] = String(newValue ?? '')
-    // Emit update to parent draft
-    emit('updateDraft', { requestHeaders: JSON.parse(JSON.stringify(editableRequestHeaders.value)) })
-  }
-}
-
-function updateResponseHeader(index: number, field: 'name' | 'value', newValue: string | number | undefined) {
-  if (editableResponseHeaders.value[index]) {
-    editableResponseHeaders.value[index][field] = String(newValue ?? '')
-    // Emit update to parent draft
-    emit('updateDraft', { responseHeaders: JSON.parse(JSON.stringify(editableResponseHeaders.value)) })
-  }
-}
-
-// Update param value and emit to parent draft
-function updateParam(index: number, field: 'key' | 'value', newValue: string | number | undefined) {
-  if (editableParams.value[index]) {
-    editableParams.value[index][field] = String(newValue ?? '')
-    // Emit update to parent draft
-    emit('updateDraft', { params: JSON.parse(JSON.stringify(editableParams.value)) })
-  }
-}
-
-// Add/remove params
-function addParam() {
-  editableParams.value.push({ key: '', value: '' })
-  emit('updateDraft', { params: JSON.parse(JSON.stringify(editableParams.value)) })
-}
-
-function removeParam(index: number) {
-  editableParams.value.splice(index, 1)
-  emit('updateDraft', { params: JSON.parse(JSON.stringify(editableParams.value)) })
-}
-
-function removeAllParams() {
-  editableParams.value = []
-  emit('updateDraft', { params: [] })
-}
-
-// Add/remove request headers
-function addRequestHeader() {
-  editableRequestHeaders.value.push({ name: '', value: '' })
-  emit('updateDraft', { requestHeaders: JSON.parse(JSON.stringify(editableRequestHeaders.value)) })
-}
-
-function removeRequestHeader(index: number) {
-  editableRequestHeaders.value.splice(index, 1)
-  emit('updateDraft', { requestHeaders: JSON.parse(JSON.stringify(editableRequestHeaders.value)) })
-}
-
-function removeAllRequestHeaders() {
-  editableRequestHeaders.value = []
-  emit('updateDraft', { requestHeaders: [] })
-}
-
-// Update body and emit to parent draft
-function updateRequestBody(value: string) {
-  editableRequestBody.value = value
-  emit('updateDraft', { requestBody: value })
-}
-
-function updateResponseBody(value: string) {
-  editableResponseBody.value = value
-  emit('updateDraft', { responseBody: value })
-}
 
 onMounted(async () => {
   try {
@@ -290,7 +126,12 @@ onMounted(async () => {
   } catch { /* use defaults */ }
 })
 
-// Sections definition - URL tab only visible in breakpoint mode
+// ============================================================================
+// Computed
+// ============================================================================
+
+type SectionId = 'url' | 'params' | 'headers' | 'request' | 'response'
+
 const sections = computed<Array<{ id: SectionId; label: string }>>(() => {
   const baseSections: Array<{ id: SectionId; label: string }> = [
     { id: 'params', label: 'Params' },
@@ -298,127 +139,71 @@ const sections = computed<Array<{ id: SectionId; label: string }>>(() => {
     { id: 'request', label: 'Request' },
     { id: 'response', label: 'Response' }
   ]
-  
-  // Add URL tab at the beginning when in breakpoint mode (request only)
   if (canEditRequest.value) {
     return [{ id: 'url' as SectionId, label: 'URL' }, ...baseSections]
   }
-  
   return baseSections
 })
 
-// Status styling
 const statusClass = computed(() => {
   if (props.entry.pending) return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30'
-  
   const category = getStatusCategory(props.entry.status)
   switch (category) {
-    case 'success':
-      return 'bg-green-500/20 text-green-500 border-green-500/30'
-    case 'redirect':
-      return 'bg-blue-500/20 text-blue-500 border-blue-500/30'
-    case 'client-error':
-      return 'bg-orange-500/20 text-orange-500 border-orange-500/30'
-    case 'server-error':
-      return 'bg-red-500/20 text-red-500 border-red-500/30'
-    default:
-      return 'bg-red-500/20 text-red-500 border-red-500/30'
+    case 'success': return 'bg-green-500/20 text-green-500 border-green-500/30'
+    case 'redirect': return 'bg-blue-500/20 text-blue-500 border-blue-500/30'
+    case 'client-error': return 'bg-orange-500/20 text-orange-500 border-orange-500/30'
+    case 'server-error': return 'bg-red-500/20 text-red-500 border-red-500/30'
+    default: return 'bg-red-500/20 text-red-500 border-red-500/30'
   }
 })
-
-// ============================================================================
-// Computed display values for breakpoint mode
-// These show the MODIFIED data when in breakpoint mode
-// ============================================================================
-
-// Build query string from params
-const paramsQueryString = computed(() => {
-  if (!editableParams.value || editableParams.value.length === 0) return ''
-  const params = editableParams.value.filter(p => p.key)
-  if (params.length === 0) return ''
-  const searchParams = new URLSearchParams()
-  params.forEach(p => searchParams.append(p.key, p.value))
-  return '?' + searchParams.toString()
-})
-
-// Full URL preview including params
-const fullUrlPreview = computed(() => {
-  const scheme = editableScheme.value || 'https'
-  const host = editableHost.value || ''
-  // Get path without query string (if path has query, strip it since we use params)
-  let path = editablePath.value || '/'
-  const pathQueryIndex = path.indexOf('?')
-  if (pathQueryIndex !== -1) {
-    path = path.substring(0, pathQueryIndex)
-  }
-  return `${scheme}://${host}${path}${paramsQueryString.value}`
-})
-
-// Display method (modified in breakpoint mode, original otherwise)
-const displayMethod = computed(() => {
-  if (canEditRequest.value && editableMethod.value) {
-    return editableMethod.value
-  }
-  return props.entry.method
-})
-
-// Display URL (modified in breakpoint mode, original otherwise)
-const displayUrl = computed(() => {
-  if (canEditRequest.value) {
-    return fullUrlPreview.value
-  }
-  return props.entry.url
-})
-
-// ============================================================================
-// Request/Response JSON for JsonEditor
-// ============================================================================
 
 const LARGE_BODY_THRESHOLD = 200 * 1024
 
 const requestBodyJson = computed(() => {
   if (!props.entry.requestBody?.text) return '{}'
+  if (isFormDataBody.value) return '{}'
   const raw = props.entry.requestBody.text
   if (raw.length > LARGE_BODY_THRESHOLD) return raw
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return raw
-  }
+  try { return JSON.stringify(JSON.parse(raw), null, 2) } catch { return raw }
 })
 
 const responseBodyJson = computed(() => {
   if (!props.entry.responseBody?.text) return '{}'
   const raw = props.entry.responseBody.text
   if (raw.length > LARGE_BODY_THRESHOLD) return raw
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return raw
-  }
+  try { return JSON.stringify(JSON.parse(raw), null, 2) } catch { return raw }
 })
 
-// Extract x-request-id from response headers
 const xRequestId = computed(() => {
-  const header = props.entry.responseHeaders.find(
-    h => h.name.toLowerCase() === 'x-request-id'
-  )
+  const header = props.entry.responseHeaders.find(h => h.name.toLowerCase() === 'x-request-id')
   return header?.value || null
 })
 
-// Watch for entry changes (id change = different entry, version change = same entry updated)
+// ============================================================================
+// Handlers
+// ============================================================================
+
+function handleBack() {
+  if (props.breakpointMode) {
+    emit('cancelBreakpoint', props.entry.id)
+  } else {
+    emit('back')
+  }
+}
+
+function handleApplyBreakpoint() {
+  if (!props.breakpointMode) return
+  emit('applyBreakpoint', buildApplyData())
+}
+
 watch(
   () => ({ id: props.entry?.id, version: props.entry?.version ?? 1 }),
   (newVal, oldVal) => {
     if (!newVal.id) return
-    
-    // Reset state on entry change (new entry selected)
     if (newVal.id !== oldVal?.id) {
       curlCopied.value = false
       copiedHeaderIndex.value = null
       copiedResponseHeaderIndex.value = null
-      // Only reset to headers if NOT in breakpoint mode
-      // In breakpoint mode, the other watch will set the correct tab
       if (!props.breakpointMode) {
         activeSection.value = 'headers'
       }
@@ -427,9 +212,6 @@ watch(
   { immediate: true }
 )
 
-// ============================================================================
-
-// Copy header value with visual feedback
 async function copyHeaderValue(value: string, index: number, isResponse: boolean = false) {
   const success = await copyToClipboard(value)
   if (success) {
@@ -442,7 +224,6 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
     }
   }
 }
-
 </script>
 
 <template>
@@ -851,11 +632,30 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             No request body
           </div>
           <template v-else>
+            <!-- Header bar -->
             <div class="shrink-0 flex items-center justify-between px-3 py-2 border-b">
               <div class="flex items-center gap-2">
-                <span class="text-sm text-muted-foreground">
-                  {{ entry.requestBody?.contentType || 'application/json' }}
-                </span>
+                <!-- Breakpoint mode: format selector -->
+                <template v-if="canEditRequest && methodAllowsBody">
+                  <Select :model-value="bodyFormatMode" @update:model-value="handleBodyFormatChange($event as BodyFormatMode)">
+                    <SelectTrigger class="h-7 w-[130px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="raw">raw</SelectItem>
+                      <SelectItem value="form-data">form-data</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="outline" class="text-xs text-amber-500 border-amber-500/50">
+                    Editable
+                  </Badge>
+                </template>
+                <!-- Read-only mode: just show content type -->
+                <template v-else>
+                  <span class="text-sm text-muted-foreground">
+                    {{ entry.requestBody?.contentType || 'application/json' }}
+                  </span>
+                </template>
                 <span v-if="entry.requestBody" class="text-xs text-muted-foreground">
                   ({{ formatBytes(entry.requestBody.originalSize) }})
                 </span>
@@ -865,36 +665,194 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 <Badge v-if="entry.requestBody?.isBinary" variant="outline" class="text-xs">
                   Binary
                 </Badge>
-                <Badge v-if="canEditRequest && methodAllowsBody" variant="outline" class="text-xs text-amber-500 border-amber-500/50">
-                  Editable
-                </Badge>
               </div>
             </div>
             
             <div v-if="entry.requestBody?.isBinary" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
               Binary content cannot be displayed
             </div>
-            <div v-else class="flex-1 min-h-0">
-              <JsonEditor
-                v-if="canEditRequest"
-                :model-value="editableRequestBody"
-                @update:model-value="updateRequestBody"
-                :editable="true"
-                :show-copy="true"
-                :mode="jsonMode"
-                :full-height="true"
-                class="h-full"
-              />
-              <JsonEditor
-                v-else
-                :model-value="requestBodyJson"
-                :editable="false"
-                :show-copy="true"
-                :mode="jsonMode"
-                :full-height="true"
-                class="h-full"
-              />
-            </div>
+            <!-- ======== Breakpoint EDIT mode ======== -->
+            <template v-else-if="canEditRequest">
+              <!-- form-data editor -->
+              <ScrollArea v-if="bodyFormatMode === 'form-data'" class="flex-1">
+                <div class="p-3 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm font-semibold">Form Data</span>
+                    <div class="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7 text-xs text-destructive hover:text-destructive"
+                        :disabled="editableFormData.length === 0"
+                        @click="removeAllFormDataEntries"
+                      >
+                        Remove all
+                      </Button>
+                      <Button variant="outline" size="sm" class="h-7 text-xs" @click="addFormDataEntry">
+                        Add Field
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div v-if="editableFormData.length === 0" class="text-sm text-muted-foreground text-center py-8">
+                    No form data fields
+                  </div>
+                  <Table v-else class="network-headers-table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead class="w-[30%]">Key</TableHead>
+                        <TableHead class="w-20">Type</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead class="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow v-for="(fd, index) in editableFormData" :key="index">
+                        <TableCell class="py-2 align-top">
+                          <Input
+                            :model-value="fd.key"
+                            @update:model-value="updateFormDataField(index, 'key', String($event))"
+                            placeholder="Key"
+                            class="h-7 text-xs font-mono"
+                          />
+                        </TableCell>
+                        <TableCell class="py-2 align-top">
+                          <Select :model-value="fd.type" @update:model-value="updateFormDataField(index, 'type', String($event))">
+                            <SelectTrigger class="h-7 text-xs w-[72px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="text">Text</SelectItem>
+                              <SelectItem value="file">File</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell class="py-2 align-top">
+                          <Input
+                            v-if="fd.type === 'text'"
+                            :model-value="fd.value"
+                            @update:model-value="updateFormDataField(index, 'value', String($event))"
+                            placeholder="Value"
+                            class="h-7 text-xs font-mono"
+                          />
+                          <div v-else class="flex items-center gap-1">
+                            <Select
+                              v-if="hasFileOptions"
+                              :model-value="getSelectedFileOption(fd)"
+                              @update:model-value="selectFileOption(index, String($event))"
+                            >
+                              <SelectTrigger class="h-7 text-xs font-mono flex-1">
+                                <SelectValue :placeholder="getFileDisplayLabel(fd)" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  v-for="opt in getFileOptions(fd)"
+                                  :key="opt.id"
+                                  :value="opt.id"
+                                >
+                                  {{ opt.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <span
+                              v-else
+                              class="flex-1 truncate text-xs font-mono px-2 h-7 flex items-center border rounded-md bg-background"
+                            >
+                              {{ getFileDisplayLabel(fd) }}
+                            </span>
+                            <label class="shrink-0 inline-flex items-center justify-center h-7 px-2 text-xs rounded-md border cursor-pointer hover:bg-muted/50 transition-colors">
+                              Browse
+                              <input
+                                type="file"
+                                class="sr-only"
+                                @change="handleFileSelected($event, index)"
+                              />
+                            </label>
+                          </div>
+                        </TableCell>
+                        <TableCell class="py-2 text-center align-top">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                            @click="removeFormDataEntry(index)"
+                          >
+                            ×
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </ScrollArea>
+              <!-- raw JSON editor -->
+              <div v-else class="flex-1 min-h-0">
+                <JsonEditor
+                  :model-value="editableRequestBody"
+                  @update:model-value="updateRequestBody"
+                  :editable="true"
+                  :show-copy="true"
+                  :mode="jsonMode"
+                  :full-height="true"
+                  class="h-full"
+                />
+              </div>
+            </template>
+            <!-- ======== Read-only mode ======== -->
+            <template v-else>
+              <!-- Form-data read-only table -->
+              <ScrollArea v-if="isFormDataBody" class="flex-1">
+                <div class="p-3">
+                  <Table class="network-headers-table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead class="w-[30%]">Key</TableHead>
+                        <TableHead class="w-16">Type</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead class="w-10 text-center">Copy</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow v-for="(fd, index) in readonlyFormData" :key="index">
+                        <TableCell class="font-mono text-xs py-2 align-top">{{ fd.key }}</TableCell>
+                        <TableCell class="font-mono text-xs py-2 align-top text-muted-foreground">
+                          {{ fd.type === 'file' ? 'File' : 'Text' }}
+                        </TableCell>
+                        <TableCell class="font-mono text-xs py-2 break-all align-top whitespace-pre-wrap">
+                          <template v-if="fd.type === 'file'">
+                            <span class="text-muted-foreground">{{ fd.fileName || '(binary)' }}</span>
+                            <span v-if="fd.fileSize" class="text-muted-foreground ml-1">({{ formatBytes(fd.fileSize) }})</span>
+                          </template>
+                          <template v-else>{{ fd.value }}</template>
+                        </TableCell>
+                        <TableCell class="py-2 text-center align-top">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            class="h-6 w-6 p-0 transition-colors"
+                            :class="{ 'text-green-500': copiedFormDataIndex === index }"
+                            @click="copyFormDataValue(fd, index)"
+                          >
+                            <component :is="copiedFormDataIndex === index ? Check : Copy" class="h-3 w-3" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </ScrollArea>
+              <!-- JSON read-only -->
+              <div v-else class="flex-1 min-h-0">
+                <JsonEditor
+                  :model-value="requestBodyJson"
+                  :editable="false"
+                  :show-copy="true"
+                  :mode="jsonMode"
+                  :full-height="true"
+                  class="h-full"
+                />
+              </div>
+            </template>
           </template>
         </div>
         

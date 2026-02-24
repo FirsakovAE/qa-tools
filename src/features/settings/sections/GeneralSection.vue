@@ -33,7 +33,9 @@ const emit = defineEmits<{
   (e: 'reset'): void
 }>()
 
-const isRunningInDevtools = getRuntimeAdapter()?.id === 'devtools'
+const runtime = getRuntimeAdapter()
+const isRunningInDevtools = runtime?.id === 'devtools'
+const isStandalone = runtime?.capabilities.mode === 'standalone'
 
 const displayMode = computed({
   get: () => props.settings.displayMode ?? 'overlay',
@@ -81,20 +83,28 @@ const refreshIntervals = [
     <div class="space-y-4">
       <h4 class="text-sm font-semibold">Display Mode</h4>
 
-      <RadioGroup v-model="displayMode" class="gap-3">
+      <RadioGroup v-model="displayMode" :disabled="isStandalone" class="gap-3">
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="overlay" id="mode-overlay" />
-          <Label for="mode-overlay" class="text-sm font-normal cursor-pointer">
+          <Label for="mode-overlay" class="text-sm font-normal" :class="isStandalone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'">
             Overlay
           </Label>
         </div>
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="devtools" id="mode-devtools" />
-          <Label for="mode-devtools" class="text-sm font-normal cursor-pointer">
+          <Label for="mode-devtools" class="text-sm font-normal" :class="isStandalone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'">
             DevTools tab
           </Label>
         </div>
       </RadioGroup>
+
+      <div
+        v-if="isStandalone"
+        class="flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400"
+      >
+        <Info class="h-4 w-4 shrink-0 mt-0.5" />
+        <p>Display Mode is only available for the browser extension version.</p>
+      </div>
 
       <div
         v-if="showDevtoolsHint"

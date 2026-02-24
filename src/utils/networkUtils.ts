@@ -1,4 +1,4 @@
-import type { NetworkEntry } from '@/types/network'
+import type { NetworkEntry, FormDataEntry } from '@/types/network'
 
 /**
  * Generate cURL command from network entry
@@ -6,26 +6,43 @@ import type { NetworkEntry } from '@/types/network'
 export function buildCurlCommand(entry: NetworkEntry): string {
   const parts: string[] = ['curl']
 
-  // Method
-  if (entry.method !== 'GET') {
+  const isFormData = entry.requestBody?.formData && entry.requestBody.formData.length > 0
+
+  // --location for form-data requests (Postman style)
+  if (isFormData) {
+    parts.push('--location')
+  }
+
+  // Method (skip for GET; for form-data POST is implied by --form)
+  if (entry.method !== 'GET' && !(isFormData && entry.method === 'POST')) {
     parts.push(`-X ${entry.method}`)
   }
 
   // URL
   parts.push(`'${entry.url}'`)
 
-  // Headers
+  // Headers (skip content-type for form-data — curl sets it automatically)
   for (const header of entry.requestHeaders) {
-    // Skip pseudo-headers and some internal ones
     if (header.name.startsWith(':')) continue
     if (header.name.toLowerCase() === 'content-length') continue
+    if (isFormData && header.name.toLowerCase() === 'content-type') continue
 
     const escapedValue = header.value.replace(/'/g, "'\\''")
     parts.push(`-H '${header.name}: ${escapedValue}'`)
   }
 
-  // Body - pretty-print JSON
-  if (entry.requestBody?.text) {
+  // Body
+  if (isFormData) {
+    for (const fd of entry.requestBody!.formData!) {
+      if (fd.type === 'file') {
+        const name = fd.fileName || fd.value || 'file'
+        parts.push(`--form '${fd.key}=@"${name}"'`)
+      } else {
+        const escaped = fd.value.replace(/'/g, "'\\''")
+        parts.push(`--form '${fd.key}="${escaped}"'`)
+      }
+    }
+  } else if (entry.requestBody?.text) {
     let formattedBody = entry.requestBody.text
     try {
       const parsed = JSON.parse(entry.requestBody.text)
@@ -37,7 +54,7 @@ export function buildCurlCommand(entry: NetworkEntry): string {
     parts.push(`--data '${escapedBody}'`)
   }
 
-  return parts.join(' \\\n  ')
+  return parts.join(' \\\n')
 }
 
 /**

@@ -39,12 +39,22 @@ interface UrlParam {
   value: string
 }
 
+interface FormDataEntry {
+  key: string
+  type: 'text' | 'file'
+  value: string
+  fileName?: string
+  fileType?: string
+  fileSize?: number
+}
+
 interface BodyContent {
   text: string
   truncated: boolean
   originalSize: number
   contentType: string
   isBinary: boolean
+  formData?: FormDataEntry[]
 }
 
 interface NetworkEntry {
@@ -252,7 +262,25 @@ function sendToContentScript(type: string, data: any): void {
 function createBodyContent(body: string | null, contentType: string, originalSize: number, truncated = false): BodyContent | null {
   if (body === null) return null
   const isBinary = isBinaryContentType(contentType)
-  return { text: isBinary ? '' : body, truncated, originalSize, contentType, isBinary }
+
+  let formData: FormDataEntry[] | undefined
+  if (!isBinary) {
+    try {
+      const parsed = JSON.parse(body)
+      if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
+        formData = parsed.entries as FormDataEntry[]
+      }
+    } catch { /* not JSON — ignore */ }
+  }
+
+  return {
+    text: isBinary ? '' : body,
+    truncated,
+    originalSize,
+    contentType: formData ? 'multipart/form-data' : contentType,
+    isBinary,
+    formData,
+  }
 }
 
 // ============================================================================

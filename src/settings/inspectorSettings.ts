@@ -1,7 +1,7 @@
-import type { BaseInspectorSettings, FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode } from '@/types/inspector'
+import type { BaseInspectorSettings, FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, SavedFile } from '@/types/inspector'
 
 export type InspectorSettings = BaseInspectorSettings
-export type { FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode }
+export type { FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, SavedFile }
 
 /** Default Network search settings */
 const defaultNetworkSearchSettings: NetworkSearchSettings = {
@@ -47,4 +47,6 @@ export const defaultInspectorSettings: InspectorSettings = {
     json: { mode: 'text' },
     updates: { refreshIntervalMs: 1000, autoRefresh: false, autoRefreshInterval: 5000 },
     data: { maxComponents: 1000, preserveState: true },
+    savedFiles: [],
+    autoSaveFiles: false,
 }

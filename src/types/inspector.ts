@@ -134,6 +134,14 @@ export interface GlobalSearchSettings {
 
 export type DisplayMode = 'overlay' | 'devtools'
 
+export interface SavedFile {
+    id: string
+    name: string
+    size: number
+    mimeType: string
+    dataUri: string
+}
+
 export interface BaseInspectorSettings {
     displayMode: DisplayMode
     blacklist: { active: string[]; inactive: string[] }
@@ -156,4 +164,6 @@ export interface BaseInspectorSettings {
     }
     updates?: { refreshIntervalMs?: number; autoRefresh?: boolean; autoRefreshInterval?: number }
     data?: { maxComponents?: number; preserveState?: boolean }
+    savedFiles: SavedFile[]
+    autoSaveFiles: boolean
 }
