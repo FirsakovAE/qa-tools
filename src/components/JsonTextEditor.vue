@@ -142,15 +142,15 @@ function onInput(e: Event) {
     </Button>
 
     <ScrollArea :class="[fullHeight ? 'flex-1 min-h-0 full-height-scroll' : 'h-[330px]']">
-      <div :class="['p-2', fullHeight ? 'h-full w-full' : '']">
+      <div :class="['p-2', fullHeight ? 'min-h-full w-full' : '']">
         <pre
           v-if="editable"
           ref="editableRef"
-          class="json-editor h-full font-sans leading-relaxed
+          class="json-editor font-sans leading-relaxed
                  whitespace-pre-wrap break-all
                  bg-transparent outline-none focus:outline-none
                  cursor-text"
-          :class="fullHeight ? '' : 'min-h-[300px]'"
+          :class="fullHeight ? 'min-h-full' : 'min-h-[300px]'"
           :style="{
             color: 'hsl(var(--foreground))',
             caretColor: 'hsl(var(--foreground))'
@@ -164,9 +164,9 @@ function onInput(e: Event) {
 
         <pre
           v-else
-          class="json-viewer h-full p-2 leading-relaxed
+          class="json-viewer p-2 leading-relaxed
                  whitespace-pre-wrap break-words"
-          :class="fullHeight ? '' : 'min-h-[300px]'"
+          :class="fullHeight ? 'min-h-full' : 'min-h-[300px]'"
         ><code ref="codeRef" :class="prismClass"></code></pre>
       </div>
       <ScrollBar orientation="vertical" />
@@ -176,7 +176,7 @@ function onInput(e: Event) {
 
 <style scoped>
 .full-height-scroll :deep([data-reka-scroll-area-viewport] > div) {
-  height: 100%;
+  min-height: 100%;
   width: 100%;
 }
 </style>
