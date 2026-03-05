@@ -90,6 +90,7 @@ const allMocksWithStatus = computed(() => [
 
 const {
   entries,
+  entriesVersion,
   paused,
   isReady,
   totalCount,
@@ -143,7 +144,8 @@ const {
   rebuildIndex
 } = useNetworkSearch(
   () => entries.value,
-  () => searchSettings.value
+  () => searchSettings.value,
+  entriesVersion
 )
 
 const breakpointState = useBreakpointState(
@@ -181,8 +183,9 @@ const activeEntryId = computed(() => {
 })
 
 const selectedEntry = computed(() => {
+  void entriesVersion.value
   if (!activeEntryId.value) return null
-  const entry = entries.value.find(e => e.id === activeEntryId.value)
+  const entry = getEntry(activeEntryId.value)
   if (entry) {
     return deepClone({ ...entry, version: entry.version ?? 1 }) as NetworkEntry
   }
@@ -275,7 +278,7 @@ const {
 // Watchers
 // ============================================================================
 
-watch(entries, () => { rebuildIndex() }, { deep: true })
+watch(entriesVersion, () => { rebuildIndex() })
 
 watch(() => props.pendingBreakpoint, (pending) => {
   if (pending) {

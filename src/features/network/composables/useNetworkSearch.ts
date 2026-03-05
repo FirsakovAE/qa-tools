@@ -6,7 +6,7 @@
  * (when NetworkTab is unmounted and remounted)
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import type { NetworkEntry } from '@/types/network'
 
@@ -36,12 +36,13 @@ interface SearchIndexEntry {
 // ============================================================================
 
 const searchTerm = ref('')
-const searchIndex = ref<SearchIndexEntry[]>([])
 const debouncedSearchTerm = ref('')
 
-/**
- * Extract JSON keys recursively
- */
+// Use a Map for O(1) lookups and incremental updates
+const searchIndexMap = new Map<string, SearchIndexEntry>()
+// Keep a ref counter to invalidate computed caches when index changes
+const indexVersion = ref(0)
+
 function extractJsonKeys(obj: any, prefix = ''): string[] {
   if (!obj || typeof obj !== 'object') return []
   const keys: string[] = []
@@ -55,9 +56,6 @@ function extractJsonKeys(obj: any, prefix = ''): string[] {
   return keys
 }
 
-/**
- * Extract JSON values recursively
- */
 function extractJsonValues(obj: any): string[] {
   if (!obj || typeof obj !== 'object') return []
   const values: string[] = []
@@ -74,9 +72,6 @@ function extractJsonValues(obj: any): string[] {
   return values
 }
 
-/**
- * Build index entry for a network entry
- */
 function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
   let requestBodyKeys: string[] = []
   let requestBodyValues: string[] = []
@@ -116,11 +111,9 @@ function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
  */
 export function useNetworkSearch(
   entries: () => NetworkEntry[],
-  getSettings: () => SearchSettings
+  getSettings: () => SearchSettings,
+  entriesVersion?: Ref<number>
 ) {
-  // State is now module-level, no need to create new refs
-  
-  // Debounced search update
   const updateDebouncedSearch = useDebounceFn((term: string) => {
     debouncedSearchTerm.value = term
   }, getSettings().debounce)
@@ -131,27 +124,52 @@ export function useNetworkSearch(
       updateDebouncedSearch(term)
     }
   })
-  
-  // Index management
+
   function addToIndex(entry: NetworkEntry) {
-    searchIndex.value = searchIndex.value.filter(e => e.entryId !== entry.id)
-    searchIndex.value.push(buildIndexEntry(entry))
+    searchIndexMap.set(entry.id, buildIndexEntry(entry))
+    indexVersion.value++
   }
   
   function removeFromIndex(entryId: string) {
-    searchIndex.value = searchIndex.value.filter(e => e.entryId !== entryId)
+    searchIndexMap.delete(entryId)
+    indexVersion.value++
   }
   
   function clearIndex() {
-    searchIndex.value = []
+    searchIndexMap.clear()
+    indexVersion.value++
   }
-  
+
+  /**
+   * Incremental rebuild: only parse entries that are new or updated.
+   * Removes stale entries that are no longer in the list.
+   */
   function rebuildIndex() {
-    searchIndex.value = entries().map(buildIndexEntry)
+    const currentEntries = entries()
+    const currentIds = new Set<string>()
+
+    for (const entry of currentEntries) {
+      currentIds.add(entry.id)
+      const existing = searchIndexMap.get(entry.id)
+      if (!existing || existing.status !== String(entry.status)) {
+        searchIndexMap.set(entry.id, buildIndexEntry(entry))
+      }
+    }
+
+    // Remove stale entries
+    for (const id of searchIndexMap.keys()) {
+      if (!currentIds.has(id)) {
+        searchIndexMap.delete(id)
+      }
+    }
+
+    indexVersion.value++
   }
   
-  // Filtered entries
   const filteredEntries = computed(() => {
+    void indexVersion.value
+    if (entriesVersion) void entriesVersion.value
+
     const q = debouncedSearchTerm.value.toLowerCase().trim()
     const allEntries = entries()
     if (!q) return allEntries
@@ -159,7 +177,7 @@ export function useNetworkSearch(
     const settings = getSettings()
     const matchedIds = new Set<string>()
     
-    for (const idx of searchIndex.value) {
+    for (const idx of searchIndexMap.values()) {
       let matched = false
       
       if (settings.byPath && idx.name.includes(q)) {
@@ -196,7 +214,6 @@ export function useNetworkSearch(
     return allEntries.filter(e => matchedIds.has(e.id))
   })
   
-  // Active search types for badges
   const activeSearchTypes = computed(() => {
     const settings = getSettings()
     const types: string[] = []

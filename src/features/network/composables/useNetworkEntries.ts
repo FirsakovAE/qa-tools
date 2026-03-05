@@ -24,19 +24,27 @@ const paused = ref(false)
 const config = ref<NetworkConfig>({ ...DEFAULT_NETWORK_CONFIG })
 const isReady = ref(false)
 
-// Track if module-level listener is initialized
+// Monotonically increasing counter — triggers watchers that can't rely on array identity
+const entriesVersion = ref(0)
+
+// O(1) lookup index: entry.id → array position
+const idIndex = new Map<string, number>()
+
+function rebuildIdIndex() {
+  idIndex.clear()
+  for (let i = 0; i < entries.value.length; i++) {
+    idIndex.set(entries.value[i].id, i)
+  }
+}
+
 let listenerInitialized = false
 
-// Breakpoint hit callbacks (component-specific, registered on mount)
 const breakpointHitCallbacks = new Set<(requestId: string, trigger: 'request' | 'response', entry?: any) => void>()
 
 // ============================================================================
 // Module-level Functions
 // ============================================================================
 
-/**
- * Send command to injected network module via content script
- */
 function sendCommand(type: string, data: Record<string, any> = {}): void {
   postToContentScript({
     type,
@@ -46,16 +54,22 @@ function sendCommand(type: string, data: Record<string, any> = {}): void {
   })
 }
 
-/**
- * Normalize entry to ensure it has a version field
- */
 function normalizeEntry(entry: any): NetworkEntry {
   return { ...entry, version: entry.version ?? 1 }
 }
 
 /**
- * Process network message (module-level, always active)
+ * Enforce the max entries limit by trimming from the front.
+ * Mutates the array in-place and rebuilds the id index.
  */
+function enforceLimit() {
+  const max = config.value.maxEntries
+  if (entries.value.length > max) {
+    entries.value.splice(0, entries.value.length - max)
+    rebuildIdIndex()
+  }
+}
+
 function processMessage(msg: any): void {
   const { type } = msg
 
@@ -71,13 +85,11 @@ function processMessage(msg: any): void {
     case 'NETWORK_ENTRY_CAPTURED':
       if (msg.entry && !paused.value) {
         const entry = normalizeEntry(msg.entry)
-        const existingIndex = entries.value.findIndex(e => e.id === entry.id)
-        if (existingIndex === -1) {
-          entries.value = [...entries.value, entry]
-
-          if (entries.value.length > config.value.maxEntries) {
-            entries.value = entries.value.slice(-config.value.maxEntries)
-          }
+        if (!idIndex.has(entry.id)) {
+          const idx = entries.value.push(entry) - 1
+          idIndex.set(entry.id, idx)
+          enforceLimit()
+          entriesVersion.value++
         }
       }
       break
@@ -85,35 +97,32 @@ function processMessage(msg: any): void {
     case 'NETWORK_ENTRY_UPDATED':
       if (msg.entry) {
         const entry = normalizeEntry(msg.entry)
-        const index = entries.value.findIndex(e => e.id === entry.id)
+        const idx = idIndex.get(entry.id)
 
-        if (index !== -1) {
-          const newEntries = [...entries.value]
-          newEntries[index] = entry
-          entries.value = newEntries
+        if (idx !== undefined) {
+          entries.value[idx] = entry
+          entriesVersion.value++
         } else if (!paused.value) {
-          entries.value = [...entries.value, entry]
+          const newIdx = entries.value.push(entry) - 1
+          idIndex.set(entry.id, newIdx)
+          entriesVersion.value++
         }
       }
       break
 
     case 'NETWORK_BREAKPOINT_HIT':
       if (msg.requestId && msg.trigger) {
-        // Add entry if provided and not in list
         if (msg.entry) {
-          const existingIndex = entries.value.findIndex(e => e.id === msg.requestId)
-          if (existingIndex === -1) {
-            // Breakpoint entries are always pending until resumed
+          const idx = idIndex.get(msg.requestId)
+          if (idx === undefined) {
             const entry = { ...normalizeEntry(msg.entry), pending: true }
-            entries.value = [...entries.value, entry]
+            const newIdx = entries.value.push(entry) - 1
+            idIndex.set(entry.id, newIdx)
           } else {
-            // Update existing entry to mark as pending
-            const newEntries = [...entries.value]
-            newEntries[existingIndex] = { ...newEntries[existingIndex], pending: true }
-            entries.value = newEntries
+            entries.value[idx] = { ...entries.value[idx], pending: true }
           }
+          entriesVersion.value++
         }
-        // Notify all registered callbacks
         breakpointHitCallbacks.forEach(cb => cb(msg.requestId, msg.trigger, msg.entry))
       }
       break
@@ -121,36 +130,33 @@ function processMessage(msg: any): void {
     case 'NETWORK_ENTRIES_DATA':
       isReady.value = true
       if (msg.entries && Array.isArray(msg.entries)) {
-        // Smart merge: update from server but preserve breakpoint pending state
         const incomingEntries = msg.entries.map(normalizeEntry)
-        const breakpointIds = new Set(
-          entries.value
-            .filter(e => e.pending)
-            .map(e => e.id)
-        )
-        
-        // Start with incoming entries (server is source of truth for completed requests)
+        const pendingIds = new Set<string>()
+        for (const e of entries.value) {
+          if (e.pending) pendingIds.add(e.id)
+        }
+
         const mergedEntries: NetworkEntry[] = []
         const processedIds = new Set<string>()
-        
+
         for (const incoming of incomingEntries) {
           processedIds.add(incoming.id)
-          // If this entry was in breakpoint (pending), preserve that status
-          if (breakpointIds.has(incoming.id)) {
+          if (pendingIds.has(incoming.id)) {
             mergedEntries.push({ ...incoming, pending: true })
           } else {
             mergedEntries.push(incoming)
           }
         }
-        
-        // Keep any breakpoint entries that weren't in incoming data
+
         for (const existing of entries.value) {
           if (existing.pending && !processedIds.has(existing.id)) {
             mergedEntries.push(existing)
           }
         }
-        
+
         entries.value = mergedEntries
+        rebuildIdIndex()
+        entriesVersion.value++
       }
       break
 
@@ -171,31 +177,25 @@ function processMessage(msg: any): void {
 
     case 'NETWORK_CLEARED':
       entries.value = []
+      idIndex.clear()
+      entriesVersion.value++
       break
   }
 }
 
-/**
- * Handle incoming network messages (module-level listener)
- */
 function handleMessage(event: MessageEvent): void {
   const data = event.data
 
-  // Handle broadcast format from content script
   if (data?.__VUE_INSPECTOR__ && data.broadcast && data.message?.__NETWORK__) {
     processMessage(data.message)
     return
   }
 
-  // Handle direct format
   if (data?.__FROM_VUE_INSPECTOR__ && data.__NETWORK__) {
     processMessage(data)
   }
 }
 
-/**
- * Initialize module-level listener (called once)
- */
 function initModuleListener(): void {
   if (listenerInitialized) return
   listenerInitialized = true
@@ -206,11 +206,7 @@ function initModuleListener(): void {
 // Composable
 // ============================================================================
 
-/**
- * Composable for network entries management
- */
 export function useNetworkEntries(options: NetworkEntriesOptions = {}) {
-  // Ensure module-level listener is active
   initModuleListener()
 
   // ============================================================================
@@ -229,26 +225,40 @@ export function useNetworkEntries(options: NetworkEntriesOptions = {}) {
 
   function clearEntries() {
     entries.value = []
+    idIndex.clear()
     sendCommand('NETWORK_CLEAR')
   }
 
   function addEntry(entry: NetworkEntry) {
-    const existingIndex = entries.value.findIndex(e => e.id === entry.id)
-    if (existingIndex === -1) {
-      entries.value = [...entries.value, entry]
+    if (!idIndex.has(entry.id)) {
+      const idx = entries.value.push(entry) - 1
+      idIndex.set(entry.id, idx)
+      enforceLimit()
+      entriesVersion.value++
     }
   }
 
   function getEntry(id: string): NetworkEntry | undefined {
-    return entries.value.find(e => e.id === id)
+    const idx = idIndex.get(id)
+    return idx !== undefined ? entries.value[idx] : undefined
   }
 
   // ============================================================================
   // Computed
   // ============================================================================
 
-  const totalCount = computed(() => entries.value.length)
-  const pendingCount = computed(() => entries.value.filter(e => e.pending).length)
+  const totalCount = computed(() => {
+    void entriesVersion.value
+    return entries.value.length
+  })
+  const pendingCount = computed(() => {
+    void entriesVersion.value
+    let count = 0
+    for (const e of entries.value) {
+      if (e.pending) count++
+    }
+    return count
+  })
 
   // ============================================================================
   // Lifecycle
@@ -257,23 +267,18 @@ export function useNetworkEntries(options: NetworkEntriesOptions = {}) {
   let statusCheckInterval: ReturnType<typeof setInterval> | null = null
 
   onMounted(() => {
-    // Register breakpoint callback if provided
     if (options.onBreakpointHit) {
       breakpointHitCallbacks.add(options.onBreakpointHit)
     }
 
-    // Request status (always)
     sendCommand('NETWORK_GET_STATUS')
-    
-    // Only request entries if we don't have any (fresh load)
+
     if (entries.value.length === 0) {
       sendCommand('NETWORK_GET_ENTRIES')
     } else {
-      // We have persisted entries, mark as ready
       isReady.value = true
     }
 
-    // Retry until ready (only if fresh load)
     let retryCount = 0
     const needsEntries = entries.value.length === 0
     statusCheckInterval = setInterval(() => {
@@ -293,13 +298,10 @@ export function useNetworkEntries(options: NetworkEntriesOptions = {}) {
   })
 
   onUnmounted(() => {
-    // Unregister breakpoint callback
     if (options.onBreakpointHit) {
       breakpointHitCallbacks.delete(options.onBreakpointHit)
     }
-    
-    // Clear interval but DON'T remove the message listener
-    // The listener stays active at module level
+
     if (statusCheckInterval) {
       clearInterval(statusCheckInterval)
       statusCheckInterval = null
@@ -307,17 +309,13 @@ export function useNetworkEntries(options: NetworkEntriesOptions = {}) {
   })
 
   return {
-    // State
     entries,
+    entriesVersion,
     paused,
     config,
     isReady,
-    
-    // Computed
     totalCount,
     pendingCount,
-    
-    // Actions
     sendCommand,
     togglePause,
     clearEntries,
