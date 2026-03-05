@@ -63,7 +63,27 @@ async function loadFromStorage(): Promise<void> {
     isLoaded = true
 }
 
-// Миграция: из единого search в per-module search settings
+function migrateFavoriteIds(saved: any): void {
+    if (!Array.isArray(saved.favorites)) return
+    let changed = false
+    for (const fav of saved.favorites) {
+        if (typeof fav.id === 'string' && fav.id.startsWith('uid:') && fav.name) {
+            const tag = fav.tagName?.toLowerCase() || 'div'
+            const cls = fav.className ? '.' + fav.className.trim().replace(/\s+/g, '.') : ''
+            fav.id = `${fav.name}::${tag}${cls}`
+            changed = true
+        }
+    }
+    if (changed) {
+        const seen = new Set<string>()
+        saved.favorites = saved.favorites.filter((fav: any) => {
+            if (seen.has(fav.id)) return false
+            seen.add(fav.id)
+            return true
+        })
+    }
+}
+
 function migrateSearchSettings(saved: any): void {
     if (saved.search && typeof saved.search === 'object') {
         const oldSearch = saved.search
@@ -127,8 +147,8 @@ function migrateSearchSettings(saved: any): void {
 
 // Мердж настроек
 function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSettings>) {
-    // Применяем миграции перед мерджем
     migrateSearchSettings(saved)
+    migrateFavoriteIds(saved)
 
     const result = structuredClone(defaults)
 

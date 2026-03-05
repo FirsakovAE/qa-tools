@@ -21,6 +21,7 @@ import { useTreeData } from '@/hooks/useTreeData'
 import { useRuntime } from '@/runtime'
 import { safeRuntime, safeTabs, safeStorage } from '@/utils/extensionBridge'
 import { isInFavorites, findMatchingFavorite } from '@/utils/favoritesMatcher'
+import { likeMatch } from '@/utils/likeMatch'
 import { 
   type PropsRow, 
   createPropsRow, 
@@ -146,6 +147,15 @@ function isFavoriteNode(node: TreeNodeModel): boolean {
   return isInFavorites(id, settings.value.favorites)
 }
 
+function isBlockedNode(node: TreeNodeModel): boolean {
+  if (!settings.value?.blacklist) return false
+  const { active, inactive } = settings.value.blacklist
+  if (!active?.length) return false
+  const name = node.name || ''
+  if (inactive?.some((rule: string) => likeMatch(name, rule))) return false
+  return active.some((rule: string) => likeMatch(name, rule))
+}
+
 function applyFilters() {
   updateRowsVisibility(rows.value, {
     searchTerm: debouncedSearchTerm.value,
@@ -186,6 +196,30 @@ watch(favorites, () => {
   }
 }, { deep: true })
 
+// Re-filter rows when blacklist changes
+watch(
+  () => settings.value?.blacklist,
+  () => {
+    if (!rows.value.length || !treeData.value?.length) return
+    const newRows = treeData.value
+      .filter(node => !isBlockedNode(node as TreeNodeModel))
+      .map(node =>
+        createPropsRow(node as TreeNodeModel, isFavoriteNode(node as TreeNodeModel))
+      )
+    sortRowsByFavorite(newRows)
+    updateRowsVisibility(newRows, {
+      searchTerm: debouncedSearchTerm.value,
+      searchByName: searchSettings.value.byName,
+      searchByRootElement: searchSettings.value.byRootElement,
+      searchByKey: searchSettings.value.byKey,
+      searchByValue: searchSettings.value.byValue
+    })
+    rows.value = newRows
+    visibilityVersion.value++
+  },
+  { deep: true }
+)
+
 // Watch for settings changes in storage (extension / devtools cross-tab sync)
 const storage = safeStorage()
 let storageListener: ((changes: any) => void) | null = null
@@ -211,10 +245,11 @@ const { treeData, isLoading: treeLoading, error: treeError, refresh } = useTreeD
 // Transform incoming data to PropsRow format (only on new data)
 watch(treeData, (data) => {
   if (data) {
-    // Create new rows array with pre-calculated flags
-    const newRows = data.map(node => 
-      createPropsRow(node as TreeNodeModel, isFavoriteNode(node as TreeNodeModel))
-    )
+    const newRows = data
+      .filter(node => !isBlockedNode(node as TreeNodeModel))
+      .map(node => 
+        createPropsRow(node as TreeNodeModel, isFavoriteNode(node as TreeNodeModel))
+      )
     
     // Sort by favorites
     sortRowsByFavorite(newRows)

@@ -152,7 +152,9 @@ function getElementInfo(node: TreeNodeModel): string {
 }
 
 function extractUid(node: TreeNodeModel): number | null {
-  const path = node.componentUid || node.id
+  // node.id holds the original runtime path (e.g. "uid:496"),
+  // node.componentUid is the stable display identifier — not suitable for UID extraction
+  const path = node.id
   if (!path) return null
   
   if (typeof path === 'string' && path.startsWith('uid:')) {

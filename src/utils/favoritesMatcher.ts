@@ -138,27 +138,24 @@ export function getStableFavoriteId(componentUid: string): string {
  * Check if two favorite IDs match (comparing stable parts)
  */
 export function matchFavoriteIds(id1: string, id2: string): boolean {
-  // First try exact match (for backwards compatibility)
   if (id1 === id2) {
     return true
   }
   
-  // Parse both IDs and compare stable parts
   const parsed1 = parseComponentUid(id1)
   const parsed2 = parseComponentUid(id2)
   
-  // CRITICAL: If both have numeric UIDs, they must match exactly
-  // This prevents false positives with the new "uid:123" format
+  // Both are numeric UIDs — only match if identical (same session)
   if (parsed1.numericUid !== null && parsed2.numericUid !== null) {
     return parsed1.numericUid === parsed2.numericUid
   }
   
-  // If one has numeric UID and other doesn't, they can't match
-  if ((parsed1.numericUid !== null) !== (parsed2.numericUid !== null)) {
+  // One is numeric UID, other is stable — cannot match by id alone
+  // (metadata-based matching is handled in findMatchingFavorite)
+  if (parsed1.numericUid !== null || parsed2.numericUid !== null) {
     return false
   }
   
-  // Must have matching component names (both must have names for comparison)
   if (!parsed1.name || !parsed2.name) {
     return false
   }
@@ -167,21 +164,18 @@ export function matchFavoriteIds(id1: string, id2: string): boolean {
     return false
   }
   
-  // If both have selectors, they should match
   if (parsed1.selector && parsed2.selector) {
     if (parsed1.selector !== parsed2.selector) {
       return false
     }
   }
   
-  // If both have text content, they should match
   if (parsed1.textContent && parsed2.textContent) {
     if (parsed1.textContent !== parsed2.textContent) {
       return false
     }
   }
   
-  // If we have at least name + one more identifier, it's a match
   const hasEnoughInfo1 = parsed1.name && (parsed1.selector || parsed1.textContent)
   const hasEnoughInfo2 = parsed2.name && (parsed2.selector || parsed2.textContent)
   
@@ -189,7 +183,6 @@ export function matchFavoriteIds(id1: string, id2: string): boolean {
     return true
   }
   
-  // Fallback: compare stable IDs
   const stable1 = generateStableFavoriteId(parsed1)
   const stable2 = generateStableFavoriteId(parsed2)
   
@@ -197,17 +190,45 @@ export function matchFavoriteIds(id1: string, id2: string): boolean {
 }
 
 /**
- * Find a matching favorite in the list
+ * Build a stable identifier from FavoriteItem metadata.
+ * Used to match old favorites stored with unstable "uid:XXX" ids.
+ */
+function buildStableIdFromMeta(fav: { name?: string; tagName?: string; className?: string }): string | null {
+  if (!fav.name) return null
+  const tag = fav.tagName?.toLowerCase() || 'div'
+  const cls = fav.className ? '.' + fav.className.trim().replace(/\s+/g, '.') : ''
+  return `${fav.name}::${tag}${cls}`
+}
+
+/**
+ * Find a matching favorite in the list.
+ * Supports metadata-based matching for legacy favorites stored with "uid:XXX" ids.
  */
 export function findMatchingFavorite(
   componentUid: string,
-  favorites: Array<{ id: string }>
+  favorites: Array<{ id: string; name?: string; tagName?: string; className?: string }>
 ): { id: string } | undefined {
   for (const fav of favorites) {
     if (matchFavoriteIds(componentUid, fav.id)) {
       return fav
     }
   }
+
+  // Migration: for favorites stored with unstable "uid:XXX",
+  // try to match using metadata (name + tagName + className)
+  const parsed = parseComponentUid(componentUid)
+  if (parsed.numericUid !== null || !parsed.name) {
+    return undefined
+  }
+
+  for (const fav of favorites) {
+    if (!fav.id.startsWith('uid:')) continue
+    const stableFromMeta = buildStableIdFromMeta(fav)
+    if (stableFromMeta && matchFavoriteIds(componentUid, stableFromMeta)) {
+      return fav
+    }
+  }
+
   return undefined
 }
 
@@ -216,7 +237,7 @@ export function findMatchingFavorite(
  */
 export function isInFavorites(
   componentUid: string,
-  favorites: Array<{ id: string }>
+  favorites: Array<{ id: string; name?: string; tagName?: string; className?: string }>
 ): boolean {
   return findMatchingFavorite(componentUid, favorites) !== undefined
 }
