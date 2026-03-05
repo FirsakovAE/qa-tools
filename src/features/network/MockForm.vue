@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ArrowLeft, Check, Shuffle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,7 @@ import JsonEditor from '@/components/JsonEditor.vue'
 import type { NetworkEntry } from '@/types/network'
 import type { MockRule } from '@/types/inspector'
 import { useMockFormState } from './composables'
+import { detectLanguage } from './utils'
 
 const props = defineProps<{
   entry: NetworkEntry
@@ -67,6 +69,13 @@ const {
   existingMock: () => props.existingMock,
   emitConfirm: (mock) => emit('confirm', mock),
 })
+
+const mockContentType = computed(() => {
+  const ct = responseHeaders.value.find(h => h.name.toLowerCase() === 'content-type')
+  return ct?.value || 'application/json'
+})
+
+const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
 </script>
 
 <template>
@@ -233,7 +242,10 @@ const {
         <div v-else-if="activeSection === 'response'" class="h-full flex flex-col">
           <div class="shrink-0 flex items-center justify-between px-3 py-2 border-b">
             <div class="flex items-center gap-2">
-              <span class="text-sm text-muted-foreground">Response Body (JSON)</span>
+              <span class="text-sm text-muted-foreground">Response Body</span>
+              <Badge variant="outline" class="text-xs font-mono">
+                {{ mockContentType }}
+              </Badge>
               <Badge variant="outline" class="text-xs text-purple-500 border-purple-500/50">
                 Editable
               </Badge>
@@ -264,13 +276,14 @@ const {
             </div>
           </div>
           
-          <!-- JSON Editor - always shown, empty = no body -->
+          <!-- Body Editor - always shown, empty = no body -->
           <div class="flex-1 min-h-0">
             <JsonEditor
               v-model="responseBody"
               :editable="true"
               :show-copy="true"
               :mode="jsonMode"
+              :language="bodyLanguage"
               :full-height="true"
               class="h-full"
             />

@@ -43,7 +43,19 @@ function formatJsonForEdit(text: string | undefined | null): string {
   if (!text) return ''
   try {
     const parsed = JSON.parse(text)
-    return JSON.stringify(parsed, null, 2)
+    if (typeof parsed === 'string') {
+      try {
+        const inner = JSON.parse(parsed)
+        if (typeof inner === 'object' && inner !== null) {
+          return JSON.stringify(inner, null, 2)
+        }
+      } catch { /* inner is not JSON */ }
+      return parsed
+    }
+    if (typeof parsed === 'object' && parsed !== null) {
+      return JSON.stringify(parsed, null, 2)
+    }
+    return text
   } catch {
     return text
   }

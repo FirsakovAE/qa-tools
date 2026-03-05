@@ -9,8 +9,10 @@ const props = withDefaults(defineProps<{
   showCopy?: boolean
   mode?: 'text' | 'tree'
   fullHeight?: boolean
+  language?: string
 }>(), {
-  fullHeight: false
+  fullHeight: false,
+  language: 'json'
 })
 
 const emit = defineEmits<{
@@ -21,6 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const mode = computed(() => props.mode ?? 'text')
+const useTreeMode = computed(() => mode.value === 'tree' && props.language === 'json')
 </script>
 
 <template>
@@ -29,11 +32,12 @@ const mode = computed(() => props.mode ?? 'text')
     :class="fullHeight ? 'h-full flex flex-col' : 'min-h-[350px]'"
   >
     <component
-      :is="mode === 'tree' ? JsonTreeEditor : JsonTextEditor"
+      :is="useTreeMode ? JsonTreeEditor : JsonTextEditor"
       :model-value="modelValue"
       :editable="editable"
       :show-copy="showCopy"
       :full-height="fullHeight"
+      :language="language"
       @update:modelValue="$emit('update:modelValue', $event)"
     />
   </div>

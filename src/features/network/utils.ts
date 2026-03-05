@@ -91,13 +91,73 @@ export function getStatusClass(status: number, pending: boolean = false): string
  * Format JSON string for display/editing
  */
 export function formatJson(text: string | undefined | null): string {
-  if (!text) return '{}'
+  if (!text) return ''
   try {
     const parsed = JSON.parse(text)
-    return JSON.stringify(parsed, null, 2)
+    if (typeof parsed === 'string') {
+      try {
+        const inner = JSON.parse(parsed)
+        if (typeof inner === 'object' && inner !== null) {
+          return JSON.stringify(inner, null, 2)
+        }
+      } catch { /* inner is not JSON */ }
+      return parsed
+    }
+    if (typeof parsed === 'object' && parsed !== null) {
+      return JSON.stringify(parsed, null, 2)
+    }
+    return text
   } catch {
     return text
   }
+}
+
+/**
+ * Format body text for read-only display.
+ * Handles JSON (pretty-print), double-wrapped JSON strings, and non-JSON content.
+ */
+export function formatBodyForDisplay(text: string | undefined | null, contentType?: string): string {
+  if (!text) return ''
+
+  const isJsonContent = !contentType || contentType.includes('json')
+
+  if (isJsonContent) {
+    try {
+      const parsed = JSON.parse(text)
+      if (typeof parsed === 'string') {
+        try {
+          const inner = JSON.parse(parsed)
+          if (typeof inner === 'object' && inner !== null) {
+            return JSON.stringify(inner, null, 2)
+          }
+        } catch { /* inner is not JSON */ }
+        return parsed
+      }
+      if (typeof parsed === 'object' && parsed !== null) {
+        return JSON.stringify(parsed, null, 2)
+      }
+      return text
+    } catch {
+      return text
+    }
+  }
+
+  return text
+}
+
+/**
+ * Detect Prism language from content type
+ */
+export function detectLanguage(contentType: string | undefined | null): string {
+  if (!contentType) return 'json'
+  const ct = contentType.toLowerCase()
+  if (ct.includes('json')) return 'json'
+  if (ct.includes('xml') || ct.includes('svg')) return 'xml'
+  if (ct.includes('html')) return 'html'
+  if (ct.includes('css')) return 'css'
+  if (ct.includes('javascript') || ct.includes('ecmascript')) return 'javascript'
+  if (ct.includes('text/plain')) return 'plain'
+  return 'plain'
 }
 
 /**

@@ -35,6 +35,7 @@ import { copyToClipboard } from '@/utils/networkUtils'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
 import type { BaseInspectorSettings } from '@/types/inspector'
+import { formatBodyForDisplay, detectLanguage } from './utils'
 import {
   useBreakpointEditor,
   useFormDataEditor,
@@ -160,19 +161,27 @@ const statusClass = computed(() => {
 const LARGE_BODY_THRESHOLD = 200 * 1024
 
 const requestBodyJson = computed(() => {
-  if (!props.entry.requestBody?.text) return '{}'
-  if (isFormDataBody.value) return '{}'
+  if (!props.entry.requestBody?.text) return ''
+  if (isFormDataBody.value) return ''
   const raw = props.entry.requestBody.text
   if (raw.length > LARGE_BODY_THRESHOLD) return raw
-  try { return JSON.stringify(JSON.parse(raw), null, 2) } catch { return raw }
+  return formatBodyForDisplay(raw, props.entry.requestBody.contentType)
 })
 
 const responseBodyJson = computed(() => {
-  if (!props.entry.responseBody?.text) return '{}'
+  if (!props.entry.responseBody?.text) return ''
   const raw = props.entry.responseBody.text
   if (raw.length > LARGE_BODY_THRESHOLD) return raw
-  try { return JSON.stringify(JSON.parse(raw), null, 2) } catch { return raw }
+  return formatBodyForDisplay(raw, props.entry.responseBody.contentType)
 })
+
+const requestBodyLanguage = computed(() =>
+  detectLanguage(props.entry.requestBody?.contentType)
+)
+
+const responseBodyLanguage = computed(() =>
+  detectLanguage(props.entry.responseBody?.contentType)
+)
 
 const xRequestId = computed(() => {
   const header = props.entry.responseHeaders.find(h => h.name.toLowerCase() === 'x-request-id')
@@ -785,7 +794,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   </Table>
                 </div>
               </ScrollArea>
-              <!-- raw JSON editor -->
+              <!-- raw body editor -->
               <div v-else class="flex-1 min-h-0">
                 <JsonEditor
                   :model-value="editableRequestBody"
@@ -793,6 +802,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   :editable="true"
                   :show-copy="true"
                   :mode="jsonMode"
+                  :language="requestBodyLanguage"
                   :full-height="true"
                   class="h-full"
                 />
@@ -841,13 +851,14 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   </Table>
                 </div>
               </ScrollArea>
-              <!-- JSON read-only -->
+              <!-- Body read-only -->
               <div v-else class="flex-1 min-h-0">
                 <JsonEditor
                   :model-value="requestBodyJson"
                   :editable="false"
                   :show-copy="true"
                   :mode="jsonMode"
+                  :language="requestBodyLanguage"
                   :full-height="true"
                   class="h-full"
                 />
@@ -899,6 +910,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 :editable="true"
                 :show-copy="true"
                 :mode="jsonMode"
+                :language="responseBodyLanguage"
                 :full-height="true"
                 class="h-full"
               />
@@ -908,6 +920,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 :editable="false"
                 :show-copy="true"
                 :mode="jsonMode"
+                :language="responseBodyLanguage"
                 :full-height="true"
                 class="h-full"
               />

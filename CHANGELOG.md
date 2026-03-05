@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-
+- Исправлена работа избранного и черного списка при работе с Props
 
 ### Fixed
 

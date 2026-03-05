@@ -2,6 +2,9 @@
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-json'
+import 'prismjs/components/prism-markup'
+import 'prismjs/components/prism-css'
+import 'prismjs/components/prism-javascript'
 import { Copy, Check } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -11,13 +14,23 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 // and freezes the UI. Plain text rendering is instant regardless of size.
 const HIGHLIGHT_SIZE_LIMIT = 200 * 1024
 
+const PRISM_LANG_MAP: Record<string, string> = {
+  json: 'json',
+  xml: 'markup',
+  html: 'markup',
+  css: 'css',
+  javascript: 'javascript',
+}
+
 const props = withDefaults(defineProps<{
   modelValue: string
   editable?: boolean
   showCopy?: boolean
   fullHeight?: boolean
+  language?: string
 }>(), {
-  fullHeight: false
+  fullHeight: false,
+  language: 'json'
 })
 
 const emit = defineEmits<{
@@ -34,7 +47,11 @@ watch(() => props.modelValue, v => {
 
 const isLargePayload = computed(() => editedJson.value.length > HIGHLIGHT_SIZE_LIMIT)
 
+const prismLang = computed(() => PRISM_LANG_MAP[props.language] || null)
+const prismClass = computed(() => prismLang.value ? `language-${prismLang.value}` : '')
+
 const isJsonValid = computed(() => {
+  if (props.language !== 'json') return true
   try { JSON.parse(editedJson.value); return true } catch { return false }
 })
 
@@ -45,7 +62,8 @@ function highlight() {
   nextTick(() => {
     if (codeRef.value && !props.editable) {
       codeRef.value.textContent = editedJson.value
-      if (!isLargePayload.value) {
+      codeRef.value.className = prismClass.value
+      if (!isLargePayload.value && prismLang.value) {
         Prism.highlightElement(codeRef.value)
       }
     }
@@ -73,10 +91,12 @@ watch(() => props.editable, () => {
 function copyToClipboard() {
   let textToCopy = editedJson.value
 
-  if (textToCopy.length <= HIGHLIGHT_SIZE_LIMIT) {
+  if (props.language === 'json' && textToCopy.length <= HIGHLIGHT_SIZE_LIMIT) {
     try {
       const parsed = JSON.parse(textToCopy)
-      textToCopy = JSON.stringify(parsed, null, 2)
+      if (typeof parsed === 'object' && parsed !== null) {
+        textToCopy = JSON.stringify(parsed, null, 2)
+      }
     } catch { /* keep original */ }
   }
 
@@ -147,7 +167,7 @@ function onInput(e: Event) {
           class="json-viewer h-full p-2 leading-relaxed
                  whitespace-pre-wrap break-words"
           :class="fullHeight ? '' : 'min-h-[300px]'"
-        ><code ref="codeRef" class="language-json"></code></pre>
+        ><code ref="codeRef" :class="prismClass"></code></pre>
       </div>
       <ScrollBar orientation="vertical" />
     </ScrollArea>
