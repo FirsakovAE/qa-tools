@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { Trash2, Pause, Play, SearchIcon } from 'lucide-vue-next'
+import { Trash2, Pause, Play, SearchIcon, Download } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ import type { NetworkEntry } from '@/types/network'
 import type { BaseInspectorSettings, BreakpointItem, MockRule } from '@/types/inspector'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
+import { downloadPostmanCollection } from '@/utils/networkUtils'
 import { 
   useNetworkEntries, 
   useNetworkSearch, 
@@ -358,6 +359,27 @@ onMounted(async () => {
         title="Search by"
         :options="searchTypeOptions"
       />
+
+      <!-- Export Postman collection -->
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button
+              variant="outline"
+              size="sm"
+              class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+              :disabled="filteredEntries.length === 0"
+              @click="downloadPostmanCollection(filteredEntries)"
+            >
+              <Download class="h-3.5 w-3.5" />
+              <span class="text-xs font-medium">Export Collection</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            Export filtered requests as Postman collection
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       
       <div class="flex-1" />
       
