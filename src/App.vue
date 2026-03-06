@@ -10,17 +10,40 @@
   useAutoUnhighlight()
   useUpdateChecker()
 
-  function isEditableTarget(el: EventTarget | null): boolean {
-    if (!el || !(el instanceof HTMLElement)) return false
-    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true
-    if (el.isContentEditable) return true
-    return false
+  function selectNodeContents(node: Node) {
+    const sel = window.getSelection()
+    if (!sel) return
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    sel.removeAllRanges()
+    sel.addRange(range)
   }
 
   function handleSelectAll(e: KeyboardEvent) {
-    if (!(e.ctrlKey || e.metaKey) || e.key !== 'a') return
-    if (isEditableTarget(e.target)) return
+    if (!(e.ctrlKey || e.metaKey) || e.code !== 'KeyA') return
+
+    const target = e.target as HTMLElement | null
+    if (!target) return
+
+    // input / textarea handle their own Ctrl+A natively (scoped to the field)
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+
     e.preventDefault()
+
+    // contenteditable — select only within this element
+    if (target.isContentEditable) {
+      selectNodeContents(target)
+      return
+    }
+
+    // pre / code (readonly JSON viewer) — select only that code block
+    const pre = target.closest('pre')
+    if (pre) {
+      selectNodeContents(pre)
+      return
+    }
+
+    // Everything else — no selection
     window.getSelection()?.removeAllRanges()
   }
 
