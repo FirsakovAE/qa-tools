@@ -308,6 +308,72 @@
 }
 
 /* =========================
+   Responsive toolbar (container queries)
+   ========================= */
+.toolbar-container {
+  container-type: inline-size;
+  container-name: toolbar;
+}
+
+@container toolbar (max-width: 700px) {
+  .export-inline {
+    display: none !important;
+  }
+  .export-wrapped {
+    display: block !important;
+  }
+  .export-spacer {
+    display: block !important;
+  }
+  .toolbar-right-block {
+    width: 100%;
+  }
+}
+
+@container toolbar (max-width: 550px) {
+  .toolbar-title {
+    display: none;
+  }
+}
+
+@container toolbar (max-width: 400px) {
+  .faceted-badges {
+    display: none !important;
+  }
+  .faceted-compact-count {
+    display: inline-flex !important;
+  }
+  .badge-label {
+    display: none;
+  }
+}
+
+/* =========================
+   Responsive 2-panel layout (<1000px)
+   ========================= */
+@media (max-width: 999px) {
+  .responsive-panels {
+    grid-template-columns: 1fr !important;
+    position: relative;
+  }
+  .responsive-panels > .details-panel {
+    display: none;
+  }
+  .responsive-panels > .details-panel.details-active {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background-color: hsl(var(--background));
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  .toolbar-hide-on-details {
+    display: none !important;
+  }
+}
+
+/* =========================
    Drag state fixes
    ========================= */
 .dragging * {

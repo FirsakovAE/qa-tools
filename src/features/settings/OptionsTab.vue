@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useInspectorSettings, resetInspectorSettings, exportSettings, importSettings } from '@/settings/useInspectorSettings'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,12 +13,14 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/Sheet'
 import {
   Settings,
   Globe,
   Box,
   Database,
   Info,
+  MenuIcon,
 } from 'lucide-vue-next'
 
 import GeneralSection from './sections/GeneralSection.vue'
@@ -59,6 +61,16 @@ const isLoading = ref(true)
 // -------------------- SECTIONS --------------------
 type SettingsSection = 'general' | 'network' | 'props' | 'pinia' | 'about'
 const activeSection = ref<SettingsSection>('general')
+const sheetOpen = ref(false)
+
+function selectSection(id: SettingsSection) {
+  activeSection.value = id
+  sheetOpen.value = false
+}
+
+const optionsDetailsActive = computed(() =>
+  !!selectedItem.value || !!editMode.value || !!(releaseInfo.value && activeSection.value === 'about')
+)
 
 const sections = [
   { id: 'general' as const, label: 'General', icon: Settings },
@@ -420,7 +432,34 @@ onMounted(async () => {
 <template>
   <div class="h-full flex flex-col overflow-hidden">
     <!-- Header -->
-    <div class="shrink-0 flex items-center gap-2 p-2 border-b">
+    <div class="shrink-0 flex items-center gap-2 p-2 border-b" :class="{ 'toolbar-hide-on-details': optionsDetailsActive }">
+      <!-- Hamburger for narrow widths -->
+      <Sheet v-model:open="sheetOpen">
+        <SheetTrigger as-child>
+          <Button variant="outline" size="icon" class="h-8 w-8 shrink-0 options-hamburger">
+            <MenuIcon class="h-4 w-4" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" class="w-[240px] p-4">
+          <nav class="flex flex-col gap-1 mt-4">
+            <Button
+              v-for="section in sections"
+              :key="section.id"
+              variant="ghost"
+              size="sm"
+              :class="[
+                'w-full justify-start h-10 text-sm',
+                activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
+              ]"
+              @click="selectSection(section.id)"
+            >
+              <component :is="section.icon" class="w-5 h-5 mr-2 shrink-0" />
+              {{ section.label }}
+            </Button>
+          </nav>
+        </SheetContent>
+      </Sheet>
+
       <Settings class="h-5 w-5 text-muted-foreground" />
       <h3 class="text-lg font-semibold">Options</h3>
     </div>
@@ -439,13 +478,13 @@ onMounted(async () => {
     </div>
 
     <!-- Content: 2-panel grid -->
-    <div v-else class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden">
+    <div v-else class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden responsive-panels">
 
       <!-- Left: Sidebar + Content -->
       <div class="h-full min-h-0 flex overflow-hidden gap-2">
 
-        <!-- Sidebar Nav -->
-        <div class="shrink-0 w-[240px] p-1 flex flex-col gap-1 bg-muted/50 rounded-lg">
+        <!-- Sidebar Nav (hidden at ≤1200px) -->
+        <div class="options-sidebar shrink-0 w-[240px] p-1 flex flex-col gap-1 bg-muted/50 rounded-lg">
           <Button
             v-for="section in sections"
             :key="section.id"
@@ -500,9 +539,10 @@ onMounted(async () => {
       </div>
 
       <!-- Right: Details Panel / Edit Forms -->
-      <div class="h-full min-h-0 overflow-hidden border rounded-lg" :class="{
+      <div class="h-full min-h-0 overflow-hidden border rounded-lg details-panel" :class="{
         'ring-2 ring-amber-500': editMode === 'breakpoint',
-        'ring-2 ring-purple-500': editMode === 'mock'
+        'ring-2 ring-purple-500': editMode === 'mock',
+        'details-active': optionsDetailsActive
       }">
         <BreakpointForm
           v-if="editMode === 'breakpoint' && editEntry"
@@ -548,3 +588,18 @@ onMounted(async () => {
     </AlertDialog>
   </div>
 </template>
+
+<style scoped>
+.options-hamburger {
+  display: none;
+}
+
+@media (max-width: 1200px) {
+  .options-hamburger {
+    display: inline-flex;
+  }
+  .options-sidebar {
+    display: none;
+  }
+}
+</style>

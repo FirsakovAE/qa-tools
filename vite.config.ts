@@ -194,7 +194,7 @@ export default defineConfig({
       // Prevent code splitting that would break injected scripts
       preserveEntrySignatures: 'strict'
     },
-    chunkSizeWarningLimit: 600
+    chunkSizeWarningLimit: 1500
   },
   publicDir: false
 })

@@ -487,34 +487,33 @@ onUnmounted(() => {
   <TooltipProvider>
     <div class="h-full flex flex-col overflow-hidden">
       <!-- Toolbar -->
-      <div class="shrink-0 flex items-center gap-2 p-2 border-b">
-        <!-- Left: Title -->
-        <h3 class="text-lg font-semibold shrink-0">
-          Props
-        </h3>
-        
-        <!-- Search bar -->
-        <div class="flex-1 max-w-xs relative">
-          <Input
-            v-model="searchTerm"
-            placeholder="Search components..."
-            class="pl-8 h-8"
+      <div class="shrink-0 flex flex-wrap items-center gap-2 p-2 border-b toolbar-container" :class="{ 'toolbar-hide-on-details': selectedNode }">
+        <!-- Left block: Title + Search + Filter -->
+        <div class="flex items-center gap-2">
+          <h3 class="text-lg font-semibold shrink-0 toolbar-title">
+            Props
+          </h3>
+          
+          <!-- Search bar -->
+          <div class="flex-1 min-w-[155px] max-w-xs relative">
+            <Input
+              v-model="searchTerm"
+              placeholder="Search components..."
+              class="pl-8 h-8"
+            />
+            <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
+          </div>
+          
+          <!-- Search type filter -->
+          <FacetedFilter
+            v-model="selectedSearchTypes"
+            title="Search by"
+            :options="propsSearchTypeOptions"
           />
-          <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
         </div>
         
-        <!-- Search type filter -->
-        <FacetedFilter
-          v-model="selectedSearchTypes"
-          title="Search by"
-          :options="propsSearchTypeOptions"
-        />
-        
-        <!-- Spacer -->
-        <div class="flex-1" />
-        
-        <!-- Right: Status badges and controls -->
-        <div class="flex items-center gap-2 shrink-0">
+        <!-- Right block: Status badges and controls -->
+        <div class="flex items-center gap-2 shrink-0 ml-auto">
           <Badge variant="secondary" class="font-mono">
             {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
           </Badge>
@@ -550,7 +549,7 @@ onUnmounted(() => {
       </div>
       
       <!-- Content -->
-      <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden">
+      <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden responsive-panels">
         <!-- Left: Table -->
         <div class="h-full min-h-0 overflow-hidden">
           <PropsTable
@@ -563,7 +562,7 @@ onUnmounted(() => {
         </div>
         
         <!-- Right: Details -->
-        <div class="h-full min-h-0 overflow-hidden border rounded-lg">
+        <div class="h-full min-h-0 overflow-hidden border rounded-lg details-panel" :class="{ 'details-active': selectedNode }">
           <ComponentDetails
             v-if="selectedNode"
             :key="selectedNode.id || selectedNode.componentUid"

@@ -340,82 +340,109 @@ onMounted(async () => {
 <template>
   <div class="h-full flex flex-col overflow-hidden">
     <!-- Toolbar -->
-    <div class="shrink-0 flex items-center gap-2 p-2 border-b">
-      <h3 class="text-lg font-semibold shrink-0">Network</h3>
-      
-      <!-- Search bar -->
-      <div class="flex-1 max-w-xs relative">
-        <Input
-          v-model="searchTerm"
-          placeholder="Search requests..."
-          class="pl-8 h-8"
+    <div class="shrink-0 flex flex-wrap items-center gap-2 p-2 border-b toolbar-container" :class="{ 'toolbar-hide-on-details': selectedEntry || mockFormMode || breakpointFormMode }">
+      <!-- Left block: Title + Search + Filter + Export (inline) -->
+      <div class="flex items-center gap-2">
+        <h3 class="text-lg font-semibold shrink-0 toolbar-title">Network</h3>
+        
+        <!-- Search bar -->
+        <div class="flex-1 min-w-[155px] max-w-xs relative">
+          <Input
+            v-model="searchTerm"
+            placeholder="Search requests..."
+            class="pl-8 h-8"
+          />
+          <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
+        </div>
+        
+        <!-- Search type filter -->
+        <FacetedFilter
+          v-model="selectedSearchTypes"
+          title="Search by"
+          :options="searchTypeOptions"
         />
-        <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
+
+        <!-- Export (inline — hidden when toolbar is narrow) -->
+        <div class="export-inline">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+                  :disabled="filteredEntries.length === 0"
+                  @click="downloadPostmanCollection(filteredEntries)"
+                >
+                  <Download class="h-3.5 w-3.5" />
+                  <span class="text-xs font-medium">Export Collection</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Export filtered requests as Postman collection
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
       
-      <!-- Search type filter -->
-      <FacetedFilter
-        v-model="selectedSearchTypes"
-        title="Search by"
-        :options="searchTypeOptions"
-      />
+      <!-- Right block: Status badges and controls -->
+      <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
+        <!-- Export (wrapped — shown when toolbar is narrow) -->
+        <div class="hidden export-wrapped">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+                  :disabled="filteredEntries.length === 0"
+                  @click="downloadPostmanCollection(filteredEntries)"
+                >
+                  <Download class="h-3.5 w-3.5" />
+                  <span class="text-xs font-medium">Export Collection</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Export filtered requests as Postman collection
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <div class="hidden flex-1 export-spacer" />
 
-      <!-- Export Postman collection -->
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
-              :disabled="filteredEntries.length === 0"
-              @click="downloadPostmanCollection(filteredEntries)"
-            >
-              <Download class="h-3.5 w-3.5" />
-              <span class="text-xs font-medium">Export Collection</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            Export filtered requests as Postman collection
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      
-      <div class="flex-1" />
-      
-      <!-- Status badges and controls -->
-      <div class="flex items-center gap-2 shrink-0">
         <Badge variant="secondary" class="font-mono">
           {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
         </Badge>
-        <Badge v-if="pendingCount > 0" variant="outline" class="text-yellow-500 border-yellow-500/30">
-          {{ pendingCount }} pending
+        <Badge v-if="pendingCount > 0" variant="outline" class="whitespace-nowrap text-yellow-500 border-yellow-500/30">
+          {{ pendingCount }}<span class="badge-label"> pending</span>
         </Badge>
         <Badge 
           v-if="pendingBreakpointIds.length > 0" 
           variant="outline" 
-          class="text-amber-500 border-amber-500/30 animate-pulse cursor-pointer hover:bg-amber-500/10 transition-colors"
+          class="whitespace-nowrap text-amber-500 border-amber-500/30 animate-pulse cursor-pointer hover:bg-amber-500/10 transition-colors"
           @click="selectFirstPendingBreakpoint"
         >
-          {{ pendingBreakpointIds.length }} breakpoint{{ pendingBreakpointIds.length > 1 ? 's' : '' }}
+          {{ pendingBreakpointIds.length }}<span class="badge-label"> bp</span>
         </Badge>
         <Badge 
           v-if="activeBreakpoints.length > 0" 
           variant="outline" 
-          class="text-amber-500 border-amber-500/30 cursor-pointer hover:bg-amber-500/10 transition-colors"
+          class="whitespace-nowrap text-amber-500 border-amber-500/30 cursor-pointer hover:bg-amber-500/10 transition-colors"
           @click="emit('navigateToOptions', 'breakpoints-section')"
         >
-          {{ activeBreakpoints.length }} bp
+          {{ activeBreakpoints.length }}<span class="badge-label"> bp</span>
         </Badge>
         <Badge 
           v-if="activeMocks.length > 0" 
           variant="outline" 
-          class="text-purple-500 border-purple-500/30 cursor-pointer hover:bg-purple-500/10 transition-colors"
+          class="whitespace-nowrap text-purple-500 border-purple-500/30 cursor-pointer hover:bg-purple-500/10 transition-colors"
           @click="emit('navigateToOptions', 'mocks-section')"
         >
-          {{ activeMocks.length }} mock{{ activeMocks.length > 1 ? 's' : '' }}
+          {{ activeMocks.length }}<span class="badge-label"> mock</span>
         </Badge>
-        <Badge v-if="paused" variant="outline" class="text-orange-500 border-orange-500/30">
+        <Badge v-if="paused" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
           Paused
         </Badge>
         
@@ -461,7 +488,7 @@ onMounted(async () => {
     </div>
     
     <!-- Content -->
-    <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden">
+    <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden responsive-panels">
       <!-- Left: Table -->
       <div class="h-full min-h-0 overflow-hidden">
         <NetworkTable
@@ -484,9 +511,10 @@ onMounted(async () => {
       </div>
       
       <!-- Right: Details / MockForm / BreakpointForm -->
-      <div class="h-full min-h-0 overflow-hidden border rounded-lg" :class="{ 
+      <div class="h-full min-h-0 overflow-hidden border rounded-lg details-panel" :class="{ 
         'ring-2 ring-amber-500': isShowingPendingBreakpoint || breakpointFormMode,
-        'ring-2 ring-purple-500': mockFormMode
+        'ring-2 ring-purple-500': mockFormMode,
+        'details-active': selectedEntry || mockFormMode || breakpointFormMode
       }">
         <MockForm
           v-if="mockFormMode && mockFormEntry"

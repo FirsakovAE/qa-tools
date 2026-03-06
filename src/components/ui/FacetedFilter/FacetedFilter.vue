@@ -87,7 +87,7 @@ function clearSearch() {
             orientation="vertical"
             class="mx-1.5 h-3.5"
           />
-          <div class="flex gap-1.5">
+          <div class="flex gap-1.5 faceted-badges">
             <span
               v-for="badge in selectedBadges"
               :key="badge"
@@ -102,6 +102,11 @@ function clearSearch() {
               +{{ selectedValues.size - props.maxBadges }}
             </span>
           </div>
+          <span
+            class="hidden faceted-compact-count h-4 items-center justify-center rounded-md bg-secondary px-1.5 text-[11px] text-secondary-foreground"
+          >
+            +{{ selectedValues.size }}
+          </span>
         </template>
       </Button>
     </PopoverTrigger>
