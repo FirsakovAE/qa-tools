@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import { onMounted, onUnmounted } from 'vue'
   import { Infusion } from '@/components/ui/infusion'
   import { useAutoUnhighlight } from '@/composables/useAutoUnhighlight'
   import { useUpdateChecker } from '@/composables/useUpdateChecker'
@@ -8,6 +9,23 @@
 
   useAutoUnhighlight()
   useUpdateChecker()
+
+  function isEditableTarget(el: EventTarget | null): boolean {
+    if (!el || !(el instanceof HTMLElement)) return false
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true
+    if (el.isContentEditable) return true
+    return false
+  }
+
+  function handleSelectAll(e: KeyboardEvent) {
+    if (!(e.ctrlKey || e.metaKey) || e.key !== 'a') return
+    if (isEditableTarget(e.target)) return
+    e.preventDefault()
+    window.getSelection()?.removeAllRanges()
+  }
+
+  onMounted(() => document.addEventListener('keydown', handleSelectAll, true))
+  onUnmounted(() => document.removeEventListener('keydown', handleSelectAll, true))
   </script>
 
   <template>

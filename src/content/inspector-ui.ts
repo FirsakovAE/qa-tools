@@ -37,6 +37,8 @@ export function injectInspectorUI(): void {
     width: 100vw;
     z-index: 1000000;
     pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
   `
 
   // Create host container (only for iframe)
@@ -64,6 +66,8 @@ export function injectInspectorUI(): void {
     background: transparent;
     pointer-events: auto;
     display: none;
+    user-select: none;
+    -webkit-user-select: none;
   `
 
   let detectionDone = false

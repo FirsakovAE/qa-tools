@@ -99,6 +99,8 @@
   html[data-injected],
   body[data-injected] {
     pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   html[data-injected] #app {
@@ -110,6 +112,17 @@
     display: flex;
     flex-direction: column;
     min-height: 0; /* CRITICAL */
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #app input,
+  #app textarea,
+  #app [contenteditable],
+  #app pre,
+  #app code {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   /* ---------------------------------
