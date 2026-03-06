@@ -22,6 +22,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/ContextMenu'
 import { MoreHorizontal, Power, Trash, Pencil } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -239,56 +246,69 @@ function handleEditFileChange(event: Event, fileId: string) {
         <ScrollArea class="max-h-[200px]">
           <Table class="table-fixed">
             <TableBody>
-              <TableRow
-                class="h-[41px] cursor-pointer transition-colors"
-                v-for="row in breakpointRows"
-                :key="row.id"
-                :class="{ 'bg-muted': selectedItemId === row.id }"
-                @click="emit('select', { type: 'breakpoint', id: row.id })"
-              >
-                <TableCell class="overflow-hidden !py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatBreakpointUrl(row)">
-                    {{ row.description || formatBreakpointUrl(row) }}
-                  </div>
-                </TableCell>
+              <ContextMenu v-for="row in breakpointRows" :key="row.id">
+                <ContextMenuTrigger as-child>
+                  <TableRow
+                    class="h-[41px] cursor-pointer transition-colors"
+                    :class="{ 'bg-muted': selectedItemId === row.id }"
+                    @click="emit('select', { type: 'breakpoint', id: row.id })"
+                  >
+                    <TableCell class="overflow-hidden !py-2">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatBreakpointUrl(row)">
+                        {{ row.description || formatBreakpointUrl(row) }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[70px] text-center !py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
-                    {{ row.active ? 'Active' : 'Off' }}
-                  </div>
-                </TableCell>
+                    <TableCell class="w-[70px] text-center !py-2">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
+                        {{ row.active ? 'Active' : 'Off' }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[48px] text-center p-0">
-                  <div class="flex justify-center items-center">
-                    <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button
-                      variant="ghost"
-                      class="h-6 w-6 p-0"
-                      @click.stop
-                    >
-                      <MoreHorizontal class="h-3.5 w-3.5" />
-                    </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-44">
-                      <DropdownMenuItem @click.stop="emit('edit-breakpoint', row.id)">
-                        <Pencil class="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem @click.stop="toggleBreakpoint(row.id, row.active)">
-                        <Power class="h-4 w-4 mr-2" />
-                        {{ row.active ? 'Disable' : 'Enable' }}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem class="text-destructive" @click.stop="removeBreakpoint(row.id)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  </div>
-                </TableCell>
-              </TableRow>
+                    <TableCell class="w-[48px] text-center p-0">
+                      <div class="flex justify-center items-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger as-child>
+                            <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
+                              <MoreHorizontal class="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" class="w-44">
+                            <DropdownMenuItem @click.stop="emit('edit-breakpoint', row.id)">
+                              <Pencil class="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @click.stop="toggleBreakpoint(row.id, row.active)">
+                              <Power class="h-4 w-4 mr-2" />
+                              {{ row.active ? 'Disable' : 'Enable' }}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem class="text-destructive" @click.stop="removeBreakpoint(row.id)">
+                              <Trash class="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </ContextMenuTrigger>
+                <ContextMenuContent class="w-44">
+                  <ContextMenuItem @click="emit('edit-breakpoint', row.id)">
+                    <Pencil class="h-4 w-4 mr-2" />
+                    Edit
+                  </ContextMenuItem>
+                  <ContextMenuItem @click="toggleBreakpoint(row.id, row.active)">
+                    <Power class="h-4 w-4 mr-2" />
+                    {{ row.active ? 'Disable' : 'Enable' }}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem class="text-destructive" @click="removeBreakpoint(row.id)">
+                    <Trash class="h-4 w-4 mr-2" />
+                    Delete
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
 
               <TableRow v-if="!breakpointRows.length">
                 <TableCell colspan="3" class="text-center text-muted-foreground py-8">
@@ -328,76 +348,89 @@ function handleEditFileChange(event: Event, fileId: string) {
         <ScrollArea class="max-h-[200px]">
           <Table class="table-fixed">
             <TableBody>
-              <TableRow
-                class="h-[41px] cursor-pointer transition-colors"
-                v-for="row in mockRows"
-                :key="row.id"
-                :class="{ 'bg-muted': selectedItemId === row.id }"
-                @click="emit('select', { type: 'mock', id: row.id })"
-              >
-                <TableCell class="overflow-hidden !py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatMockUrl(row)">
-                    {{ row.description || formatMockUrl(row) }}
-                  </div>
-                </TableCell>
-
-                <TableCell class="w-[60px] text-center !py-2">
-                  <div
-                    :class="[
-                      !row.active ? 'opacity-50' : '',
-                      'text-xs font-mono',
-                      row.status >= 200 && row.status < 300 ? 'text-green-500' : '',
-                      row.status >= 400 && row.status < 500 ? 'text-orange-500' : '',
-                      row.status >= 500 ? 'text-red-500' : ''
-                    ]"
+              <ContextMenu v-for="row in mockRows" :key="row.id">
+                <ContextMenuTrigger as-child>
+                  <TableRow
+                    class="h-[41px] cursor-pointer transition-colors"
+                    :class="{ 'bg-muted': selectedItemId === row.id }"
+                    @click="emit('select', { type: 'mock', id: row.id })"
                   >
-                    {{ row.status }}
-                  </div>
-                </TableCell>
+                    <TableCell class="overflow-hidden !py-2">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatMockUrl(row)">
+                        {{ row.description || formatMockUrl(row) }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[60px] text-center !py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="text-xs text-muted-foreground">
-                    {{ row.delay ? `${row.delay}ms` : '-' }}
-                  </div>
-                </TableCell>
+                    <TableCell class="w-[60px] text-center !py-2">
+                      <div
+                        :class="[
+                          !row.active ? 'opacity-50' : '',
+                          'text-xs font-mono',
+                          row.status >= 200 && row.status < 300 ? 'text-green-500' : '',
+                          row.status >= 400 && row.status < 500 ? 'text-orange-500' : '',
+                          row.status >= 500 ? 'text-red-500' : ''
+                        ]"
+                      >
+                        {{ row.status }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[60px] text-center !py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
-                    {{ row.active ? 'Active' : 'Off' }}
-                  </div>
-                </TableCell>
+                    <TableCell class="w-[60px] text-center !py-2">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="text-xs text-muted-foreground">
+                        {{ row.delay ? `${row.delay}ms` : '-' }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[48px] text-center p-0">
-                  <div class="flex justify-center items-center">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger as-child>
-                        <Button
-                          variant="ghost"
-                          class="h-6 w-6 p-0"
-                          @click.stop
-                        >
-                          <MoreHorizontal class="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" class="w-44">
-                        <DropdownMenuItem @click.stop="emit('edit-mock', row.id)">
-                          <Pencil class="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
-                          <Power class="h-4 w-4 mr-2" />
-                          {{ row.active ? 'Disable' : 'Enable' }}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem class="text-destructive" @click.stop="removeMock(row.id)">
-                          <Trash class="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </TableCell>
-              </TableRow>
+                    <TableCell class="w-[60px] text-center !py-2">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
+                        {{ row.active ? 'Active' : 'Off' }}
+                      </div>
+                    </TableCell>
+
+                    <TableCell class="w-[48px] text-center p-0">
+                      <div class="flex justify-center items-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger as-child>
+                            <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
+                              <MoreHorizontal class="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" class="w-44">
+                            <DropdownMenuItem @click.stop="emit('edit-mock', row.id)">
+                              <Pencil class="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
+                              <Power class="h-4 w-4 mr-2" />
+                              {{ row.active ? 'Disable' : 'Enable' }}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem class="text-destructive" @click.stop="removeMock(row.id)">
+                              <Trash class="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </ContextMenuTrigger>
+                <ContextMenuContent class="w-44">
+                  <ContextMenuItem @click="emit('edit-mock', row.id)">
+                    <Pencil class="h-4 w-4 mr-2" />
+                    Edit
+                  </ContextMenuItem>
+                  <ContextMenuItem @click="toggleMock(row.id, row.active)">
+                    <Power class="h-4 w-4 mr-2" />
+                    {{ row.active ? 'Disable' : 'Enable' }}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem class="text-destructive" @click="removeMock(row.id)">
+                    <Trash class="h-4 w-4 mr-2" />
+                    Delete
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
 
               <TableRow v-if="!mockRows.length">
                 <TableCell colspan="5" class="text-center text-muted-foreground py-8">
@@ -446,59 +479,75 @@ function handleEditFileChange(event: Event, fileId: string) {
         <ScrollArea class="max-h-[200px]">
           <Table class="table-fixed">
             <TableBody>
-              <TableRow
-                v-for="file in (settings.savedFiles || [])"
-                :key="file.id"
-                class="h-[41px] cursor-pointer transition-colors"
-                :class="{ 'bg-muted': selectedItemId === file.id }"
-                @click="emit('select', { type: 'saved-file', id: file.id })"
-              >
-                <TableCell class="overflow-hidden !py-2">
-                  <div class="text-sm truncate" :title="file.name">
-                    {{ file.name }}
-                  </div>
-                </TableCell>
+              <ContextMenu v-for="file in (settings.savedFiles || [])" :key="file.id">
+                <ContextMenuTrigger as-child>
+                  <TableRow
+                    class="h-[41px] cursor-pointer transition-colors"
+                    :class="{ 'bg-muted': selectedItemId === file.id }"
+                    @click="emit('select', { type: 'saved-file', id: file.id })"
+                  >
+                    <TableCell class="overflow-hidden !py-2">
+                      <div class="text-sm truncate" :title="file.name">
+                        {{ file.name }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[80px] text-center !py-2">
-                  <div class="text-xs text-muted-foreground">
-                    {{ formatFileSize(file.size) }}
-                  </div>
-                </TableCell>
+                    <TableCell class="w-[80px] text-center !py-2">
+                      <div class="text-xs text-muted-foreground">
+                        {{ formatFileSize(file.size) }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[48px] text-center p-0">
-                  <div class="flex justify-center items-center">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger as-child>
-                        <Button
-                          variant="ghost"
-                          class="h-6 w-6 p-0"
-                          @click.stop
-                        >
-                          <MoreHorizontal class="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" class="w-44">
-                        <DropdownMenuItem as-child>
-                          <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground w-full">
-                            <Pencil class="h-4 w-4 mr-2" />
-                            Edit
-                            <input
-                              type="file"
-                              class="sr-only"
-                              @change="handleEditFileChange($event, file.id)"
-                            />
-                          </label>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem class="text-destructive" @click.stop="removeSavedFile(file.id)">
-                          <Trash class="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </TableCell>
-              </TableRow>
+                    <TableCell class="w-[48px] text-center p-0">
+                      <div class="flex justify-center items-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger as-child>
+                            <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
+                              <MoreHorizontal class="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" class="w-44">
+                            <DropdownMenuItem as-child>
+                              <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground w-full">
+                                <Pencil class="h-4 w-4 mr-2" />
+                                Edit
+                                <input
+                                  type="file"
+                                  class="sr-only"
+                                  @change="handleEditFileChange($event, file.id)"
+                                />
+                              </label>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem class="text-destructive" @click.stop="removeSavedFile(file.id)">
+                              <Trash class="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </ContextMenuTrigger>
+                <ContextMenuContent class="w-44">
+                  <ContextMenuItem as-child>
+                    <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-secondary hover:text-secondary-foreground w-full">
+                      <Pencil class="h-4 w-4 mr-2" />
+                      Edit
+                      <input
+                        type="file"
+                        class="sr-only"
+                        @change="handleEditFileChange($event, file.id)"
+                      />
+                    </label>
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem class="text-destructive" @click="removeSavedFile(file.id)">
+                    <Trash class="h-4 w-4 mr-2" />
+                    Delete
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
 
               <!-- + Add new file row -->
               <TableRow class="h-[41px] hover:bg-muted/50 transition-colors">

@@ -62,7 +62,9 @@
       'bottom: 0',
       'width: 100vw',
       'z-index: 1000000',
-      'pointer-events: none'
+      'pointer-events: none',
+      'user-select: none',
+      '-webkit-user-select: none'
     ].join(';');
     
     var host = document.createElement('div');
@@ -84,7 +86,9 @@
       'border: none',
       'background: transparent',
       'pointer-events: auto',
-      'display: none'
+      'display: none',
+      'user-select: none',
+      '-webkit-user-select: none'
     ].join(';');
     
     // Toggle button

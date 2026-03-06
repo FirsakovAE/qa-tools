@@ -52,7 +52,7 @@
   </script>
 
   <template>
-    <div class="relative h-screen overflow-hidden">
+    <div class="relative h-screen overflow-hidden" @contextmenu.prevent>
       <Infusion
       :src="backgroundImage"
       :opacity="0.2"

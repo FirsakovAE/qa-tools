@@ -386,6 +386,24 @@ async function handleRefresh() {
   lastUpdated.value = formatDateTime(new Date())
 }
 
+async function ignoreByName(node: PropsRow) {
+  if (!settings.value?.blacklist) return
+  const name = node.name?.trim()
+  if (!name) return
+
+  const { active, inactive } = settings.value.blacklist
+  if (active.includes(name) || inactive.includes(name)) return
+
+  active.push(name)
+
+  try {
+    const settingsToSave = JSON.parse(JSON.stringify(settings.value))
+    await runtime.storage.set('vue-inspector-settings', settingsToSave)
+  } catch {
+    // Ignore save errors
+  }
+}
+
 // Toggle favorite for a node (NO sorting - element stays in place)
 async function toggleFavorite(node: PropsRow) {
   if (!settings.value) return
@@ -540,6 +558,7 @@ onUnmounted(() => {
             :selected-id="selectedNode?.id || null"
             @select="selectEntry"
             @toggle-favorite="toggleFavorite"
+            @ignore-by-name="ignoreByName"
           />
         </div>
         

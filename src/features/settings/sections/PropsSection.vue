@@ -22,6 +22,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/ContextMenu'
 import { MoreHorizontal, Power, Trash } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -152,46 +159,59 @@ function removeFromFavorites(id: string) {
         <ScrollArea class="max-h-[200px]">
           <Table>
             <TableBody>
-              <TableRow
-                v-for="row in blacklistRows"
-                :key="row.name"
-                class="cursor-pointer transition-colors"
-                :class="{ 'bg-muted': selectedItemId === row.name }"
-                @click="emit('select', { type: 'blacklist', id: row.name })"
-              >
-                <TableCell class="py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm">
-                    {{ row.name }}
-                  </div>
-                </TableCell>
+              <ContextMenu v-for="row in blacklistRows" :key="row.name">
+                <ContextMenuTrigger as-child>
+                  <TableRow
+                    class="cursor-pointer transition-colors"
+                    :class="{ 'bg-muted': selectedItemId === row.name }"
+                    @click="emit('select', { type: 'blacklist', id: row.name })"
+                  >
+                    <TableCell class="py-2">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm">
+                        {{ row.name }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[70px] text-center py-2">
-                  <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
-                    {{ row.active ? 'Blocked' : 'Allowed' }}
-                  </div>
-                </TableCell>
+                    <TableCell class="w-[70px] text-center py-2">
+                      <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
+                        {{ row.active ? 'Blocked' : 'Allowed' }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[28px] py-2 pr-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                        <MoreHorizontal class="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-44">
-                      <DropdownMenuItem @click.stop="toggleBlacklist(row.name, row.active)">
-                        <Power class="h-4 w-4 mr-2" />
-                        {{ row.active ? 'Allow' : 'Block' }}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem class="text-destructive" @click.stop="removeFromBlacklist(row.name)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
+                    <TableCell class="w-[28px] py-2 pr-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                          <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                            <MoreHorizontal class="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-44">
+                          <DropdownMenuItem @click.stop="toggleBlacklist(row.name, row.active)">
+                            <Power class="h-4 w-4 mr-2" />
+                            {{ row.active ? 'Allow' : 'Block' }}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem class="text-destructive" @click.stop="removeFromBlacklist(row.name)">
+                            <Trash class="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                </ContextMenuTrigger>
+                <ContextMenuContent class="w-44">
+                  <ContextMenuItem @click="toggleBlacklist(row.name, row.active)">
+                    <Power class="h-4 w-4 mr-2" />
+                    {{ row.active ? 'Allow' : 'Block' }}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem class="text-destructive" @click="removeFromBlacklist(row.name)">
+                    <Trash class="h-4 w-4 mr-2" />
+                    Delete
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
 
               <TableRow v-if="!blacklistRows.length">
                 <TableCell colspan="3" class="text-center text-muted-foreground py-8">
@@ -226,42 +246,50 @@ function removeFromFavorites(id: string) {
         <ScrollArea class="max-h-[200px]">
           <Table>
             <TableBody>
-              <TableRow
-                v-for="fav in favoritesList"
-                :key="fav.id"
-                class="cursor-pointer transition-colors"
-                :class="{ 'bg-muted': selectedItemId === fav.id }"
-                @click="emit('select', { type: 'favorite', id: fav.id })"
-              >
-                <TableCell class="py-2">
-                  <div class="font-mono text-sm">{{ fav.name }}</div>
-                  <div class="text-xs text-muted-foreground mt-0.5 font-mono">
-                    {{ fav.tagName }}{{ fav.className ? '.' + fav.className : '' }}
-                  </div>
-                </TableCell>
+              <ContextMenu v-for="fav in favoritesList" :key="fav.id">
+                <ContextMenuTrigger as-child>
+                  <TableRow
+                    class="cursor-pointer transition-colors"
+                    :class="{ 'bg-muted': selectedItemId === fav.id }"
+                    @click="emit('select', { type: 'favorite', id: fav.id })"
+                  >
+                    <TableCell class="py-2">
+                      <div class="font-mono text-sm">{{ fav.name }}</div>
+                      <div class="text-xs text-muted-foreground mt-0.5 font-mono">
+                        {{ fav.tagName }}{{ fav.className ? '.' + fav.className : '' }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[80px] text-center py-2">
-                  <div class="text-xs text-muted-foreground">
-                    {{ new Date(fav.timestamp).toLocaleDateString() }}
-                  </div>
-                </TableCell>
+                    <TableCell class="w-[80px] text-center py-2">
+                      <div class="text-xs text-muted-foreground">
+                        {{ new Date(fav.timestamp).toLocaleDateString() }}
+                      </div>
+                    </TableCell>
 
-                <TableCell class="w-[28px] py-2 pr-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                        <MoreHorizontal class="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-44">
-                      <DropdownMenuItem class="text-destructive" @click.stop="removeFromFavorites(fav.id)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
+                    <TableCell class="w-[28px] py-2 pr-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                          <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                            <MoreHorizontal class="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-44">
+                          <DropdownMenuItem class="text-destructive" @click.stop="removeFromFavorites(fav.id)">
+                            <Trash class="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                </ContextMenuTrigger>
+                <ContextMenuContent class="w-44">
+                  <ContextMenuItem class="text-destructive" @click="removeFromFavorites(fav.id)">
+                    <Trash class="h-4 w-4 mr-2" />
+                    Delete
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
 
               <TableRow v-if="!favoritesList.length">
                 <TableCell colspan="3" class="text-center text-muted-foreground py-8">

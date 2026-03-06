@@ -3,7 +3,22 @@ import { onUnmounted } from 'vue'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { Badge } from '@/components/ui/badge'
-import { Star } from 'lucide-vue-next'
+import { Star, StarOff, EyeOff, MoreHorizontal } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/ContextMenu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/DropdownMenu'
 import type { PropsRow } from './types'
 import { useRuntime } from '@/runtime'
 
@@ -17,6 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select', row: PropsRow): void
   (e: 'toggleFavorite', row: PropsRow): void
+  (e: 'ignoreByName', row: PropsRow): void
 }>()
 
 // ============================================================================
@@ -160,6 +176,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
         <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
         <div class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
         <div class="props-cell props-cell-props text-xs font-semibold">Props</div>
+        <div class="props-cell props-cell-actions"></div>
       </div>
     </div>
     
@@ -172,67 +189,108 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
       @mouseleave="onScrollerLeave"
     >
       <template #default="{ item: row }">
-        <div
-          class="props-row"
-          :class="{
-            'props-row-selected': selectedId === row.id,
-            'props-row-clickable': row.hasPropsFlag,
-            'props-row-disabled': !row.hasPropsFlag,
-            'props-row-favorite': row.isFavoriteFlag
-          }"
-          @click="handleRowClick(row)"
-          @mouseenter="onRowHover(row, $event)"
-        >
-          <!-- Star Column -->
-          <div class="props-cell props-cell-star">
-            <button
-              class="star-btn"
-              :class="{ 
-                'star-visible': row.isFavoriteFlag,
-                'star-favorite': row.isFavoriteFlag
+        <ContextMenu>
+          <ContextMenuTrigger as-child>
+            <div
+              class="props-row"
+              :class="{
+                'props-row-selected': selectedId === row.id,
+                'props-row-clickable': row.hasPropsFlag,
+                'props-row-disabled': !row.hasPropsFlag,
+                'props-row-favorite': row.isFavoriteFlag
               }"
-              :title="row.isFavoriteFlag ? 'Remove from favorites' : 'Add to favorites'"
-              @click="(e) => handleToggleFavorite(e, row)"
+              @click="handleRowClick(row)"
+              @mouseenter="onRowHover(row, $event)"
             >
-              <Star 
-                class="h-3.5 w-3.5"
-                :class="row.isFavoriteFlag 
-                  ? 'text-yellow-500 fill-yellow-500' 
-                  : 'text-muted-foreground'"
-              />
-            </button>
-          </div>
-          
-          <!-- Name Column -->
-          <div class="props-cell props-cell-name">
-            <div class="truncate text-sm font-medium" :title="row.name">
-              {{ row.name }}
+              <!-- Star Column -->
+              <div class="props-cell props-cell-star">
+                <button
+                  class="star-btn"
+                  :class="{ 
+                    'star-visible': row.isFavoriteFlag,
+                    'star-favorite': row.isFavoriteFlag
+                  }"
+                  :title="row.isFavoriteFlag ? 'Remove from favorites' : 'Add to favorites'"
+                  @click="(e) => handleToggleFavorite(e, row)"
+                >
+                  <Star 
+                    class="h-3.5 w-3.5"
+                    :class="row.isFavoriteFlag 
+                      ? 'text-yellow-500 fill-yellow-500' 
+                      : 'text-muted-foreground'"
+                  />
+                </button>
+              </div>
+              
+              <!-- Name Column -->
+              <div class="props-cell props-cell-name">
+                <div class="truncate text-sm font-medium" :title="row.name">
+                  {{ row.name }}
+                </div>
+              </div>
+              
+              <!-- Element Column -->
+              <div class="props-cell props-cell-element">
+                <Badge 
+                  :variant="row.elementInfo === 'Logic only' ? 'destructive' : 'secondary'"
+                  class="text-xs truncate max-w-full"
+                  :title="row.elementInfo"
+                >
+                  {{ truncateElementInfo(row.elementInfo) }}
+                </Badge>
+              </div>
+              
+              <!-- Props Column -->
+              <div class="props-cell props-cell-props">
+                <Badge 
+                  v-if="row.hasPropsFlag"
+                  variant="outline" 
+                  class="text-xs font-mono"
+                >
+                  {{ getPropsCount(row) }}
+                </Badge>
+                <span v-else class="text-xs text-muted-foreground">—</span>
+              </div>
+
+              <!-- Actions Column (3-dot button) -->
+              <div class="props-cell props-cell-actions">
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                      <MoreHorizontal class="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" class="w-48">
+                    <DropdownMenuItem @click.stop="emit('toggleFavorite', row)">
+                      <StarOff v-if="row.isFavoriteFlag" class="h-4 w-4 mr-2" />
+                      <Star v-else class="h-4 w-4 mr-2" />
+                      {{ row.isFavoriteFlag ? 'Remove favorite' : 'Add favorite' }}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem class="text-destructive" @click.stop="emit('ignoreByName', row)">
+                      <EyeOff class="h-4 w-4 mr-2" />
+                      Ignore by name
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
-          </div>
-          
-          <!-- Element Column (use pre-calculated elementInfo) -->
-          <div class="props-cell props-cell-element">
-            <Badge 
-              :variant="row.elementInfo === 'Logic only' ? 'destructive' : 'secondary'"
-              class="text-xs truncate max-w-full"
-              :title="row.elementInfo"
-            >
-              {{ truncateElementInfo(row.elementInfo) }}
-            </Badge>
-          </div>
-          
-          <!-- Props Column -->
-          <div class="props-cell props-cell-props">
-            <Badge 
-              v-if="row.hasPropsFlag"
-              variant="outline" 
-              class="text-xs font-mono"
-            >
-              {{ getPropsCount(row) }}
-            </Badge>
-            <span v-else class="text-xs text-muted-foreground">—</span>
-          </div>
-        </div>
+          </ContextMenuTrigger>
+
+          <!-- Right-click context menu (appears at cursor) -->
+          <ContextMenuContent class="w-48">
+            <ContextMenuItem @click="emit('toggleFavorite', row)">
+              <StarOff v-if="row.isFavoriteFlag" class="h-4 w-4 mr-2" />
+              <Star v-else class="h-4 w-4 mr-2" />
+              {{ row.isFavoriteFlag ? 'Remove favorite' : 'Add favorite' }}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem class="text-destructive" @click="emit('ignoreByName', row)">
+              <EyeOff class="h-4 w-4 mr-2" />
+              Ignore by name
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
       </template>
       
       <!-- Empty state -->
@@ -283,8 +341,14 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 }
 
 .props-cell-props {
-  width: 80px;
+  width: 40px;
   text-align: left;
+}
+
+.props-cell-actions {
+  width: 28px;
+  display: flex;
+  justify-content: center;
 }
 
 /* Row states */

@@ -10,10 +10,25 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/ContextMenu'
+import { MoreHorizontal, Terminal, PauseCircle, Shuffle, Power, Trash } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/DropdownMenu'
 import type { NetworkEntry } from '@/types/network'
 import type { BreakpointItem, MockRule } from '@/types/inspector'
 import { formatBytes, formatDuration } from '@/types/network'
-import NetworkRowActions from './NetworkRowActions.vue'
 import { getStatusClass } from './utils'
 import { matchesBreakpoint, matchesMock } from './composables/useBreakpointMatching'
 
@@ -105,6 +120,7 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
   }
   return null
 }
+
 </script>
 
 <template>
@@ -131,77 +147,148 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
     <ScrollArea v-else class="flex-1 min-h-0">
       <Table>
         <TableBody>
-          <TableRow
-            v-for="entry in sortedEntries"
-            :key="entry.id"
-            class="cursor-pointer transition-colors group"
-            :class="{
-              'bg-muted': selectedId === entry.id && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
-              'opacity-60': entry.pending,
-              'bg-amber-500/10 hover:bg-amber-500/20': hasBreakpoint(entry.id),
-              'border-l-2 border-l-amber-500/50': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
-              'bg-purple-500/10 hover:bg-purple-500/20': matchesMockPattern(entry.id) && selectedId === entry.id && !hasBreakpoint(entry.id),
-              'border-l-2 border-l-purple-500/50': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id)
-            }"
-            @click="emit('select', entry.id)"
-          >
-            <TableCell class="w-[70px] py-2">
-              <Badge
-                variant="outline"
-                class="text-xs font-mono px-1.5 py-0"
-                :class="getStatusClass(entry.status, entry.pending)"
+          <ContextMenu v-for="entry in sortedEntries" :key="entry.id">
+            <ContextMenuTrigger as-child>
+              <TableRow
+                class="cursor-pointer transition-colors group"
+                :class="{
+                  'bg-muted': selectedId === entry.id && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
+                  'opacity-60': entry.pending,
+                  'bg-amber-500/10 hover:bg-amber-500/20': hasBreakpoint(entry.id),
+                  'border-l-2 border-l-amber-500/50': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
+                  'bg-purple-500/10 hover:bg-purple-500/20': matchesMockPattern(entry.id) && selectedId === entry.id && !hasBreakpoint(entry.id),
+                  'border-l-2 border-l-purple-500/50': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id)
+                }"
+                @click="emit('select', entry.id)"
               >
-                {{ formatStatus(entry) }}
-              </Badge>
-            </TableCell>
-            
-            <TableCell class="w-[70px] py-2">
-              <Badge
-                :variant="getMethodVariant(entry.method)"
-                class="text-xs font-mono px-1.5 py-0"
-              >
-                {{ entry.method }}
-              </Badge>
-            </TableCell>
-            
-            <TableCell class="py-2 max-w-0">
-              <div class="truncate text-sm" :title="entry.url">
-                {{ entry.path }}
-              </div>
-              <div
-                v-if="entry.error"
-                class="text-xs text-destructive truncate"
-                :title="entry.error"
-              >
-                {{ entry.error }}
-              </div>
-            </TableCell>
-            
-            <TableCell class="w-[80px] py-2 text-right text-xs text-muted-foreground font-mono">
-              {{ entry.pending ? '...' : formatDuration(entry.duration) }}
-            </TableCell>
+                <TableCell class="w-[70px] py-2">
+                  <Badge
+                    variant="outline"
+                    class="text-xs font-mono px-1.5 py-0"
+                    :class="getStatusClass(entry.status, entry.pending)"
+                  >
+                    {{ formatStatus(entry) }}
+                  </Badge>
+                </TableCell>
+                
+                <TableCell class="w-[70px] py-2">
+                  <Badge
+                    :variant="getMethodVariant(entry.method)"
+                    class="text-xs font-mono px-1.5 py-0"
+                  >
+                    {{ entry.method }}
+                  </Badge>
+                </TableCell>
+                
+                <TableCell class="py-2 max-w-0">
+                  <div class="truncate text-sm" :title="entry.url">
+                    {{ entry.path }}
+                  </div>
+                  <div
+                    v-if="entry.error"
+                    class="text-xs text-destructive truncate"
+                    :title="entry.error"
+                  >
+                    {{ entry.error }}
+                  </div>
+                </TableCell>
+                
+                <TableCell class="w-[80px] py-2 text-right text-xs text-muted-foreground font-mono">
+                  {{ entry.pending ? '...' : formatDuration(entry.duration) }}
+                </TableCell>
 
-            <TableCell class="w-[80px] py-2 text-right text-xs text-muted-foreground font-mono">
-              {{ entry.pending ? '...' : formatBytes(entry.size) }}
-            </TableCell>
-            
-            <TableCell class="w-[28px] py-2 pr-2">
-              <NetworkRowActions
-                :entry="entry"
-                :matches-breakpoint="matchesBreakpointPattern(entry.id)"
-                :matches-mock="matchesMockPattern(entry.id)"
-                :matching-breakpoint-active="getMatchingBreakpointActive(entry)"
-                :matching-mock-active="getMatchingMockActive(entry)"
-                @set-breakpoint="emit('setBreakpoint', entry)"
-                @copy-curl="emit('copyCurl', entry)"
-                @mock-response="emit('mockResponse', entry)"
-                @toggle-breakpoint="emit('toggleBreakpoint', entry)"
-                @delete-breakpoint="emit('deleteBreakpoint', entry)"
-                @toggle-mock="emit('toggleMock', entry)"
-                @delete-mock="emit('deleteMock', entry)"
-              />
-            </TableCell>
-          </TableRow>
+                <TableCell class="w-[80px] py-2 text-right text-xs text-muted-foreground font-mono">
+                  {{ entry.pending ? '...' : formatBytes(entry.size) }}
+                </TableCell>
+                
+                <TableCell class="w-[28px] py-2 pr-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                        <MoreHorizontal class="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-48">
+                      <DropdownMenuItem @click.stop="emit('copyCurl', entry)">
+                        <Terminal class="h-4 w-4 mr-2" />
+                        Copy cURL
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem @click.stop="emit('setBreakpoint', entry)">
+                        <PauseCircle class="h-4 w-4 mr-2" />
+                        {{ matchesBreakpointPattern(entry.id) ? 'Rewrite Breakpoint' : 'Breakpoint Request' }}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click.stop="emit('mockResponse', entry)">
+                        <Shuffle class="h-4 w-4 mr-2" />
+                        {{ matchesMockPattern(entry.id) ? 'Rewrite Mock' : 'Mock Response' }}
+                      </DropdownMenuItem>
+                      <template v-if="getMatchingBreakpointActive(entry) != null">
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem @click.stop="emit('toggleBreakpoint', entry)">
+                          <Power class="h-4 w-4 mr-2" />
+                          {{ getMatchingBreakpointActive(entry) ? 'Disable' : 'Enable' }} Breakpoint
+                        </DropdownMenuItem>
+                        <DropdownMenuItem class="text-destructive" @click.stop="emit('deleteBreakpoint', entry)">
+                          <Trash class="h-4 w-4 mr-2" />
+                          Delete Breakpoint
+                        </DropdownMenuItem>
+                      </template>
+                      <template v-if="getMatchingMockActive(entry) != null">
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem @click.stop="emit('toggleMock', entry)">
+                          <Power class="h-4 w-4 mr-2" />
+                          {{ getMatchingMockActive(entry) ? 'Disable' : 'Enable' }} Mock
+                        </DropdownMenuItem>
+                        <DropdownMenuItem class="text-destructive" @click.stop="emit('deleteMock', entry)">
+                          <Trash class="h-4 w-4 mr-2" />
+                          Delete Mock
+                        </DropdownMenuItem>
+                      </template>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            </ContextMenuTrigger>
+
+            <!-- Right-click context menu -->
+            <ContextMenuContent class="w-48">
+              <ContextMenuItem @click="emit('copyCurl', entry)">
+                <Terminal class="h-4 w-4 mr-2" />
+                Copy cURL
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem @click="emit('setBreakpoint', entry)">
+                <PauseCircle class="h-4 w-4 mr-2" />
+                {{ matchesBreakpointPattern(entry.id) ? 'Rewrite Breakpoint' : 'Breakpoint Request' }}
+              </ContextMenuItem>
+              <ContextMenuItem @click="emit('mockResponse', entry)">
+                <Shuffle class="h-4 w-4 mr-2" />
+                {{ matchesMockPattern(entry.id) ? 'Rewrite Mock' : 'Mock Response' }}
+              </ContextMenuItem>
+              <template v-if="getMatchingBreakpointActive(entry) != null">
+                <ContextMenuSeparator />
+                <ContextMenuItem @click="emit('toggleBreakpoint', entry)">
+                  <Power class="h-4 w-4 mr-2" />
+                  {{ getMatchingBreakpointActive(entry) ? 'Disable' : 'Enable' }} Breakpoint
+                </ContextMenuItem>
+                <ContextMenuItem class="text-destructive" @click="emit('deleteBreakpoint', entry)">
+                  <Trash class="h-4 w-4 mr-2" />
+                  Delete Breakpoint
+                </ContextMenuItem>
+              </template>
+              <template v-if="getMatchingMockActive(entry) != null">
+                <ContextMenuSeparator />
+                <ContextMenuItem @click="emit('toggleMock', entry)">
+                  <Power class="h-4 w-4 mr-2" />
+                  {{ getMatchingMockActive(entry) ? 'Disable' : 'Enable' }} Mock
+                </ContextMenuItem>
+                <ContextMenuItem class="text-destructive" @click="emit('deleteMock', entry)">
+                  <Trash class="h-4 w-4 mr-2" />
+                  Delete Mock
+                </ContextMenuItem>
+              </template>
+            </ContextMenuContent>
+          </ContextMenu>
         </TableBody>
       </Table>
     </ScrollArea>
