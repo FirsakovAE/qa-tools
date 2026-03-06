@@ -123,31 +123,47 @@ export function createPropsRow(node: TreeNodeModel, isFavorite: boolean): PropsR
   }
 }
 
+function buildElementSelector(
+  tag: string,
+  elId?: string,
+  cls?: string,
+  testId?: string
+): string {
+  let sel = tag.toLowerCase()
+  if (elId) sel += '#' + elId
+  if (cls) sel += '.' + cls.trim().replace(/\s+/g, '.')
+  if (testId) sel += `[${testId}]`
+  return sel
+}
+
 function getElementInfo(node: TreeNodeModel): string {
   if (node.element) {
     if (node.element instanceof HTMLElement) {
-      const tag = node.element.tagName.toLowerCase()
-      const cls = node.element.className
-        ? '.' + node.element.className.trim().replace(/\s+/g, '.')
-        : ''
-      return tag + cls
+      return buildElementSelector(
+        node.element.tagName,
+        node.element.id || undefined,
+        node.element.className || undefined,
+        node.element.getAttribute?.('data-testid') || undefined
+      )
     } else if (node.element.tagName) {
-      const tag = node.element.tagName.toLowerCase()
-      const cls = node.element.className
-        ? '.' + node.element.className.trim().replace(/\s+/g, '.')
-        : ''
-      return tag + cls
+      return buildElementSelector(
+        node.element.tagName,
+        node.element.id,
+        node.element.className,
+        node.element.testId
+      )
     }
   }
-  
+
   if (node.rootElement?.tagName) {
-    const tag = node.rootElement.tagName.toLowerCase()
-    const cls = node.rootElement.className
-      ? '.' + node.rootElement.className.trim().replace(/\s+/g, '.')
-      : ''
-    return tag + cls
+    return buildElementSelector(
+      node.rootElement.tagName,
+      node.rootElement.id,
+      node.rootElement.className,
+      node.rootElement.testId
+    )
   }
-  
+
   return 'Logic only'
 }
 

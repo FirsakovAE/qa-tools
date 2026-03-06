@@ -1,5 +1,7 @@
 export interface FavoriteItem {
     id: string
+    /** Session-specific node uid for exact same-session matching */
+    nodeId?: string
     tagName: string
     className?: string
     name: string

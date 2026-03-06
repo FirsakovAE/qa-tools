@@ -15,7 +15,7 @@ import type { TreeNodeModel } from '@/types/tree'
 import type { FavoriteItem, BaseInspectorSettings } from '@/types/inspector'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
-import { isInFavorites, findMatchingFavorite } from '@/utils/favoritesMatcher'
+import { isInFavorites, matchFavoriteIds } from '@/utils/favoritesMatcher'
 import { useComponentsTab } from '@/hooks/useComponentsTab'
 import { ref as createRef } from 'vue'
 
@@ -51,25 +51,45 @@ function getElementIdentifier(node: TreeNodeModel): string {
   return `${node.name}::${elementInfo}`
 }
 
+function buildElementSelector(
+  tag: string,
+  elId?: string,
+  cls?: string,
+  testId?: string
+): string {
+  let sel = tag.toLowerCase()
+  if (elId) sel += '#' + elId
+  if (cls) sel += '.' + cls.trim().replace(/\s+/g, '.')
+  if (testId) sel += `[${testId}]`
+  return sel
+}
+
 function getElementInfo(node: TreeNodeModel): string {
   if (node.element) {
     if (node.element instanceof HTMLElement) {
-      const tag = node.element.tagName.toLowerCase()
-      const cls = node.element.className ? '.' + node.element.className.trim().replace(/\s+/g, '.') : ''
-      return tag + cls
+      return buildElementSelector(
+        node.element.tagName,
+        node.element.id || undefined,
+        node.element.className || undefined,
+        node.element.getAttribute?.('data-testid') || undefined
+      )
     } else if (node.element.tagName) {
-      const tag = node.element.tagName.toLowerCase()
-      const cls = node.element.className ? '.' + node.element.className.trim().replace(/\s+/g, '.') : ''
-      const id = node.element.id ? `#${node.element.id}` : ''
-      return tag + cls + id
+      return buildElementSelector(
+        node.element.tagName,
+        node.element.id,
+        node.element.className,
+        node.element.testId
+      )
     }
   }
 
   if (node.rootElement?.tagName) {
-    const tag = node.rootElement.tagName.toLowerCase()
-    const cls = node.rootElement.className ? '.' + node.rootElement.className.trim().replace(/\s+/g, '.') : ''
-    const id = node.rootElement.id ? `#${node.rootElement.id}` : ''
-    return tag + cls + id
+    return buildElementSelector(
+      node.rootElement.tagName,
+      node.rootElement.id,
+      node.rootElement.className,
+      node.rootElement.testId
+    )
   }
 
   return 'div'
@@ -81,15 +101,17 @@ async function toggleFavorite() {
   const elementId = getElementIdentifier(props.node)
 
   if (isFavorite.value) {
-    const matchingFav = findMatchingFavorite(elementId, settings.value.favorites)
-    if (matchingFav) {
+    const stableMatches = settings.value.favorites.filter(f => matchFavoriteIds(elementId, f.id))
+    const toRemove = stableMatches.find(f => f.nodeId === props.node.id) || stableMatches[0]
+    if (toRemove) {
       settings.value.favorites = settings.value.favorites.filter(
-        (fav: FavoriteItem) => fav.id !== matchingFav.id
+        (fav: FavoriteItem) => fav !== toRemove
       )
     }
   } else {
     const favoriteItem: FavoriteItem = {
       id: elementId,
+      nodeId: props.node.id,
       tagName: props.node.element?.tagName || props.node.rootElement?.tagName || 'div',
       className: props.node.element?.className || props.node.rootElement?.className,
       name: props.node.name,

@@ -20,7 +20,7 @@ import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useTreeData } from '@/hooks/useTreeData'
 import { useRuntime } from '@/runtime'
 import { safeRuntime, safeTabs, safeStorage } from '@/utils/extensionBridge'
-import { isInFavorites, findMatchingFavorite } from '@/utils/favoritesMatcher'
+import { isInFavorites, findMatchingFavorite, matchFavoriteIds } from '@/utils/favoritesMatcher'
 import { likeMatch } from '@/utils/likeMatch'
 import { 
   type PropsRow, 
@@ -107,31 +107,47 @@ function formatDateTime(date: Date): string {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
+function buildElementSelector(
+  tag: string,
+  elId?: string,
+  cls?: string,
+  testId?: string
+): string {
+  let sel = tag.toLowerCase()
+  if (elId) sel += '#' + elId
+  if (cls) sel += '.' + cls.trim().replace(/\s+/g, '.')
+  if (testId) sel += `[${testId}]`
+  return sel
+}
+
 function getElementInfo(node: TreeNodeModel): string {
   if (node.element) {
     if (node.element instanceof HTMLElement) {
-      const tag = node.element.tagName.toLowerCase()
-      const cls = node.element.className
-        ? '.' + node.element.className.trim().replace(/\s+/g, '.')
-        : ''
-      return tag + cls
+      return buildElementSelector(
+        node.element.tagName,
+        node.element.id || undefined,
+        node.element.className || undefined,
+        node.element.getAttribute?.('data-testid') || undefined
+      )
     } else if (node.element.tagName) {
-      const tag = node.element.tagName.toLowerCase()
-      const cls = node.element.className
-        ? '.' + node.element.className.trim().replace(/\s+/g, '.')
-        : ''
-      return tag + cls
+      return buildElementSelector(
+        node.element.tagName,
+        node.element.id,
+        node.element.className,
+        node.element.testId
+      )
     }
   }
-  
+
   if (node.rootElement?.tagName) {
-    const tag = node.rootElement.tagName.toLowerCase()
-    const cls = node.rootElement.className
-      ? '.' + node.rootElement.className.trim().replace(/\s+/g, '.')
-      : ''
-    return tag + cls
+    return buildElementSelector(
+      node.rootElement.tagName,
+      node.rootElement.id,
+      node.rootElement.className,
+      node.rootElement.testId
+    )
   }
-  
+
   return 'Logic only'
 }
 
@@ -169,12 +185,69 @@ function applyFilters() {
   visibilityVersion.value++
 }
 
+let updatingFavorites = false
+
 function updateFavoriteFlags() {
-  for (const row of rows.value) {
-    row.isFavoriteFlag = isFavoriteNode(row)
+  if (updatingFavorites) return
+  updatingFavorites = true
+
+  try {
+    if (!settings.value?.favorites?.length) {
+      for (const row of rows.value) row.isFavoriteFlag = false
+      visibilityVersion.value++
+      return
+    }
+
+    for (const row of rows.value) row.isFavoriteFlag = false
+
+    const nodeIdUpdates: Array<{ fav: FavoriteItem; newNodeId: string }> = []
+
+    for (const fav of settings.value.favorites) {
+      const candidates = rows.value.filter(r => {
+        const sid = getNodeId(r)
+        return matchFavoriteIds(sid, fav.id)
+      })
+
+      if (candidates.length === 0) continue
+
+      if (candidates.length === 1) {
+        candidates[0].isFavoriteFlag = true
+        if (fav.nodeId && fav.nodeId !== candidates[0].id) {
+          nodeIdUpdates.push({ fav, newNodeId: candidates[0].id })
+        }
+        continue
+      }
+
+      // Multiple candidates — use nodeId to pick the right one
+      if (fav.nodeId) {
+        const exact = candidates.find(r => r.id === fav.nodeId)
+        if (exact) {
+          exact.isFavoriteFlag = true
+          continue
+        }
+      }
+
+      // nodeId stale or missing — mark first candidate
+      candidates[0].isFavoriteFlag = true
+      nodeIdUpdates.push({ fav, newNodeId: candidates[0].id })
+    }
+
+    sortRowsByFavorite(rows.value)
+    visibilityVersion.value++
+
+    // Apply nodeId updates outside the reactive pass to avoid triggering watchers
+    if (nodeIdUpdates.length > 0) {
+      for (const { fav, newNodeId } of nodeIdUpdates) {
+        fav.nodeId = newNodeId
+      }
+      try {
+        const settingsToSave = JSON.parse(JSON.stringify(settings.value))
+        runtime.storage.set('vue-inspector-settings', settingsToSave).catch(() => {})
+      } catch { /* ignore */ }
+    }
+  } finally {
+    updatingFavorites = false
   }
-  sortRowsByFavorite(rows.value)
-  visibilityVersion.value++
 }
 
 // ============================================================================
@@ -248,14 +321,16 @@ watch(treeData, (data) => {
     const newRows = data
       .filter(node => !isBlockedNode(node as TreeNodeModel))
       .map(node => 
-        createPropsRow(node as TreeNodeModel, isFavoriteNode(node as TreeNodeModel))
+        createPropsRow(node as TreeNodeModel, false)
       )
     
-    // Sort by favorites
-    sortRowsByFavorite(newRows)
+    rows.value = newRows
+
+    // Batch favorite matching with nodeId disambiguation
+    updateFavoriteFlags()
     
     // Apply current visibility filters
-    updateRowsVisibility(newRows, {
+    updateRowsVisibility(rows.value, {
       searchTerm: debouncedSearchTerm.value,
       searchByName: searchSettings.value.byName,
       searchByRootElement: searchSettings.value.byRootElement,
@@ -263,7 +338,6 @@ watch(treeData, (data) => {
       searchByValue: searchSettings.value.byValue
     })
     
-    rows.value = newRows
     lastUpdated.value = formatDateTime(new Date())
   }
 }, { immediate: true })
@@ -411,18 +485,20 @@ async function toggleFavorite(node: PropsRow) {
   const elementId = getNodeId(node)
 
   if (node.isFavoriteFlag) {
-    // Remove from favorites
-    const matchingFav = findMatchingFavorite(elementId, settings.value.favorites)
-    if (matchingFav) {
+    // Remove: prefer nodeId match, then fall back to stable id
+    const stableMatches = settings.value.favorites.filter(f => matchFavoriteIds(elementId, f.id))
+    const toRemove = stableMatches.find(f => f.nodeId === node.id) || stableMatches[0]
+    if (toRemove) {
       settings.value.favorites = settings.value.favorites.filter(
-        (fav: FavoriteItem) => fav.id !== matchingFav.id
+        (fav: FavoriteItem) => fav !== toRemove
       )
     }
     node.isFavoriteFlag = false
   } else {
-    // Add to favorites
+    // Add to favorites with session-specific nodeId
     const favoriteItem: FavoriteItem = {
       id: elementId,
+      nodeId: node.id,
       tagName: node.element?.tagName || node.rootElement?.tagName || 'div',
       className: node.element?.className || node.rootElement?.className,
       name: node.name,
