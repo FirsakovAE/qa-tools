@@ -1,669 +1,600 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en" class="dark">
 <head>
-<!-- Основная иконка -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vue Inspector — Inspect and control Vue applications in real time</title>
+<meta name="description" content="Change props, manipulate Pinia stores and mock API responses directly in the browser. No proxies. No rebuilds. No hacks.">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon32.png">
-<!-- Резерв -->
 <link rel="icon" type="image/png" sizes="16x16" href="./icons/icon16.png">
-<!-- Для Safari / Apple -->
-<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon34.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon48.png">
 
+<style>
+/* ─── Reset & Tokens ─── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vue Inspector — QA Tools</title>
+:root{
+  --bg:        #09090b;
+  --surface:   #111113;
+  --surface-2: #18181b;
+  --border:    rgba(255,255,255,.08);
+  --border-h:  rgba(255,255,255,.14);
+  --text:      #fafafa;
+  --text-2:    #a1a1aa;
+  --text-3:    #71717a;
+  --accent:    #8b5cf6;
+  --accent-h:  #7c3aed;
+  --accent-s:  rgba(139,92,246,.12);
+  --radius:    12px;
+  --max-w:     1352px;
+  --font:      system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font-mono: 'SF Mono',Monaco,'Cascadia Code','Roboto Mono',monospace;
+}
 
-  <style>
-    :root {
-      --bg: #0a0a0b;
-      --surface: #141415;
-      --border: #2a2a2c;
-      --text: #e4e4e7;
-      --text-muted: #71717a;
-      --accent: #8b5cf6;
-      --accent-hover: #7c3aed;
-    }
-    
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
-    
-    .container {
-      max-width: 700px;
-      width: 100%;
-    }
-    
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.5rem;
-    }
-    
-    h1 {
-      font-size: 1.75rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    
-    h1 span { font-size: 2rem; }
-    
-    .subtitle {
-      color: var(--text-muted);
-      margin-bottom: 1.5rem;
-    }
-    
-    .github-icon {
-      color: var(--text-muted);
-      font-size: 1.5rem;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-    
-    .github-icon:hover {
-      color: var(--text);
-    }
-    
-    .description {
-      margin-bottom: 2rem;
-      line-height: 1.6;
-    }
-    
-    .update-info {
-      background: rgba(139, 92, 246, 0.1);
-      border: 1px solid var(--accent);
-      border-radius: 8px;
-      padding: 1rem;
-      margin-bottom: 2rem;
-    }
-    
-    .update-title {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      color: var(--accent);
-    }
-    
-    .update-version {
-      background: var(--accent);
-      color: white;
-      padding: 0.125rem 0.5rem;
-      border-radius: 4px;
-      font-size: 0.875rem;
-    }
-    
-    .update-description {
-      font-size: 0.875rem;
-      line-height: 1.5;
-      margin-top: 0.5rem;
-    }
+html{
+  overflow-y:auto;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
 
-    .update-description h1 { font-size: 1.25rem; font-weight: 700; margin: 0.75rem 0 0.375rem; }
-    .update-description h2 { font-size: 1.1rem; font-weight: 600; margin: 0.625rem 0 0.25rem; }
-    .update-description h3 { font-size: 1rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
-    .update-description h4 { font-size: 0.875rem; font-weight: 600; margin: 0.375rem 0 0.125rem; }
-    .update-description p { margin: 0.375rem 0; }
-    .update-description ul,
-    .update-description ol { padding-left: 1.25rem; margin: 0.375rem 0; }
-    .update-description li { margin: 0.125rem 0; }
-    .update-description code {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 0.125rem 0.375rem;
-      border-radius: 4px;
-      font-size: 0.8em;
-    }
-    .update-description pre {
-      background: rgba(255, 255, 255, 0.05);
-      padding: 0.75rem;
-      border-radius: 6px;
-      overflow-x: auto;
-      margin: 0.5rem 0;
-    }
-    .update-description pre code { background: none; padding: 0; }
-    .update-description a { color: var(--accent); text-decoration: underline; }
-    .update-description blockquote {
-      border-left: 3px solid var(--border);
-      padding-left: 0.75rem;
-      color: var(--text-muted);
-      margin: 0.5rem 0;
-    }
-    .update-description hr { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
-    .update-description > *:first-child { margin-top: 0; }
-    
-    .release-date {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 0.5rem;
-    }
-    
-    .tabs {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1.5rem;
-      border-bottom: 1px solid var(--border);
-    }
-    
-    .tab {
-      padding: 0.75rem 1.5rem;
-      background: transparent;
-      border: 1px solid transparent;
-      border-radius: 8px 8px 0 0;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-weight: 500;
-      transition: all 0.2s;
-    }
-    
-    .tab:hover {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.05);
-    }
-    
-    .tab.active {
-      color: var(--accent);
-      border-color: var(--border);
-      border-bottom-color: var(--bg);
-      background: var(--surface);
-    }
-    
-    .tab-content {
-      display: none;
-    }
-    
-    .tab-content.active {
-      display: block;
-    }
-    
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-    
-    .card-title {
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 1rem;
-    }
-    
-    .step {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 1rem;
-    }
-    
-    .step:last-child { margin-bottom: 0; }
-    
-    .step-number {
-      width: 24px;
-      height: 24px;
-      background: var(--accent);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-    
-    .step-content {
-      flex: 1;
-    }
-    
-    .step-content p {
-      line-height: 1.5;
-    }
-    
-    .bookmarklet-area {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-    
-    .bookmarklet {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.25rem;
-      background: var(--accent);
-      color: white;
-      text-decoration: none;
-      border-radius: 8px;
-      font-weight: 500;
-      cursor: grab;
-      transition: background 0.2s;
-    }
-    
-    .bookmarklet:hover {
-      background: var(--accent-hover);
-    }
-    
-    .bookmarklet:active {
-      cursor: grabbing;
-    }
-    
-    .download-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.5rem;
-      background: var(--accent);
-      color: white;
-      text-decoration: none;
-      border-radius: 8px;
-      font-weight: 500;
-      transition: background 0.2s;
-      border: none;
-      cursor: pointer;
-      font-size: 1rem;
-    }
-    
-    .download-btn:hover {
-      background: var(--accent-hover);
-    }
-    
-    .hint {
-      font-size: 0.875rem;
-      color: var(--text-muted);
-    }
-    
-    .config-section {
-      margin-top: 1.5rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid var(--border);
-    }
-    
-    .config-label {
-      display: block;
-      font-size: 0.875rem;
-      color: var(--text-muted);
-      margin-bottom: 0.5rem;
-    }
-    
-    .config-input {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 0.875rem;
-    }
-    
-    .config-input:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-    
-    .update-btn {
-      margin-top: 0.75rem;
-      padding: 0.5rem 1rem;
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text);
-      cursor: pointer;
-      font-size: 0.875rem;
-      transition: border-color 0.2s;
-    }
-    
-    .update-btn:hover {
-      border-color: var(--accent);
-    }
-    
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      padding: 0.25rem 0.5rem;
-      background: rgba(139, 92, 246, 0.15);
-      color: var(--accent);
-      border-radius: 4px;
-      font-size: 0.75rem;
-      font-weight: 500;
-    }
-    
-    .footer {
-      margin-top: 2rem;
-      font-size: 0.875rem;
-      color: var(--text-muted);
-      text-align: center;
-    }
-    
-    .footer a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-    
-    .footer a:hover {
-      text-decoration: underline;
-    }
-    
-    .download-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.5rem;
-      background: var(--accent);
-      color: white;
-      text-decoration: none;
-      border-radius: 8px;
-      font-weight: 500;
-      transition: background 0.2s;
-      margin-top: 0.5rem;
-    }
-    
-    .download-link:hover {
-      background: var(--accent-hover);
-    }
-    
-    .error-message {
-      color: #ef4444;
-      font-size: 0.875rem;
-      margin-top: 0.5rem;
-    }
-  </style>
+body{background:var(--bg);min-height:100vh}
+
+::selection{background:rgba(139,92,246,.35);color:#fff}
+
+a{color:inherit;text-decoration:none}
+
+img{max-width:100%;display:block}
+
+/* ─── Sections ─── */
+.snap-section{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  position:relative;
+}
+.snap-section.auto-h{min-height:auto;padding:6rem 0}
+
+/* ─── Layout helpers ─── */
+.container{width:100%;max-width:var(--max-w);margin:0 auto;padding:0 2rem}
+.flex{display:flex}.flex-col{flex-direction:column}.items-center{align-items:center}.justify-between{justify-content:space-between}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.gap-8{gap:2rem}
+.text-center{text-align:center}.mx-auto{margin-left:auto;margin-right:auto}
+.w-full{width:100%}
+.relative{position:relative}
+
+/* ─── Typography ─── */
+.hero-title{
+  font-size:clamp(2.25rem,5vw,4rem);
+  font-weight:700;
+  line-height:1.1;
+  letter-spacing:-.03em;
+  background:linear-gradient(180deg,#fff 40%,var(--text-2) 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.section-title{
+  font-size:clamp(1.75rem,3.5vw,2.75rem);
+  font-weight:700;
+  line-height:1.15;
+  letter-spacing:-.02em;
+}
+.section-subtitle{
+  font-size:1.125rem;
+  color:var(--text-2);
+  max-width:600px;
+  line-height:1.7;
+}
+.text-muted{color:var(--text-2)}
+.text-dim{color:var(--text-3)}
+.text-sm{font-size:.875rem}
+.text-xs{font-size:.75rem}
+.font-medium{font-weight:500}
+.font-semibold{font-weight:600}
+.font-mono{font-family:var(--font-mono)}
+
+/* ─── Buttons ─── */
+.btn{
+  display:inline-flex;align-items:center;gap:.5rem;
+  padding:.75rem 1.5rem;border-radius:8px;font-weight:500;font-size:.9375rem;
+  cursor:pointer;transition:all .2s;border:none;font-family:inherit;
+  white-space:nowrap;
+}
+.btn-primary{
+  background:var(--accent);color:#fff;
+  box-shadow:0 0 20px rgba(139,92,246,.25);
+}
+.btn-primary:hover{background:var(--accent-h);box-shadow:0 0 30px rgba(139,92,246,.35)}
+.btn-secondary{
+  background:transparent;color:var(--text);
+  border:1px solid var(--border-h);
+}
+.btn-secondary:hover{border-color:var(--text-3);background:rgba(255,255,255,.03)}
+.btn-sm{padding:.5rem 1rem;font-size:.8125rem}
+.btn-ghost{background:transparent;color:var(--text-2);border:none;padding:.5rem .75rem}
+.btn-ghost:hover{color:var(--text)}
+.btn svg{flex-shrink:0;display:block;vertical-align:middle}
+
+/* ─── Cards ─── */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:2rem;
+  transition:border-color .3s,box-shadow .3s;
+}
+.card:hover{
+  border-color:var(--border-h);
+  box-shadow:0 0 40px rgba(139,92,246,.06);
+}
+/* ─── Badge ─── */
+.badge{
+  display:inline-flex;align-items:center;gap:.375rem;
+  padding:.375rem .75rem;border-radius:999px;font-size:.8125rem;font-weight:500;
+  background:var(--accent-s);color:var(--accent);
+  border:1px solid rgba(139,92,246,.15);
+}
+
+/* ─── Header ─── */
+.site-header{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(9,9,11,.8);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.header-inner{
+  max-width:var(--max-w);margin:0 auto;padding:0 2rem;
+  height:56px;display:flex;align-items:center;justify-content:space-between;
+}
+.logo{display:flex;align-items:center;gap:.5rem;font-weight:600;font-size:1rem}
+.logo img{width:24px;height:24px}
+.nav-links{display:flex;align-items:center;gap:.25rem}
+.nav-links a{
+  padding:.375rem .75rem;border-radius:6px;font-size:.875rem;color:var(--text-2);
+  transition:color .2s,background .2s;
+}
+.nav-links a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.hamburger{display:none;background:none;border:none;color:var(--text);cursor:pointer;padding:.5rem}
+.mobile-nav{
+  display:none;position:absolute;top:56px;left:0;right:0;
+  background:rgba(9,9,11,.95);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);padding:1rem 2rem;
+  flex-direction:column;gap:.5rem;
+}
+.mobile-nav.open{display:flex}
+.mobile-nav a{
+  padding:.75rem 0;font-size:1rem;color:var(--text-2);
+  border-bottom:1px solid var(--border);
+}
+.mobile-nav a:last-child{border-bottom:none}
+.mobile-nav a:hover{color:var(--text)}
+
+/* ─── Hero ─── */
+.hero-section{padding-top:56px}
+.hero-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:center;
+  min-height:calc(100vh - 56px);
+}
+.hero-text{display:flex;flex-direction:column;gap:1.5rem;align-items:flex-start;text-align:left}
+.hero-tagline{
+  font-size:.875rem;color:var(--accent);font-weight:500;
+  letter-spacing:.05em;text-transform:uppercase;
+}
+.hero-desc{font-size:1.125rem;color:var(--text-2);line-height:1.7}
+.hero-cta{display:flex;gap:1rem;flex-wrap:wrap;margin-top:.5rem;justify-content:flex-start}
+.hero-carousel-wrap{display:flex;flex-direction:column;align-items:center;width:100%}
+.hero-visual{
+  position:relative;background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;overflow:hidden;aspect-ratio:4/3;min-height:240px;width:100%;
+}
+.preview-carousel{position:absolute;inset:0;width:100%;height:100%}
+.preview-carousel img{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:cover;object-position:top;opacity:0;transition:opacity .5s ease;
+}
+.preview-carousel img.active{opacity:1;z-index:1}
+.carousel-dots{display:flex;justify-content:center;gap:.5rem;padding:.75rem 0 0;margin-top:.75rem}
+.carousel-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--text-3);
+  cursor:pointer;transition:background .2s,transform .2s;border:none;padding:0;
+}
+.carousel-dot:hover{background:var(--text-2)}
+.carousel-dot.active{background:var(--accent);transform:scale(1.2)}
+
+/* ─── Social Proof ─── */
+.proof-grid{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
+.proof-badge{
+  display:flex;align-items:center;gap:.5rem;
+  padding:.625rem 1.25rem;border-radius:999px;
+  background:var(--surface);border:1px solid var(--border);
+  font-size:.875rem;color:var(--text-2);
+}
+.proof-badge svg{width:18px;height:18px;color:var(--accent)}
+
+/* ─── Features Grid ─── */
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+.feature-card .card{
+  height:100%;display:flex;flex-direction:column;padding:0;overflow:hidden;
+}
+.feature-card-img{
+  flex:0 0 60%;min-height:0;overflow:hidden;background:var(--surface-2);position:relative;
+}
+.feature-card-img img{width:100%;height:100%;object-fit:cover;display:block}
+.feature-card-img h3{
+  position:absolute;bottom:0;left:0;right:0;margin:0;padding:1rem 1.25rem;
+  font-size:1.25rem;font-weight:600;color:#fff;
+  background:linear-gradient(transparent,rgba(0,0,0,.75));text-shadow:0 1px 2px rgba(0,0,0,.5);
+}
+.feature-card-content{padding:1.5rem;flex:1 1 auto;min-height:6rem;display:flex;flex-direction:column;gap:.75rem}
+.feature-card p{color:var(--text-2);font-size:.9375rem;line-height:1.7;margin:0}
+
+/* ─── Install section ─── */
+.install-grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.install-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:2rem;
+  transition:border-color .3s,box-shadow .3s;
+}
+.install-card:hover{
+  border-color:var(--border-h);
+  box-shadow:0 0 40px rgba(139,92,246,.06);
+}
+.install-card-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem}
+.install-card-title{font-size:1.125rem;font-weight:600;margin:0}
+.install-card-badge{
+  font-size:.75rem;font-weight:500;padding:.25rem .5rem;
+  background:var(--accent-s);color:var(--accent);border-radius:999px;
+}
+.step{display:flex;gap:1rem;margin-bottom:1.25rem}
+.step:last-child{margin-bottom:0}
+.step-num{
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent-s);color:var(--accent);font-size:.75rem;font-weight:600;
+}
+.step p{line-height:1.6;color:var(--text-2)}
+.bookmarklet-area{display:flex;align-items:center;gap:1rem;margin-top:1.25rem;flex-wrap:wrap}
+.bookmarklet-link{
+  display:inline-flex;align-items:center;gap:.5rem;
+  padding:.75rem 1.25rem;background:var(--accent);color:#fff;
+  border-radius:8px;font-weight:500;cursor:grab;transition:background .2s;
+}
+.bookmarklet-link:hover{background:var(--accent-h)}
+.bookmarklet-link:active{cursor:grabbing}
+.standalone-note{
+  margin-top:1.5rem;padding:1rem;border-radius:8px;
+  background:rgba(234,179,8,.06);border:1px solid rgba(234,179,8,.15);
+  font-size:.8125rem;color:var(--text-2);line-height:1.6;
+}
+
+/* ─── Release section ─── */
+.release-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:2rem;max-width:800px;margin:0 auto;
+}
+.release-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.release-version{font-size:1.5rem;font-weight:700}
+.release-date{font-size:.8125rem;color:var(--text-3)}
+.release-body{font-size:.9375rem;line-height:1.8;color:var(--text-2)}
+.release-body h1{font-size:1.25rem;font-weight:700;color:var(--text);margin:1.25rem 0 .5rem}
+.release-body h2{font-size:1.125rem;font-weight:600;color:var(--text);margin:1rem 0 .375rem}
+.release-body h3{font-size:1rem;font-weight:600;color:var(--text);margin:.75rem 0 .25rem}
+.release-body p{margin:.5rem 0}
+.release-body ul,.release-body ol{padding-left:1.5rem;margin:.5rem 0}
+.release-body li{margin:.25rem 0}
+.release-body code{background:rgba(255,255,255,.08);padding:.125rem .375rem;border-radius:4px;font-size:.85em;font-family:var(--font-mono)}
+.release-body pre{background:rgba(255,255,255,.04);padding:1rem;border-radius:8px;overflow-x:auto;margin:.75rem 0}
+.release-body pre code{background:none;padding:0}
+.release-body a{color:var(--accent);text-decoration:underline}
+.release-body blockquote{border-left:3px solid var(--border);padding-left:1rem;color:var(--text-3);margin:.75rem 0}
+.release-body hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
+.release-loading{text-align:center;padding:3rem;color:var(--text-3)}
+.release-error{text-align:center;padding:2rem;color:#ef4444;font-size:.875rem}
+
+/* ─── CTA ─── */
+.cta-section{
+  text-align:center;
+  background:radial-gradient(ellipse at center,rgba(139,92,246,.08) 0%,transparent 70%);
+}
+
+/* ─── Footer ─── */
+.site-footer{
+  border-top:1px solid var(--border);padding:2rem 0;
+  text-align:center;font-size:.8125rem;color:var(--text-3);
+}
+.site-footer a{color:var(--text-2);transition:color .2s}
+.site-footer a:hover{color:var(--accent)}
+
+/* ─── Glow bg effect ─── */
+.glow{
+  position:absolute;border-radius:50%;pointer-events:none;
+  filter:blur(120px);opacity:.15;
+}
+.glow-1{width:600px;height:600px;background:#8b5cf6;top:-200px;left:-100px}
+.glow-2{width:400px;height:400px;background:#6366f1;bottom:-100px;right:-100px}
+.glow-hero{width:800px;height:800px;background:var(--accent);top:50%;left:50%;transform:translate(-50%,-50%);opacity:.06}
+
+/* ─── Fade-in animation ─── */
+.fade-in{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.fade-in.visible{opacity:1;transform:translateY(0)}
+
+/* ─── Responsive ─── */
+@media(max-width:1279px){
+  .features-grid{grid-template-columns:repeat(2,1fr)}
+  .install-grid{grid-template-columns:1fr}
+}
+@media(max-width:767px){
+  .nav-links{display:none}
+  .hamburger{display:block}
+  .hero-grid{grid-template-columns:1fr;gap:2rem;min-height:auto;padding:4rem 0 2rem}
+  .hero-text{align-items:center;text-align:center}
+  .hero-cta{justify-content:center}
+  .hero-carousel-wrap{order:2}
+  .hero-visual{max-width:100%}
+  .features-grid{grid-template-columns:1fr}
+  .install-grid{grid-template-columns:1fr}
+  .proof-grid{flex-direction:column;align-items:center}
+  .snap-section{min-height:auto;padding:4rem 0}
+  .release-header{flex-direction:column;align-items:flex-start}
+}
+</style>
 </head>
 <body>
+
+<!-- ═══ Header ═══ -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="logo">
+      <img src="./icons/icon32.png" alt="Vue Inspector" width="24" height="24">
+      Vue Inspector
+    </div>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#installation">Installation</a>
+      <a href="#releases">Releases</a>
+      <a href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <button class="hamburger" onclick="document.getElementById('mobileNav').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <nav id="mobileNav" class="mobile-nav">
+      <a href="#features" onclick="this.parentElement.classList.remove('open')">Features</a>
+      <a href="#installation" onclick="this.parentElement.classList.remove('open')">Installation</a>
+      <a href="#releases" onclick="this.parentElement.classList.remove('open')">Releases</a>
+      <a href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ═══ Hero ═══ -->
+<section class="snap-section hero-section">
+  <div class="glow glow-hero"></div>
   <div class="container">
-    <div class="header">
-      <div>
-        <h1>      <a href="https://github.com/FirsakovAE" target="_blank" class="github-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-          </svg>
-        </a> Vue Inspector</h1>
-        <p class="subtitle">Инструмент инспекции Vue/Pinia</p>
-      </div>
-    </div>
-    
-    <div class="description">
-      <p>Этот инструмент позволяет инспектировать Vue компоненты и Pinia хранилища на страницах. Доступно два режима использования: как расширение браузера или как standalone-скрипт.</p>
-    </div>
-    
-    <div id="updateInfo" class="card" style="display: none;">
-      <div class="update-title">
-        <span>Последнее обновление</span>
-        <span class="badge" id="updateVersion"></span>
-      </div>
-      <div class="update-description" id="updateDescription"></div>
-      <div class="release-date" id="releaseDate"></div>
-    </div>
-    
-    <div class="tabs">
-      <button class="tab active" data-tab="extensions">Extensions</button>
-      <button class="tab" data-tab="standalone">Standalone</button>
-    </div>
-    
-    <div id="standalone-tab" class="tab-content">
-      <div class="card">
-        <div class="card-title">Как использовать</div>
-        
-        <div class="step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <p>Перетащите кнопку ниже в панель закладок браузера</p>
-          </div>
-        </div>
-        
-        <div class="step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <p>Откройте страницу с Vue приложением</p>
-          </div>
-        </div>
-        
-        <div class="step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <p>Кликните по закладке — inspector появится внизу страницы</p>
-          </div>
-        </div>
-        
-        <div class="bookmarklet-area">
-          <a id="bookmarklet" class="bookmarklet" href="#">
-            Vue Inspector
+    <div class="hero-grid">
+      <div class="hero-text fade-in">
+        <span class="hero-tagline">Developer & QA Tool for Vue</span>
+        <h1 class="hero-title">Inspect and control Vue application runtime</h1>
+        <p class="hero-desc">
+          Debug components, manipulate Pinia state and simulate API responses directly in the browser.<br>
+No proxies. No rebuilds. No DevTools limitations.
+        </p>
+        <div class="hero-cta">
+          <a id="heroCta" class="btn btn-primary" href="#installation">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v8m0 0l-3-3m3 3l3-3M6 15h12"/></svg>
+            Download
           </a>
-          <span class="hint">← Перетащите в закладки</span>
-        </div>
-        
-        <div class="config-section">
-          <label class="config-label">Адрес сервера с инструментом</label>
-          <input 
-            type="text" 
-            id="baseUrl" 
-            class="config-input" 
-            value=""
-            placeholder="http://localhost:5174"
-          >
-          <button class="update-btn" onclick="updateBookmarklet()">
-            Обновить bookmarklet
-          </button>
+          <a class="btn btn-secondary" href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+            GitHub
+          </a>
         </div>
       </div>
-      
-      <div class="card">
-        <div class="card-title">Режим работы</div>
-        <p style="margin-bottom: 0.75rem;">
-          <span class="badge">Standalone Mode</span>
-        </p>
-        <p class="hint">
-          В standalone режиме некоторые функции недоступны:
-          инспекция других вкладок, фоновая синхронизация.
-          Все основные возможности инспекции Vue и Pinia работают.
-        </p>
-      </div>
-    </div>
-    
-    <div id="extensions-tab" class="tab-content active">
-      <div class="card">
-        <div class="card-title">Установка расширения</div>
-        
-        <div class="step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <p>Скачайте последнюю версию расширения</p>
+      <div class="hero-carousel-wrap fade-in">
+        <div class="hero-visual">
+          <div class="preview-carousel" id="previewCarousel">
+            <img src="./Network_Hero.jpg" alt="Network" class="active">
+            <img src="./Props_Hero.jpg" alt="Props">
+            <img src="./Store_Hero.jpg" alt="Store">
           </div>
         </div>
-        
-        <div class="step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <p>Распакуйте архив в удобное место</p>
-          </div>
-        </div>
-        
-        <div class="step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <p>Откройте chrome://extensions/ в браузере</p>
-          </div>
-        </div>
-        
-        <div class="step">
-          <div class="step-number">4</div>
-          <div class="step-content">
-            <p>Включите "Developer mode" (режим разработчика) в правом верхнем углу</p>
-          </div>
-        </div>
-        
-        <div class="step">
-          <div class="step-number">5</div>
-          <div class="step-content">
-            <p>Нажмите "Load unpacked" и выберите папку dist/ из распакованного архива</p>
-          </div>
-        </div>
-
-      <div id="downloadSection">
-        <a id="downloadLink" class="download-link" href="#" target="_blank" style="display: none;">
-          Скачать расширение
-        </a>
-        <div id="downloadError" class="error-message" style="display: none;">
-          Файл для скачивания не найден в релизе. Пожалуйста, скачайте вручную с GitHub.
+        <div class="carousel-dots" id="carouselDots">
+          <button type="button" class="carousel-dot active" aria-label="Image 1" data-index="0"></button>
+          <button type="button" class="carousel-dot" aria-label="Image 2" data-index="1"></button>
+          <button type="button" class="carousel-dot" aria-label="Image 3" data-index="2"></button>
         </div>
       </div>
     </div>
+  </div>
+</section>
 
-      
-      <div class="card">
-        <div class="card-title">Режим инкогнито для расширения</div>
-        
-        <div class="step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <p>Откройте chrome://extensions/</p>
+<!-- ═══ Social Proof ═══ -->
+<section class="snap-section auto-h" style="min-height:auto;padding:3rem 0 4rem">
+  <div class="container text-center">
+    <div class="fade-in">
+      <p class="text-muted" style="margin-bottom:1.5rem;font-size:1rem">
+        Built for debugging and testing modern Vue applications.</p>
+      <div class="proof-grid">
+        <div class="proof-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+          Developer Tool
+        </div>
+        <div class="proof-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          QA Tool
+        </div>
+        <div class="proof-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+          Debugging Tool
+        </div>
+        <div class="proof-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Zero Config
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Features ═══ -->
+<section id="features" class="snap-section auto-h">
+  <div class="container">
+    <div class="text-center fade-in" style="margin-bottom:3rem">
+      <h2 class="section-title">Everything you need to debug Vue apps</h2>
+      <p class="section-subtitle mx-auto" style="margin-top:1rem">Powerful tools that work directly in the browser, no setup required.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card fade-in">
+        <div class="card">
+          <div class="feature-card-img">
+            <img src="./vue.png" alt="Vue">
+            <h3>Change Vue Props in Real Time</h3>
+          </div>
+          <div class="feature-card-content">
+            <p>Stop guessing what your component receives. Inspect and modify Vue props directly in the running application and instantly see how the UI reacts.</p>
           </div>
         </div>
-        
-        <div class="step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <p>Найдите Vue Inspector и нажмите "Details"</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="card">
+          <div class="feature-card-img">
+            <img src="./Pinia.png" alt="Pinia">
+            <h3>Control Pinia State</h3>
+          </div>
+          <div class="feature-card-content">
+            <p>Edit Pinia stores live and simulate any application state. Reproduce edge cases without writing debug code or rebuilding the app.</p>
           </div>
         </div>
-        
-        <div class="step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <p>Переключите "Allow in Incognito" = ON</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="card">
+          <div class="feature-card-img">
+            <img src="./Network.png" alt="Network">
+            <h3>Mock API Responses Instantly</h3>
+          </div>
+          <div class="feature-card-content">
+            <p>Intercept and modify API responses directly in the browser. No proxy servers, certificates or complicated setup required.</p>
           </div>
         </div>
       </div>
     </div>
   </div>
+</section>
 
+<!-- ═══ Installation ═══ -->
+<section id="installation" class="snap-section auto-h">
+  <div class="glow glow-1"></div>
+  <div class="container">
+    <div class="text-center fade-in" style="margin-bottom:3rem">
+      <h2 class="section-title">Get started in minutes</h2>
+      <p class="section-subtitle mx-auto" style="margin-top:1rem">Choose the installation method that works best for you.</p>
+    </div>
+    <div class="fade-in install-grid" style="max-width:900px;margin:0 auto">
+      <div class="install-card">
+        <div class="install-card-header">
+          <h3 class="install-card-title">Chrome / Edge</h3>
+          <span class="install-card-badge">Recommended</span>
+        </div>
+        <div class="step"><div class="step-num">1</div><div><p>Download the latest extension release</p></div></div>
+        <div class="step"><div class="step-num">2</div><div><p>Unzip the archive to a convenient location</p></div></div>
+        <div class="step"><div class="step-num">3</div><div><p>Open <code style="background:rgba(255,255,255,.06);padding:.2rem .5rem;border-radius:6px;font-family:var(--font-mono);font-size:.85em">chrome://extensions/</code></p></div></div>
+        <div class="step"><div class="step-num">4</div><div><p>Enable <strong>Developer mode</strong> in the top-right corner</p></div></div>
+        <div class="step"><div class="step-num">5</div><div><p>Click <strong>Load unpacked</strong> and select the <code style="background:rgba(255,255,255,.06);padding:.2rem .5rem;border-radius:6px;font-family:var(--font-mono);font-size:.85em">dist/</code> folder</p></div></div>
+        <div style="margin-top:1.75rem">
+          <a id="downloadLink" class="btn btn-primary" href="#" target="_blank" style="display:none">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v8m0 0l-3-3m3 3l3-3M6 15h12"/></svg>
+            Download Extension
+          </a>
+          <div id="downloadError" style="display:none;color:#ef4444;font-size:.875rem;margin-top:.5rem"></div>
+        </div>
+      </div>
+      <div class="install-card">
+        <div class="install-card-header">
+          <h3 class="install-card-title">Bookmarklet Mode</h3>
+          <span class="install-card-badge">Quick start</span>
+        </div>
+        <div class="step"><div class="step-num">1</div><div><p>Drag the button below to your browser bookmarks bar</p></div></div>
+        <div class="step"><div class="step-num">2</div><div><p>Open a page with a Vue application</p></div></div>
+        <div class="step"><div class="step-num">3</div><div><p>Click the bookmark — the inspector panel will appear at the bottom</p></div></div>
+        <div class="standalone-note">
+          <strong>Note:</strong> Designed for corporate devices where extensions cannot be installed. Features may be limited.
+        </div>
+        <div class="bookmarklet-area">
+          <a id="bookmarklet" class="bookmarklet-link" href="#">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v14l4-3 4 3V2z"/></svg>
+            Vue Inspector
+          </a>
+          <span class="text-dim text-sm">&larr; Drag to bookmarks bar</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Release Notes ═══ -->
+<section id="releases" class="snap-section auto-h">
+  <div class="container">
+    <div class="text-center fade-in" style="margin-bottom:3rem">
+      <h2 class="section-title">Latest Release</h2>
+      <p class="section-subtitle mx-auto" style="margin-top:1rem">Stay up to date with the latest improvements.</p>
+    </div>
+    <div class="fade-in">
+      <div id="releaseCard" class="release-card">
+        <div class="release-loading">Loading release information...</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CTA ═══ -->
+<section class="snap-section auto-h cta-section" style="padding:6rem 0">
+  <div class="container text-center fade-in">
+    <h2 class="section-title">Start debugging Vue applications faster</h2>
+    <p class="section-subtitle mx-auto" style="margin-top:1rem;margin-bottom:2rem">
+      Join developers who save hours every week with real-time Vue inspection.
+    </p>
+    <div class="flex gap-4 items-center" style="justify-content:center;flex-wrap:wrap">
+      <a id="ctaDownload" class="btn btn-primary" href="#installation">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v8m0 0l-3-3m3 3l3-3M6 15h12"/></svg>
+        Download Extension
+      </a>
+      <a class="btn btn-secondary" href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Footer ═══ -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="flex items-center gap-4" style="justify-content:center;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:.375rem">
+        <img src="./icons/icon16.png" alt="" width="16" height="16">
+        Vue Inspector
+      </span>
+      <span>&middot;</span>
+      <a href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">GitHub</a>
+      <span>&middot;</span>
+      <span>MIT License</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══ Scripts ═══ -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
-    // Определяем текущий origin как базовый URL
-    const currentOrigin = window.location.origin;
-    document.getElementById('baseUrl').value = currentOrigin;
-    
-    // Обработчики вкладок
-    document.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        // Убираем активный класс у всех вкладок и контента
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        
-        // Добавляем активный класс текущей вкладке и соответствующему контенту
-        tab.classList.add('active');
-        const tabId = tab.getAttribute('data-tab');
-        document.getElementById(`${tabId}-tab`).classList.add('active');
-      });
-    });
-    
-    // Получение информации о последнем релизе
-    async function fetchLatestRelease() {
-      try {
-        const response = await fetch('https://api.github.com/repos/FirsakovAE/qa-tools/releases/latest');
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-                
-        // Обновляем информацию о релизе
-        const updateInfo = document.getElementById('updateInfo');
-        const updateVersion = document.getElementById('updateVersion');
-        const updateDescription = document.getElementById('updateDescription');
-        const releaseDate = document.getElementById('releaseDate');
-        
-        if (data && data.tag_name) {
-          updateVersion.textContent = data.tag_name;
-          
-          const description = data.body || 'Нет описания';
-          updateDescription.innerHTML = marked.parse(description);
-          
-          // Форматируем дату
-          if (data.published_at) {
-            const date = new Date(data.published_at);
-            releaseDate.textContent = `Опубликовано: ${date.toLocaleDateString('ru-RU')}`;
-          }
-          
-          updateInfo.style.display = 'block';
-          
-          // Ищем ссылку для скачивания
-          const downloadLink = document.getElementById('downloadLink');
-          const downloadError = document.getElementById('downloadError');
-          
-          // Проверяем, есть ли assets в релизе
-          if (data.assets && data.assets.length > 0) {
-            // Ищем zip архив
-            const zipAsset = data.assets.find(asset => 
-              asset.name.includes('.zip') || 
-              asset.name.includes('.crx') ||
-              asset.name.toLowerCase().includes('extension')
-            );
-            
-            if (zipAsset) {
-              downloadLink.href = zipAsset.browser_download_url;
-              downloadLink.style.display = 'inline-flex';
-              downloadError.style.display = 'none';
-            } else {
-              // Используем первый доступный asset
-              downloadLink.href = data.assets[0].browser_download_url;
-              downloadLink.textContent = `⬇️ Скачать ${data.assets[0].name}`;
-              downloadLink.style.display = 'inline-flex';
-              downloadError.style.display = 'none';
-            }
-          } else {
-            // Если нет assets, создаем ссылку на скачивание исходного кода
-            downloadLink.href = `https://github.com/FirsakovAE/qa-tools/archive/refs/tags/${data.tag_name}.zip`;
-            downloadLink.textContent = `⬇️ Скачать ${data.tag_name}.zip`;
-            downloadLink.style.display = 'inline-flex';
-            downloadError.style.display = 'none';
-          }
-          
-          // Для кнопки скачивания в заголовке
-          const downloadBtn = document.getElementById('downloadBtn');
-          if (downloadBtn) {
-            downloadBtn.href = downloadLink.href;
-            downloadBtn.target = '_blank';
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching release info:', error);
-        
-        // Показываем ошибку
-        const downloadError = document.getElementById('downloadError');
-        const downloadLink = document.getElementById('downloadLink');
-        
-        downloadError.textContent = `Ошибка загрузки информации о релизе: ${error.message}. Пожалуйста, проверьте https://github.com/FirsakovAE/qa-tools/releases`;
-        downloadError.style.display = 'block';
-        downloadLink.style.display = 'none';
-      }
-    }
-    
-    function generateBookmarkletCode(baseURL) {
-      // Минимальный код для загрузки inspector
+    // ── Bookmarklet ──
+    (function(){
+      const baseURL = window.location.origin;
       const code = `
         (function(){
-          if(window.__VUE_INSPECTOR_INITIALIZED__){
-            return;
-          }
+          if(window.__VUE_INSPECTOR_INITIALIZED__) return;
           var b='${baseURL}';
           window.__VUE_INSPECTOR_CONFIG__={baseURL:b};
           window.__VUE_INSPECTOR_INITIALIZED__=true;
@@ -673,30 +604,96 @@
           document.head.appendChild(s);
         })();
       `.replace(/\s+/g, ' ').trim();
-      
-      return 'javascript:' + encodeURIComponent(code);
+      document.getElementById('bookmarklet').href = 'javascript:' + encodeURIComponent(code);
+      document.getElementById('bookmarklet').addEventListener('click', function(e) {
+        alert('Drag this button to your bookmarks bar,\nthen use it on any page with a Vue application.');
+        e.preventDefault();
+      });
+    })();
+
+// ── GitHub Release ──
+async function fetchLatestRelease() {
+  try {
+    const res = await fetch('https://api.github.com/repos/FirsakovAE/qa-tools/releases/latest');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    if (!data || !data.tag_name) return;
+
+    const version = data.tag_name;
+    const date = data.published_at
+      ? new Date(data.published_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
+      : '';
+    const body = data.body || 'No release notes available.';
+
+    // Render release card
+    const card = document.getElementById('releaseCard');
+    card.innerHTML = `
+      <div class="release-header">
+        <div>
+          <div class="release-version">${version}</div>
+          <div class="release-date">${date}</div>
+        </div>
+        <a id="releaseDownload" class="btn btn-primary btn-sm" href="#" target="_blank" style="display:none">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v8m0 0l-3-3m3 3l3-3M6 15h12"/></svg>
+          Download ${version}
+        </a>
+      </div>
+      <div class="release-body">${marked.parse(body)}</div>
+    `;
+
+    // Download link
+    let dlUrl = null;
+    if (data.assets && data.assets.length > 0) {
+      const zip = data.assets.find(a => a.name.includes('.zip') || a.name.includes('.crx') || a.name.toLowerCase().includes('extension'));
+      dlUrl = zip ? zip.browser_download_url : data.assets[0].browser_download_url;
+    } else {
+      dlUrl = 'https://github.com/FirsakovAE/qa-tools/archive/refs/tags/' + version + '.zip';
     }
-    
-    function updateBookmarklet() {
-      const baseURL = document.getElementById('baseUrl').value.replace(/\/$/, '');
-      const bookmarklet = document.getElementById('bookmarklet');
-      bookmarklet.href = generateBookmarkletCode(baseURL);
-    }
-    
-    // Инициализация
-    updateBookmarklet();
-    
-    // Загружаем информацию о релизе после загрузки страницы
-    document.addEventListener('DOMContentLoaded', fetchLatestRelease);
-    
-    // Обновляем при изменении input
-    document.getElementById('baseUrl').addEventListener('input', updateBookmarklet);
-    
-    // Предотвращаем переход по ссылке при клике
-    document.getElementById('bookmarklet').addEventListener('click', function(e) {
-      alert('Перетащите эту кнопку в панель закладок браузера,\\nзатем используйте на странице с Vue приложением.');
-      e.preventDefault();
-    });
-  </script>
+
+    // Show download buttons
+    const relBtn = document.getElementById('releaseDownload');
+    if (relBtn) { relBtn.href = dlUrl; relBtn.style.display = 'inline-flex'; }
+    const dlLink = document.getElementById('downloadLink');
+    if (dlLink) { dlLink.href = dlUrl; dlLink.style.display = 'inline-flex'; }
+
+    // Update CTA buttons (heroCta stays as #installation)
+    const ctaDl = document.getElementById('ctaDownload');
+    if (ctaDl && dlUrl) { ctaDl.href = dlUrl; ctaDl.target = '_blank'; }
+  } catch (err) {
+    const card = document.getElementById('releaseCard');
+    card.innerHTML = '<div class="release-error">Failed to load release info. Visit <a href="https://github.com/FirsakovAE/qa-tools/releases" target="_blank">GitHub Releases</a> directly.</div>';
+  }
+}
+fetchLatestRelease();
+
+// ── Fade-in on scroll ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+}, { threshold: 0.15 });
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// ── Preview carousel (10s cycle + dot indicators) ──
+(function(){
+  const carousel = document.getElementById('previewCarousel');
+  const dotsContainer = document.getElementById('carouselDots');
+  if (!carousel) return;
+  const imgs = carousel.querySelectorAll('img');
+  if (imgs.length < 2) return;
+  const dots = (dotsContainer && dotsContainer.querySelectorAll('.carousel-dot')) || [];
+  let idx = 0;
+  function goTo(i){
+    imgs[idx].classList.remove('active');
+    dots[idx] && dots[idx].classList.remove('active');
+    idx = (i + imgs.length) % imgs.length;
+    imgs[idx].classList.add('active');
+    dots[idx] && dots[idx].classList.add('active');
+  }
+  dots.forEach(function(dot,i){
+    dot.addEventListener('click',function(){ goTo(i); });
+  });
+  setInterval(function(){ goTo(idx + 1); }, 10000);
+})();
+</script>
 </body>
 </html>
