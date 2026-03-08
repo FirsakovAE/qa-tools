@@ -157,7 +157,7 @@ function onInput(e: Event) {
           }"
           contenteditable="plaintext-only"
           @input="onInput"
-          @keydown="(e) => e.stopPropagation()"
+          @keydown="(e: KeyboardEvent) => { if (e.key !== 'Escape') e.stopPropagation() }"
           spellcheck="false"
           :data-content="editedJson"
         ></pre>

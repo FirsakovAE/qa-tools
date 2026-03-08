@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowLeft, Check, Shuffle } from 'lucide-vue-next'
+import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -35,6 +36,8 @@ const emit = defineEmits<{
   (e: 'back'): void
   (e: 'confirm', mock: MockRule): void
 }>()
+
+useEscapeClose(computed(() => true), () => emit('back'))
 
 const {
   activeSection,

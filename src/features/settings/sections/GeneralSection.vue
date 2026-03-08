@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import type { InspectorSettings, DisplayMode, ImageSourceType } from '@/settings/inspectorSettings'
-import { defaultCustomizeSettings } from '@/settings/inspectorSettings'
+import type { InspectorSettings, DisplayMode } from '@/settings/inspectorSettings'
+import { addMedia, removeMedia } from '@/settings/mediaStore'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -44,9 +44,10 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
-import { Info, Download, Upload, RotateCcw, Plus, MoreHorizontal, Pencil, Trash, Check } from 'lucide-vue-next'
+import { Info, Download, Upload, RotateCcw, Plus, MoreHorizontal, Pencil, Trash } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { getRuntimeAdapter } from '@/runtime'
+import ImagePickerDrawer from '@/features/settings/components/ImagePickerDrawer.vue'
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -98,89 +99,59 @@ const refreshIntervals = [
 // -------------------- CUSTOMIZE --------------------
 
 const customize = computed(() => props.settings.customize)
+const imagePickerOpen = ref(false)
 
-const draftSourceType = ref<ImageSourceType>(customize.value.image.sourceType)
-const draftUrl = ref(customize.value.image.url)
-const draftSavedFileId = ref(customize.value.image.savedFileId)
-const draftFileName = ref(customize.value.image.fileName)
+const currentImageLabel = computed(() => {
+  if (customize.value.image.fileName) return customize.value.image.fileName
+  if (customize.value.image.url) return customize.value.image.url
+  return 'Default'
+})
 
-const sourceTypeSelectOpen = ref(false)
-const fileSelectOpen = ref(false)
+function handlePickerSelectFile(id: string, name: string) {
+  customize.value.image.sourceType = 'file'
+  customize.value.image.savedFileId = id
+  customize.value.image.fileName = name
+  customize.value.image.url = ''
+}
 
-watch(sourceTypeSelectOpen, v => { if (v) fileSelectOpen.value = false })
-watch(fileSelectOpen, v => { if (v) sourceTypeSelectOpen.value = false })
+function handlePickerSelectUrl(url: string) {
+  customize.value.image.sourceType = 'link'
+  customize.value.image.url = url
+  customize.value.image.savedFileId = ''
+  customize.value.image.fileName = ''
+}
 
-const isDraftDirty = computed(() =>
-  draftSourceType.value !== customize.value.image.sourceType ||
-  draftUrl.value !== customize.value.image.url ||
-  draftSavedFileId.value !== customize.value.image.savedFileId ||
-  draftFileName.value !== customize.value.image.fileName
-)
-
-const savedImageFiles = computed(() =>
-  (props.settings.savedFiles || []).filter(f => f.mimeType.startsWith('image/'))
-)
-
-function handleImageFileSelect(optionId: string) {
-  if (!optionId || optionId === '__none__') return
-  const sf = props.settings.savedFiles.find(f => f.id === optionId)
-  if (sf) {
-    draftSavedFileId.value = sf.id
-    draftFileName.value = sf.name
+async function handlePickerAddFile(file: File) {
+  const existing = props.settings.savedFiles.find(
+    sf => sf.name === file.name && sf.size === file.size,
+  )
+  let fileId: string
+  if (existing) {
+    fileId = existing.id
+  } else {
+    fileId = generateId()
+    await addMedia(fileId, file)
+    props.settings.savedFiles.push({
+      id: fileId,
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || 'application/octet-stream',
+    })
   }
+  customize.value.image.sourceType = 'file'
+  customize.value.image.savedFileId = fileId
+  customize.value.image.fileName = file.name
+  customize.value.image.url = ''
 }
 
-function handleImageBrowse(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input?.files?.[0]
-  if (!file) return
-
-  const reader = new FileReader()
-  reader.onload = () => {
-    const dataUri = reader.result as string
-    const existing = props.settings.savedFiles.find(
-      sf => sf.name === file.name && sf.size === file.size,
-    )
-    let fileId: string
-    if (existing) {
-      fileId = existing.id
-    } else {
-      fileId = generateId()
-      props.settings.savedFiles.push({
-        id: fileId,
-        name: file.name,
-        size: file.size,
-        mimeType: file.type || 'application/octet-stream',
-        dataUri,
-      })
-    }
-    draftSavedFileId.value = fileId
-    draftFileName.value = file.name
+async function handlePickerRemoveFile(id: string) {
+  if (!props.settings.savedFiles) return
+  props.settings.savedFiles = props.settings.savedFiles.filter(f => f.id !== id)
+  await removeMedia(id)
+  if (customize.value.image.savedFileId === id) {
+    customize.value.image.savedFileId = ''
+    customize.value.image.fileName = ''
   }
-  reader.readAsDataURL(file)
-  input.value = ''
-}
-
-function clearCustomizeImage() {
-  draftUrl.value = ''
-  draftSavedFileId.value = ''
-  draftFileName.value = ''
-}
-
-function applyImageSettings() {
-  customize.value.image.sourceType = draftSourceType.value
-  customize.value.image.url = draftUrl.value
-  customize.value.image.savedFileId = draftSavedFileId.value
-  customize.value.image.fileName = draftFileName.value
-}
-
-function resetCustomize() {
-  const defaults = structuredClone(defaultCustomizeSettings)
-  Object.assign(customize.value, defaults)
-  draftSourceType.value = defaults.image.sourceType
-  draftUrl.value = defaults.image.url
-  draftSavedFileId.value = defaults.image.savedFileId
-  draftFileName.value = defaults.image.fileName
 }
 
 function setSlider(setter: (v: number) => void, val: number[] | undefined) {
@@ -203,54 +174,45 @@ function formatFileSize(bytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`
 }
 
-function removeSavedFile(fileId: string) {
+async function removeSavedFile(fileId: string) {
   if (!props.settings.savedFiles) return
   props.settings.savedFiles = props.settings.savedFiles.filter(f => f.id !== fileId)
+  await removeMedia(fileId)
 }
 
-function handleAddNewFile(event: Event) {
+async function handleAddNewFile(event: Event) {
   const input = event.target as HTMLInputElement
   const files = input?.files
   if (!files || !props.settings.savedFiles) return
-  Array.from(files).forEach(file => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUri = reader.result as string
-      const alreadySaved = props.settings.savedFiles.some(
-        sf => sf.name === file.name && sf.size === file.size,
-      )
-      if (!alreadySaved) {
-        props.settings.savedFiles.push({
-          id: generateId(),
-          name: file.name,
-          size: file.size,
-          mimeType: file.type || 'application/octet-stream',
-          dataUri,
-        })
-      }
+  for (const file of Array.from(files)) {
+    const alreadySaved = props.settings.savedFiles.some(
+      sf => sf.name === file.name && sf.size === file.size,
+    )
+    if (!alreadySaved) {
+      const id = generateId()
+      await addMedia(id, file)
+      props.settings.savedFiles.push({
+        id,
+        name: file.name,
+        size: file.size,
+        mimeType: file.type || 'application/octet-stream',
+      })
     }
-    reader.readAsDataURL(file)
-  })
+  }
   input.value = ''
 }
 
-function handleEditFileChange(event: Event, fileId: string) {
+async function handleEditFileChange(event: Event, fileId: string) {
   const input = event.target as HTMLInputElement
   const file = input?.files?.[0]
   if (!file) return
-
-  const reader = new FileReader()
-  reader.onload = () => {
-    const dataUri = reader.result as string
-    const sf = props.settings.savedFiles?.find(f => f.id === fileId)
-    if (sf) {
-      sf.name = file.name
-      sf.size = file.size
-      sf.mimeType = file.type || 'application/octet-stream'
-      sf.dataUri = dataUri
-    }
+  await addMedia(fileId, file)
+  const sf = props.settings.savedFiles?.find(f => f.id === fileId)
+  if (sf) {
+    sf.name = file.name
+    sf.size = file.size
+    sf.mimeType = file.type || 'application/octet-stream'
   }
-  reader.readAsDataURL(file)
   input.value = ''
 }
 </script>
@@ -306,86 +268,20 @@ function handleEditFileChange(event: Event, fileId: string) {
 
     <!-- CUSTOMIZE -->
     <div class="space-y-4 border-t pt-4">
-      <div class="flex items-center justify-between">
-        <h4 class="text-sm font-semibold">Customize</h4>
-        <div class="flex items-center gap-1">
-          <Button
-            v-if="isDraftDirty"
-            variant="outline"
-            size="sm"
-            class="h-7 gap-1 text-xs"
-            @click="applyImageSettings"
-          >
-            <Check class="h-3 w-3" />
-            Apply
-          </Button>
-          <Button variant="ghost" size="sm" class="h-7 gap-1 text-xs text-muted-foreground" @click="resetCustomize">
-            <RotateCcw class="h-3 w-3" />
-            Reset
-          </Button>
-        </div>
-      </div>
+      <h4 class="text-sm font-semibold">Customize</h4>
 
       <!-- Image -->
       <div class="space-y-2">
         <Label class="text-xs font-medium text-muted-foreground">Image</Label>
         <div class="flex items-center gap-2">
-          <Select v-model="draftSourceType" v-model:open="sourceTypeSelectOpen">
-            <SelectTrigger class="w-[90px] h-8 shrink-0 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="file" class="text-xs">File</SelectItem>
-              <SelectItem value="link" class="text-xs">Link</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Input
-            v-if="draftSourceType === 'link'"
-            v-model="draftUrl"
-            placeholder="https://example.com/image.jpg"
-            class="h-8 text-xs flex-1"
-          />
-
-          <template v-else>
-            <Select
-              :model-value="draftSavedFileId || undefined"
-              @update:model-value="handleImageFileSelect(String($event))"
-              v-model:open="fileSelectOpen"
-            >
-              <SelectTrigger class="h-8 text-xs flex-1">
-                <SelectValue :placeholder="draftFileName || 'Choose file'" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="sf in savedImageFiles"
-                  :key="sf.id"
-                  :value="sf.id"
-                  class="text-xs"
-                >
-                  {{ sf.name }} ({{ formatFileSize(sf.size) }})
-                </SelectItem>
-                <SelectItem v-if="!savedImageFiles.length" value="__none__" disabled class="text-xs">
-                  No saved images
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            <label class="shrink-0 inline-flex items-center justify-center h-8 px-3 text-xs rounded-md border cursor-pointer hover:bg-muted/50 transition-colors">
-              Browse
-              <input type="file" accept="image/*" class="sr-only" @change="handleImageBrowse" />
-            </label>
-          </template>
-
+          <span class="text-xs text-muted-foreground flex-1 truncate" :title="currentImageLabel">{{ currentImageLabel }}</span>
           <Button
-            v-if="draftUrl || draftSavedFileId"
-            variant="ghost"
+            variant="outline"
             size="sm"
-            class="h-8 w-8 p-0 shrink-0"
-            title="Clear image"
-            @click="clearCustomizeImage"
+            class="h-8 px-3 text-xs shrink-0"
+            @click="imagePickerOpen = true"
           >
-            <Trash class="h-3.5 w-3.5" />
+            Change background
           </Button>
         </div>
       </div>
@@ -429,28 +325,15 @@ function handleEditFileChange(event: Event, fileId: string) {
         />
       </div>
 
-      <!-- Image Opacity (Light) -->
+      <!-- Image Opacity -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
-          <Label class="text-xs">Image Opacity (Light)</Label>
-          <span class="text-xs text-muted-foreground tabular-nums">{{ customize.imageOpacityLight.toFixed(2) }}</span>
+          <Label class="text-xs">Image Opacity</Label>
+          <span class="text-xs text-muted-foreground tabular-nums">{{ customize.imageOpacity.toFixed(2) }}</span>
         </div>
         <Slider
-          :model-value="[customize.imageOpacityLight]"
-          @update:model-value="setSlider(v => customize.imageOpacityLight = v, $event)"
-          :min="0" :max="1" :step="0.01"
-        />
-      </div>
-
-      <!-- Image Opacity (Dark) -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-between">
-          <Label class="text-xs">Image Opacity (Dark)</Label>
-          <span class="text-xs text-muted-foreground tabular-nums">{{ customize.imageOpacityDark.toFixed(2) }}</span>
-        </div>
-        <Slider
-          :model-value="[customize.imageOpacityDark]"
-          @update:model-value="setSlider(v => customize.imageOpacityDark = v, $event)"
+          :model-value="[customize.imageOpacity]"
+          @update:model-value="setSlider(v => customize.imageOpacity = v, $event)"
           :min="0" :max="1" :step="0.01"
         />
       </div>
@@ -465,32 +348,6 @@ function handleEditFileChange(event: Event, fileId: string) {
           :model-value="[customize.blur]"
           @update:model-value="setSlider(v => customize.blur = v, $event)"
           :min="0" :max="200" :step="1"
-        />
-      </div>
-
-      <!-- Noise Intensity -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-between">
-          <Label class="text-xs">Noise Intensity</Label>
-          <span class="text-xs text-muted-foreground tabular-nums">{{ customize.noiseIntensity.toFixed(2) }}</span>
-        </div>
-        <Slider
-          :model-value="[customize.noiseIntensity]"
-          @update:model-value="setSlider(v => customize.noiseIntensity = v, $event)"
-          :min="0" :max="1" :step="0.01"
-        />
-      </div>
-
-      <!-- Noise Opacity -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-between">
-          <Label class="text-xs">Noise Opacity</Label>
-          <span class="text-xs text-muted-foreground tabular-nums">{{ customize.noiseOpacity.toFixed(2) }}</span>
-        </div>
-        <Slider
-          :model-value="[customize.noiseOpacity]"
-          @update:model-value="setSlider(v => customize.noiseOpacity = v, $event)"
-          :min="0" :max="1" :step="0.01"
         />
       </div>
     </div>
@@ -698,5 +555,16 @@ function handleEditFileChange(event: Event, fileId: string) {
         </Button>
       </div>
     </div>
+
+    <ImagePickerDrawer
+      v-model:open="imagePickerOpen"
+      :saved-files="settings.savedFiles"
+      :selected-saved-file-id="customize.image.savedFileId"
+      :selected-url="customize.image.url"
+      @select-file="handlePickerSelectFile"
+      @select-url="handlePickerSelectUrl"
+      @add-file="handlePickerAddFile"
+      @remove-file="handlePickerRemoveFile"
+    />
   </div>
 </template>

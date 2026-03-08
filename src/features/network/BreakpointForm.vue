@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ArrowLeft, Check, CirclePause } from 'lucide-vue-next'
+import { useEscapeClose } from '@/composables/useEscapeClose'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +27,8 @@ const emit = defineEmits<{
   (e: 'back'): void
   (e: 'confirm', breakpoint: BreakpointItem): void
 }>()
+
+useEscapeClose(computed(() => true), () => emit('back'))
 
 // Whether we're editing an existing breakpoint
 const isRewrite = computed(() => !!props.existingBreakpoint)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ArrowLeft, Edit, X, Save } from 'lucide-vue-next'
+import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -183,7 +184,6 @@ function startEditing() {
   }
 }
 
-// Cancel editing current section
 function cancelEditing() {
   if (activeSection.value === 'state') {
     editedStateJson.value = stateJson.value
@@ -194,7 +194,11 @@ function cancelEditing() {
   }
 }
 
-// Save current section changes
+useEscapeClose(computed(() => true), () => {
+  if (isEditing.value) cancelEditing()
+  else emit('back')
+})
+
 async function saveChanges() {
   if (activeSection.value === 'state') {
     await saveStateChanges()

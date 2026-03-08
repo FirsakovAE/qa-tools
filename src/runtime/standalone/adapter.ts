@@ -1,9 +1,12 @@
 /**
  * Standalone Runtime Adapter
- * 
+ *
  * Реализация RuntimeAdapter для standalone режима (без расширения).
- * Использует postMessage для коммуникации, sessionStorage для storage.
- * sessionStorage выбран намеренно: настройки живут до перезагрузки страницы (F5).
+ * Использует postMessage для коммуникации.
+ *
+ * Storage:
+ *   sessionStorage  — synchronous preload cache (survives F5)
+ *   IndexedDB       — persistent source of truth (survives tab close)
  */
 
 import type { 
@@ -18,37 +21,98 @@ import type {
 const STORAGE_KEY = '__vue_inspector_storage__'
 const MESSAGE_PREFIX = '__VUE_INSPECTOR__'
 
+const IDB_NAME = 'vue-inspector-standalone'
+const IDB_VERSION = 1
+const IDB_STORE = 'kv'
+
+let idbPromise: Promise<IDBDatabase> | null = null
+
+function openIDB(): Promise<IDBDatabase> {
+  if (idbPromise) return idbPromise
+  idbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION)
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+  return idbPromise
+}
+
+function idbGet<T>(key: string): Promise<T | null> {
+  return openIDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly')
+    const req = tx.objectStore(IDB_STORE).get(key)
+    req.onsuccess = () => resolve(req.result ?? null)
+    req.onerror = () => reject(req.error)
+  }))
+}
+
+function idbSet(key: string, value: unknown): Promise<void> {
+  return openIDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite')
+    tx.objectStore(IDB_STORE).put(value, key)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  }))
+}
+
+function idbDelete(key: string): Promise<void> {
+  return openIDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite')
+    tx.objectStore(IDB_STORE).delete(key)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  }))
+}
+
+function sessionGet<T>(key: string): T | null {
+  try {
+    const stored = sessionStorage.getItem(STORAGE_KEY)
+    const data = stored ? JSON.parse(stored) : {}
+    return (data[key] as T) ?? null
+  } catch {
+    return null
+  }
+}
+
+function sessionSet(key: string, value: unknown): void {
+  try {
+    const stored = sessionStorage.getItem(STORAGE_KEY)
+    const data = stored ? JSON.parse(stored) : {}
+    data[key] = value
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch { /* quota / private mode */ }
+}
+
+function sessionRemove(key: string): void {
+  try {
+    const stored = sessionStorage.getItem(STORAGE_KEY)
+    const data = stored ? JSON.parse(stored) : {}
+    delete data[key]
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch { /* silent */ }
+}
+
 class StandaloneStorage implements RuntimeStorage {
   async get<T = unknown>(key: string): Promise<T | null> {
     try {
-      const stored = sessionStorage.getItem(STORAGE_KEY)
-      const data = stored ? JSON.parse(stored) : {}
-      return (data[key] as T) ?? null
-    } catch {
-      return null
-    }
+      const idbValue = await idbGet<T>(key)
+      if (idbValue !== null) {
+        sessionSet(key, idbValue)
+        return idbValue
+      }
+    } catch { /* IDB unavailable */ }
+    return sessionGet<T>(key)
   }
 
   async set(key: string, value: unknown): Promise<void> {
-    try {
-      const stored = sessionStorage.getItem(STORAGE_KEY)
-      const data = stored ? JSON.parse(stored) : {}
-      data[key] = value
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-    } catch {
-      // Silent fail
-    }
+    sessionSet(key, value)
+    try { await idbSet(key, value) } catch { /* IDB unavailable */ }
   }
 
   async remove(key: string): Promise<void> {
-    try {
-      const stored = sessionStorage.getItem(STORAGE_KEY)
-      const data = stored ? JSON.parse(stored) : {}
-      delete data[key]
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-    } catch {
-      // Silent fail
-    }
+    sessionRemove(key)
+    try { await idbDelete(key) } catch { /* IDB unavailable */ }
   }
 }
 

@@ -4,9 +4,10 @@
   import { useAutoUnhighlight } from '@/composables/useAutoUnhighlight'
   import { useUpdateChecker } from '@/composables/useUpdateChecker'
   import { inspectorState, useInspectorSettings } from '@/settings/useInspectorSettings'
+  import { mediaUrls } from '@/settings/mediaStore'
+  import { wallpapers, defaultWallpaperUrl } from '@/assets/wallpapers'
   import Navigation from '@/features/Navigation.vue'
   import { Toaster } from '@/components/ui/Toaster'
-  import defaultBackground from '@/assets/background1.jpg'
 
   useAutoUnhighlight()
   useUpdateChecker()
@@ -16,13 +17,15 @@
   const customize = computed(() => inspectorState.customize)
   const infusionSrc = computed(() => {
     const img = customize.value?.image
-    if (!img) return defaultBackground
+    if (!img) return defaultWallpaperUrl
     if (img.sourceType === 'link' && img.url) return img.url
     if (img.sourceType === 'file' && img.savedFileId) {
-      const sf = inspectorState.savedFiles.find(f => f.id === img.savedFileId)
-      return sf?.dataUri || defaultBackground
+      if (img.savedFileId.startsWith('wallpaper:')) {
+        return wallpapers.find(w => w.id === img.savedFileId)?.url || defaultWallpaperUrl
+      }
+      return mediaUrls[img.savedFileId] || defaultWallpaperUrl
     }
-    return defaultBackground
+    return defaultWallpaperUrl
   })
 
   function selectNodeContents(node: Node) {
@@ -70,16 +73,13 @@
     <div class="relative h-screen overflow-hidden" @contextmenu.prevent>
       <Infusion
       :src="infusionSrc"
-      :opacity="customize.imageOpacityLight"
-      :opacityDark="customize.imageOpacityDark"
+      :opacity="customize.imageOpacity"
+      :opacityDark="customize.imageOpacity"
       :zIndex="100"
       :blur="customize.blur"
       :positionX="customize.positionX"
       :positionY="customize.positionY"
       :scale="customize.scale"
-      :noiseIntensity="customize.noiseIntensity"
-      :noiseScale="1"
-      :noiseOpacity="customize.noiseOpacity"
       blendMode="normal"
       :relative="true"
       type="image"

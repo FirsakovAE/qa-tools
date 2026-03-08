@@ -68,10 +68,6 @@ function selectSection(id: SettingsSection) {
   sheetOpen.value = false
 }
 
-const optionsDetailsActive = computed(() =>
-  !!selectedItem.value || !!editMode.value || !!(releaseInfo.value && activeSection.value === 'about')
-)
-
 const sections = [
   { id: 'general' as const, label: 'General', icon: Settings },
   { id: 'network' as const, label: 'Network', icon: Globe },
@@ -243,6 +239,10 @@ function handleDownloadUpdate(url: string) {
   link.click()
   document.body.removeChild(link)
 }
+
+const optionsDetailsActive = computed(() =>
+  !!selectedItem.value || !!editMode.value || !!(releaseInfo.value && activeSection.value === 'about')
+)
 
 // Handle navigation from toast "Preview" button
 watch(() => props.pendingAboutRelease, (release) => {

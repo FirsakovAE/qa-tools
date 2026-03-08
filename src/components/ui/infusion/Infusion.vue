@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
   positionX: 50,
   positionY: 50,
   scale: 100,
-  noiseIntensity: 0.5,
+  noiseIntensity: 0.2,
   noiseScale: 1,
   noiseOpacity: 0.05,
   blendMode: 'normal',

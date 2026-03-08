@@ -148,11 +148,8 @@ export interface CustomizeSettings {
     positionX: number
     positionY: number
     scale: number
-    imageOpacityLight: number
-    imageOpacityDark: number
+    imageOpacity: number
     blur: number
-    noiseIntensity: number
-    noiseOpacity: number
 }
 
 export interface SavedFile {
@@ -160,7 +157,8 @@ export interface SavedFile {
     name: string
     size: number
     mimeType: string
-    dataUri: string
+    /** @deprecated Stored in IndexedDB. Present only during migration from older versions. */
+    dataUri?: string
 }
 
 export interface BaseInspectorSettings {

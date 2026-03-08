@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import type { FormDataEntry, NetworkEntry } from '@/types/network'
 import type { BaseInspectorSettings, SavedFile } from '@/types/inspector'
 import { copyToClipboard } from '@/utils/networkUtils'
+import { mediaUrls } from '@/settings/mediaStore'
 
 type BodyFormatMode = 'raw' | 'form-data'
 
@@ -251,7 +252,7 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
       return
     }
 
-    fd.value = savedFile.dataUri
+    fd.value = mediaUrls[savedFile.id] || savedFile.id
     fd.fileName = savedFile.name
     fd.fileSize = savedFile.size
     fd.fileType = savedFile.mimeType

@@ -54,11 +54,8 @@ export const defaultInspectorSettings: InspectorSettings = {
         positionX: 22,
         positionY: 30,
         scale: 100,
-        imageOpacityLight: 0.2,
-        imageOpacityDark: 0.3,
+        imageOpacity: 0.2,
         blur: 34,
-        noiseIntensity: 0.5,
-        noiseOpacity: 0.05,
     },
 }
 

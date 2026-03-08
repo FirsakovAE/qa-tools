@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, watch, nextTick } from 'vue'
 import { ArrowLeft, Star, X, Save, Edit, RefreshCw } from 'lucide-vue-next'
+import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -23,7 +24,7 @@ const runtime = useRuntime()
 
 // --- Props и Emits ---
 const props = defineProps<{ node: TreeNodeModel }>()
-defineEmits<{ back: [] }>()
+const emit = defineEmits<{ back: [] }>()
 
 // --- Settings ---
 const settings = ref<BaseInspectorSettings | null>(null)
@@ -219,6 +220,11 @@ function cancelEdit() {
   cancelPropsEditing?.()
 }
 
+useEscapeClose(computed(() => true), () => {
+  if (isEditing.value) cancelEdit()
+  else emit('back')
+})
+
 async function saveChanges() {
   if (!isJsonValid.value) return
 
@@ -253,7 +259,7 @@ async function saveChanges() {
     <div class="h-full flex flex-col">
       <!-- Header (NetworkDetails style) -->
       <div class="shrink-0 flex items-center gap-3 p-3 border-b">
-        <Button variant="ghost" size="icon" class="h-8 w-8" @click="$emit('back')">
+        <Button variant="ghost" size="icon" class="h-8 w-8" @click="emit('back')">
           <ArrowLeft class="h-4 w-4" />
         </Button>
         

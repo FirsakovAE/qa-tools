@@ -2,6 +2,7 @@ import { reactive, watch, toRaw } from 'vue'
 import { defaultInspectorSettings, type InspectorSettings } from '@/settings/inspectorSettings'
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
+import { initMediaStore } from '@/settings/mediaStore'
 
 const SETTINGS_STORAGE_KEY = 'inspector-settings'
 const STANDALONE_STORAGE_KEY = '__vue_inspector_storage__'
@@ -47,6 +48,10 @@ async function saveToStorage() {
             settingsToSave = JSON.parse(JSON.stringify(toRaw(state)))
         }
 
+        for (const sf of settingsToSave.savedFiles || []) {
+            delete sf.dataUri
+        }
+
         if (isStandaloneMode()) {
             const adapter = getRuntimeAdapter()
             await adapter?.storage.set(SETTINGS_STORAGE_KEY, settingsToSave)
@@ -83,6 +88,7 @@ async function loadFromStorage(): Promise<void> {
         Object.assign(state, structuredClone(defaultInspectorSettings))
     }
 
+    await initMediaStore(state.savedFiles || [])
     isLoaded = true
 }
 
@@ -168,10 +174,12 @@ function migrateSearchSettings(saved: any): void {
     delete saved.version
 }
 
-function migrateCustomizeImage(settings: any) {
-    const img = settings.customize?.image
-    if (!img) return
-    if (img.sourceType === 'file' && img.url && !img.savedFileId) {
+function migrateCustomizeSettings(settings: any) {
+    const c = settings.customize
+    if (!c) return
+
+    const img = c.image
+    if (img && img.sourceType === 'file' && img.url && !img.savedFileId) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         if (!settings.savedFiles) settings.savedFiles = []
         settings.savedFiles.push({
@@ -184,13 +192,21 @@ function migrateCustomizeImage(settings: any) {
         img.savedFileId = id
         img.url = ''
     }
+
+    if (c.imageOpacity === undefined && (c.imageOpacityLight !== undefined || c.imageOpacityDark !== undefined)) {
+        c.imageOpacity = c.imageOpacityLight ?? c.imageOpacityDark ?? 0.2
+    }
+    delete c.imageOpacityLight
+    delete c.imageOpacityDark
+    delete c.noiseIntensity
+    delete c.noiseOpacity
 }
 
 // Мердж настроек
 function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSettings>) {
     migrateSearchSettings(saved)
     migrateFavoriteIds(saved)
-    migrateCustomizeImage(saved)
+    migrateCustomizeSettings(saved)
 
     const result = structuredClone(defaults)
 

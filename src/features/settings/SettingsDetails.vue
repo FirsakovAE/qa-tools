@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { useEscapeClose } from '@/composables/useEscapeClose'
 import { marked } from 'marked'
 import '@/assets/markdown.css'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { BreakpointItem, MockRule, FavoriteItem, SavedFile } from '@/types/inspector'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
+import { mediaUrls, getMediaBlob } from '@/settings/mediaStore'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,6 +42,14 @@ const emit = defineEmits<{
   (e: 'download-update', url: string): void
   (e: 'edit'): void
 }>()
+
+useEscapeClose(
+  computed(() => !!(props.selectedItem || props.releaseInfo)),
+  () => {
+    if (props.selectedItem) emit('close')
+    else if (props.releaseInfo) emit('close-release')
+  },
+)
 
 // -------------------- LOOKUP DATA --------------------
 const breakpointData = computed<(BreakpointItem & { active: boolean }) | null>(() => {
@@ -102,19 +112,22 @@ function isTextFile(mime: string): boolean {
   return textPrefixes.some(t => mime.startsWith(t))
 }
 
-function decodeTextDataUri(dataUri: string): string {
+const textPreviewContent = ref('(loading...)')
+
+watch(savedFileData, async (file) => {
+  textPreviewContent.value = '(loading...)'
+  if (!file || !isTextFile(file.mimeType)) return
   try {
-    const base64 = dataUri.split(',')[1]
-    if (!base64) return '(empty)'
-    return decodeURIComponent(escape(atob(base64)))
-  } catch {
-    try {
-      return atob(dataUri.split(',')[1] || '')
-    } catch {
-      return '(unable to decode)'
+    const blob = await getMediaBlob(file.id)
+    if (blob) {
+      textPreviewContent.value = await blob.text()
+    } else {
+      textPreviewContent.value = '(no data)'
     }
+  } catch {
+    textPreviewContent.value = '(unable to decode)'
   }
-}
+}, { immediate: true })
 
 function isOfficeFile(mime: string): boolean {
   const officeTypes = [
@@ -142,17 +155,9 @@ function formatFileSize(bytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`
 }
 
-function dataUriToBlob(dataUri: string): Blob {
-  const [header, base64] = dataUri.split(',')
-  const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream'
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return new Blob([bytes], { type: mime })
-}
-
-function downloadSavedFile(file: SavedFile) {
-  const blob = dataUriToBlob(file.dataUri)
+async function downloadSavedFile(file: SavedFile) {
+  const blob = await getMediaBlob(file.id)
+  if (!blob) return
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -163,16 +168,20 @@ function downloadSavedFile(file: SavedFile) {
   URL.revokeObjectURL(url)
 }
 
+function getFileUrl(file: SavedFile): string {
+  return mediaUrls[file.id] || ''
+}
+
 const officeBlobUrl = ref<string | null>(null)
 
-watch(savedFileData, (file) => {
+watch(savedFileData, async (file) => {
   if (officeBlobUrl.value) {
     URL.revokeObjectURL(officeBlobUrl.value)
     officeBlobUrl.value = null
   }
   if (file && isOfficeFile(file.mimeType)) {
-    const blob = dataUriToBlob(file.dataUri)
-    officeBlobUrl.value = URL.createObjectURL(blob)
+    const blob = await getMediaBlob(file.id)
+    if (blob) officeBlobUrl.value = URL.createObjectURL(blob)
   }
 }, { immediate: true })
 
@@ -500,7 +509,7 @@ function formatTrigger(trigger: string): string {
                 <span class="text-xs text-muted-foreground">Preview</span>
                 <div class="mt-2 rounded-lg border overflow-hidden bg-muted/20 flex items-center justify-center p-2">
                   <img
-                    :src="savedFileData.dataUri"
+                    :src="getFileUrl(savedFileData)"
                     :alt="savedFileData.name"
                     class="max-w-full max-h-[300px] object-contain rounded"
                   />
@@ -510,14 +519,14 @@ function formatTrigger(trigger: string): string {
               <!-- Audio -->
               <div v-else-if="isAudioFile(savedFileData.mimeType)">
                 <span class="text-xs text-muted-foreground">Preview</span>
-                <audio :src="savedFileData.dataUri" controls class="w-full mt-2" />
+                <audio :src="getFileUrl(savedFileData)" controls class="w-full mt-2" />
               </div>
 
               <!-- Video -->
               <div v-else-if="isVideoFile(savedFileData.mimeType)">
                 <span class="text-xs text-muted-foreground">Preview</span>
                 <video
-                  :src="savedFileData.dataUri"
+                  :src="getFileUrl(savedFileData)"
                   controls
                   class="w-full mt-2 rounded-lg max-h-[300px]"
                 />
@@ -527,7 +536,7 @@ function formatTrigger(trigger: string): string {
               <div v-else-if="isTextFile(savedFileData.mimeType)">
                 <span class="text-xs text-muted-foreground">Preview</span>
                 <ScrollArea class="mt-2 rounded bg-muted/50 saved-file-text-scroll">
-                  <pre class="text-xs font-mono p-3 whitespace-pre-wrap break-all">{{ decodeTextDataUri(savedFileData.dataUri) }}</pre>
+                  <pre class="text-xs font-mono p-3 whitespace-pre-wrap break-all">{{ textPreviewContent }}</pre>
                 </ScrollArea>
               </div>
 
@@ -535,7 +544,7 @@ function formatTrigger(trigger: string): string {
               <div v-else-if="savedFileData.mimeType === 'application/pdf'">
                 <span class="text-xs text-muted-foreground">Preview</span>
                 <iframe
-                  :src="savedFileData.dataUri"
+                  :src="getFileUrl(savedFileData)"
                   class="w-full h-[300px] mt-2 rounded-lg border"
                 />
               </div>
@@ -584,7 +593,7 @@ function formatTrigger(trigger: string): string {
                 <span class="text-xs text-muted-foreground">Preview</span>
                 <div class="mt-2 rounded-lg border overflow-hidden bg-muted/20 flex items-center justify-center p-2">
                   <img
-                    :src="savedFileData.dataUri"
+                    :src="getFileUrl(savedFileData)"
                     :alt="savedFileData.name"
                     class="max-w-full max-h-[300px] object-contain"
                   />

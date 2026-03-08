@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { ArrowLeft, Copy, Check, Send } from 'lucide-vue-next'
+import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -199,6 +200,8 @@ function handleBack() {
     emit('back')
   }
 }
+
+useEscapeClose(computed(() => true), handleBack)
 
 function handleApplyBreakpoint() {
   if (!props.breakpointMode) return
