@@ -1,9 +1,10 @@
 import { ref, computed, watch } from 'vue'
 import type { FormDataEntry, NetworkEntry } from '@/types/network'
-import type { BaseInspectorSettings, SavedFile } from '@/types/inspector'
+import type { BaseInspectorSettings } from '@/types/inspector'
 import { copyToClipboard } from '@/utils/networkUtils'
-import { mediaUrls } from '@/settings/mediaStore'
+import { addMedia, dataUriToBlob } from '@/settings/mediaStore'
 
+const FILE_ID_PREFIX = '__fileId:'
 type BodyFormatMode = 'raw' | 'form-data'
 
 export interface FileOption {
@@ -117,7 +118,7 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
     if (!file || !editableFormData.value[index]) return
 
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const dataUri = reader.result as string
       const fd = editableFormData.value[index]
       if (!fd) return
@@ -131,12 +132,14 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
       if (s?.autoSaveFiles) {
         const alreadySaved = s.savedFiles.some(sf => sf.name === file.name && sf.size === file.size)
         if (!alreadySaved) {
+          const fileId = generateId()
+          const blob = dataUriToBlob(dataUri)
+          await addMedia(fileId, blob)
           s.savedFiles.push({
-            id: generateId(),
+            id: fileId,
             name: file.name,
             size: file.size,
             mimeType: file.type || 'application/octet-stream',
-            dataUri,
           })
         }
       }
@@ -147,6 +150,10 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
 
   function getFileDisplayLabel(fd: FormDataEntry): string {
     if (!fd.value || fd.value === '') return 'Choose file'
+    if (fd.value.startsWith(FILE_ID_PREFIX) && fd.fileName) {
+      const sizeKb = fd.fileSize ? (fd.fileSize / 1024).toFixed(1) : '?'
+      return `${fd.fileName} (${sizeKb} KB)`
+    }
     if (fd.value.startsWith('data:') && fd.fileName) {
       const sizeKb = fd.fileSize ? (fd.fileSize / 1024).toFixed(1) : '?'
       return `${fd.fileName} (${sizeKb} KB)`
@@ -183,6 +190,16 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
       })
     }
 
+    if (fd.value.startsWith(FILE_ID_PREFIX)) {
+      const fileId = fd.value.slice(FILE_ID_PREFIX.length)
+      if (!savedFiles.some(sf => sf.id === fileId)) {
+        const sizeKb = fd.fileSize ? (fd.fileSize / 1024).toFixed(1) : '?'
+        opts.push({
+          id: '__custom__',
+          label: `${fd.fileName || 'file'} (${sizeKb} KB) — current`,
+        })
+      }
+    }
     if (fd.value.startsWith('data:') && fd.fileName) {
       const isSaved = savedFiles.some(sf => sf.name === fd.fileName && sf.size === fd.fileSize)
       if (!isSaved) {
@@ -199,6 +216,11 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
 
   function getSelectedFileOption(fd: FormDataEntry): string {
     if (fd.value === '(binary)') return '__original__'
+    if (fd.value.startsWith(FILE_ID_PREFIX)) {
+      const fileId = fd.value.slice(FILE_ID_PREFIX.length)
+      const savedFiles = settings()?.savedFiles || []
+      return savedFiles.some(sf => sf.id === fileId) ? fileId : '__custom__'
+    }
     if (fd.value.startsWith('data:') && fd.fileName) {
       const savedFiles = settings()?.savedFiles || []
       const match = savedFiles.find(sf => sf.name === fd.fileName && sf.size === fd.fileSize)
@@ -252,7 +274,7 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
       return
     }
 
-    fd.value = mediaUrls[savedFile.id] || savedFile.id
+    fd.value = FILE_ID_PREFIX + savedFile.id
     fd.fileName = savedFile.name
     fd.fileSize = savedFile.size
     fd.fileType = savedFile.mimeType

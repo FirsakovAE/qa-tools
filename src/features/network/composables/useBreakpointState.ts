@@ -10,8 +10,42 @@ import { ref, computed, watch } from 'vue'
 import type { NetworkEntry } from '@/types/network'
 import { postToContentScript } from '@/utils/postToContentScript'
 import type { BreakpointItem } from '@/types/inspector'
+import { getMediaBlob } from '@/settings/mediaStore'
 import { matchesBreakpoint, getMatchingEntryIds } from './useBreakpointMatching'
 import { parseUrl, deepClone } from '../utils'
+
+const FILE_ID_PREFIX = '__fileId:'
+
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function resolveFileIdsInRequestBody(body: string): Promise<string> {
+  try {
+    const parsed = JSON.parse(body)
+    if (!parsed?.__formData || !Array.isArray(parsed.entries)) return body
+
+    let changed = false
+    for (const entry of parsed.entries) {
+      if (entry.type === 'file' && typeof entry.value === 'string' && entry.value.startsWith(FILE_ID_PREFIX)) {
+        const fileId = entry.value.slice(FILE_ID_PREFIX.length)
+        const blob = await getMediaBlob(fileId)
+        if (blob) {
+          entry.value = await blobToDataUri(blob)
+          changed = true
+        }
+      }
+    }
+    return changed ? JSON.stringify(parsed) : body
+  } catch {
+    return body
+  }
+}
 
 // ============================================================================
 // Types
@@ -161,7 +195,7 @@ export function useBreakpointState(
   /**
    * Apply breakpoint - resume with modifications
    */
-  function applyBreakpoint(entryId: string) {
+  async function applyBreakpoint(entryId: string) {
     const pending = pendingBreakpoints.value.get(entryId)
     const draft = breakpointDrafts.value.get(entryId)
 
@@ -178,7 +212,9 @@ export function useBreakpointState(
       // Always include arrays - empty arrays mean "clear all"
       if (Array.isArray(draft.requestHeaders)) modifications.requestHeaders = draft.requestHeaders
       if (Array.isArray(draft.params)) modifications.params = draft.params
-      if (draft.requestBody !== undefined) modifications.requestBody = draft.requestBody
+      if (draft.requestBody !== undefined) {
+        modifications.requestBody = await resolveFileIdsInRequestBody(draft.requestBody)
+      }
     } else if (pending.trigger === 'response') {
       // Always include arrays - empty arrays mean "clear all"
       if (Array.isArray(draft.responseHeaders)) modifications.responseHeaders = draft.responseHeaders

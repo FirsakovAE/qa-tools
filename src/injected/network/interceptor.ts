@@ -477,7 +477,13 @@ async function deserializeBodyForRequest(
           }
 
           // 3. URL or file path — attempt fetch (works for http/https; file:// blocked by browsers)
+          // blob: and __fileId: must be resolved in DevTools before sending — use empty fallback
           if (rawValue) {
+            if (rawValue.startsWith('blob:') || rawValue.startsWith('__fileId:')) {
+              console.warn('[VueInspector] File reference could not be resolved. Use Browse to select a file or ensure the file is saved in Settings.')
+              fd.append(entry.key, new Blob([], { type: entry.fileType || 'application/octet-stream' }), entry.fileName || 'file')
+              continue
+            }
             const fileUri = normalizeFilePathToUri(rawValue)
             const fileName = rawValue.replace(/\\/g, '/').split('/').pop() || 'file'
             let blob: Blob

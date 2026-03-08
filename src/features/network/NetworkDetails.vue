@@ -754,7 +754,9 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                               @update:model-value="selectFileOption(index, String($event))"
                             >
                               <SelectTrigger class="h-7 text-xs font-mono flex-1">
-                                <SelectValue :placeholder="getFileDisplayLabel(fd)" />
+                                <SelectValue :placeholder="getFileDisplayLabel(fd)">
+                                  {{ getFileDisplayLabel(fd) }}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem
