@@ -232,7 +232,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               <!-- Element Column -->
               <div class="props-cell props-cell-element">
                 <Badge 
-                  :variant="row.elementInfo === 'Logic only' ? 'destructive' : 'secondary'"
+                  :variant="row.elementInfo === 'Logic only' ? 'destructive_text' : 'secondary'"
                   class="text-xs truncate max-w-full"
                   :title="row.elementInfo"
                 >
@@ -267,7 +267,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                       {{ row.isFavoriteFlag ? 'Remove favorite' : 'Add favorite' }}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem class="text-destructive" @click.stop="emit('ignoreByName', row)">
+                    <DropdownMenuItem class="text-destructive_text" @click.stop="emit('ignoreByName', row)">
                       <EyeOff class="h-4 w-4 mr-2" />
                       Ignore by name
                     </DropdownMenuItem>
@@ -285,7 +285,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               {{ row.isFavoriteFlag ? 'Remove favorite' : 'Add favorite' }}
             </ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem class="text-destructive" @click="emit('ignoreByName', row)">
+            <ContextMenuItem class="text-destructive_text" @click="emit('ignoreByName', row)">
               <EyeOff class="h-4 w-4 mr-2" />
               Ignore by name
             </ContextMenuItem>

@@ -396,7 +396,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  class="h-7 text-xs text-destructive hover:text-destructive" 
+                  class="h-7 text-xs text-destructive_text hover:text-destructive_text" 
                   :disabled="editableParams.length === 0"
                   @click="removeAllParams"
                 >
@@ -440,7 +440,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                       <Button
                         variant="ghost"
                         size="sm"
-                        class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                        class="h-6 w-6 p-0 text-destructive_text hover:text-destructive_text"
                         @click="removeParam(index)"
                       >
                         ×
@@ -484,7 +484,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    class="h-7 text-xs text-destructive hover:text-destructive" 
+                    class="h-7 text-xs text-destructive_text hover:text-destructive_text" 
                     :disabled="editableRequestHeaders.length === 0"
                     @click="removeAllRequestHeaders"
                   >
@@ -529,7 +529,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                         <Button
                           variant="ghost"
                           size="sm"
-                          class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                          class="h-6 w-6 p-0 text-destructive_text hover:text-destructive_text"
                           @click="removeRequestHeader(index)"
                         >
                           ×
@@ -694,7 +694,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                       <Button
                         variant="outline"
                         size="sm"
-                        class="h-7 text-xs text-destructive hover:text-destructive"
+                        class="h-7 text-xs text-destructive_text hover:text-destructive_text"
                         :disabled="editableFormData.length === 0"
                         @click="removeAllFormDataEntries"
                       >
@@ -786,7 +786,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                           <Button
                             variant="ghost"
                             size="sm"
-                            class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                            class="h-6 w-6 p-0 text-destructive_text hover:text-destructive_text"
                             @click="removeFormDataEntry(index)"
                           >
                             ×
@@ -875,7 +875,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
           <div v-if="entry.pending && !canEditResponse" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
             Waiting for response...
           </div>
-          <div v-else-if="entry.error && !canEditResponse" class="flex-1 flex items-center justify-center text-sm text-destructive">
+          <div v-else-if="entry.error && !canEditResponse" class="flex-1 flex items-center justify-center text-sm text-destructive_text">
             {{ entry.error }}
           </div>
           <div v-else-if="!entry.responseBody && !canEditResponse" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">

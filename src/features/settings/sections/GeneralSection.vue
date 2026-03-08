@@ -334,7 +334,7 @@ async function handleEditFileChange(event: Event, fileId: string) {
         <Slider
           :model-value="[customize.imageOpacity]"
           @update:model-value="setSlider(v => customize.imageOpacity = v, $event)"
-          :min="0" :max="1" :step="0.01"
+          :min="0" :max="0.5" :step="0.01"
         />
       </div>
 
@@ -461,7 +461,7 @@ async function handleEditFileChange(event: Event, fileId: string) {
           </Table>
         </div>
 
-        <ScrollArea class="max-h-[200px]">
+        <ScrollArea class="h-[205px]">
           <Table class="table-fixed">
             <TableBody>
               <ContextMenu v-for="file in (settings.savedFiles || [])" :key="file.id">
@@ -496,7 +496,7 @@ async function handleEditFileChange(event: Event, fileId: string) {
                               </label>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem class="text-destructive" @click.stop="removeSavedFile(file.id)">
+                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeSavedFile(file.id)">
                               <Trash class="h-4 w-4 mr-2" />
                               Delete
                             </DropdownMenuItem>
@@ -515,7 +515,7 @@ async function handleEditFileChange(event: Event, fileId: string) {
                     </label>
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem class="text-destructive" @click="removeSavedFile(file.id)">
+                  <ContextMenuItem class="text-destructive_text" @click="removeSavedFile(file.id)">
                     <Trash class="h-4 w-4 mr-2" />
                     Delete
                   </ContextMenuItem>

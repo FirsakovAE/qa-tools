@@ -217,7 +217,7 @@ function formatMockUrl(mock: MockRule): string {
                               {{ row.active ? 'Disable' : 'Enable' }}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem class="text-destructive" @click.stop="removeBreakpoint(row.id)">
+                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeBreakpoint(row.id)">
                               <Trash class="h-4 w-4 mr-2" />
                               Delete
                             </DropdownMenuItem>
@@ -237,7 +237,7 @@ function formatMockUrl(mock: MockRule): string {
                     {{ row.active ? 'Disable' : 'Enable' }}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem class="text-destructive" @click="removeBreakpoint(row.id)">
+                  <ContextMenuItem class="text-destructive_text" @click="removeBreakpoint(row.id)">
                     <Trash class="h-4 w-4 mr-2" />
                     Delete
                   </ContextMenuItem>
@@ -339,7 +339,7 @@ function formatMockUrl(mock: MockRule): string {
                               {{ row.active ? 'Disable' : 'Enable' }}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem class="text-destructive" @click.stop="removeMock(row.id)">
+                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeMock(row.id)">
                               <Trash class="h-4 w-4 mr-2" />
                               Delete
                             </DropdownMenuItem>
@@ -359,7 +359,7 @@ function formatMockUrl(mock: MockRule): string {
                     {{ row.active ? 'Disable' : 'Enable' }}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem class="text-destructive" @click="removeMock(row.id)">
+                  <ContextMenuItem class="text-destructive_text" @click="removeMock(row.id)">
                     <Trash class="h-4 w-4 mr-2" />
                     Delete
                   </ContextMenuItem>

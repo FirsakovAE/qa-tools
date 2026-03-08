@@ -233,7 +233,7 @@ function formatTrigger(trigger: string): string {
 
           <!-- Error -->
           <template v-if="releaseInfo.error">
-            <div class="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
+            <div class="flex items-start gap-2 p-3 rounded-lg bg-destructive_text/10 text-destructive_text">
               <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
               <p class="text-sm">{{ releaseInfo.error }}</p>
             </div>

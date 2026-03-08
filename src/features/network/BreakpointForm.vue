@@ -227,7 +227,7 @@ const sections: Array<{ id: SectionId; label: string }> = [
             </div>
             
             <div class="space-y-1.5">
-              <Label for="host" class="text-xs">Host <span class="text-destructive">*</span></Label>
+              <Label for="host" class="text-xs">Host <span class="text-destructive_text">*</span></Label>
               <Input
                 id="host"
                 v-model="host"

@@ -501,7 +501,7 @@ onUnmounted(() => {
       <!-- Error overlay -->
       <div
         v-if="error"
-        class="absolute inset-0 z-10 bg-background/80 flex items-center justify-center text-destructive text-sm"
+        class="absolute inset-0 z-10 bg-background/80 flex items-center justify-center text-destructive_text text-sm"
       >
         {{ error }}
       </div>

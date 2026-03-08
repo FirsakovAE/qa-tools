@@ -139,7 +139,7 @@ function removeFromFavorites(id: string) {
         <Button size="sm" @click="addToBlacklist" class="h-8">Add</Button>
       </div>
 
-      <p v-if="blacklistError" class="text-sm text-destructive">{{ blacklistError }}</p>
+      <p v-if="blacklistError" class="text-sm text-destructive_text">{{ blacklistError }}</p>
 
       <div class="flex flex-col border rounded-lg overflow-hidden">
         <!-- Fixed Header -->
@@ -191,7 +191,7 @@ function removeFromFavorites(id: string) {
                             {{ row.active ? 'Allow' : 'Block' }}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem class="text-destructive" @click.stop="removeFromBlacklist(row.name)">
+                          <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromBlacklist(row.name)">
                             <Trash class="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
@@ -206,7 +206,7 @@ function removeFromFavorites(id: string) {
                     {{ row.active ? 'Allow' : 'Block' }}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem class="text-destructive" @click="removeFromBlacklist(row.name)">
+                  <ContextMenuItem class="text-destructive_text" @click="removeFromBlacklist(row.name)">
                     <Trash class="h-4 w-4 mr-2" />
                     Delete
                   </ContextMenuItem>
@@ -274,7 +274,7 @@ function removeFromFavorites(id: string) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" class="w-44">
-                          <DropdownMenuItem class="text-destructive" @click.stop="removeFromFavorites(fav.id)">
+                          <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
                             <Trash class="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
@@ -284,7 +284,7 @@ function removeFromFavorites(id: string) {
                   </TableRow>
                 </ContextMenuTrigger>
                 <ContextMenuContent class="w-44">
-                  <ContextMenuItem class="text-destructive" @click="removeFromFavorites(fav.id)">
+                  <ContextMenuItem class="text-destructive_text" @click="removeFromFavorites(fav.id)">
                     <Trash class="h-4 w-4 mr-2" />
                     Delete
                   </ContextMenuItem>

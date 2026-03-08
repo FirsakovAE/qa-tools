@@ -473,7 +473,7 @@ onMounted(async () => {
     </div>
 
     <!-- Error -->
-    <div v-else-if="!settings" class="flex-1 flex items-center justify-center text-destructive">
+    <div v-else-if="!settings" class="flex-1 flex items-center justify-center text-destructive_text">
       Failed to load settings
     </div>
 

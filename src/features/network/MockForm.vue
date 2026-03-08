@@ -180,7 +180,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
             </div>
             
             <div class="space-y-1.5">
-              <Label for="host" class="text-xs">Host <span class="text-destructive">*</span></Label>
+              <Label for="host" class="text-xs">Host <span class="text-destructive_text">*</span></Label>
               <Input
                 id="host"
                 v-model="host"
@@ -305,7 +305,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  class="h-7 text-xs text-destructive hover:text-destructive" 
+                  class="h-7 text-xs text-destructive_text hover:text-destructive_text" 
                   :disabled="responseHeaders.length === 0"
                   @click="removeAllHeaders"
                 >
@@ -348,7 +348,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
                     <Button
                       variant="ghost"
                       size="sm"
-                      class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                      class="h-6 w-6 p-0 text-destructive_text hover:text-destructive_text"
                       @click="removeHeader(index)"
                     >
                       ×

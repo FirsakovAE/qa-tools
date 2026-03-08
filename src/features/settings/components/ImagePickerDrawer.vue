@@ -158,7 +158,7 @@ function formatFileSize(bytes: number): string {
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent class="w-44">
-                  <ContextMenuItem class="text-destructive" @click="emit('remove-file', file.id)">
+                  <ContextMenuItem class="text-destructive_text" @click="emit('remove-file', file.id)">
                     <Trash2Icon class="h-4 w-4 mr-2" />
                     Delete
                   </ContextMenuItem>

@@ -57,13 +57,13 @@ const emit = defineEmits<{
 }>()
 
 // Method badge variant based on HTTP method
-function getMethodVariant(method: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getMethodVariant(method: string): 'default' | 'secondary' | 'destructive_text' | 'outline' {
   switch (method.toUpperCase()) {
     case 'GET': return 'secondary'
     case 'POST': return 'default'
     case 'PUT':
     case 'PATCH': return 'outline'
-    case 'DELETE': return 'destructive'
+    case 'DELETE': return 'destructive_text'
     default: return 'secondary'
   }
 }
@@ -186,7 +186,7 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                   </div>
                   <div
                     v-if="entry.error"
-                    class="text-xs text-destructive truncate"
+                    class="text-xs text-destructive_text truncate"
                     :title="entry.error"
                   >
                     {{ entry.error }}
@@ -228,7 +228,7 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                           <Power class="h-4 w-4 mr-2" />
                           {{ getMatchingBreakpointActive(entry) ? 'Disable' : 'Enable' }} Breakpoint
                         </DropdownMenuItem>
-                        <DropdownMenuItem class="text-destructive" @click.stop="emit('deleteBreakpoint', entry)">
+                        <DropdownMenuItem class="text-destructive_text" @click.stop="emit('deleteBreakpoint', entry)">
                           <Trash class="h-4 w-4 mr-2" />
                           Delete Breakpoint
                         </DropdownMenuItem>
@@ -239,7 +239,7 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                           <Power class="h-4 w-4 mr-2" />
                           {{ getMatchingMockActive(entry) ? 'Disable' : 'Enable' }} Mock
                         </DropdownMenuItem>
-                        <DropdownMenuItem class="text-destructive" @click.stop="emit('deleteMock', entry)">
+                        <DropdownMenuItem class="text-destructive_text" @click.stop="emit('deleteMock', entry)">
                           <Trash class="h-4 w-4 mr-2" />
                           Delete Mock
                         </DropdownMenuItem>
@@ -271,7 +271,7 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                   <Power class="h-4 w-4 mr-2" />
                   {{ getMatchingBreakpointActive(entry) ? 'Disable' : 'Enable' }} Breakpoint
                 </ContextMenuItem>
-                <ContextMenuItem class="text-destructive" @click="emit('deleteBreakpoint', entry)">
+                <ContextMenuItem class="text-destructive_text" @click="emit('deleteBreakpoint', entry)">
                   <Trash class="h-4 w-4 mr-2" />
                   Delete Breakpoint
                 </ContextMenuItem>
@@ -282,7 +282,7 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                   <Power class="h-4 w-4 mr-2" />
                   {{ getMatchingMockActive(entry) ? 'Disable' : 'Enable' }} Mock
                 </ContextMenuItem>
-                <ContextMenuItem class="text-destructive" @click="emit('deleteMock', entry)">
+                <ContextMenuItem class="text-destructive_text" @click="emit('deleteMock', entry)">
                   <Trash class="h-4 w-4 mr-2" />
                   Delete Mock
                 </ContextMenuItem>
