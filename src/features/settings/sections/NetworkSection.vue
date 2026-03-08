@@ -133,7 +133,17 @@ function formatMockUrl(mock: MockRule): string {
   return url
 }
 
+const breakpointTableHeight = computed(() => {
+  const rowCount = Math.max(breakpointRows.value.length, 1)
+  return Math.min(rowCount * 41, 205)
+})
+const breakpointNeedsScroll = computed(() => breakpointRows.value.length > 4)
 
+const mockTableHeight = computed(() => {
+  const rowCount = Math.max(mockRows.value.length, 1)
+  return Math.min(rowCount * 41, 205)
+})
+const mockNeedsScroll = computed(() => mockRows.value.length > 4)
 </script>
 
 <template>
@@ -177,81 +187,155 @@ function formatMockUrl(mock: MockRule): string {
         </div>
 
         <!-- Scrollable Body -->
-        <ScrollArea class="max-h-[200px]">
-          <Table class="table-fixed">
-            <TableBody>
-              <ContextMenu v-for="row in breakpointRows" :key="row.id">
-                <ContextMenuTrigger as-child>
-                  <TableRow
-                    class="h-[41px] cursor-pointer transition-colors"
-                    :class="{ 'bg-muted': selectedItemId === row.id }"
-                    @click="emit('select', { type: 'breakpoint', id: row.id })"
-                  >
-                    <TableCell class="overflow-hidden !py-2">
-                      <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatBreakpointUrl(row)">
-                        {{ row.description || formatBreakpointUrl(row) }}
-                      </div>
-                    </TableCell>
+        <div class="min-h-0 max-h-[205px] overflow-hidden">
+          <template v-if="breakpointNeedsScroll">
+            <ScrollArea :style="{ height: `${breakpointTableHeight}px` }">
+              <Table class="table-fixed">
+                <TableBody>
+                  <ContextMenu v-for="row in breakpointRows" :key="row.id">
+                    <ContextMenuTrigger as-child>
+                      <TableRow
+                        class="h-[41px] cursor-pointer transition-colors"
+                        :class="{ 'bg-muted': selectedItemId === row.id }"
+                        @click="emit('select', { type: 'breakpoint', id: row.id })"
+                      >
+                        <TableCell class="overflow-hidden !py-2">
+                          <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatBreakpointUrl(row)">
+                            {{ row.description || formatBreakpointUrl(row) }}
+                          </div>
+                        </TableCell>
+                        <TableCell class="w-[70px] text-center !py-2">
+                          <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
+                            {{ row.active ? 'Active' : 'Off' }}
+                          </div>
+                        </TableCell>
+                        <TableCell class="w-[48px] text-center p-0">
+                          <div class="flex justify-center items-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
+                                  <MoreHorizontal class="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" class="w-44">
+                                <DropdownMenuItem @click.stop="emit('edit-breakpoint', row.id)">
+                                  <Pencil class="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem @click.stop="toggleBreakpoint(row.id, row.active)">
+                                  <Power class="h-4 w-4 mr-2" />
+                                  {{ row.active ? 'Disable' : 'Enable' }}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeBreakpoint(row.id)">
+                                  <Trash class="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent class="w-44">
+                      <ContextMenuItem @click="emit('edit-breakpoint', row.id)">
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Edit
+                      </ContextMenuItem>
+                      <ContextMenuItem @click="toggleBreakpoint(row.id, row.active)">
+                        <Power class="h-4 w-4 mr-2" />
+                        {{ row.active ? 'Disable' : 'Enable' }}
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem class="text-destructive_text" @click="removeBreakpoint(row.id)">
+                        <Trash class="h-4 w-4 mr-2" />
+                        Delete
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
 
-                    <TableCell class="w-[70px] text-center !py-2">
-                      <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
-                        {{ row.active ? 'Active' : 'Off' }}
-                      </div>
-                    </TableCell>
-
-                    <TableCell class="w-[48px] text-center p-0">
-                      <div class="flex justify-center items-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger as-child>
-                            <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
-                              <MoreHorizontal class="h-3.5 w-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" class="w-44">
-                            <DropdownMenuItem @click.stop="emit('edit-breakpoint', row.id)">
-                              <Pencil class="h-4 w-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem @click.stop="toggleBreakpoint(row.id, row.active)">
-                              <Power class="h-4 w-4 mr-2" />
-                              {{ row.active ? 'Disable' : 'Enable' }}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeBreakpoint(row.id)">
-                              <Trash class="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                  <TableRow v-if="!breakpointRows.length">
+                    <TableCell colspan="3" class="text-center text-muted-foreground py-8">
+                      No breakpoints configured. Set breakpoints from the Network tab.
                     </TableCell>
                   </TableRow>
-                </ContextMenuTrigger>
-                <ContextMenuContent class="w-44">
-                  <ContextMenuItem @click="emit('edit-breakpoint', row.id)">
-                    <Pencil class="h-4 w-4 mr-2" />
-                    Edit
-                  </ContextMenuItem>
-                  <ContextMenuItem @click="toggleBreakpoint(row.id, row.active)">
-                    <Power class="h-4 w-4 mr-2" />
-                    {{ row.active ? 'Disable' : 'Enable' }}
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem class="text-destructive_text" @click="removeBreakpoint(row.id)">
-                    <Trash class="h-4 w-4 mr-2" />
-                    Delete
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-
-              <TableRow v-if="!breakpointRows.length">
-                <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                  No breakpoints configured. Set breakpoints from the Network tab.
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </ScrollArea>
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </template>
+          <template v-else>
+            <Table class="table-fixed">
+              <TableBody>
+                <ContextMenu v-for="row in breakpointRows" :key="row.id">
+                  <ContextMenuTrigger as-child>
+                    <TableRow
+                      class="h-[41px] cursor-pointer transition-colors"
+                      :class="{ 'bg-muted': selectedItemId === row.id }"
+                      @click="emit('select', { type: 'breakpoint', id: row.id })"
+                    >
+                      <TableCell class="overflow-hidden !py-2">
+                        <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatBreakpointUrl(row)">
+                          {{ row.description || formatBreakpointUrl(row) }}
+                        </div>
+                      </TableCell>
+                      <TableCell class="w-[70px] text-center !py-2">
+                        <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
+                          {{ row.active ? 'Active' : 'Off' }}
+                        </div>
+                      </TableCell>
+                      <TableCell class="w-[48px] text-center p-0">
+                        <div class="flex justify-center items-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                              <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
+                                <MoreHorizontal class="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" class="w-44">
+                              <DropdownMenuItem @click.stop="emit('edit-breakpoint', row.id)">
+                                <Pencil class="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem @click.stop="toggleBreakpoint(row.id, row.active)">
+                                <Power class="h-4 w-4 mr-2" />
+                                {{ row.active ? 'Disable' : 'Enable' }}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeBreakpoint(row.id)">
+                                <Trash class="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent class="w-44">
+                    <ContextMenuItem @click="emit('edit-breakpoint', row.id)">
+                      <Pencil class="h-4 w-4 mr-2" />
+                      Edit
+                    </ContextMenuItem>
+                    <ContextMenuItem @click="toggleBreakpoint(row.id, row.active)">
+                      <Power class="h-4 w-4 mr-2" />
+                      {{ row.active ? 'Disable' : 'Enable' }}
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem class="text-destructive_text" @click="removeBreakpoint(row.id)">
+                      <Trash class="h-4 w-4 mr-2" />
+                      Delete
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+                <TableRow v-if="!breakpointRows.length">
+                  <TableCell colspan="3" class="text-center text-muted-foreground py-8">
+                    No breakpoints configured. Set breakpoints from the Network tab.
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -279,101 +363,191 @@ function formatMockUrl(mock: MockRule): string {
         </div>
 
         <!-- Scrollable Body -->
-        <ScrollArea class="max-h-[200px]">
-          <Table class="table-fixed">
-            <TableBody>
-              <ContextMenu v-for="row in mockRows" :key="row.id">
-                <ContextMenuTrigger as-child>
-                  <TableRow
-                    class="h-[41px] cursor-pointer transition-colors"
-                    :class="{ 'bg-muted': selectedItemId === row.id }"
-                    @click="emit('select', { type: 'mock', id: row.id })"
-                  >
-                    <TableCell class="overflow-hidden !py-2">
-                      <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatMockUrl(row)">
-                        {{ row.description || formatMockUrl(row) }}
-                      </div>
-                    </TableCell>
-
-                    <TableCell class="w-[60px] text-center !py-2">
-                      <div
-                        :class="[
-                          !row.active ? 'opacity-50' : '',
-                          'text-xs font-mono',
-                          row.status >= 200 && row.status < 300 ? 'text-green-500' : '',
-                          row.status >= 400 && row.status < 500 ? 'text-orange-500' : '',
-                          row.status >= 500 ? 'text-red-500' : ''
-                        ]"
+        <div class="min-h-0 max-h-[205px] overflow-hidden">
+          <template v-if="mockNeedsScroll">
+            <ScrollArea :style="{ height: `${mockTableHeight}px` }">
+              <Table class="table-fixed">
+                <TableBody>
+                  <ContextMenu v-for="row in mockRows" :key="row.id">
+                    <ContextMenuTrigger as-child>
+                      <TableRow
+                        class="h-[41px] cursor-pointer transition-colors"
+                        :class="{ 'bg-muted': selectedItemId === row.id }"
+                        @click="emit('select', { type: 'mock', id: row.id })"
                       >
-                        {{ row.status }}
-                      </div>
-                    </TableCell>
+                        <TableCell class="overflow-hidden !py-2">
+                          <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatMockUrl(row)">
+                            {{ row.description || formatMockUrl(row) }}
+                          </div>
+                        </TableCell>
+                        <TableCell class="w-[60px] text-center !py-2">
+                          <div
+                            :class="[
+                              !row.active ? 'opacity-50' : '',
+                              'text-xs font-mono',
+                              row.status >= 200 && row.status < 300 ? 'text-green-500' : '',
+                              row.status >= 400 && row.status < 500 ? 'text-orange-500' : '',
+                              row.status >= 500 ? 'text-red-500' : ''
+                            ]"
+                          >
+                            {{ row.status }}
+                          </div>
+                        </TableCell>
+                        <TableCell class="w-[60px] text-center !py-2">
+                          <div :class="!row.active ? 'opacity-50' : ''" class="text-xs text-muted-foreground">
+                            {{ row.delay ? `${row.delay}ms` : '-' }}
+                          </div>
+                        </TableCell>
+                        <TableCell class="w-[60px] text-center !py-2">
+                          <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
+                            {{ row.active ? 'Active' : 'Off' }}
+                          </div>
+                        </TableCell>
+                        <TableCell class="w-[48px] text-center p-0">
+                          <div class="flex justify-center items-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
+                                  <MoreHorizontal class="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" class="w-44">
+                                <DropdownMenuItem @click.stop="emit('edit-mock', row.id)">
+                                  <Pencil class="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
+                                  <Power class="h-4 w-4 mr-2" />
+                                  {{ row.active ? 'Disable' : 'Enable' }}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeMock(row.id)">
+                                  <Trash class="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent class="w-44">
+                      <ContextMenuItem @click="emit('edit-mock', row.id)">
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Edit
+                      </ContextMenuItem>
+                      <ContextMenuItem @click="toggleMock(row.id, row.active)">
+                        <Power class="h-4 w-4 mr-2" />
+                        {{ row.active ? 'Disable' : 'Enable' }}
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem class="text-destructive_text" @click="removeMock(row.id)">
+                        <Trash class="h-4 w-4 mr-2" />
+                        Delete
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
 
-                    <TableCell class="w-[60px] text-center !py-2">
-                      <div :class="!row.active ? 'opacity-50' : ''" class="text-xs text-muted-foreground">
-                        {{ row.delay ? `${row.delay}ms` : '-' }}
-                      </div>
-                    </TableCell>
-
-                    <TableCell class="w-[60px] text-center !py-2">
-                      <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
-                        {{ row.active ? 'Active' : 'Off' }}
-                      </div>
-                    </TableCell>
-
-                    <TableCell class="w-[48px] text-center p-0">
-                      <div class="flex justify-center items-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger as-child>
-                            <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
-                              <MoreHorizontal class="h-3.5 w-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" class="w-44">
-                            <DropdownMenuItem @click.stop="emit('edit-mock', row.id)">
-                              <Pencil class="h-4 w-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
-                              <Power class="h-4 w-4 mr-2" />
-                              {{ row.active ? 'Disable' : 'Enable' }}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeMock(row.id)">
-                              <Trash class="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                  <TableRow v-if="!mockRows.length">
+                    <TableCell colspan="5" class="text-center text-muted-foreground py-8">
+                      No mocks configured. Click "Mock Response" on any request in the Network tab.
                     </TableCell>
                   </TableRow>
-                </ContextMenuTrigger>
-                <ContextMenuContent class="w-44">
-                  <ContextMenuItem @click="emit('edit-mock', row.id)">
-                    <Pencil class="h-4 w-4 mr-2" />
-                    Edit
-                  </ContextMenuItem>
-                  <ContextMenuItem @click="toggleMock(row.id, row.active)">
-                    <Power class="h-4 w-4 mr-2" />
-                    {{ row.active ? 'Disable' : 'Enable' }}
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem class="text-destructive_text" @click="removeMock(row.id)">
-                    <Trash class="h-4 w-4 mr-2" />
-                    Delete
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-
-              <TableRow v-if="!mockRows.length">
-                <TableCell colspan="5" class="text-center text-muted-foreground py-8">
-                  No mocks configured. Click "Mock Response" on any request in the Network tab.
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </ScrollArea>
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </template>
+          <template v-else>
+            <Table class="table-fixed">
+              <TableBody>
+                <ContextMenu v-for="row in mockRows" :key="row.id">
+                  <ContextMenuTrigger as-child>
+                    <TableRow
+                      class="h-[41px] cursor-pointer transition-colors"
+                      :class="{ 'bg-muted': selectedItemId === row.id }"
+                      @click="emit('select', { type: 'mock', id: row.id })"
+                    >
+                      <TableCell class="overflow-hidden !py-2">
+                        <div :class="!row.active ? 'opacity-50' : ''" class="text-sm truncate" :title="row.description || formatMockUrl(row)">
+                          {{ row.description || formatMockUrl(row) }}
+                        </div>
+                      </TableCell>
+                      <TableCell class="w-[60px] text-center !py-2">
+                        <div
+                          :class="[
+                            !row.active ? 'opacity-50' : '',
+                            'text-xs font-mono',
+                            row.status >= 200 && row.status < 300 ? 'text-green-500' : '',
+                            row.status >= 400 && row.status < 500 ? 'text-orange-500' : '',
+                            row.status >= 500 ? 'text-red-500' : ''
+                          ]"
+                        >
+                          {{ row.status }}
+                        </div>
+                      </TableCell>
+                      <TableCell class="w-[60px] text-center !py-2">
+                        <div :class="!row.active ? 'opacity-50' : ''" class="text-xs text-muted-foreground">
+                          {{ row.delay ? `${row.delay}ms` : '-' }}
+                        </div>
+                      </TableCell>
+                      <TableCell class="w-[60px] text-center !py-2">
+                        <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
+                          {{ row.active ? 'Active' : 'Off' }}
+                        </div>
+                      </TableCell>
+                      <TableCell class="w-[48px] text-center p-0">
+                        <div class="flex justify-center items-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                              <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
+                                <MoreHorizontal class="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" class="w-44">
+                              <DropdownMenuItem @click.stop="emit('edit-mock', row.id)">
+                                <Pencil class="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
+                                <Power class="h-4 w-4 mr-2" />
+                                {{ row.active ? 'Disable' : 'Enable' }}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeMock(row.id)">
+                                <Trash class="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent class="w-44">
+                    <ContextMenuItem @click="emit('edit-mock', row.id)">
+                      <Pencil class="h-4 w-4 mr-2" />
+                      Edit
+                    </ContextMenuItem>
+                    <ContextMenuItem @click="toggleMock(row.id, row.active)">
+                      <Power class="h-4 w-4 mr-2" />
+                      {{ row.active ? 'Disable' : 'Enable' }}
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem class="text-destructive_text" @click="removeMock(row.id)">
+                      <Trash class="h-4 w-4 mr-2" />
+                      Delete
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+                <TableRow v-if="!mockRows.length">
+                  <TableCell colspan="5" class="text-center text-muted-foreground py-8">
+                    No mocks configured. Click "Mock Response" on any request in the Network tab.
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </template>
+        </div>
       </div>
     </div>
 

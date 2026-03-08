@@ -215,6 +215,13 @@ async function handleEditFileChange(event: Event, fileId: string) {
   }
   input.value = ''
 }
+
+const savedFilesTableHeight = computed(() => {
+  const rowCount = (props.settings.savedFiles?.length ?? 0) + 1
+  return Math.min(rowCount * 41, 205)
+})
+
+const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length ?? 0) > 4)
 </script>
 
 <template>
@@ -461,9 +468,83 @@ async function handleEditFileChange(event: Event, fileId: string) {
           </Table>
         </div>
 
-        <ScrollArea class="h-[205px]">
-          <Table class="table-fixed">
-            <TableBody>
+        <div class="min-h-0 max-h-[205px] overflow-hidden">
+          <template v-if="savedFilesNeedsScroll">
+            <ScrollArea :style="{ height: `${savedFilesTableHeight}px` }">
+              <Table class="table-fixed">
+                <TableBody>
+                  <ContextMenu v-for="file in (settings.savedFiles || [])" :key="file.id">
+                    <ContextMenuTrigger as-child>
+                      <TableRow
+                        class="h-[41px] cursor-pointer transition-colors"
+                        :class="{ 'bg-muted': selectedItemId === file.id }"
+                        @click="emit('select', { type: 'saved-file', id: file.id })"
+                      >
+                        <TableCell class="overflow-hidden !py-2">
+                          <div class="text-sm truncate" :title="file.name">{{ file.name }}</div>
+                        </TableCell>
+                        <TableCell class="w-[80px] text-center !py-2">
+                          <div class="text-xs text-muted-foreground">{{ formatFileSize(file.size) }}</div>
+                        </TableCell>
+                        <TableCell class="w-[48px] text-center p-0">
+                          <div class="flex justify-center items-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button variant="ghost" class="h-6 w-6 p-0" @click.stop>
+                                  <MoreHorizontal class="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" class="w-44">
+                                <DropdownMenuItem as-child>
+                                  <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground w-full">
+                                    <Pencil class="h-4 w-4 mr-2" />
+                                    Edit
+                                    <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id)" />
+                                  </label>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeSavedFile(file.id)">
+                                  <Trash class="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                    </TableRow>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent class="w-44">
+                    <ContextMenuItem as-child>
+                      <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-secondary hover:text-secondary-foreground w-full">
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Edit
+                        <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id)" />
+                      </label>
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem class="text-destructive_text" @click="removeSavedFile(file.id)">
+                      <Trash class="h-4 w-4 mr-2" />
+                      Delete
+                    </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+
+                  <TableRow class="h-[41px] hover:bg-muted/50 transition-colors">
+                    <TableCell colspan="3" class="!p-0">
+                      <label class="flex items-center justify-center gap-1.5 cursor-pointer text-sm text-primary hover:text-primary/80 transition-colors w-full h-[41px]">
+                        <Plus class="h-3.5 w-3.5" />
+                        Add new file
+                        <input type="file" multiple class="sr-only" @change="handleAddNewFile" />
+                      </label>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </template>
+          <template v-else>
+            <Table class="table-fixed">
+              <TableBody>
               <ContextMenu v-for="file in (settings.savedFiles || [])" :key="file.id">
                 <ContextMenuTrigger as-child>
                   <TableRow
@@ -474,11 +555,9 @@ async function handleEditFileChange(event: Event, fileId: string) {
                     <TableCell class="overflow-hidden !py-2">
                       <div class="text-sm truncate" :title="file.name">{{ file.name }}</div>
                     </TableCell>
-
                     <TableCell class="w-[80px] text-center !py-2">
                       <div class="text-xs text-muted-foreground">{{ formatFileSize(file.size) }}</div>
                     </TableCell>
-
                     <TableCell class="w-[48px] text-center p-0">
                       <div class="flex justify-center items-center">
                         <DropdownMenu>
@@ -521,7 +600,6 @@ async function handleEditFileChange(event: Event, fileId: string) {
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
-
               <TableRow class="h-[41px] hover:bg-muted/50 transition-colors">
                 <TableCell colspan="3" class="!p-0">
                   <label class="flex items-center justify-center gap-1.5 cursor-pointer text-sm text-primary hover:text-primary/80 transition-colors w-full h-[41px]">
@@ -531,9 +609,10 @@ async function handleEditFileChange(event: Event, fileId: string) {
                   </label>
                 </TableCell>
               </TableRow>
-            </TableBody>
-          </Table>
-        </ScrollArea>
+              </TableBody>
+            </Table>
+          </template>
+        </div>
       </div>
     </div>
 
