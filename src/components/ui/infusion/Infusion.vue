@@ -7,6 +7,9 @@ interface Props {
   opacityDark?: number;
   zIndex?: number;
   blur?: number;
+  positionX?: number;
+  positionY?: number;
+  scale?: number;
   noiseIntensity?: number;
   noiseScale?: number;
   noiseOpacity?: number;
@@ -21,6 +24,9 @@ const props = withDefaults(defineProps<Props>(), {
   opacityDark: 0.3,
   zIndex: 100,
   blur: 64,
+  positionX: 50,
+  positionY: 50,
+  scale: 100,
   noiseIntensity: 0.5,
   noiseScale: 1,
   noiseOpacity: 0.05,
@@ -34,6 +40,9 @@ const imageStyle = computed(() => ({
   '--infusion-opacity-dark': props.opacityDark,
   '--infusion-z-index': props.zIndex,
   '--infusion-blur': `${props.blur}px`,
+  '--infusion-position-x': `${props.positionX}%`,
+  '--infusion-position-y': `${props.positionY}%`,
+  '--infusion-scale': (props.scale / 100) * 1.1,
   '--infusion-noise-intensity': props.noiseIntensity,
   '--infusion-noise-scale': props.noiseScale,
   '--infusion-noise-opacity': props.noiseOpacity,
@@ -80,7 +89,14 @@ const containerClass = computed(() => [
     : 'fixed w-screen h-screen',
 ]);
 
-const mediaClass = 'w-full h-full object-cover scale-110 opacity-(--infusion-opacity) dark:opacity-(--infusion-opacity-dark)';
+const mediaClass = 'w-full h-full object-cover opacity-(--infusion-opacity) dark:opacity-(--infusion-opacity-dark)';
+
+const mediaStyle = computed(() => ({
+  objectPosition: `var(--infusion-position-x) var(--infusion-position-y)`,
+  transformOrigin: `var(--infusion-position-x) var(--infusion-position-y)`,
+  transform: `scale(var(--infusion-scale))`,
+}));
+
 const noiseClass = 'absolute top-0 left-0 w-full h-full bg-repeat mix-blend-overlay';
 </script>
 
@@ -94,6 +110,7 @@ const noiseClass = 'absolute top-0 left-0 w-full h-full bg-repeat mix-blend-over
       :class="mediaClass"
       :src="props.src"
       :style="{
+        ...mediaStyle,
         filter: `blur(var(--infusion-blur))`,
       }"
       alt=""
@@ -103,6 +120,7 @@ const noiseClass = 'absolute top-0 left-0 w-full h-full bg-repeat mix-blend-over
       :class="mediaClass"
       :src="props.src"
       :style="{
+        ...mediaStyle,
         filter: `blur(var(--infusion-blur))`,
       }"
       autoplay

@@ -136,6 +136,25 @@ export interface GlobalSearchSettings {
 
 export type DisplayMode = 'overlay' | 'devtools'
 
+export type ImageSourceType = 'file' | 'link'
+
+export interface CustomizeSettings {
+    image: {
+        sourceType: ImageSourceType
+        url: string
+        savedFileId: string
+        fileName: string
+    }
+    positionX: number
+    positionY: number
+    scale: number
+    imageOpacityLight: number
+    imageOpacityDark: number
+    blur: number
+    noiseIntensity: number
+    noiseOpacity: number
+}
+
 export interface SavedFile {
     id: string
     name: string
@@ -168,4 +187,5 @@ export interface BaseInspectorSettings {
     data?: { maxComponents?: number; preserveState?: boolean }
     savedFiles: SavedFile[]
     autoSaveFiles: boolean
+    customize: CustomizeSettings
 }

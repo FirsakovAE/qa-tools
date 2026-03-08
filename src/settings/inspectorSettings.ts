@@ -1,7 +1,7 @@
-import type { BaseInspectorSettings, FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, SavedFile } from '@/types/inspector'
+import type { BaseInspectorSettings, FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, SavedFile, CustomizeSettings, ImageSourceType } from '@/types/inspector'
 
 export type InspectorSettings = BaseInspectorSettings
-export type { FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, SavedFile }
+export type { FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, SavedFile, CustomizeSettings, ImageSourceType }
 
 /** Default Network search settings */
 const defaultNetworkSearchSettings: NetworkSearchSettings = {
@@ -49,4 +49,17 @@ export const defaultInspectorSettings: InspectorSettings = {
     data: { maxComponents: 1000, preserveState: true },
     savedFiles: [],
     autoSaveFiles: false,
+    customize: {
+        image: { sourceType: 'file', url: '', savedFileId: '', fileName: '' },
+        positionX: 22,
+        positionY: 30,
+        scale: 100,
+        imageOpacityLight: 0.2,
+        imageOpacityDark: 0.3,
+        blur: 34,
+        noiseIntensity: 0.5,
+        noiseOpacity: 0.05,
+    },
 }
+
+export const defaultCustomizeSettings: CustomizeSettings = defaultInspectorSettings.customize

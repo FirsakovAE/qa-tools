@@ -4,11 +4,34 @@ import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
 
 const SETTINGS_STORAGE_KEY = 'inspector-settings'
+const STANDALONE_STORAGE_KEY = '__vue_inspector_storage__'
 
 // Реактивное состояние
 const state = reactive<InspectorSettings>(structuredClone(defaultInspectorSettings))
 let isLoaded = false
 let saveTimeout: number | null = null
+
+/**
+ * Synchronous preload from sessionStorage (standalone mode).
+ * Populates `state` immediately so the first render already has real settings.
+ */
+function trySyncPreload(): void {
+    try {
+        const raw = sessionStorage.getItem(STANDALONE_STORAGE_KEY)
+        if (!raw) return
+        const data = JSON.parse(raw)
+        const saved = data[SETTINGS_STORAGE_KEY]
+        if (saved && typeof saved === 'object') {
+            const merged = mergeSettings(defaultInspectorSettings, saved)
+            Object.assign(state, merged)
+            isLoaded = true
+        }
+    } catch { /* sync preload failed — async path will handle it */ }
+}
+
+trySyncPreload()
+
+export { state as inspectorState }
 
 function isStandaloneMode(): boolean {
     const adapter = getRuntimeAdapter()
@@ -145,10 +168,29 @@ function migrateSearchSettings(saved: any): void {
     delete saved.version
 }
 
+function migrateCustomizeImage(settings: any) {
+    const img = settings.customize?.image
+    if (!img) return
+    if (img.sourceType === 'file' && img.url && !img.savedFileId) {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        if (!settings.savedFiles) settings.savedFiles = []
+        settings.savedFiles.push({
+            id,
+            name: img.fileName || 'Imported image',
+            size: img.url.length,
+            mimeType: 'image/png',
+            dataUri: img.url,
+        })
+        img.savedFileId = id
+        img.url = ''
+    }
+}
+
 // Мердж настроек
 function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSettings>) {
     migrateSearchSettings(saved)
     migrateFavoriteIds(saved)
+    migrateCustomizeImage(saved)
 
     const result = structuredClone(defaults)
 

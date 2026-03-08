@@ -394,7 +394,7 @@ async function handleReset() {
 watch(() => props.scrollToAnchor, (anchor) => {
   if (!anchor) return
   // Switch to 'network' section first, then scroll after render
-  activeSection.value = 'network'
+  activeSection.value = anchor === 'saved-files-section' ? 'general' : 'network'
   nextTick(() => {
     // Small delay to ensure DOM is rendered after section switch
     setTimeout(() => {
@@ -507,14 +507,16 @@ onMounted(async () => {
             <GeneralSection
               v-if="activeSection === 'general'"
               :settings="settings"
+              :selected-item-id="selectedItem?.type === 'saved-file' ? selectedItem.id : null"
               @import="handleImport"
               @export="handleExport"
               @reset="handleReset"
+              @select="onSelectItem"
             />
             <NetworkSection
               v-else-if="activeSection === 'network'"
               :settings="settings"
-              :selected-item-id="selectedItem?.type === 'breakpoint' || selectedItem?.type === 'mock' || selectedItem?.type === 'saved-file' ? selectedItem.id : null"
+              :selected-item-id="selectedItem?.type === 'breakpoint' || selectedItem?.type === 'mock' ? selectedItem.id : null"
               @select="onSelectItem"
               @edit-breakpoint="handleEditBreakpoint"
               @edit-mock="handleEditMock"

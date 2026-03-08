@@ -1,14 +1,29 @@
 <script setup lang="ts">
-  import { onMounted, onUnmounted } from 'vue'
+  import { computed, onMounted, onUnmounted } from 'vue'
   import { Infusion } from '@/components/ui/infusion'
   import { useAutoUnhighlight } from '@/composables/useAutoUnhighlight'
   import { useUpdateChecker } from '@/composables/useUpdateChecker'
+  import { inspectorState, useInspectorSettings } from '@/settings/useInspectorSettings'
   import Navigation from '@/features/Navigation.vue'
   import { Toaster } from '@/components/ui/Toaster'
-  import backgroundImage from '@/assets/background1.jpg'
+  import defaultBackground from '@/assets/background1.jpg'
 
   useAutoUnhighlight()
   useUpdateChecker()
+
+  onMounted(() => useInspectorSettings())
+
+  const customize = computed(() => inspectorState.customize)
+  const infusionSrc = computed(() => {
+    const img = customize.value?.image
+    if (!img) return defaultBackground
+    if (img.sourceType === 'link' && img.url) return img.url
+    if (img.sourceType === 'file' && img.savedFileId) {
+      const sf = inspectorState.savedFiles.find(f => f.id === img.savedFileId)
+      return sf?.dataUri || defaultBackground
+    }
+    return defaultBackground
+  })
 
   function selectNodeContents(node: Node) {
     const sel = window.getSelection()
@@ -54,14 +69,17 @@
   <template>
     <div class="relative h-screen overflow-hidden" @contextmenu.prevent>
       <Infusion
-      :src="backgroundImage"
-      :opacity="0.2"
-      :opacityDark="0.3"
+      :src="infusionSrc"
+      :opacity="customize.imageOpacityLight"
+      :opacityDark="customize.imageOpacityDark"
       :zIndex="100"
-      :blur="34"
-      :noiseIntensity="0.5"
+      :blur="customize.blur"
+      :positionX="customize.positionX"
+      :positionY="customize.positionY"
+      :scale="customize.scale"
+      :noiseIntensity="customize.noiseIntensity"
       :noiseScale="1"
-      :noiseOpacity="0.05"
+      :noiseOpacity="customize.noiseOpacity"
       blendMode="normal"
       :relative="true"
       type="image"
