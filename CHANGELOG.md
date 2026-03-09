@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Options
 
+- Изменен способ сохранения файлов. Вместо blob экземпляра приложение сохраняет ссылки на файлы;
+
 - Добавлена возможность персонализации интерфейса.
 
 
@@ -63,8 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Исправлено отображение кнопок сброса или удаления как Disabled;
 
 Исправлено отображение таблиц в разделе Options при большом количестве значений;
-
-
 
 
 

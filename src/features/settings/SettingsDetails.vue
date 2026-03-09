@@ -619,7 +619,7 @@ function formatTrigger(trigger: string): string {
     </template>
 
     <!-- No selection -->
-    <div v-else class="h-full flex items-center justify-center text-muted-foreground text-sm">
+    <div v-else class="h-full flex items-center justify-center text-muted-foreground">
       Select an item to see details
     </div>
   </div>
