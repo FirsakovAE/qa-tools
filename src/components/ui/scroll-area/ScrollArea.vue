@@ -19,7 +19,8 @@ const props = defineProps<ScrollAreaRootProps>();
     <ScrollAreaViewport class="h-full w-full rounded-[inherit]">
       <slot />
     </ScrollAreaViewport>
-    <ScrollBar />
+    <ScrollBar orientation="horizontal" />
+    <ScrollBar orientation="vertical" />
     <ScrollAreaCorner />
   </ScrollAreaRoot>
 </template>

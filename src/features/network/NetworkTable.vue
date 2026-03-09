@@ -125,27 +125,29 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
 
 <template>
   <div class="h-full flex flex-col border rounded-lg overflow-hidden">
-    <div class="shrink-0 border-b bg-muted/30">
-      <Table>
-        <TableHeader>
-          <TableRow class="hover:bg-transparent">
-            <TableHead class="w-[70px] text-xs font-semibold">Status</TableHead>
-            <TableHead class="w-[70px] text-xs font-semibold">Method</TableHead>
-            <TableHead class="text-xs font-semibold">Path</TableHead>
-            <TableHead class="w-[80px] text-xs font-semibold text-right">Time</TableHead>
-            <TableHead class="w-[80px] text-xs font-semibold text-right">Size</TableHead>
-            <TableHead class="w-[28px]"></TableHead>
-          </TableRow>
-        </TableHeader>
-      </Table>
-    </div>
-    
     <div v-if="entries.length === 0" class="flex-1 min-h-0 flex items-center justify-center text-muted-foreground">
       No network requests captured yet
     </div>
 
-    <ScrollArea v-else class="flex-1 min-h-0">
-      <Table>
+    <div v-else class="h-full flex flex-col overflow-hidden table-scroll-x">
+      <div class="min-w-[460px] flex flex-col h-full">
+        <div class="shrink-0 border-b bg-muted/30">
+          <Table no-scroll>
+            <TableHeader>
+              <TableRow class="hover:bg-transparent">
+                <TableHead class="w-[70px] text-xs font-semibold">Status</TableHead>
+                <TableHead class="w-[70px] text-xs font-semibold">Method</TableHead>
+                <TableHead class="text-xs font-semibold">Path</TableHead>
+                <TableHead class="w-[80px] text-xs font-semibold text-right">Time</TableHead>
+                <TableHead class="w-[80px] text-xs font-semibold text-right">Size</TableHead>
+                <TableHead class="w-[28px]" style="height: 48px; width: 60px;"></TableHead>
+              </TableRow>
+            </TableHeader>
+          </Table>
+        </div>
+        
+        <ScrollArea class="flex-1 min-h-0">
+          <Table no-scroll>
         <TableBody>
           <ContextMenu v-for="entry in sortedEntries" :key="entry.id">
             <ContextMenuTrigger as-child>
@@ -291,6 +293,41 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
           </ContextMenu>
         </TableBody>
       </Table>
-    </ScrollArea>
+        </ScrollArea>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.table-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.table-scroll-x {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.table-scroll-x::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-scroll-x::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.table-scroll-x::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.table-scroll-x::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--border) / 0.8);
+  background-clip: padding-box;
+}
+</style>

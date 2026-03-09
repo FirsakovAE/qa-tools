@@ -45,21 +45,22 @@ const handleRowClick = (store: StoreEntry) => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col border rounded-lg overflow-hidden">
-    <div class="shrink-0 border-b bg-muted/30">
-      <Table>
-        <TableHeader>
-          <TableRow class="hover:bg-transparent">
-            <TableHead class="text-xs font-semibold">Name</TableHead>
-            <TableHead class="w-[120px] text-xs font-semibold">State</TableHead>
-            <TableHead class="w-[80px] text-xs font-semibold text-center">Getters</TableHead>
-          </TableRow>
-        </TableHeader>
-      </Table>
-    </div>
-    
-    <ScrollArea class="flex-1 min-h-0">
-      <Table>
+  <div class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
+    <div class="min-w-[360px] flex flex-col h-full">
+      <div class="shrink-0 border-b bg-muted/30">
+        <Table no-scroll>
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead class="text-xs font-semibold">Name</TableHead>
+              <TableHead class="w-[120px] text-xs font-semibold">State</TableHead>
+              <TableHead class="w-[80px] text-xs font-semibold text-center">Getters</TableHead>
+            </TableRow>
+          </TableHeader>
+        </Table>
+      </div>
+      
+      <ScrollArea class="flex-1 min-h-0">
+        <Table no-scroll>
         <TableBody>
           <TableRow
             v-for="store in entries"
@@ -107,6 +108,41 @@ const handleRowClick = (store: StoreEntry) => {
           </TableRow>
         </TableBody>
       </Table>
-    </ScrollArea>
+      </ScrollArea>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.table-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Uikit-style scrollbar for horizontal scroll */
+.table-scroll-x {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.table-scroll-x::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-scroll-x::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.table-scroll-x::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.table-scroll-x::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--border) / 0.8);
+  background-clip: padding-box;
+}
+</style>

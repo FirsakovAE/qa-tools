@@ -168,20 +168,21 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 </script>
 
 <template>
-  <div class="h-full flex flex-col border rounded-lg overflow-hidden">
-    <!-- Fixed Header -->
-    <div class="shrink-0 border-b bg-muted/30">
-      <div class="props-header">
-        <div class="props-cell props-cell-star"></div>
-        <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
-        <div class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
-        <div class="props-cell props-cell-props text-xs font-semibold">Props</div>
-        <div class="props-cell props-cell-actions"></div>
+  <div class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
+    <div class="min-w-[360px] flex flex-col h-full">
+      <!-- Fixed Header -->
+      <div class="shrink-0 border-b bg-muted/30">
+        <div class="props-header">
+          <div class="props-cell props-cell-star"></div>
+          <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
+          <div class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
+          <div class="props-cell props-cell-props text-xs font-semibold">Props</div>
+          <div class="props-cell props-cell-actions"></div>
+        </div>
       </div>
-    </div>
-    
-    <!-- Virtualized Body -->
-    <RecycleScroller
+      
+      <!-- Virtualized Body (RecycleScroller has its own scroll) -->
+      <RecycleScroller
       class="flex-1 min-h-0"
       :items="rows"
       :item-size="40"
@@ -300,6 +301,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
         </div>
       </template>
     </RecycleScroller>
+    </div>
   </div>
 </template>
 
@@ -315,6 +317,8 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 
 .props-header {
   background: hsl(var(--muted) / 0.3);
+  /* Reserve scrollbar space so header and rows align when scrollbar visible */
+  padding-right: 16px;
 }
 
 /* Cell sizes */
@@ -428,5 +432,34 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 
 :deep(.vue-recycle-scroller::-webkit-scrollbar-corner) {
   background: transparent;
+}
+
+/* Horizontal scroll (min-width 360px) - Uikit-style */
+.table-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.table-scroll-x::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-scroll-x::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.table-scroll-x::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.table-scroll-x::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--border) / 0.8);
+  background-clip: padding-box;
 }
 </style>

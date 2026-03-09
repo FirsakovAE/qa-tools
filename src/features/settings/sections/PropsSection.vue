@@ -156,12 +156,12 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
       <div class="flex flex-col border rounded-lg overflow-hidden">
         <!-- Fixed Header -->
         <div class="shrink-0 border-b bg-muted/30">
-          <Table>
+          <Table class="table-fixed">
             <TableHeader>
               <TableRow class="hover:bg-transparent">
                 <TableHead class="text-xs font-semibold">Component Name</TableHead>
                 <TableHead class="text-xs font-semibold w-[70px] text-center">Status</TableHead>
-                <TableHead class="w-[28px]" />
+                <TableHead class="w-[48px] text-center p-0" />
               </TableRow>
             </TableHeader>
           </Table>
@@ -171,7 +171,7 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
         <div class="min-h-0 max-h-[205px] overflow-hidden">
           <template v-if="blacklistNeedsScroll">
             <ScrollArea :style="{ height: `${blacklistTableHeight}px` }">
-              <Table>
+              <Table class="table-fixed">
                 <TableBody>
                   <ContextMenu v-for="row in blacklistRows" :key="row.name">
                     <ContextMenuTrigger as-child>
@@ -180,25 +180,26 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                         :class="{ 'bg-muted': selectedItemId === row.name }"
                         @click="emit('select', { type: 'blacklist', id: row.name })"
                       >
-                        <TableCell class="py-2">
-                          <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm">
+                        <TableCell class="overflow-hidden !py-2">
+                          <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm truncate">
                             {{ row.name }}
                           </div>
                         </TableCell>
-                        <TableCell class="w-[70px] text-center py-2">
+                        <TableCell class="w-[70px] text-center !py-2">
                           <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
                             {{ row.active ? 'Blocked' : 'Allowed' }}
                           </div>
                         </TableCell>
-                        <TableCell class="w-[28px] py-2 pr-2">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger as-child>
-                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                                <MoreHorizontal class="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem @click.stop="toggleBlacklist(row.name, row.active)">
+                        <TableCell class="w-[48px] text-center p-0">
+                          <div class="flex justify-center items-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                                  <MoreHorizontal class="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" class="w-44">
+                                <DropdownMenuItem @click.stop="toggleBlacklist(row.name, row.active)">
                                 <Power class="h-4 w-4 mr-2" />
                                 {{ row.active ? 'Allow' : 'Block' }}
                               </DropdownMenuItem>
@@ -209,6 +210,7 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>
@@ -235,7 +237,7 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
             </ScrollArea>
           </template>
           <template v-else>
-            <Table>
+            <Table class="table-fixed">
               <TableBody>
                 <ContextMenu v-for="row in blacklistRows" :key="row.name">
                   <ContextMenuTrigger as-child>
@@ -244,25 +246,26 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                       :class="{ 'bg-muted': selectedItemId === row.name }"
                       @click="emit('select', { type: 'blacklist', id: row.name })"
                     >
-                      <TableCell class="py-2">
-                        <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm">
+                      <TableCell class="overflow-hidden !py-2">
+                        <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm truncate">
                           {{ row.name }}
                         </div>
                       </TableCell>
-                      <TableCell class="w-[70px] text-center py-2">
+                      <TableCell class="w-[70px] text-center !py-2">
                         <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
                           {{ row.active ? 'Blocked' : 'Allowed' }}
                         </div>
                       </TableCell>
-                      <TableCell class="w-[28px] py-2 pr-2">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger as-child>
-                            <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                              <MoreHorizontal class="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" class="w-44">
-                            <DropdownMenuItem @click.stop="toggleBlacklist(row.name, row.active)">
+                      <TableCell class="w-[48px] text-center p-0">
+                        <div class="flex justify-center items-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                                <MoreHorizontal class="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" class="w-44">
+                              <DropdownMenuItem @click.stop="toggleBlacklist(row.name, row.active)">
                               <Power class="h-4 w-4 mr-2" />
                               {{ row.active ? 'Allow' : 'Block' }}
                             </DropdownMenuItem>
@@ -273,6 +276,7 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   </ContextMenuTrigger>
@@ -307,12 +311,12 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
       <div class="flex flex-col border rounded-lg overflow-hidden">
         <!-- Fixed Header -->
         <div class="shrink-0 border-b bg-muted/30">
-          <Table>
+          <Table class="table-fixed">
             <TableHeader>
               <TableRow class="hover:bg-transparent">
                 <TableHead class="text-xs font-semibold">Component</TableHead>
                 <TableHead class="text-xs font-semibold w-[80px] text-center">Added</TableHead>
-                <TableHead class="w-[28px]" />
+                <TableHead class="w-[48px] text-center p-0" />
               </TableRow>
             </TableHeader>
           </Table>
@@ -322,7 +326,7 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
         <div class="min-h-0 max-h-[205px] overflow-hidden">
           <template v-if="favoritesNeedsScroll">
             <ScrollArea :style="{ height: `${favoritesTableHeight}px` }">
-              <Table>
+              <Table class="table-fixed">
                 <TableBody>
                   <ContextMenu v-for="fav in favoritesList" :key="fav.id">
                     <ContextMenuTrigger as-child>
@@ -331,31 +335,33 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                         :class="{ 'bg-muted': selectedItemId === fav.id }"
                         @click="emit('select', { type: 'favorite', id: fav.id })"
                       >
-                        <TableCell class="py-2">
-                          <div class="font-mono text-sm">{{ fav.name }}</div>
-                          <div class="text-xs text-muted-foreground mt-0.5 font-mono">
+                        <TableCell class="overflow-hidden !py-2">
+                          <div class="font-mono text-sm truncate">{{ fav.name }}</div>
+                          <div class="text-xs text-muted-foreground mt-0.5 font-mono truncate">
                             {{ fav.tagName }}{{ fav.className ? '.' + fav.className : '' }}
                           </div>
                         </TableCell>
-                        <TableCell class="w-[80px] text-center py-2">
+                        <TableCell class="w-[80px] text-center !py-2">
                           <div class="text-xs text-muted-foreground">
                             {{ new Date(fav.timestamp).toLocaleDateString() }}
                           </div>
                         </TableCell>
-                        <TableCell class="w-[28px] py-2 pr-2">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger as-child>
-                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                                <MoreHorizontal class="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
-                                <Trash class="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                        <TableCell class="w-[48px] text-center p-0">
+                          <div class="flex justify-center items-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                                  <MoreHorizontal class="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" class="w-44">
+                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
+                                  <Trash class="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>
@@ -377,7 +383,7 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
             </ScrollArea>
           </template>
           <template v-else>
-            <Table>
+            <Table class="table-fixed">
               <TableBody>
                 <ContextMenu v-for="fav in favoritesList" :key="fav.id">
                   <ContextMenuTrigger as-child>
@@ -386,42 +392,44 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                       :class="{ 'bg-muted': selectedItemId === fav.id }"
                       @click="emit('select', { type: 'favorite', id: fav.id })"
                     >
-                      <TableCell class="py-2">
-                        <div class="font-mono text-sm">{{ fav.name }}</div>
-                        <div class="text-xs text-muted-foreground mt-0.5 font-mono">
+                      <TableCell class="overflow-hidden !py-2">
+                        <div class="font-mono text-sm truncate">{{ fav.name }}</div>
+                        <div class="text-xs text-muted-foreground mt-0.5 font-mono truncate">
                           {{ fav.tagName }}{{ fav.className ? '.' + fav.className : '' }}
                         </div>
                       </TableCell>
-                      <TableCell class="w-[80px] text-center py-2">
+                      <TableCell class="w-[80px] text-center !py-2">
                         <div class="text-xs text-muted-foreground">
                           {{ new Date(fav.timestamp).toLocaleDateString() }}
                         </div>
                       </TableCell>
-                      <TableCell class="w-[28px] py-2 pr-2">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger as-child>
-                            <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                              <MoreHorizontal class="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" class="w-44">
-                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
-                              <Trash class="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent class="w-44">
-                    <ContextMenuItem class="text-destructive_text" @click="removeFromFavorites(fav.id)">
-                      <Trash class="h-4 w-4 mr-2" />
-                      Delete
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-                <TableRow v-if="!favoritesList.length">
+                      <TableCell class="w-[48px] text-center p-0">
+                        <div class="flex justify-center items-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                                <MoreHorizontal class="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" class="w-44">
+                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
+                                  <Trash class="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent class="w-44">
+                      <ContextMenuItem class="text-destructive_text" @click="removeFromFavorites(fav.id)">
+                        <Trash class="h-4 w-4 mr-2" />
+                        Delete
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                  <TableRow v-if="!favoritesList.length">
                   <TableCell colspan="3" class="text-center text-muted-foreground py-8">
                     No favorite components
                   </TableCell>
