@@ -83,11 +83,11 @@ export function useComponentsTab(
     const startEditingProps = (uid: string) => {
         editingComponent.value = uid
         // Находим компонент в treeData и копируем его пропсы
+        // uid может быть node.id (uid:123) или node.componentUid (ComponentName::elementInfo)
         const findComponent = (nodes: TreeNodeModel[]): TreeNodeModel | null => {
             for (const node of nodes) {
-                if (node.componentUid === uid) {
-                    return node
-                }
+                const matches = node.id === uid || node.componentUid === uid
+                if (matches) return node
                 if (node.children) {
                     const found = findComponent(node.children)
                     if (found) return found
@@ -121,10 +121,11 @@ export function useComponentsTab(
             )
 
             if (success) {
-                // Обновляем пропсы в treeData
+                // Обновляем пропсы в treeData (editingComponent может быть node.id или node.componentUid)
                 const findAndUpdate = (nodes: TreeNodeModel[]): boolean => {
                     for (const node of nodes) {
-                        if (node.componentUid === editingComponent.value) {
+                        const matches = node.id === editingComponent.value || node.componentUid === editingComponent.value
+                        if (matches) {
                             node.props = { ...editedProps.value }
                             node.jsonProps = JSON.stringify(editedProps.value, null, 2)
                             node.timestamp = new Date().toISOString()

@@ -138,6 +138,10 @@ const {
 } = useComponentsTab(createRef<TreeNodeModel[]>([]), {})
 
 const componentUid = computed(() => props.node.componentUid || '')
+// Path for updateComponentProps: use uid: format when available (required for save)
+const componentPath = computed(() =>
+  props.node.id?.startsWith('uid:') ? props.node.id : (props.node.componentUid || props.node.id || '')
+)
 
 // --- JSON State ---
 const json = computed(() => {
@@ -211,7 +215,7 @@ const formattedTime = computed(() => {
 function startEditing() {
   editedJson.value = json.value.trim()
   isEditing.value = true
-  startEditingProps?.(componentUid.value)
+  startEditingProps?.(componentPath.value)
 }
 
 function cancelEdit() {
