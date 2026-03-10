@@ -352,6 +352,12 @@
   }
 }
 
+@container toolbar (min-width: 401px) {
+  .badge-label {
+    margin-left: 0.25em;
+  }
+}
+
 /* =========================
    Responsive 2-panel layout (<1000px)
    ========================= */

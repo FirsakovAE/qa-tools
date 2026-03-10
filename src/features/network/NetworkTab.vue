@@ -416,7 +416,7 @@ onMounted(async () => {
           {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
         </Badge>
         <Badge v-if="pendingCount > 0" variant="outline" class="whitespace-nowrap text-yellow-500 border-yellow-500/30">
-          {{ pendingCount }}<span class="badge-label"> pending</span>
+          {{ pendingCount }}<span class="badge-label">pending</span>
         </Badge>
         <Badge 
           v-if="pendingBreakpointIds.length > 0" 
@@ -424,7 +424,7 @@ onMounted(async () => {
           class="whitespace-nowrap text-amber-500 border-amber-500/30 animate-pulse cursor-pointer hover:bg-amber-500/10 transition-colors"
           @click="selectFirstPendingBreakpoint"
         >
-          {{ pendingBreakpointIds.length }}<span class="badge-label"> bp</span>
+          {{ pendingBreakpointIds.length }}<span class="badge-label">bp</span>
         </Badge>
         <Badge 
           v-if="activeBreakpoints.length > 0" 
@@ -432,7 +432,7 @@ onMounted(async () => {
           class="whitespace-nowrap text-amber-500 border-amber-500/30 cursor-pointer hover:bg-amber-500/10 transition-colors"
           @click="emit('navigateToOptions', 'breakpoints-section')"
         >
-          {{ activeBreakpoints.length }}<span class="badge-label"> bp</span>
+          {{ activeBreakpoints.length }}<span class="badge-label">bp</span>
         </Badge>
         <Badge 
           v-if="activeMocks.length > 0" 
@@ -440,7 +440,7 @@ onMounted(async () => {
           class="whitespace-nowrap text-purple-500 border-purple-500/30 cursor-pointer hover:bg-purple-500/10 transition-colors"
           @click="emit('navigateToOptions', 'mocks-section')"
         >
-          {{ activeMocks.length }}<span class="badge-label"> mock</span>
+          {{ activeMocks.length }}<span class="badge-label">mock</span>
         </Badge>
         <Badge v-if="paused" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
           Paused
