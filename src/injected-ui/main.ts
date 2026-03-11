@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import App from '../App.vue'
 import { setRuntimeAdapter, createExtensionAdapter, createStandaloneAdapter, createDevtoolsAdapter } from '@/runtime'
+import { useDevtoolsSearch } from '@/composables/useDevtoolsSearch'
 
 import '@/assets/index.css'
 import '@/assets/json.css'
@@ -18,6 +19,8 @@ function initRuntime() {
     if (tabId) {
       const adapter = createDevtoolsAdapter(tabId)
       setRuntimeAdapter(adapter)
+      // Connect Ctrl+F search to panel content (DevTools search bar → window.find)
+      useDevtoolsSearch()
       return
     }
   }

@@ -123,6 +123,18 @@ const settingsStorage = new SettingsStorage()
 // Per-tab static site flags
 const staticSiteTabs = new Map<number, boolean>()
 
+// DevTools panel search: panel connects here, devtools relays search via sendMessage
+const SEARCH_PORT_NAME = 'vue-inspector-devtools-search'
+let devtoolsSearchPort: chrome.runtime.Port | null = null
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== SEARCH_PORT_NAME) return
+  devtoolsSearchPort = port
+  port.onDisconnect.addListener(() => {
+    devtoolsSearchPort = null
+  })
+})
+
 chrome.tabs.onRemoved.addListener((tabId) => {
   staticSiteTabs.delete(tabId)
 })
@@ -387,6 +399,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendMessageWithRetry(message.tabId, {
                     type: 'UNHIGHLIGHT_ELEMENT'
                 }, 'UNHIGHLIGHT_ELEMENT')
+            }
+            break
+
+        case 'RELAY_DEVTOOLS_SEARCH':
+            if (devtoolsSearchPort) {
+                devtoolsSearchPort.postMessage({
+                    type: 'DEVTOOLS_SEARCH',
+                    action: message.action ?? '',
+                    query: message.query ?? ''
+                })
             }
             break
     }
