@@ -311,7 +311,7 @@ export function injectInspectorUI(): void {
   window.addEventListener('message', (event: MessageEvent) => {
     const data = event.data
     if (!data) return
-    
+
     // Handle EXPAND_INSPECTOR from iframe (Vue site, iframe loaded but collapsed)
     if (data[UI_MESSAGE_PREFIX] && data.message?.type === 'EXPAND_INSPECTOR' &&
         event.source === iframe.contentWindow) {

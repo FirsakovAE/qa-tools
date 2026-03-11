@@ -109,6 +109,8 @@
 
   html[data-injected] #app {
     pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   #app {

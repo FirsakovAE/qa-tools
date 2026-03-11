@@ -61,6 +61,13 @@
       return
     }
 
+    // Injected iframe / DevTools — select .app-content to avoid blue frame outline
+    if (document.documentElement.hasAttribute('data-injected')) {
+      const content = document.querySelector('.app-content') || document.getElementById('app')
+      if (content) selectNodeContents(content)
+      return
+    }
+
     // Everything else — no selection
     window.getSelection()?.removeAllRanges()
   }

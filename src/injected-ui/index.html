@@ -3,6 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <title>Vue Inspector</title>
+    <style>
+      /* Prevent blue focus outline (Chrome -webkit-focus-ring-color) in overlay + DevTools */
+      html, html:focus, html:focus-visible,
+      body, body:focus, body:focus-visible,
+      #app, #app:focus, #app:focus-within {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+    </style>
   </head>
   <body data-injected style="height: 100%; overscroll-behavior: contain;">
     <div id="app"></div>
