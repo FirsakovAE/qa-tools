@@ -1,38 +1,49 @@
-/* JSON key */
+/* Light mode: dark text on light background */
 .token.property {
-    color: #afafaf;
-
+    color: #374151;
 }
-
-/* String values */
 .token.string {
-    color: rgb(220, 220, 220);
+    color: #064e3b;
 }
-
-/* Numbers */
 .token.number {
-    color: rgb(220, 220, 220);
+    color: #1e3a8a;
 }
-
-/* Booleans */
 .token.boolean {
-    color: rgb(220, 220, 220);
+    color: #92400e;
 }
-
-/* null */
 .token.null {
-    color: rgb(220, 220, 220);
+    color: #9f1239;
 }
-
-/* Braces, commas, etc */
 .token.punctuation {
-    color: rgb(220, 220, 220);
+    color: #1f2937;
 }
-
 .token.operator {
-    color: #c9d1d9;
+    color: #374151;
     background: none;
     box-shadow: none;
     border: none;
     font-weight: normal;
+}
+
+/* Dark mode: light text on dark background */
+.dark .token.property {
+    color: #afafaf;
+}
+.dark .token.string {
+    color: rgb(220, 220, 220);
+}
+.dark .token.number {
+    color: rgb(220, 220, 220);
+}
+.dark .token.boolean {
+    color: rgb(220, 220, 220);
+}
+.dark .token.null {
+    color: rgb(220, 220, 220);
+}
+.dark .token.punctuation {
+    color: rgb(220, 220, 220);
+}
+.dark .token.operator {
+    color: #c9d1d9;
 }

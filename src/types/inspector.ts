@@ -136,6 +136,8 @@ export interface GlobalSearchSettings {
 
 export type DisplayMode = 'overlay' | 'devtools'
 
+export type ThemeMode = 'dark' | 'light'
+
 export type ImageSourceType = 'file' | 'link'
 
 export interface CustomizeSettings {
@@ -162,6 +164,7 @@ export interface SavedFile {
 }
 
 export interface BaseInspectorSettings {
+    theme: ThemeMode
     displayMode: DisplayMode
     blacklist: { active: string[]; inactive: string[] }
     favorites: FavoriteItem[]

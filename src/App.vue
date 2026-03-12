@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, onMounted, onUnmounted } from 'vue'
+  import { computed, watch, onMounted, onUnmounted } from 'vue'
   import { Infusion } from '@/components/ui/infusion'
   import { useAutoUnhighlight } from '@/composables/useAutoUnhighlight'
   import { useUpdateChecker } from '@/composables/useUpdateChecker'
@@ -11,6 +11,18 @@
 
   useAutoUnhighlight()
   useUpdateChecker()
+
+  function applyTheme(theme: 'dark' | 'light') {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }
+
+  watch(() => inspectorState.theme, (theme) => {
+    if (theme) applyTheme(theme)
+  }, { immediate: true })
 
   onMounted(() => useInspectorSettings())
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import type { InspectorSettings, DisplayMode } from '@/settings/inspectorSettings'
+import type { InspectorSettings, DisplayMode, ThemeMode } from '@/settings/inspectorSettings'
 import { addMedia, removeMedia } from '@/settings/mediaStore'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -44,7 +44,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
-import { Info, Download, Upload, RotateCcw, Plus, MoreHorizontal, Pencil, Trash } from 'lucide-vue-next'
+import { Info, Download, Upload, RotateCcw, Plus, MoreHorizontal, Pencil, Trash, Moon, Sun } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { getRuntimeAdapter } from '@/runtime'
 import ImagePickerDrawer from '@/features/settings/components/ImagePickerDrawer.vue'
@@ -68,6 +68,11 @@ const isStandalone = runtime?.capabilities.mode === 'standalone'
 const displayMode = computed({
   get: () => props.settings.displayMode ?? 'overlay',
   set: (val: DisplayMode) => { props.settings.displayMode = val }
+})
+
+const theme = computed({
+  get: () => props.settings.theme ?? 'dark',
+  set: (val: ThemeMode) => { props.settings.theme = val }
 })
 
 const showDevtoolsHint = computed(
@@ -282,6 +287,16 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
         <Label class="text-xs font-medium text-muted-foreground">Image</Label>
         <div class="flex items-center gap-2">
           <span class="text-xs text-muted-foreground flex-1 truncate" :title="currentImageLabel">{{ currentImageLabel }}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-8 w-8 p-0 shrink-0"
+            :title="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+            @click="theme = theme === 'dark' ? 'light' : 'dark'"
+          >
+            <Sun v-if="theme === 'dark'" class="h-4 w-4" />
+            <Moon v-else class="h-4 w-4" />
+          </Button>
           <Button
             variant="outline"
             size="sm"
