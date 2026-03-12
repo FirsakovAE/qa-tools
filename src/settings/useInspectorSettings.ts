@@ -2,7 +2,7 @@ import { reactive, watch, toRaw } from 'vue'
 import { defaultInspectorSettings, type InspectorSettings } from '@/settings/inspectorSettings'
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
-import { initMediaStore } from '@/settings/mediaStore'
+import { initMediaStore, getMediaBlob, blobToDataUri } from '@/settings/mediaStore'
 
 const SETTINGS_STORAGE_KEY = 'inspector-settings'
 const STANDALONE_STORAGE_KEY = '__vue_inspector_storage__'
@@ -13,19 +13,21 @@ let isLoaded = false
 let saveTimeout: number | null = null
 
 /**
- * Synchronous preload from sessionStorage (standalone mode).
+ * Synchronous preload from sessionStorage or localStorage (standalone mode).
  * Populates `state` immediately so the first render already has real settings.
+ * Tries sessionStorage first (survives F5), then localStorage (survives refresh/new tab).
+ * Does NOT set isLoaded — loadFromStorage will run and call initMediaStore.
  */
 function trySyncPreload(): void {
     try {
-        const raw = sessionStorage.getItem(STANDALONE_STORAGE_KEY)
+        let raw = sessionStorage.getItem(STANDALONE_STORAGE_KEY)
+        if (!raw) raw = localStorage.getItem(STANDALONE_STORAGE_KEY)
         if (!raw) return
         const data = JSON.parse(raw)
         const saved = data[SETTINGS_STORAGE_KEY]
         if (saved && typeof saved === 'object') {
             const merged = mergeSettings(defaultInspectorSettings, saved)
             Object.assign(state, merged)
-            isLoaded = true
         }
     } catch { /* sync preload failed — async path will handle it */ }
 }
@@ -48,8 +50,19 @@ async function saveToStorage() {
             settingsToSave = JSON.parse(JSON.stringify(toRaw(state)))
         }
 
-        for (const sf of settingsToSave.savedFiles || []) {
-            delete sf.dataUri
+        if (isStandaloneMode()) {
+            for (const sf of settingsToSave.savedFiles || []) {
+                if (!sf.dataUri) {
+                    try {
+                        const blob = await getMediaBlob(sf.id)
+                        if (blob) sf.dataUri = await blobToDataUri(blob)
+                    } catch { /* ignore */ }
+                }
+            }
+        } else {
+            for (const sf of settingsToSave.savedFiles || []) {
+                delete sf.dataUri
+            }
         }
 
         if (isStandaloneMode()) {
@@ -73,6 +86,15 @@ async function loadFromStorage(): Promise<void> {
         if (isStandaloneMode()) {
             const adapter = getRuntimeAdapter()
             savedSettings = await adapter?.storage.get(SETTINGS_STORAGE_KEY)
+            if (!savedSettings) {
+                try {
+                    const raw = localStorage.getItem(STANDALONE_STORAGE_KEY)
+                    if (raw) {
+                        const data = JSON.parse(raw)
+                        savedSettings = data[SETTINGS_STORAGE_KEY]
+                    }
+                } catch { /* ignore */ }
+            }
         } else {
             savedSettings = await safeSendMessage({ type: 'GET_SETTINGS' })
         }
@@ -291,7 +313,24 @@ export async function resetInspectorSettings() {
 }
 
 export async function exportSettings(): Promise<string> {
-    return JSON.stringify(toRaw(state), null, 2)
+    let data = toRaw(state)
+    if (isStandaloneMode()) {
+        data = JSON.parse(JSON.stringify(data))
+        for (const sf of (data as InspectorSettings).savedFiles || []) {
+            if (!sf.dataUri) {
+                try {
+                    const blob = await getMediaBlob(sf.id)
+                    if (blob) sf.dataUri = await blobToDataUri(blob)
+                } catch { /* ignore */ }
+            }
+        }
+    } else {
+        data = JSON.parse(JSON.stringify(data))
+        for (const sf of (data as InspectorSettings).savedFiles || []) {
+            delete sf.dataUri
+        }
+    }
+    return JSON.stringify(data, null, 2)
 }
 
 export async function importSettings(json: string): Promise<void> {

@@ -6,6 +6,7 @@
  *
  * Storage:
  *   sessionStorage  — synchronous preload cache (survives F5)
+ *   localStorage    — persistent backup (survives hard refresh)
  *   IndexedDB       — persistent source of truth (survives tab close)
  */
 
@@ -109,25 +110,62 @@ function sessionRemove(key: string): void {
   } catch { /* silent */ }
 }
 
+function localGet<T>(key: string): T | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    const data = stored ? JSON.parse(stored) : {}
+    return (data[key] as T) ?? null
+  } catch {
+    return null
+  }
+}
+
+function localSet(key: string, value: unknown): void {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    const data = stored ? JSON.parse(stored) : {}
+    data[key] = value
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch { /* quota / private mode */ }
+}
+
+function localRemove(key: string): void {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    const data = stored ? JSON.parse(stored) : {}
+    delete data[key]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch { /* silent */ }
+}
+
 class StandaloneStorage implements RuntimeStorage {
   async get<T = unknown>(key: string): Promise<T | null> {
     try {
       const idbValue = await idbGet<T>(key)
       if (idbValue !== null) {
         sessionSet(key, idbValue)
+        localSet(key, idbValue)
         return idbValue
       }
     } catch { /* IDB unavailable */ }
+    const localValue = localGet<T>(key)
+    if (localValue !== null) {
+      sessionSet(key, localValue)
+      try { await idbSet(key, localValue) } catch { /* restore IDB when possible */ }
+      return localValue
+    }
     return sessionGet<T>(key)
   }
 
   async set(key: string, value: unknown): Promise<void> {
     sessionSet(key, value)
+    localSet(key, value)
     try { await idbSet(key, value) } catch { /* IDB unavailable */ }
   }
 
   async remove(key: string): Promise<void> {
     sessionRemove(key)
+    localRemove(key)
     try { await idbDelete(key) } catch { /* IDB unavailable */ }
   }
 }
