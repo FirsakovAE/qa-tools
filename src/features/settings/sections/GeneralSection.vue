@@ -230,7 +230,7 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 min-w-0">
     <!-- DISPLAY MODE -->
     <div class="space-y-4">
       <h4 class="text-sm font-semibold">Display Mode</h4>
@@ -283,10 +283,10 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
       <h4 class="text-sm font-semibold">Customize</h4>
 
       <!-- Image -->
-      <div class="space-y-2">
+      <div class="space-y-2 min-w-0">
         <Label class="text-xs font-medium text-muted-foreground">Image</Label>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-muted-foreground flex-1 truncate" :title="currentImageLabel">{{ currentImageLabel }}</span>
+        <div class="grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-2 min-w-0">
+          <span class="text-xs text-muted-foreground truncate block min-w-0" :title="currentImageLabel">{{ currentImageLabel }}</span>
           <Button
             variant="outline"
             size="sm"

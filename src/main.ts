@@ -1,3 +1,6 @@
+import { suppressResizeObserverError } from '@/utils/suppressResizeObserverError'
+suppressResizeObserverError()
+
 import { createApp } from 'vue'
 import './assets/index.css'
 import './assets/json-viewer.css'

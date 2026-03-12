@@ -1,3 +1,6 @@
+import { suppressResizeObserverError } from '@/utils/suppressResizeObserverError'
+suppressResizeObserverError()
+
 import { createApp } from 'vue'
 import App from '../App.vue'
 import { setRuntimeAdapter, createExtensionAdapter, createStandaloneAdapter, createDevtoolsAdapter } from '@/runtime'

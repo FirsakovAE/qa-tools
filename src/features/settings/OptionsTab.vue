@@ -481,7 +481,7 @@ onMounted(async () => {
     <div v-else class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden responsive-panels">
 
       <!-- Left: Sidebar + Content -->
-      <div class="h-full min-h-0 flex overflow-hidden gap-2">
+      <div class="h-full min-h-0 min-w-0 flex overflow-hidden gap-2">
 
         <!-- Sidebar Nav (hidden at ≤1200px) -->
         <div class="options-sidebar shrink-0 w-[240px] p-1 flex flex-col gap-1 bg-muted/50 rounded-lg">
@@ -502,8 +502,8 @@ onMounted(async () => {
         </div>
 
         <!-- Section Content -->
-        <ScrollArea class="flex-1 min-h-0 border rounded-lg">
-          <div class="p-4">
+        <ScrollArea class="options-section-scroll flex-1 min-h-0 min-w-0 border rounded-lg">
+          <div class="p-4 min-w-0 overflow-hidden">
             <GeneralSection
               v-if="activeSection === 'general'"
               :settings="settings"
@@ -603,5 +603,10 @@ onMounted(async () => {
   .options-sidebar {
     display: none;
   }
+}
+
+/* Allow section content to shrink so long filenames truncate */
+.options-section-scroll :deep([data-reka-scroll-area-viewport] > div) {
+  min-width: 0;
 }
 </style>
