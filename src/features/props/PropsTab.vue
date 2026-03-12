@@ -460,6 +460,18 @@ async function handleRefresh() {
   lastUpdated.value = formatDateTime(new Date())
 }
 
+/** Refresh tree and re-select current node to update details panel */
+async function handleRefreshSelected() {
+  if (isLoading.value) return
+  const currentId = selectedNode.value?.id ?? selectedNode.value?.componentUid
+  await refresh()
+  lastUpdated.value = formatDateTime(new Date())
+  if (currentId) {
+    const updated = rows.value.find(r => r.id === currentId || r.componentUid === currentId)
+    if (updated) selectedNode.value = updated
+  }
+}
+
 async function ignoreByName(node: PropsRow) {
   if (!settings.value?.blacklist) return
   const name = node.name?.trim()
@@ -565,12 +577,12 @@ onUnmounted(() => {
       <!-- Toolbar -->
       <div class="shrink-0 flex flex-wrap items-center gap-2 p-2 border-b toolbar-container" :class="{ 'toolbar-hide-on-details': selectedNode }">
         <!-- Left block: Title + Search + Filter -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 toolbar-left-block">
           <h3 class="text-lg font-semibold shrink-0 toolbar-title">
             Props
           </h3>
           
-          <!-- Search bar -->
+          <!-- Search bar (stays left) -->
           <div class="flex-1 min-w-[155px] max-w-xs relative">
             <Input
               v-model="searchTerm"
@@ -580,16 +592,19 @@ onUnmounted(() => {
             <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
           </div>
           
-          <!-- Search type filter -->
-          <FacetedFilter
-            v-model="selectedSearchTypes"
-            title="Search by"
-            :options="propsSearchTypeOptions"
-          />
+          <!-- Search by + subsequent elements (right-aligned when header wraps to 2 rows) -->
+          <div class="flex items-center gap-2 toolbar-row1-right">
+            <!-- Search type filter -->
+            <FacetedFilter
+              v-model="selectedSearchTypes"
+              title="Search by"
+              :options="propsSearchTypeOptions"
+            />
+          </div>
         </div>
         
         <!-- Right block: Status badges and controls -->
-        <div class="flex items-center gap-2 shrink-0 ml-auto">
+        <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
           <Badge variant="secondary" class="font-mono">
             {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
           </Badge>
@@ -643,7 +658,9 @@ onUnmounted(() => {
             v-if="selectedNode"
             :key="selectedNode.id || selectedNode.componentUid"
             :node="selectedNode"
+            :refreshing="isLoading"
             @back="deselectEntry"
+            @refresh="handleRefreshSelected"
           />
           
           <div

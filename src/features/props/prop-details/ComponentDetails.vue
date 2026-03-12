@@ -23,8 +23,11 @@ import { ref as createRef } from 'vue'
 const runtime = useRuntime()
 
 // --- Props и Emits ---
-const props = defineProps<{ node: TreeNodeModel }>()
-const emit = defineEmits<{ back: [] }>()
+const props = withDefaults(
+  defineProps<{ node: TreeNodeModel; refreshing?: boolean }>(),
+  { refreshing: false }
+)
+const emit = defineEmits<{ (e: 'back'): void; (e: 'refresh'): void }>()
 
 // --- Settings ---
 const settings = ref<BaseInspectorSettings | null>(null)
@@ -305,6 +308,24 @@ async function saveChanges() {
             </TooltipTrigger>
             <TooltipContent side="bottom">
               {{ isFavorite ? 'Remove from favorites' : 'Add to favorites' }}
+            </TooltipContent>
+          </Tooltip>
+          
+          <!-- Refresh button (read-only mode) -->
+          <Tooltip v-if="!isEditing">
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-8 w-8"
+                :disabled="refreshing"
+                @click="emit('refresh')"
+              >
+                <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': refreshing }" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Refresh data
             </TooltipContent>
           </Tooltip>
           

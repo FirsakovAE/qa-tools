@@ -342,10 +342,10 @@ onMounted(async () => {
     <!-- Toolbar -->
     <div class="shrink-0 flex flex-wrap items-center gap-2 p-2 border-b toolbar-container" :class="{ 'toolbar-hide-on-details': selectedEntry || mockFormMode || breakpointFormMode }">
       <!-- Left block: Title + Search + Filter + Export (inline) -->
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 toolbar-left-block">
         <h3 class="text-lg font-semibold shrink-0 toolbar-title">Network</h3>
         
-        <!-- Search bar -->
+        <!-- Search bar (stays left) -->
         <div class="flex-1 min-w-[155px] max-w-xs relative">
           <Input
             v-model="searchTerm"
@@ -355,17 +355,19 @@ onMounted(async () => {
           <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
         </div>
         
-        <!-- Search type filter -->
-        <FacetedFilter
-          v-model="selectedSearchTypes"
-          title="Search by"
-          :options="searchTypeOptions"
-        />
+        <!-- Search by + subsequent elements (right-aligned when header wraps to 2 rows) -->
+        <div class="flex items-center gap-2 toolbar-row1-right">
+          <!-- Search type filter -->
+          <FacetedFilter
+            v-model="selectedSearchTypes"
+            title="Search by"
+            :options="searchTypeOptions"
+          />
 
-        <!-- Export (inline — hidden when toolbar is narrow) -->
-        <div class="export-inline">
-          <TooltipProvider>
-            <Tooltip>
+          <!-- Export (inline — hidden when toolbar is narrow) -->
+          <div class="export-inline">
+            <TooltipProvider>
+              <Tooltip>
               <TooltipTrigger as-child>
                 <Button
                   variant="outline"
@@ -381,8 +383,9 @@ onMounted(async () => {
               <TooltipContent side="bottom">
                 Export filtered requests as Postman collection
               </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
       </div>
       

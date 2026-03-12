@@ -321,7 +321,7 @@
   container-name: toolbar;
 }
 
-@container toolbar (max-width: 700px) {
+@container toolbar (max-width: 850px) {
   .export-inline {
     display: none !important;
   }
@@ -333,6 +333,14 @@
   }
   .toolbar-right-block {
     width: 100%;
+    justify-content: flex-end;
+  }
+  /* When header wraps to 2 rows: align Search by + subsequent elements to the right on row 1 */
+  .toolbar-left-block {
+    width: 100%;
+  }
+  .toolbar-row1-right {
+    margin-left: auto;
   }
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { ArrowLeft, Edit, X, Save } from 'lucide-vue-next'
+import { ArrowLeft, Edit, X, Save, RefreshCw } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -303,6 +303,24 @@ onUnmounted(() => {
         
         <!-- Edit/Save/Cancel buttons in header -->
         <div class="flex items-center gap-1 shrink-0">
+          <!-- Refresh button (read-only mode) -->
+          <Tooltip v-if="!isEditing">
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-8 w-8"
+                :disabled="isLoading"
+                @click="loadStoreData"
+              >
+                <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': isLoading }" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Refresh data
+            </TooltipContent>
+          </Tooltip>
+          
           <Tooltip v-if="!isEditing">
             <TooltipTrigger as-child>
               <Button
