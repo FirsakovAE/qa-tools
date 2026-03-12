@@ -91,7 +91,7 @@
       '-webkit-user-select: none'
     ].join(';');
     
-    // Toggle button
+    // Toggle button (premium SaaS style — same as Extension)
     var toggle = document.createElement('button');
     toggle.id = 'vue-inspector-toggle';
     toggle.style.cssText = [
@@ -99,28 +99,41 @@
       'bottom: 0px',
       'left: 50%',
       'transform: translateX(-50%)',
-      'width: 32px',
-      'height: 32px',
-      'border-radius: 50%',
-      'background: #111',
-      'color: white',
-      'border: 1px solid rgba(255,255,255,0.2)',
+      'width: 40px',
+      'height: 28px',
+      'border-radius: 14px 14px 0 0',
+      'background: rgba(15, 15, 15, 0.85)',
+      'backdrop-filter: blur(12px)',
+      '-webkit-backdrop-filter: blur(12px)',
+      'color: rgba(255, 255, 255, 0.95)',
+      'border: 1px solid rgba(255, 255, 255, 0.12)',
+      'border-bottom: none',
+      'box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.25), 0 1px 0 rgba(255, 255, 255, 0.06) inset',
       'cursor: pointer',
       'pointer-events: auto',
       'display: flex',
       'align-items: center',
-      'justify-content: center'
+      'justify-content: center',
+      'transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease'
     ].join(';');
     
+    toggle.addEventListener('mouseenter', function() {
+      toggle.style.background = 'rgba(25, 25, 25, 0.92)';
+      toggle.style.boxShadow = '0 -2px 16px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.08) inset';
+    });
+    toggle.addEventListener('mouseleave', function() {
+      toggle.style.background = 'rgba(15, 15, 15, 0.85)';
+      toggle.style.boxShadow = '0 -2px 12px rgba(0, 0, 0, 0.25), 0 1px 0 rgba(255, 255, 255, 0.06) inset';
+    });
+    
     var chevron = document.createElement('div');
+    chevron.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
     chevron.style.cssText = [
-      'width: 0',
-      'height: 0',
-      'border-left: 6px solid transparent',
-      'border-right: 6px solid transparent',
-      'border-top: 8px solid white',
-      'transition: transform 0.2s ease',
-      'transform: rotate(180deg)'
+      'display: flex',
+      'align-items: center',
+      'justify-content: center',
+      'transform: rotate(0deg)',
+      'transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
     ].join(';');
     toggle.appendChild(chevron);
     
@@ -223,6 +236,16 @@
       resizeHandle.releasePointerCapture(e.pointerId);
     });
     
+    // Focus styles for toggle (same as Extension)
+    var toggleStyles = document.createElement('style');
+    toggleStyles.textContent = [
+      '#vue-inspector-toggle:focus,',
+      '#vue-inspector-toggle:focus-visible {',
+      '  outline: none;',
+      '}'
+    ].join('\n');
+    root.appendChild(toggleStyles);
+    
     // Assemble
     host.appendChild(iframe);
     host.appendChild(resizeHandle);
@@ -239,7 +262,7 @@
     function expandAndLoadIframe() {
       if (!isCollapsed) return;
       isCollapsed = false;
-      chevron.style.transform = 'rotate(0deg)';
+      chevron.style.transform = 'rotate(180deg)';
       if (!iframeLoaded) {
         iframeLoaded = true;
         iframe.src = baseURL + '/injected_ui/#standalone=' + encodeURIComponent(baseURL);
