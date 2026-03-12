@@ -10,10 +10,26 @@ let dbPromise: Promise<IDBDatabase> | null = null
 function openDB(): Promise<IDBDatabase> {
     if (dbPromise) return dbPromise
     dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION)
-        req.onupgradeneeded = () => req.result.createObjectStore(STORE_NAME)
-        req.onsuccess = () => resolve(req.result)
-        req.onerror = () => reject(req.error)
+        function tryOpen(useExistingVersion = false) {
+            const req = indexedDB.open(DB_NAME, useExistingVersion ? undefined : DB_VERSION)
+            req.onupgradeneeded = () => {
+                const db = req.result
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME)
+                }
+            }
+            req.onsuccess = () => resolve(req.result)
+            req.onerror = () => {
+                const err = req.error
+                if (err?.name === 'VersionError' && !useExistingVersion) {
+                    dbPromise = null
+                    tryOpen(true)
+                } else {
+                    reject(err)
+                }
+            }
+        }
+        tryOpen(false)
     })
     return dbPromise
 }
