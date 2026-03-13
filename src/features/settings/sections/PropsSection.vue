@@ -305,7 +305,7 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
     </div>
 
     <!-- Favorite Components -->
-    <div class="space-y-2 border-t pt-4">
+    <div id="favorites-section" class="space-y-2 border-t pt-4">
       <h4 class="text-sm font-semibold">Favorite Components</h4>
 
       <div class="flex flex-col border rounded-lg overflow-hidden">

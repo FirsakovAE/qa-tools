@@ -454,7 +454,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           v-if="activeTab === 'props'"
           class="h-full overflow-hidden"
         >
-          <PropsTab />
+          <PropsTab @navigate-to-options="handleNavigateToOptions" />
         </div>
 
         <!-- ===== Stores tab (unified two-panel layout) ===== -->
@@ -462,7 +462,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           v-else-if="activeTab === 'stores'"
           class="h-full overflow-hidden"
         >
-          <StoresTab />
+          <StoresTab @navigate-to-options="handleNavigateToOptions" />
         </div>
 
         <!-- ===== Network tab (unified two-panel layout) ===== -->

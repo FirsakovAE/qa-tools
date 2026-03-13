@@ -113,7 +113,7 @@ const favoritesNeedsScroll = computed(() => piniaFavoritesList.value.length > 4)
     </div>
 
     <!-- Favorite Stores -->
-    <div class="space-y-2 border-t pt-4">
+    <div id="pinia-favorites-section" class="space-y-2 border-t pt-4">
       <h4 class="text-sm font-semibold">Favorite Stores</h4>
 
       <div class="flex gap-2">

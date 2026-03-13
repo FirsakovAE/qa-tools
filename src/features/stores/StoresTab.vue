@@ -22,6 +22,10 @@ import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavorites
 
 const runtime = useRuntime()
 
+const emit = defineEmits<{
+  (e: 'navigateToOptions', anchor: string): void
+}>()
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -495,7 +499,12 @@ onUnmounted(() => {
               {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
             </template>
           </Badge>
-          <Badge v-if="favoritesCount > 0" variant="outline" class="text-yellow-500 border-yellow-500/30">
+          <Badge
+            v-if="favoritesCount > 0"
+            variant="outline"
+            class="text-yellow-500 border-yellow-500/30 cursor-pointer hover:bg-yellow-500/10 transition-colors"
+            @click="emit('navigateToOptions', 'pinia-favorites-section')"
+          >
             <Star class="h-3 w-3 mr-1 fill-yellow-500" />
             {{ favoritesCount }}
           </Badge>

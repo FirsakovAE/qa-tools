@@ -411,8 +411,16 @@ async function handleReset() {
 // -------------------- SCROLL TO ANCHOR --------------------
 watch(() => props.scrollToAnchor, (anchor) => {
   if (!anchor) return
-  // Switch to 'network' section first, then scroll after render
-  activeSection.value = anchor === 'saved-files-section' ? 'general' : 'network'
+  // Switch section based on anchor
+  if (anchor === 'saved-files-section') {
+    activeSection.value = 'general'
+  } else if (anchor === 'favorites-section') {
+    activeSection.value = 'props'
+  } else if (anchor === 'pinia-favorites-section') {
+    activeSection.value = 'pinia'
+  } else {
+    activeSection.value = 'network'
+  }
   nextTick(() => {
     // Small delay to ensure DOM is rendered after section switch
     setTimeout(() => {
