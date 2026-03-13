@@ -2,7 +2,7 @@ import { reactive, watch, toRaw } from 'vue'
 import { defaultInspectorSettings, type InspectorSettings } from '@/settings/inspectorSettings'
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
-import { initMediaStore, getMediaBlob, blobToDataUri } from '@/settings/mediaStore'
+import { initMediaStore, initWallpapersStore, getMediaBlob, getWallpaperBlob, blobToDataUri } from '@/settings/mediaStore'
 
 const SETTINGS_STORAGE_KEY = 'inspector-settings'
 const STANDALONE_STORAGE_KEY = '__vue_inspector_storage__'
@@ -51,13 +51,9 @@ async function saveToStorage() {
         }
 
         if (isStandaloneMode()) {
+            // Standalone: wallpapers in IndexedDB wallpapers store, savedFiles blobs in blobs store — never embed in settings
             for (const sf of settingsToSave.savedFiles || []) {
-                if (!sf.dataUri) {
-                    try {
-                        const blob = await getMediaBlob(sf.id)
-                        if (blob) sf.dataUri = await blobToDataUri(blob)
-                    } catch { /* ignore */ }
-                }
+                delete sf.dataUri
             }
         } else {
             for (const sf of settingsToSave.savedFiles || []) {
@@ -111,6 +107,33 @@ async function loadFromStorage(): Promise<void> {
     }
 
     await initMediaStore(state.savedFiles || [])
+
+    if (isStandaloneMode()) {
+        const wallpapers = state.customize?.image?.wallpapers ?? []
+        const wpIds = new Set<string>(wallpapers.map(w => w.id))
+        const selectedId = state.customize?.image?.wallpaperId || state.customize?.image?.savedFileId
+        if (selectedId && selectedId.startsWith('wallpaper_')) {
+            wpIds.add(selectedId)
+        }
+        if (wpIds.size > 0) {
+            await initWallpapersStore([...wpIds])
+        }
+        // Update size for wallpapers with missing/zero size (migrated or legacy)
+        let sizesUpdated = false
+        for (const wp of wallpapers) {
+            if ((wp.size ?? 0) === 0) {
+                const blob = await getWallpaperBlob(wp.id)
+                if (blob && blob.size > 0) {
+                    wp.size = blob.size
+                    sizesUpdated = true
+                }
+            }
+        }
+        if (sizesUpdated) {
+            debouncedSave()
+        }
+    }
+
     isLoaded = true
 }
 
@@ -201,6 +224,20 @@ function migrateCustomizeSettings(settings: any) {
     if (!c) return
 
     const img = c.image
+    if (!img?.urls) img.urls = []
+    if (!img?.wallpapers) img.wallpapers = []
+    // Restore wallpapers from savedFileId+fileName when array is empty (standalone migration)
+    if (img && img.sourceType === 'file' && img.savedFileId?.startsWith('wallpaper_') && img.fileName && (!img.wallpapers || img.wallpapers.length === 0)) {
+        const ext = img.fileName.split('.').pop()?.toLowerCase() || ''
+        const videoMimes: Record<string, string> = { mp4: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg', mov: 'video/quicktime' }
+        const mime = videoMimes[ext] || 'image/png'
+        img.wallpapers = [{ id: img.savedFileId, name: img.fileName, size: 0, mimeType: mime }]
+        if (!img.wallpaperId) img.wallpaperId = img.savedFileId
+    }
+    // Migrate old single url to urls array (when sourceType was 'link')
+    if (img && img.sourceType === 'link' && img.url && img.urls.length === 0) {
+        img.urls = [img.url]
+    }
     if (img && img.sourceType === 'file' && img.url && !img.savedFileId) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         if (!settings.savedFiles) settings.savedFiles = []

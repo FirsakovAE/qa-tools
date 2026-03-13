@@ -51,7 +51,7 @@ export const defaultInspectorSettings: InspectorSettings = {
     savedFiles: [],
     autoSaveFiles: false,
     customize: {
-        image: { sourceType: 'file', url: '', savedFileId: '', fileName: '' },
+        image: { sourceType: 'file', url: '', urls: [], savedFileId: '', fileName: '', wallpaperId: '', wallpapers: [] },
         positionX: 22,
         positionY: 30,
         scale: 100,

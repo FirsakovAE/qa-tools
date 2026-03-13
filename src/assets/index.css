@@ -27,8 +27,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 
-    /* Browser-native dark awareness only */
-    color-scheme: dark;
+    /* Browser-native theme awareness */
+    color-scheme: light;
 
     /* sigma-ui tokens */
     --backdrop-filter-blur: 32px;
@@ -54,6 +54,8 @@
     --destructive-text: 0 84.2% 60.2%;
     --destructive-text-foreground: 0 0% 98%;
     --ring: 240 5.9% 10%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
 
   }
 
@@ -61,6 +63,7 @@
      Dark theme (class-based)
      --------------------------------- */
   .dark {
+    color-scheme: dark;
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
     --muted: 240 3.7% 15.9%;
@@ -80,6 +83,8 @@
     --destructive-text: 0 84.2% 60.2%;
     --destructive-text-foreground: 0 0% 98%;
     --ring: 240 4.9% 83.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 240 5% 64.9%;
   }
 
 

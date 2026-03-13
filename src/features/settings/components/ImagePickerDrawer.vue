@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { GlobeIcon, PlusIcon, Trash2Icon, LoaderCircleIcon } from 'lucide-vue-next'
+import { GlobeIcon, PlusIcon, Trash2Icon, LoaderCircleIcon, VideoIcon } from 'lucide-vue-next'
 import {
   Drawer,
   DrawerContent,
@@ -23,6 +23,8 @@ import { wallpapers, defaultWallpaperId } from '@/assets/wallpapers'
 const props = defineProps<{
   open: boolean
   savedFiles: SavedFile[]
+  /** URLs added by user via Input */
+  urlImages?: string[]
   selectedSavedFileId?: string
   selectedUrl?: string
 }>()
@@ -31,6 +33,8 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
   'select-file': [id: string, name: string]
   'select-url': [url: string]
+  'add-url': [url: string]
+  'remove-url': [url: string]
   'add-file': [file: File]
   'remove-file': [id: string]
 }>()
@@ -38,9 +42,17 @@ const emit = defineEmits<{
 const urlInput = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 
-const imageFiles = computed(() =>
-  props.savedFiles.filter(f => f.mimeType.startsWith('image/'))
+const mediaFiles = computed(() =>
+  props.savedFiles.filter(f =>
+    f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/')
+  )
 )
+
+function isVideoFile(mime: string): boolean {
+  return mime.startsWith('video/')
+}
+
+const urlImagesList = computed(() => props.urlImages ?? [])
 
 function isWallpaperSelected(wpId: string): boolean {
   if (wpId === props.selectedSavedFileId) return true
@@ -48,11 +60,26 @@ function isWallpaperSelected(wpId: string): boolean {
   return false
 }
 
+function isUrlSelected(url: string): boolean {
+  return props.selectedUrl === url
+}
+
 function handleAddUrl() {
   const url = urlInput.value.trim()
   if (!url) return
-  emit('select-url', url)
+  emit('add-url', url)
   urlInput.value = ''
+}
+
+function getUrlDisplayName(url: string): string {
+  try {
+    const u = new URL(url)
+    const path = u.pathname
+    const name = path.split('/').filter(Boolean).pop() || u.hostname
+    return decodeURIComponent(name)
+  } catch {
+    return url.slice(0, 40) + (url.length > 40 ? '…' : '')
+  }
 }
 
 function handleBrowseFiles(event: Event) {
@@ -60,11 +87,15 @@ function handleBrowseFiles(event: Event) {
   const files = input?.files
   if (!files) return
   Array.from(files).forEach(file => {
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
       emit('add-file', file)
     }
   })
   input.value = ''
+}
+
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|webm|ogv|mov)(\?|$)/i.test(url)
 }
 
 function formatFileSize(bytes: number): string {
@@ -83,7 +114,7 @@ function formatFileSize(bytes: number): string {
     <DrawerContent class="image-picker-drawer">
       <div class="flex flex-col flex-1 min-h-0" @contextmenu.prevent>
         <DrawerHeader>
-          <DrawerTitle>Background Image</DrawerTitle>
+          <DrawerTitle>Background Image / Video</DrawerTitle>
         </DrawerHeader>
 
         <ScrollArea class="image-picker__scroll-area">
@@ -97,7 +128,7 @@ function formatFileSize(bytes: number): string {
               <Input
                 v-model="urlInput"
                 class="image-picker__url-input"
-                placeholder="Paste image URL and press Enter"
+                placeholder="Paste image or video URL and press Enter"
                 @keydown.enter="handleAddUrl"
               />
               <Button
@@ -118,18 +149,65 @@ function formatFileSize(bytes: number): string {
               >
                 <PlusIcon :size="32" class="image-picker__drop-zone-icon" />
                 <span class="image-picker__drop-zone-title">Click to browse</span>
-                <span class="image-picker__drop-zone-hint">JPG, PNG, WebP, GIF</span>
+                <span class="image-picker__drop-zone-hint">JPG, PNG, WebP, GIF, MP4, WebM</span>
                 <input
                   ref="fileInput"
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   multiple
                   class="sr-only"
                   @change="handleBrowseFiles"
                 />
               </button>
 
-              <ContextMenu v-for="file in imageFiles" :key="file.id">
+              <ContextMenu v-for="url in urlImagesList" :key="url">
+                <ContextMenuTrigger as-child>
+                  <div
+                    class="image-picker__item"
+                    :class="{ 'image-picker__item--selected': isUrlSelected(url) }"
+                    @click="emit('select-url', url)"
+                  >
+                    <div class="image-picker__item-thumb">
+                      <video
+                        v-if="isVideoUrl(url)"
+                        :src="url"
+                        class="image-picker__item-media"
+                        muted
+                        loop
+                        playsinline
+                        preload="metadata"
+                        @error="($event.target as HTMLVideoElement).style.display = 'none'"
+                      />
+                      <img
+                        v-else
+                        :src="url"
+                        :alt="getUrlDisplayName(url)"
+                        class="image-picker__item-media"
+                        loading="lazy"
+                        @error="($event.target as HTMLImageElement).style.display = 'none'"
+                      />
+                      <div class="image-picker__item-placeholder image-picker__item-placeholder--url-fallback">
+                        <GlobeIcon :size="20" class="image-picker__loader-icon" />
+                      </div>
+                    </div>
+
+                    <div class="image-picker__item-overlay">
+                      <div class="image-picker__item-overlay-text">
+                        <span class="image-picker__item-name">{{ getUrlDisplayName(url) }}</span>
+                        <span class="image-picker__item-type">{{ isVideoUrl(url) ? 'Video URL' : 'URL' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent class="w-44">
+                  <ContextMenuItem class="text-destructive_text" @click="emit('remove-url', url)">
+                    <Trash2Icon class="h-4 w-4 mr-2" />
+                    Delete
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+
+              <ContextMenu v-for="file in mediaFiles" :key="file.id">
                 <ContextMenuTrigger as-child>
                   <div
                     class="image-picker__item"
@@ -137,22 +215,32 @@ function formatFileSize(bytes: number): string {
                     @click="emit('select-file', file.id, file.name)"
                   >
                     <div class="image-picker__item-thumb">
+                      <video
+                        v-if="isVideoFile(file.mimeType) && mediaUrls[file.id]"
+                        :src="mediaUrls[file.id]"
+                        class="image-picker__item-media"
+                        muted
+                        loop
+                        playsinline
+                        preload="metadata"
+                      />
                       <img
-                        v-if="mediaUrls[file.id]"
+                        v-else-if="!isVideoFile(file.mimeType) && mediaUrls[file.id]"
                         :src="mediaUrls[file.id]"
                         :alt="file.name"
                         class="image-picker__item-media"
                         loading="lazy"
                       />
                       <div v-else class="image-picker__item-placeholder">
-                        <LoaderCircleIcon :size="20" class="image-picker__loader-icon" />
+                        <LoaderCircleIcon v-if="!isVideoFile(file.mimeType)" :size="20" class="image-picker__loader-icon" />
+                        <VideoIcon v-else :size="20" class="image-picker__loader-icon" />
                       </div>
                     </div>
 
                     <div class="image-picker__item-overlay">
                       <div class="image-picker__item-overlay-text">
                         <span class="image-picker__item-name">{{ file.name }}</span>
-                        <span class="image-picker__item-type">{{ formatFileSize(file.size) }}</span>
+                        <span class="image-picker__item-type">{{ formatFileSize(file.size) }} · {{ isVideoFile(file.mimeType) ? 'Video' : 'Image' }}</span>
                       </div>
                     </div>
                   </div>
@@ -347,6 +435,17 @@ function formatFileSize(bytes: number): string {
   width: 100%;
   height: 100%;
   background: hsl(var(--muted) / 50%);
+}
+
+.image-picker__item-placeholder--url-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.image-picker__item-thumb .image-picker__item-media {
+  position: relative;
+  z-index: 1;
 }
 
 .image-picker__loader-icon {

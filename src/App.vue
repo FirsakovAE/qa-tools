@@ -40,6 +40,21 @@
     return defaultWallpaperUrl
   })
 
+  const infusionType = computed((): 'image' | 'video' => {
+    const img = customize.value?.image
+    if (!img) return 'image'
+    if (img.sourceType === 'link' && img.url) {
+      return /\.(mp4|webm|ogv|mov)(\?|$)/i.test(img.url) ? 'video' : 'image'
+    }
+    if (img.sourceType === 'file' && img.savedFileId && !img.savedFileId.startsWith('wallpaper:')) {
+      const wp = img.wallpapers?.find(w => w.id === img.savedFileId)
+      if (wp) return wp.mimeType.startsWith('video/') ? 'video' : 'image'
+      const file = inspectorState.savedFiles?.find(f => f.id === img.savedFileId)
+      return file?.mimeType.startsWith('video/') ? 'video' : 'image'
+    }
+    return 'image'
+  })
+
   function selectNodeContents(node: Node) {
     const sel = window.getSelection()
     if (!sel) return
@@ -101,7 +116,7 @@
       :scale="customize.scale"
       blendMode="normal"
       :relative="true"
-      type="image"
+      :type="infusionType"
       />
 
       <div class="relative z-10 h-full">

@@ -68,7 +68,12 @@ initRuntime()
 
 // Добавляем Toaster в injected UI
 import { Toaster } from '@/components/ui/Toaster'
+import { useInspectorSettings } from '@/settings/useInspectorSettings'
 
 const app = createApp(App)
 app.component('Toaster', Toaster)
-app.mount('#app')
+
+// Загружаем настройки и медиа (wallpapers) до монтирования, чтобы Infusion получил src при первом рендере
+useInspectorSettings().then(() => {
+  app.mount('#app')
+})

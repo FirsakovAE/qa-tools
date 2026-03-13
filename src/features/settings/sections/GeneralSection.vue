@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import type { InspectorSettings, DisplayMode, ThemeMode } from '@/settings/inspectorSettings'
-import { addMedia, removeMedia } from '@/settings/mediaStore'
+import { addMedia, removeMedia, putWallpaperBlob, removeWallpaperBlob, initWallpapersStore } from '@/settings/mediaStore'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -65,6 +65,38 @@ const runtime = getRuntimeAdapter()
 const isRunningInDevtools = runtime?.id === 'devtools'
 const isStandalone = runtime?.capabilities.mode === 'standalone'
 
+/** Standalone: media files for background picker (from wallpapers store). Extension: from savedFiles. */
+const mediaFilesForPicker = computed(() => {
+  if (isStandalone) {
+    const wallpapers = props.settings.customize?.image?.wallpapers ?? []
+    return wallpapers
+      .filter(w => w.mimeType.startsWith('image/') || w.mimeType.startsWith('video/'))
+      .map(w => ({ id: w.id, name: w.name, size: w.size ?? 0, mimeType: w.mimeType }))
+  }
+  return (props.settings.savedFiles ?? []).filter(f =>
+    f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/')
+  )
+})
+
+/** Saved Files table: standalone = wallpapers + savedFiles, extension = savedFiles only */
+const savedFilesForTable = computed(() => {
+  if (isStandalone) {
+    const wallpapers = (props.settings.customize?.image?.wallpapers ?? []).map(w => ({
+      id: w.id,
+      name: w.name,
+      size: w.size ?? 0,
+      mimeType: w.mimeType,
+      _isWallpaper: true as const,
+    }))
+    const breakpointFiles = (props.settings.savedFiles ?? []).map(f => ({
+      ...f,
+      _isWallpaper: false as const,
+    }))
+    return [...wallpapers, ...breakpointFiles]
+  }
+  return (props.settings.savedFiles ?? []).map(f => ({ ...f, _isWallpaper: false as const }))
+})
+
 const displayMode = computed({
   get: () => props.settings.displayMode ?? 'overlay',
   set: (val: DisplayMode) => { props.settings.displayMode = val }
@@ -117,6 +149,18 @@ function handlePickerSelectFile(id: string, name: string) {
   customize.value.image.savedFileId = id
   customize.value.image.fileName = name
   customize.value.image.url = ''
+  if (isStandalone) customize.value.image.wallpaperId = id
+}
+
+function handlePickerAddUrl(url: string) {
+  const urls = customize.value.image.urls ?? []
+  if (urls.includes(url)) return
+  customize.value.image.urls = [...urls, url]
+  customize.value.image.sourceType = 'link'
+  customize.value.image.url = url
+  customize.value.image.savedFileId = ''
+  customize.value.image.fileName = ''
+  if (isStandalone) customize.value.image.wallpaperId = ''
 }
 
 function handlePickerSelectUrl(url: string) {
@@ -124,9 +168,45 @@ function handlePickerSelectUrl(url: string) {
   customize.value.image.url = url
   customize.value.image.savedFileId = ''
   customize.value.image.fileName = ''
+  if (isStandalone) customize.value.image.wallpaperId = ''
+}
+
+function handlePickerRemoveUrl(url: string) {
+  const urls = customize.value.image.urls ?? []
+  customize.value.image.urls = urls.filter(u => u !== url)
+  if (customize.value.image.url === url) {
+    customize.value.image.url = ''
+    customize.value.image.sourceType = 'file'
+    customize.value.image.savedFileId = ''
+    customize.value.image.fileName = ''
+    if (isStandalone) customize.value.image.wallpaperId = ''
+  }
 }
 
 async function handlePickerAddFile(file: File) {
+  if (isStandalone) {
+    const wallpapers = customize.value.image.wallpapers ?? []
+    const nums = wallpapers.map(w => {
+      const m = w.id.match(/^wallpaper_(\d+)$/)
+      return m ? parseInt(m[1], 10) : 0
+    })
+    const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : 1
+    const fileId = `wallpaper_${nextNum}`
+    await putWallpaperBlob(fileId, file)
+    customize.value.image.wallpapers = [...wallpapers, {
+      id: fileId,
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || 'application/octet-stream',
+    }]
+    customize.value.image.sourceType = 'file'
+    customize.value.image.savedFileId = fileId
+    customize.value.image.fileName = file.name
+    customize.value.image.wallpaperId = fileId
+    customize.value.image.url = ''
+    await initWallpapersStore([fileId])
+    return
+  }
   const existing = props.settings.savedFiles.find(
     sf => sf.name === file.name && sf.size === file.size,
   )
@@ -150,6 +230,17 @@ async function handlePickerAddFile(file: File) {
 }
 
 async function handlePickerRemoveFile(id: string) {
+  if (isStandalone) {
+    const wallpapers = customize.value.image.wallpapers ?? []
+    customize.value.image.wallpapers = wallpapers.filter(w => w.id !== id)
+    await removeWallpaperBlob(id)
+    if (customize.value.image.savedFileId === id || customize.value.image.wallpaperId === id) {
+      customize.value.image.savedFileId = ''
+      customize.value.image.fileName = ''
+      customize.value.image.wallpaperId = ''
+    }
+    return
+  }
   if (!props.settings.savedFiles) return
   props.settings.savedFiles = props.settings.savedFiles.filter(f => f.id !== id)
   await removeMedia(id)
@@ -179,7 +270,18 @@ function formatFileSize(bytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`
 }
 
-async function removeSavedFile(fileId: string) {
+async function removeSavedFile(fileId: string, isWallpaper = false) {
+  if (isWallpaper) {
+    const wallpapers = customize.value.image.wallpapers ?? []
+    customize.value.image.wallpapers = wallpapers.filter(w => w.id !== fileId)
+    await removeWallpaperBlob(fileId)
+    if (customize.value.image.savedFileId === fileId || customize.value.image.wallpaperId === fileId) {
+      customize.value.image.savedFileId = ''
+      customize.value.image.fileName = ''
+      customize.value.image.wallpaperId = ''
+    }
+    return
+  }
   if (!props.settings.savedFiles) return
   props.settings.savedFiles = props.settings.savedFiles.filter(f => f.id !== fileId)
   await removeMedia(fileId)
@@ -188,7 +290,48 @@ async function removeSavedFile(fileId: string) {
 async function handleAddNewFile(event: Event) {
   const input = event.target as HTMLInputElement
   const files = input?.files
-  if (!files || !props.settings.savedFiles) return
+  if (!files) return
+  if (isStandalone) {
+    for (const file of Array.from(files)) {
+      const isMedia = file.type.startsWith('image/') || file.type.startsWith('video/')
+      if (isMedia) {
+        const wallpapers = customize.value.image.wallpapers ?? []
+        const alreadySaved = wallpapers.some(w => w.name === file.name && w.size === file.size)
+        if (!alreadySaved) {
+          const nums = wallpapers.map(w => {
+            const m = w.id.match(/^wallpaper_(\d+)$/)
+            return m ? parseInt(m[1], 10) : 0
+          })
+          const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : 1
+          const fileId = `wallpaper_${nextNum}`
+          await putWallpaperBlob(fileId, file)
+          customize.value.image.wallpapers = [...wallpapers, {
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type || 'application/octet-stream',
+          }]
+          await initWallpapersStore([fileId])
+        }
+      } else {
+        if (!props.settings.savedFiles) props.settings.savedFiles = []
+        const alreadySaved = props.settings.savedFiles.some(sf => sf.name === file.name && sf.size === file.size)
+        if (!alreadySaved) {
+          const id = generateId()
+          await addMedia(id, file)
+          props.settings.savedFiles.push({
+            id,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type || 'application/octet-stream',
+          })
+        }
+      }
+    }
+    input.value = ''
+    return
+  }
+  if (!props.settings.savedFiles) return
   for (const file of Array.from(files)) {
     const alreadySaved = props.settings.savedFiles.some(
       sf => sf.name === file.name && sf.size === file.size,
@@ -207,10 +350,22 @@ async function handleAddNewFile(event: Event) {
   input.value = ''
 }
 
-async function handleEditFileChange(event: Event, fileId: string) {
+async function handleEditFileChange(event: Event, fileId: string, isWallpaper = false) {
   const input = event.target as HTMLInputElement
   const file = input?.files?.[0]
   if (!file) return
+  if (isWallpaper) {
+    await putWallpaperBlob(fileId, file)
+    const wp = customize.value.image.wallpapers?.find(w => w.id === fileId)
+    if (wp) {
+      wp.name = file.name
+      wp.size = file.size
+      wp.mimeType = file.type || 'application/octet-stream'
+    }
+    await initWallpapersStore([fileId])
+    input.value = ''
+    return
+  }
   await addMedia(fileId, file)
   const sf = props.settings.savedFiles?.find(f => f.id === fileId)
   if (sf) {
@@ -222,11 +377,11 @@ async function handleEditFileChange(event: Event, fileId: string) {
 }
 
 const savedFilesTableHeight = computed(() => {
-  const rowCount = (props.settings.savedFiles?.length ?? 0) + 1
+  const rowCount = savedFilesForTable.value.length + 1
   return Math.min(rowCount * 41, 205)
 })
 
-const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length ?? 0) > 4)
+const savedFilesNeedsScroll = computed(() => savedFilesForTable.value.length > 4)
 </script>
 
 <template>
@@ -488,7 +643,7 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
             <ScrollArea :style="{ height: `${savedFilesTableHeight}px` }">
               <Table class="table-fixed">
                 <TableBody>
-                  <ContextMenu v-for="file in (settings.savedFiles || [])" :key="file.id">
+                  <ContextMenu v-for="file in savedFilesForTable" :key="file.id">
                     <ContextMenuTrigger as-child>
                       <TableRow
                         class="h-[41px] cursor-pointer transition-colors"
@@ -514,11 +669,11 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
                                   <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground w-full">
                                     <Pencil class="h-4 w-4 mr-2" />
                                     Edit
-                                    <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id)" />
+                                    <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id, file._isWallpaper)" />
                                   </label>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeSavedFile(file.id)">
+                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeSavedFile(file.id, file._isWallpaper)">
                                   <Trash class="h-4 w-4 mr-2" />
                                   Delete
                                 </DropdownMenuItem>
@@ -533,11 +688,11 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
                       <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-secondary hover:text-secondary-foreground w-full">
                         <Pencil class="h-4 w-4 mr-2" />
                         Edit
-                        <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id)" />
+                        <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id, file._isWallpaper)" />
                       </label>
                     </ContextMenuItem>
                     <ContextMenuSeparator />
-                    <ContextMenuItem class="text-destructive_text" @click="removeSavedFile(file.id)">
+                    <ContextMenuItem class="text-destructive_text" @click="removeSavedFile(file.id, file._isWallpaper)">
                       <Trash class="h-4 w-4 mr-2" />
                       Delete
                     </ContextMenuItem>
@@ -560,7 +715,7 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
           <template v-else>
             <Table class="table-fixed">
               <TableBody>
-              <ContextMenu v-for="file in (settings.savedFiles || [])" :key="file.id">
+              <ContextMenu v-for="file in savedFilesForTable" :key="file.id">
                 <ContextMenuTrigger as-child>
                   <TableRow
                     class="h-[41px] cursor-pointer transition-colors"
@@ -586,11 +741,11 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
                               <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground w-full">
                                 <Pencil class="h-4 w-4 mr-2" />
                                 Edit
-                                <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id)" />
+                                <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id, file._isWallpaper)" />
                               </label>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeSavedFile(file.id)">
+                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeSavedFile(file.id, file._isWallpaper)">
                               <Trash class="h-4 w-4 mr-2" />
                               Delete
                             </DropdownMenuItem>
@@ -605,11 +760,11 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
                     <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-secondary hover:text-secondary-foreground w-full">
                       <Pencil class="h-4 w-4 mr-2" />
                       Edit
-                      <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id)" />
+                      <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id, file._isWallpaper)" />
                     </label>
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem class="text-destructive_text" @click="removeSavedFile(file.id)">
+                  <ContextMenuItem class="text-destructive_text" @click="removeSavedFile(file.id, file._isWallpaper)">
                     <Trash class="h-4 w-4 mr-2" />
                     Delete
                   </ContextMenuItem>
@@ -652,11 +807,14 @@ const savedFilesNeedsScroll = computed(() => (props.settings.savedFiles?.length 
 
     <ImagePickerDrawer
       v-model:open="imagePickerOpen"
-      :saved-files="settings.savedFiles"
+      :saved-files="mediaFilesForPicker"
+      :url-images="customize.image.urls"
       :selected-saved-file-id="customize.image.savedFileId"
       :selected-url="customize.image.url"
       @select-file="handlePickerSelectFile"
       @select-url="handlePickerSelectUrl"
+      @add-url="handlePickerAddUrl"
+      @remove-url="handlePickerRemoveUrl"
       @add-file="handlePickerAddFile"
       @remove-file="handlePickerRemoveFile"
     />

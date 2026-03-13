@@ -140,12 +140,27 @@ export type ThemeMode = 'dark' | 'light'
 
 export type ImageSourceType = 'file' | 'link'
 
+/** Standalone: wallpaper entry in IndexedDB wallpapers store */
+export interface WallpaperEntry {
+    id: string
+    name: string
+    size: number
+    mimeType: string
+}
+
 export interface CustomizeSettings {
     image: {
         sourceType: ImageSourceType
+        /** Currently selected URL (when sourceType is 'link') */
         url: string
+        /** List of URLs added by user via Input - can add unlimited */
+        urls: string[]
         savedFileId: string
         fileName: string
+        /** Standalone: selected wallpaper id (key in IndexedDB wallpapers store) */
+        wallpaperId?: string
+        /** Standalone: list of wallpapers for picker (Blob in IndexedDB, key = id) */
+        wallpapers?: WallpaperEntry[]
     }
     positionX: number
     positionY: number

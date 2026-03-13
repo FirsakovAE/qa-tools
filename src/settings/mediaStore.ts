@@ -2,8 +2,9 @@ import { reactive } from 'vue'
 import type { SavedFile } from '@/settings/inspectorSettings'
 
 const DB_NAME = 'vue-inspector-media'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'blobs'
+const WALLPAPERS_STORE = 'wallpapers'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -16,6 +17,9 @@ function openDB(): Promise<IDBDatabase> {
                 const db = req.result
                 if (!db.objectStoreNames.contains(STORE_NAME)) {
                     db.createObjectStore(STORE_NAME)
+                }
+                if (!db.objectStoreNames.contains(WALLPAPERS_STORE)) {
+                    db.createObjectStore(WALLPAPERS_STORE)
                 }
             }
             req.onsuccess = () => resolve(req.result)
@@ -120,4 +124,58 @@ export async function addMedia(id: string, blob: Blob): Promise<void> {
 
 export async function removeMedia(id: string): Promise<void> {
     await removeMediaBlob(id)
+}
+
+// --- Standalone: wallpapers store (key: wallpaper_1, value: Blob) ---
+
+export async function getWallpaperBlob(id: string): Promise<Blob | null> {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(WALLPAPERS_STORE, 'readonly')
+        const req = tx.objectStore(WALLPAPERS_STORE).get(id)
+        req.onsuccess = () => resolve(req.result ?? null)
+        req.onerror = () => reject(req.error)
+    })
+}
+
+export async function putWallpaperBlob(id: string, blob: Blob): Promise<void> {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
+        tx.objectStore(WALLPAPERS_STORE).put(blob, id)
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+    })
+}
+
+export async function removeWallpaperBlob(id: string): Promise<void> {
+    const db = await openDB()
+    await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
+        tx.objectStore(WALLPAPERS_STORE).delete(id)
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+    })
+    if (mediaUrls[id]) {
+        URL.revokeObjectURL(mediaUrls[id])
+        delete mediaUrls[id]
+    }
+}
+
+/**
+ * Load wallpapers from IndexedDB wallpapers store into mediaUrls.
+ * Used in standalone mode: blob = await getWallpaperBlob('wallpaper_1'), video.src = URL.createObjectURL(blob)
+ */
+export async function initWallpapersStore(ids: string[]): Promise<void> {
+    try {
+        for (const id of ids) {
+            if (mediaUrls[id]) continue
+            const blob = await getWallpaperBlob(id)
+            if (blob) {
+                mediaUrls[id] = URL.createObjectURL(blob)
+            }
+        }
+    } catch {
+        // IDB unavailable — fall back silently
+    }
 }

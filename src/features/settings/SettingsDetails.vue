@@ -6,7 +6,7 @@ import '@/assets/markdown.css'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { BreakpointItem, MockRule, FavoriteItem, SavedFile } from '@/types/inspector'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
-import { mediaUrls, getMediaBlob } from '@/settings/mediaStore'
+import { mediaUrls, getMediaBlob, getWallpaperBlob } from '@/settings/mediaStore'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import {
@@ -87,10 +87,22 @@ const favoriteData = computed<FavoriteItem | null>(() => {
 
 const savedFileData = computed<SavedFile | null>(() => {
   if (props.selectedItem?.type !== 'saved-file') return null
-  return props.settings.savedFiles?.find(f => f.id === props.selectedItem!.id) || null
+  const id = props.selectedItem!.id
+  if (id.startsWith('wallpaper_')) {
+    const wp = props.settings.customize?.image?.wallpapers?.find(w => w.id === id)
+    return wp ? { id: wp.id, name: wp.name, size: wp.size, mimeType: wp.mimeType } : null
+  }
+  return props.settings.savedFiles?.find(f => f.id === id) || null
 })
 
 // -------------------- FILE PREVIEW HELPERS --------------------
+async function getFileBlob(fileId: string): Promise<Blob | null> {
+  if (fileId.startsWith('wallpaper_')) {
+    return getWallpaperBlob(fileId)
+  }
+  return getMediaBlob(fileId)
+}
+
 function isImageFile(mime: string): boolean {
   return mime.startsWith('image/')
 }
@@ -118,7 +130,7 @@ watch(savedFileData, async (file) => {
   textPreviewContent.value = '(loading...)'
   if (!file || !isTextFile(file.mimeType)) return
   try {
-    const blob = await getMediaBlob(file.id)
+    const blob = await getFileBlob(file.id)
     if (blob) {
       textPreviewContent.value = await blob.text()
     } else {
@@ -156,7 +168,7 @@ function formatFileSize(bytes: number): string {
 }
 
 async function downloadSavedFile(file: SavedFile) {
-  const blob = await getMediaBlob(file.id)
+  const blob = await getFileBlob(file.id)
   if (!blob) return
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -180,7 +192,7 @@ watch(savedFileData, async (file) => {
     officeBlobUrl.value = null
   }
   if (file && isOfficeFile(file.mimeType)) {
-    const blob = await getMediaBlob(file.id)
+    const blob = await getFileBlob(file.id)
     if (blob) officeBlobUrl.value = URL.createObjectURL(blob)
   }
 }, { immediate: true })

@@ -440,7 +440,7 @@ onMounted(async () => {
             <MenuIcon class="h-4 w-4" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" class="w-[240px] p-4">
+        <SheetContent side="left" class="w-[240px] p-4 text-foreground bg-background">
           <nav class="flex flex-col gap-1 mt-4">
             <Button
               v-for="section in sections"
