@@ -176,7 +176,7 @@ const mockNeedsScroll = computed(() => mockRows.value.length > 4)
         <!-- Fixed Header -->
         <div class="shrink-0 border-b bg-muted/30">
           <Table class="table-fixed">
-            <TableHeader>
+            <TableHeader class="[&_th]:h-10">
               <TableRow class="hover:bg-transparent">
                 <TableHead class="text-xs font-semibold">Description</TableHead>
                 <TableHead class="text-xs font-semibold w-[70px] text-center">Status</TableHead>
@@ -350,7 +350,7 @@ const mockNeedsScroll = computed(() => mockRows.value.length > 4)
         <!-- Fixed Header -->
         <div class="shrink-0 border-b bg-muted/30">
           <Table class="table-fixed">
-            <TableHeader>
+            <TableHeader class="[&_th]:h-10">
               <TableRow class="hover:bg-transparent">
                 <TableHead class="text-xs font-semibold">Description</TableHead>
                 <TableHead class="text-xs font-semibold w-[60px] text-center">Code</TableHead>

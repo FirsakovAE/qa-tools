@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import type { InspectorSettings, DisplayMode, ThemeMode } from '@/settings/inspectorSettings'
 import { addMedia, removeMedia, putWallpaperBlob, removeWallpaperBlob, initWallpapersStore } from '@/settings/mediaStore'
+import { getStorageClient } from '@/storage/storage-client'
+import { MEDIA_LIMIT_BYTES } from '@/storage/storage-protocol'
+import { Progress } from '@/components/ui/Progress'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -64,6 +67,28 @@ const emit = defineEmits<{
 const runtime = getRuntimeAdapter()
 const isRunningInDevtools = runtime?.id === 'devtools'
 const isStandalone = runtime?.capabilities.mode === 'standalone'
+
+// -------------------- STORAGE USAGE (standalone) --------------------
+
+const mediaUsedBytes = ref(0)
+const storageClient = isStandalone ? getStorageClient() : null
+
+async function refreshMediaUsage() {
+  if (!storageClient) return
+  try { mediaUsedBytes.value = await storageClient.getTotalMediaSize() } catch { /* ignore */ }
+}
+
+const mediaUsagePercent = computed(() =>
+  Math.min(100, Math.round((mediaUsedBytes.value / MEDIA_LIMIT_BYTES) * 100))
+)
+
+const mediaUsageLabel = computed(() => {
+  const used = (mediaUsedBytes.value / 1024 / 1024).toFixed(1)
+  const limit = (MEDIA_LIMIT_BYTES / 1024 / 1024).toFixed(0)
+  return `${used} MB / ${limit} MB`
+})
+
+if (isStandalone) onMounted(refreshMediaUsage)
 
 /** Standalone: media files for background picker (from wallpapers store). Extension: from savedFiles. */
 const mediaFilesForPicker = computed(() => {
@@ -205,6 +230,7 @@ async function handlePickerAddFile(file: File) {
     customize.value.image.wallpaperId = fileId
     customize.value.image.url = ''
     await initWallpapersStore([fileId])
+    refreshMediaUsage()
     return
   }
   const existing = props.settings.savedFiles.find(
@@ -239,6 +265,7 @@ async function handlePickerRemoveFile(id: string) {
       customize.value.image.fileName = ''
       customize.value.image.wallpaperId = ''
     }
+    refreshMediaUsage()
     return
   }
   if (!props.settings.savedFiles) return
@@ -280,11 +307,13 @@ async function removeSavedFile(fileId: string, isWallpaper = false) {
       customize.value.image.fileName = ''
       customize.value.image.wallpaperId = ''
     }
+    refreshMediaUsage()
     return
   }
   if (!props.settings.savedFiles) return
   props.settings.savedFiles = props.settings.savedFiles.filter(f => f.id !== fileId)
   await removeMedia(fileId)
+  refreshMediaUsage()
 }
 
 async function handleAddNewFile(event: Event) {
@@ -329,6 +358,7 @@ async function handleAddNewFile(event: Event) {
       }
     }
     input.value = ''
+    refreshMediaUsage()
     return
   }
   if (!props.settings.savedFiles) return
@@ -348,6 +378,7 @@ async function handleAddNewFile(event: Event) {
     }
   }
   input.value = ''
+  refreshMediaUsage()
 }
 
 async function handleEditFileChange(event: Event, fileId: string, isWallpaper = false) {
@@ -364,6 +395,7 @@ async function handleEditFileChange(event: Event, fileId: string, isWallpaper = 
     }
     await initWallpapersStore([fileId])
     input.value = ''
+    refreshMediaUsage()
     return
   }
   await addMedia(fileId, file)
@@ -374,6 +406,7 @@ async function handleEditFileChange(event: Event, fileId: string, isWallpaper = 
     sf.mimeType = file.type || 'application/octet-stream'
   }
   input.value = ''
+  refreshMediaUsage()
 }
 
 const savedFilesTableHeight = computed(() => {
@@ -614,6 +647,15 @@ const savedFilesNeedsScroll = computed(() => savedFilesForTable.value.length > 4
         Files saved from breakpoint form-data editing for quick reuse.
       </p>
 
+      <div v-if="isStandalone" class="flex items-center gap-3">
+        <Progress
+          :model-value="mediaUsagePercent"
+          class="h-2 flex-1"
+          :class="mediaUsagePercent >= 90 ? '[&>*]:bg-destructive' : mediaUsagePercent >= 70 ? '[&>*]:bg-yellow-500' : ''"
+        />
+        <span class="text-xs text-muted-foreground tabular-nums whitespace-nowrap">{{ mediaUsageLabel }}</span>
+      </div>
+
       <div class="flex items-center space-x-3 mb-3">
         <Checkbox
           id="auto-save-files"
@@ -628,7 +670,7 @@ const savedFilesNeedsScroll = computed(() => savedFilesForTable.value.length > 4
       <div class="flex flex-col border rounded-lg">
         <div class="shrink-0 border-b bg-muted/30">
           <Table class="table-fixed">
-            <TableHeader>
+            <TableHeader class="[&_th]:h-10">
               <TableRow class="hover:bg-transparent">
                 <TableHead class="text-xs font-semibold">Name</TableHead>
                 <TableHead class="text-xs font-semibold w-[80px] text-center">Size</TableHead>

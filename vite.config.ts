@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 
@@ -11,6 +12,7 @@ export default defineConfig({
   plugins: [
     vue(),
     tailwindcss(),
+    basicSsl(),
     viteStaticCopy({
       targets: [
         { src: 'manifest.json', dest: '.' },
@@ -23,26 +25,34 @@ export default defineConfig({
       ]
     }),
     {
-      name: 'copy-injected-ui-html',
+      name: 'copy-html-entries',
       closeBundle() {
         const distPath = join(process.cwd(), 'dist')
-        // Vite puts the HTML entry at dist/src/injected-ui/index.html (mirroring input path)
-        // but the extension expects it at dist/injected_ui/index.html
-        const srcHtml = join(distPath, 'src', 'injected-ui', 'index.html')
-        const destDir = join(distPath, 'injected_ui')
-        const destHtml = join(destDir, 'index.html')
 
-        if (existsSync(srcHtml)) {
-          if (!existsSync(destDir)) {
-            mkdirSync(destDir, { recursive: true })
-          }
-          let content = readFileSync(srcHtml, 'utf-8')
-          // Fix relative paths: the source HTML is 2 dirs deep (dist/src/injected-ui/),
-          // but the destination is 1 dir deep (dist/injected_ui/)
+        // injected_ui: dist/src/injected-ui/index.html → dist/injected_ui/index.html
+        const uiSrcHtml = join(distPath, 'src', 'injected-ui', 'index.html')
+        const uiDestDir = join(distPath, 'injected_ui')
+        const uiDestHtml = join(uiDestDir, 'index.html')
+        if (existsSync(uiSrcHtml)) {
+          if (!existsSync(uiDestDir)) mkdirSync(uiDestDir, { recursive: true })
+          let content = readFileSync(uiSrcHtml, 'utf-8')
           content = content
             .replace(/src="\.\.\/\.\.\/injected_ui\/index\.js"/g, 'src="./index.js"')
             .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
-          writeFileSync(destHtml, content, 'utf-8')
+          writeFileSync(uiDestHtml, content, 'utf-8')
+        }
+
+        // storage: dist/src/storage/index.html → dist/storage/index.html
+        const storageSrcHtml = join(distPath, 'src', 'storage', 'index.html')
+        const storageDestDir = join(distPath, 'storage')
+        const storageDestHtml = join(storageDestDir, 'index.html')
+        if (existsSync(storageSrcHtml)) {
+          if (!existsSync(storageDestDir)) mkdirSync(storageDestDir, { recursive: true })
+          let content = readFileSync(storageSrcHtml, 'utf-8')
+          content = content
+            .replace(/src="\.\.\/\.\.\/storage\/index\.js"/g, 'src="./index.js"')
+            .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
+          writeFileSync(storageDestHtml, content, 'utf-8')
         }
       }
     },
@@ -68,7 +78,7 @@ export default defineConfig({
         }
 
         // Копируем необходимые папки для работы standalone
-        const foldersToCopy = ['js', 'injected_ui', 'assets', 'icons']
+        const foldersToCopy = ['js', 'injected_ui', 'storage', 'assets', 'icons']
         foldersToCopy.forEach(folder => {
           const srcPath = join(distPath, folder)
           const destPath = join(docsPath, folder)
@@ -171,6 +181,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         injected_ui_html: 'src/injected-ui/index.html',
+        storage_html: 'src/storage/index.html',
         content: 'src/content/index.ts',
         background: 'src/background.ts',
         injected: 'src/injected/main.ts',
@@ -183,6 +194,9 @@ export default defineConfig({
           }
           if (chunkInfo.name === 'injected_ui_html') {
             return 'injected_ui/index.js'
+          }
+          if (chunkInfo.name === 'storage_html') {
+            return 'storage/index.js'
           }
           return 'assets/[name]-[hash].js'
         },

@@ -133,14 +133,14 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
       <div class="min-w-[460px] flex flex-col h-full">
         <div class="shrink-0 border-b bg-muted/30">
           <Table no-scroll>
-            <TableHeader>
+            <TableHeader class="[&_th]:h-10">
               <TableRow class="hover:bg-transparent">
                 <TableHead class="w-[70px] text-xs font-semibold">Status</TableHead>
                 <TableHead class="w-[70px] text-xs font-semibold">Method</TableHead>
                 <TableHead class="text-xs font-semibold">Path</TableHead>
                 <TableHead class="w-[80px] text-xs font-semibold text-right">Time</TableHead>
                 <TableHead class="w-[80px] text-xs font-semibold text-right">Size</TableHead>
-                <TableHead class="w-[28px]" style="height: 48px; width: 60px;"></TableHead>
+                <TableHead class="w-[28px]" style="width: 60px;"></TableHead>
               </TableRow>
             </TableHeader>
           </Table>

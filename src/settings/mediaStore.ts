@@ -1,6 +1,15 @@
 import { reactive } from 'vue'
 import type { SavedFile } from '@/settings/inspectorSettings'
+import type { StorageClient } from '@/storage/storage-client'
 
+// ── Standalone storage client (set at init) ─────────
+let _storageClient: StorageClient | null = null
+
+export function setMediaStorageClient(client: StorageClient): void {
+    _storageClient = client
+}
+
+// ── Extension-only: direct IndexedDB (vue-inspector-media) ──
 const DB_NAME = 'vue-inspector-media'
 const DB_VERSION = 2
 const STORE_NAME = 'blobs'
@@ -41,6 +50,9 @@ function openDB(): Promise<IDBDatabase> {
 export const mediaUrls = reactive<Record<string, string>>({})
 
 export async function saveMediaBlob(id: string, blob: Blob): Promise<void> {
+    if (_storageClient) {
+        return _storageClient.setMedia(id, blob)
+    }
     const db = await openDB()
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, 'readwrite')
@@ -51,6 +63,9 @@ export async function saveMediaBlob(id: string, blob: Blob): Promise<void> {
 }
 
 export async function getMediaBlob(id: string): Promise<Blob | null> {
+    if (_storageClient) {
+        return _storageClient.getMedia(id)
+    }
     const db = await openDB()
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, 'readonly')
@@ -61,13 +76,17 @@ export async function getMediaBlob(id: string): Promise<Blob | null> {
 }
 
 export async function removeMediaBlob(id: string): Promise<void> {
-    const db = await openDB()
-    await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite')
-        tx.objectStore(STORE_NAME).delete(id)
-        tx.oncomplete = () => resolve()
-        tx.onerror = () => reject(tx.error)
-    })
+    if (_storageClient) {
+        await _storageClient.removeMedia(id)
+    } else {
+        const db = await openDB()
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite')
+            tx.objectStore(STORE_NAME).delete(id)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => reject(tx.error)
+        })
+    }
     if (mediaUrls[id]) {
         URL.revokeObjectURL(mediaUrls[id])
         delete mediaUrls[id]
@@ -126,9 +145,37 @@ export async function removeMedia(id: string): Promise<void> {
     await removeMediaBlob(id)
 }
 
-// --- Standalone: wallpapers store (key: wallpaper_1, value: Blob) ---
+/**
+ * Clear all blobs from the media store and revoke all object URLs.
+ * Used during settings reset to free storage quota.
+ */
+export async function clearAllMedia(): Promise<void> {
+    for (const [id, url] of Object.entries(mediaUrls)) {
+        URL.revokeObjectURL(url)
+        delete mediaUrls[id]
+    }
+    if (_storageClient) {
+        await _storageClient.clearAllMedia()
+        return
+    }
+    try {
+        const db = await openDB()
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction([STORE_NAME, WALLPAPERS_STORE], 'readwrite')
+            tx.objectStore(STORE_NAME).clear()
+            tx.objectStore(WALLPAPERS_STORE).clear()
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => reject(tx.error)
+        })
+    } catch { /* IDB unavailable */ }
+}
+
+// --- Wallpapers (standalone: unified media store via StorageClient, extension: wallpapers store) ---
 
 export async function getWallpaperBlob(id: string): Promise<Blob | null> {
+    if (_storageClient) {
+        return _storageClient.getMedia(id)
+    }
     const db = await openDB()
     return new Promise((resolve, reject) => {
         const tx = db.transaction(WALLPAPERS_STORE, 'readonly')
@@ -139,6 +186,9 @@ export async function getWallpaperBlob(id: string): Promise<Blob | null> {
 }
 
 export async function putWallpaperBlob(id: string, blob: Blob): Promise<void> {
+    if (_storageClient) {
+        return _storageClient.setMedia(id, blob)
+    }
     const db = await openDB()
     return new Promise((resolve, reject) => {
         const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
@@ -149,13 +199,17 @@ export async function putWallpaperBlob(id: string, blob: Blob): Promise<void> {
 }
 
 export async function removeWallpaperBlob(id: string): Promise<void> {
-    const db = await openDB()
-    await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
-        tx.objectStore(WALLPAPERS_STORE).delete(id)
-        tx.oncomplete = () => resolve()
-        tx.onerror = () => reject(tx.error)
-    })
+    if (_storageClient) {
+        await _storageClient.removeMedia(id)
+    } else {
+        const db = await openDB()
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
+            tx.objectStore(WALLPAPERS_STORE).delete(id)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => reject(tx.error)
+        })
+    }
     if (mediaUrls[id]) {
         URL.revokeObjectURL(mediaUrls[id])
         delete mediaUrls[id]
@@ -163,8 +217,9 @@ export async function removeWallpaperBlob(id: string): Promise<void> {
 }
 
 /**
- * Load wallpapers from IndexedDB wallpapers store into mediaUrls.
- * Used in standalone mode: blob = await getWallpaperBlob('wallpaper_1'), video.src = URL.createObjectURL(blob)
+ * Load wallpapers into mediaUrls as object URLs.
+ * Standalone: reads from central-store media via StorageClient.
+ * Extension: reads from vue-inspector-media wallpapers store.
  */
 export async function initWallpapersStore(ids: string[]): Promise<void> {
     try {

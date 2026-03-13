@@ -78,11 +78,11 @@ const handleRowClick = (store: StoreEntry) => {
     <div class="min-w-[360px] flex flex-col h-full">
       <div class="shrink-0 border-b bg-muted/30">
         <Table no-scroll>
-          <TableHeader>
+          <TableHeader class="[&_th]:h-10">
             <TableRow class="hover:bg-transparent">
               <TableHead class="pinia-cell-star pl-4" />
               <TableHead class="text-xs font-semibold">Name</TableHead>
-              <TableHead class="w-[120px] text-xs font-semibold">State</TableHead>
+              <TableHead class="w-[80px] text-xs font-semibold text-center">State</TableHead>
               <TableHead class="w-[80px] text-xs font-semibold text-center">Getters</TableHead>
               <TableHead class="pinia-cell-actions w-[48px] p-0" />
             </TableRow>
@@ -124,7 +124,7 @@ const handleRowClick = (store: StoreEntry) => {
                   </div>
                 </TableCell>
                 
-                <TableCell class="w-[120px] py-2">
+                <TableCell class="w-[80px] py-2 text-center">
                   <Badge 
                     v-if="hasStateKeys(store)"
                     variant="secondary" 

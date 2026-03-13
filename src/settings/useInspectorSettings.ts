@@ -2,7 +2,7 @@ import { reactive, watch, toRaw } from 'vue'
 import { defaultInspectorSettings, type InspectorSettings } from '@/settings/inspectorSettings'
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
-import { initMediaStore, initWallpapersStore, getMediaBlob, getWallpaperBlob, blobToDataUri } from '@/settings/mediaStore'
+import { initMediaStore, initWallpapersStore, getMediaBlob, getWallpaperBlob, blobToDataUri, clearAllMedia } from '@/settings/mediaStore'
 
 const SETTINGS_STORAGE_KEY = 'inspector-settings'
 const STANDALONE_STORAGE_KEY = '__vue_inspector_storage__'
@@ -13,15 +13,13 @@ let isLoaded = false
 let saveTimeout: number | null = null
 
 /**
- * Synchronous preload from sessionStorage or localStorage (standalone mode).
+ * Synchronous preload from sessionStorage (standalone mode).
  * Populates `state` immediately so the first render already has real settings.
- * Tries sessionStorage first (survives F5), then localStorage (survives refresh/new tab).
- * Does NOT set isLoaded — loadFromStorage will run and call initMediaStore.
+ * Does NOT set isLoaded — loadFromStorage will confirm from central-store.
  */
 function trySyncPreload(): void {
     try {
-        let raw = sessionStorage.getItem(STANDALONE_STORAGE_KEY)
-        if (!raw) raw = localStorage.getItem(STANDALONE_STORAGE_KEY)
+        const raw = sessionStorage.getItem(STANDALONE_STORAGE_KEY)
         if (!raw) return
         const data = JSON.parse(raw)
         const saved = data[SETTINGS_STORAGE_KEY]
@@ -82,15 +80,6 @@ async function loadFromStorage(): Promise<void> {
         if (isStandaloneMode()) {
             const adapter = getRuntimeAdapter()
             savedSettings = await adapter?.storage.get(SETTINGS_STORAGE_KEY)
-            if (!savedSettings) {
-                try {
-                    const raw = localStorage.getItem(STANDALONE_STORAGE_KEY)
-                    if (raw) {
-                        const data = JSON.parse(raw)
-                        savedSettings = data[SETTINGS_STORAGE_KEY]
-                    }
-                } catch { /* ignore */ }
-            }
         } else {
             savedSettings = await safeSendMessage({ type: 'GET_SETTINGS' })
         }
@@ -342,6 +331,10 @@ export async function useInspectorSettings(): Promise<InspectorSettings> {
 
 export async function resetInspectorSettings() {
     Object.assign(state, structuredClone(defaultInspectorSettings))
+
+    try {
+        await clearAllMedia()
+    } catch { /* best-effort */ }
 
     try {
         if (isStandaloneMode()) {

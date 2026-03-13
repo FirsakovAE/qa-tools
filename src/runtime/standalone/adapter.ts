@@ -5,9 +5,8 @@
  * Использует postMessage для коммуникации.
  *
  * Storage:
+ *   StorageClient   — communicates with hidden storage iframe (central-store IndexedDB)
  *   sessionStorage  — synchronous preload cache (survives F5)
- *   localStorage    — persistent backup (survives hard refresh)
- *   IndexedDB       — persistent source of truth (survives tab close)
  */
 
 import type { 
@@ -18,69 +17,10 @@ import type {
   MessageHandler,
   Unsubscribe 
 } from '../types'
+import type { StorageClient } from '@/storage/storage-client'
 
 const STORAGE_KEY = '__vue_inspector_storage__'
 const MESSAGE_PREFIX = '__VUE_INSPECTOR__'
-
-const IDB_NAME = 'vue-inspector-standalone'
-const IDB_VERSION = 1
-const IDB_STORE = 'kv'
-
-let idbPromise: Promise<IDBDatabase> | null = null
-
-function openIDB(): Promise<IDBDatabase> {
-  if (idbPromise) return idbPromise
-  idbPromise = new Promise((resolve, reject) => {
-    function tryOpen(useExistingVersion = false) {
-      const req = indexedDB.open(IDB_NAME, useExistingVersion ? undefined : IDB_VERSION)
-      req.onupgradeneeded = () => {
-        const db = req.result
-        if (!db.objectStoreNames.contains(IDB_STORE)) {
-          db.createObjectStore(IDB_STORE)
-        }
-      }
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => {
-        const err = req.error
-        if (err?.name === 'VersionError' && !useExistingVersion) {
-          idbPromise = null
-          tryOpen(true)
-        } else {
-          reject(err)
-        }
-      }
-    }
-    tryOpen(false)
-  })
-  return idbPromise
-}
-
-function idbGet<T>(key: string): Promise<T | null> {
-  return openIDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, 'readonly')
-    const req = tx.objectStore(IDB_STORE).get(key)
-    req.onsuccess = () => resolve(req.result ?? null)
-    req.onerror = () => reject(req.error)
-  }))
-}
-
-function idbSet(key: string, value: unknown): Promise<void> {
-  return openIDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite')
-    tx.objectStore(IDB_STORE).put(value, key)
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  }))
-}
-
-function idbDelete(key: string): Promise<void> {
-  return openIDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite')
-    tx.objectStore(IDB_STORE).delete(key)
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  }))
-}
 
 function sessionGet<T>(key: string): T | null {
   try {
@@ -110,63 +50,29 @@ function sessionRemove(key: string): void {
   } catch { /* silent */ }
 }
 
-function localGet<T>(key: string): T | null {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    const data = stored ? JSON.parse(stored) : {}
-    return (data[key] as T) ?? null
-  } catch {
-    return null
-  }
-}
-
-function localSet(key: string, value: unknown): void {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    const data = stored ? JSON.parse(stored) : {}
-    data[key] = value
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch { /* quota / private mode */ }
-}
-
-function localRemove(key: string): void {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    const data = stored ? JSON.parse(stored) : {}
-    delete data[key]
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch { /* silent */ }
-}
-
 class StandaloneStorage implements RuntimeStorage {
+  constructor(private client: StorageClient) {}
+
   async get<T = unknown>(key: string): Promise<T | null> {
     try {
-      const idbValue = await idbGet<T>(key)
-      if (idbValue !== null) {
-        sessionSet(key, idbValue)
-        localSet(key, idbValue)
-        return idbValue
+      const value = await this.client.getSettings(key) as T | null
+      if (value !== null) {
+        sessionSet(key, value)
       }
-    } catch { /* IDB unavailable */ }
-    const localValue = localGet<T>(key)
-    if (localValue !== null) {
-      sessionSet(key, localValue)
-      try { await idbSet(key, localValue) } catch { /* restore IDB when possible */ }
-      return localValue
+      return value
+    } catch {
+      return sessionGet<T>(key)
     }
-    return sessionGet<T>(key)
   }
 
   async set(key: string, value: unknown): Promise<void> {
     sessionSet(key, value)
-    localSet(key, value)
-    try { await idbSet(key, value) } catch { /* IDB unavailable */ }
+    await this.client.setSettings(value, key)
   }
 
   async remove(key: string): Promise<void> {
     sessionRemove(key)
-    localRemove(key)
-    try { await idbDelete(key) } catch { /* IDB unavailable */ }
+    await this.client.removeSettings(key)
   }
 }
 
@@ -177,6 +83,8 @@ export interface StandaloneAdapterConfig {
   targetWindow?: Window
   /** Origin для postMessage */
   targetOrigin?: string
+  /** StorageClient for central-store IndexedDB */
+  storageClient: StorageClient
 }
 
 export class StandaloneAdapter implements RuntimeAdapter {
@@ -190,7 +98,7 @@ export class StandaloneAdapter implements RuntimeAdapter {
     mode: 'standalone'
   }
 
-  readonly storage = new StandaloneStorage()
+  readonly storage: RuntimeStorage
   
   private config: StandaloneAdapterConfig
   private messageListeners: Set<MessageHandler> = new Set()
@@ -207,6 +115,7 @@ export class StandaloneAdapter implements RuntimeAdapter {
       targetOrigin: '*',
       ...config
     }
+    this.storage = new StandaloneStorage(config.storageClient)
   }
 
   getResourceURL(path: string): string {

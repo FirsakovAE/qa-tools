@@ -5,6 +5,8 @@ import { createApp } from 'vue'
 import App from '../App.vue'
 import { setRuntimeAdapter, createExtensionAdapter, createStandaloneAdapter, createDevtoolsAdapter } from '@/runtime'
 import { useDevtoolsSearch } from '@/composables/useDevtoolsSearch'
+import { createStorageClient } from '@/storage/storage-client'
+import { setMediaStorageClient } from '@/settings/mediaStore'
 
 import '@/assets/index.css'
 import '@/assets/json.css'
@@ -12,7 +14,6 @@ import '@/assets/json-viewer.css'
 import '@/assets/prism-json-theme.css'
 import '@/assets/prism-overrides.css'
 
-// Определяем режим работы и создаём соответствующий адаптер
 function initRuntime() {
   const params = new URLSearchParams(window.location.search)
 
@@ -22,7 +23,6 @@ function initRuntime() {
     if (tabId) {
       const adapter = createDevtoolsAdapter(tabId)
       setRuntimeAdapter(adapter)
-      // Connect Ctrl+F search to panel content (DevTools search bar → window.find)
       useDevtoolsSearch()
       return
     }
@@ -40,7 +40,6 @@ function initRuntime() {
     isStandalone = true
     baseURL = decodeURIComponent(standaloneMatch[1])
   } else {
-    // Fallback: проверяем window.parent (работает только для same-origin)
     try {
       isStandalone = !!(window.parent as any)?.__VUE_INSPECTOR_STANDALONE__
       baseURL = (window.parent as any)?.__VUE_INSPECTOR_BASE_URL__ || ''
@@ -50,30 +49,29 @@ function initRuntime() {
   }
 
   if (isStandalone) {
-    // Standalone mode
+    const storageClient = createStorageClient(baseURL + '/storage/')
+    setMediaStorageClient(storageClient)
+
     const adapter = createStandaloneAdapter({
       baseURL,
-      targetWindow: window.parent
+      targetWindow: window.parent,
+      storageClient,
     })
     setRuntimeAdapter(adapter)
   } else {
-    // Extension mode
     const adapter = createExtensionAdapter()
     setRuntimeAdapter(adapter)
   }
 }
 
-// Инициализируем runtime ДО монтирования Vue приложения
 initRuntime()
 
-// Добавляем Toaster в injected UI
 import { Toaster } from '@/components/ui/Toaster'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 
 const app = createApp(App)
 app.component('Toaster', Toaster)
 
-// Загружаем настройки и медиа (wallpapers) до монтирования, чтобы Infusion получил src при первом рендере
 useInspectorSettings().then(() => {
   app.mount('#app')
 })
