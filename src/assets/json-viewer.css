@@ -51,6 +51,11 @@ pre[class*=language-] {
 
 /* JSON editor стили */
 .json-editor {
+    font-family: inherit !important;
+    font-size: inherit !important;
+    line-height: inherit !important;
+    font-weight: inherit !important;
+    font-style: inherit !important;
     color: hsl(var(--foreground));
     caret-color: hsl(var(--foreground));
 }
