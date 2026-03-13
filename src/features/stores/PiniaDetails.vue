@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { ArrowLeft, Edit, X, Save, RefreshCw } from 'lucide-vue-next'
+import { ArrowLeft, Edit, X, Save, RefreshCw, Star } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +13,8 @@ import {
 import JsonEditor from '@/components/JsonEditor.vue'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
+import type { BaseInspectorSettings, PiniaFavoriteItem } from '@/types/inspector'
+import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavoritesMatcher'
 
 const runtime = useRuntime()
 
@@ -59,6 +61,44 @@ const isGettersJsonValid = computed(() => {
 
 // JSON Mode
 const jsonMode = ref<'text' | 'tree'>('text')
+
+// --- Favorites (by store name) ---
+const settings = ref<BaseInspectorSettings | null>(null)
+const storeName = computed(() => props.store.baseId || 'Unknown Store')
+const isFavorite = computed(() => {
+  if (!settings.value?.piniaFavorites) return false
+  const name = storeName.value
+  return isStoreInFavorites(name, settings.value.piniaFavorites)
+})
+
+async function toggleFavorite() {
+  if (!settings.value) return
+
+  const name = storeName.value
+
+  if (isFavorite.value) {
+    settings.value.piniaFavorites = settings.value.piniaFavorites.filter(f => {
+      if (f.id === name || f.name === name) return false
+      if (matchFavoritePattern(name, f.id) || matchFavoritePattern(name, f.name)) return false
+      return true
+    })
+  } else {
+    const favoriteItem: PiniaFavoriteItem = {
+      id: name,
+      storeId: storeId,
+      name,
+      timestamp: new Date().toISOString()
+    }
+    settings.value.piniaFavorites.push(favoriteItem)
+  }
+
+  try {
+    const settingsToSave = JSON.parse(JSON.stringify(settings.value))
+    await runtime.storage.set('vue-inspector-settings', settingsToSave)
+  } catch {
+    // Ignore save errors
+  }
+}
 
 // Sections definition
 const sections = computed(() => {
@@ -263,9 +303,10 @@ let unsubscribeMessage: (() => void) | null = null
 onMounted(async () => {
   unsubscribeMessage = runtime.onMessage(handlePiniaMessage)
 
-  // Load JSON mode setting
-  const settings = await useInspectorSettings()
-  jsonMode.value = settings?.json?.mode ?? 'text'
+  // Load settings (for favorites and JSON mode)
+  const loadedSettings = await useInspectorSettings()
+  settings.value = loadedSettings
+  jsonMode.value = loadedSettings?.json?.mode ?? 'text'
   
   // Load store data
   loadStoreData()
@@ -303,6 +344,26 @@ onUnmounted(() => {
         
         <!-- Edit/Save/Cancel buttons in header -->
         <div class="flex items-center gap-1 shrink-0">
+          <!-- Favorite button -->
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-8 w-8"
+                @click="toggleFavorite"
+              >
+                <Star 
+                  class="h-4 w-4" 
+                  :class="isFavorite ? 'text-yellow-500 fill-yellow-500' : ''"
+                />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {{ isFavorite ? 'Remove from favorites' : 'Add to favorites' }}
+            </TooltipContent>
+          </Tooltip>
+          
           <!-- Refresh button (read-only mode) -->
           <Tooltip v-if="!isEditing">
             <TooltipTrigger as-child>

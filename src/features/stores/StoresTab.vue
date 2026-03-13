@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { SearchIcon, RefreshCw } from 'lucide-vue-next'
+import { SearchIcon, RefreshCw, Star } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,7 @@ import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import { deepSearchKey, deepSearchValue } from '@/features/props'
+import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavoritesMatcher'
 
 const runtime = useRuntime()
 
@@ -313,6 +314,12 @@ watch(needsStoreData, (needs) => {
   }
 })
 
+function isFavoriteStore(store: StoreEntry): boolean {
+  if (!settings.value?.piniaFavorites?.length) return false
+  const name = store.baseId || ''
+  return isStoreInFavorites(name, settings.value.piniaFavorites)
+}
+
 // Filter stores
 const filteredEntries = computed(() => {
   const q = debouncedSearchTerm.value.toLowerCase().trim()
@@ -348,6 +355,18 @@ const filteredEntries = computed(() => {
   })
 })
 
+// Sort: favorites first
+const sortedEntries = computed(() => {
+  const list = [...filteredEntries.value]
+  return list.sort((a, b) => {
+    const aFav = isFavoriteStore(a)
+    const bFav = isFavoriteStore(b)
+    if (aFav && !bFav) return -1
+    if (!aFav && bFav) return 1
+    return 0
+  })
+})
+
 // Active search types for badges
 const activeSearchTypes = computed(() => {
   const types: string[] = []
@@ -366,8 +385,9 @@ const selectedStore = computed(() => {
   return entries.value.find(s => s.id === selectedStoreId.value) || null
 })
 
-const entriesCount = computed(() => filteredEntries.value.length)
+const entriesCount = computed(() => sortedEntries.value.length)
 const totalCount = computed(() => entries.value.length)
+const favoritesCount = computed(() => sortedEntries.value.filter(s => isFavoriteStore(s)).length)
 
 // ============================================================================
 // Actions
@@ -384,6 +404,35 @@ function deselectStore() {
 async function handleRefresh() {
   if (isLoading.value) return
   await loadStoresSummary()
+}
+
+async function toggleFavorite(store: StoreEntry) {
+  if (!settings.value) return
+
+  const name = store.baseId || 'Unknown Store'
+  const isFav = isFavoriteStore(store)
+
+  if (isFav) {
+    settings.value.piniaFavorites = settings.value.piniaFavorites.filter(f => {
+      if (f.id === name || f.name === name) return false
+      if (matchFavoritePattern(name, f.id) || matchFavoritePattern(name, f.name)) return false
+      return true
+    })
+  } else {
+    settings.value.piniaFavorites.push({
+      id: name,
+      storeId: store.id,
+      name,
+      timestamp: new Date().toISOString()
+    })
+  }
+
+  try {
+    const settingsToSave = JSON.parse(JSON.stringify(settings.value))
+    await runtime.storage.set('vue-inspector-settings', settingsToSave)
+  } catch {
+    // Ignore save errors
+  }
 }
 
 // ============================================================================
@@ -446,6 +495,10 @@ onUnmounted(() => {
               {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
             </template>
           </Badge>
+          <Badge v-if="favoritesCount > 0" variant="outline" class="text-yellow-500 border-yellow-500/30">
+            <Star class="h-3 w-3 mr-1 fill-yellow-500" />
+            {{ favoritesCount }}
+          </Badge>
           
           <!-- Refresh button -->
           <Tooltip>
@@ -477,9 +530,11 @@ onUnmounted(() => {
         <!-- Left: Table -->
         <div class="h-full min-h-0 overflow-hidden">
           <PiniaTable
-            :entries="filteredEntries"
+            :entries="sortedEntries"
             :selected-id="selectedStoreId"
+            :pinia-favorites="settings?.piniaFavorites ?? []"
             @select="selectStore"
+            @toggle-favorite="toggleFavorite"
           />
         </div>
         

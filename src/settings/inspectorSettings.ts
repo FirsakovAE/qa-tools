@@ -1,7 +1,7 @@
-import type { BaseInspectorSettings, FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType } from '@/types/inspector'
+import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType } from '@/types/inspector'
 
 export type InspectorSettings = BaseInspectorSettings
-export type { FavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType }
+export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType }
 
 /** Default Network search settings */
 const defaultNetworkSearchSettings: NetworkSearchSettings = {
@@ -39,6 +39,7 @@ export const defaultInspectorSettings: InspectorSettings = {
     displayMode: 'overlay',
     blacklist: { active: [], inactive: [] },
     favorites: [],
+    piniaFavorites: [],
     breakpoints: { active: [], inactive: [] },
     mocks: { active: [], inactive: [] },
     networkSearch: { ...defaultNetworkSearchSettings },

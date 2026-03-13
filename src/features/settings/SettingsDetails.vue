@@ -4,7 +4,7 @@ import { useEscapeClose } from '@/composables/useEscapeClose'
 import { marked } from 'marked'
 import '@/assets/markdown.css'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { BreakpointItem, MockRule, FavoriteItem, SavedFile } from '@/types/inspector'
+import type { BreakpointItem, MockRule, FavoriteItem, PiniaFavoriteItem, SavedFile } from '@/types/inspector'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
 import { mediaUrls, getMediaBlob, getWallpaperBlob } from '@/settings/mediaStore'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -19,7 +19,11 @@ import {
   Pencil,
   FileSpreadsheet,
   FileText,
+  Edit,
+  X,
+  Save,
 } from 'lucide-vue-next'
+import { Input } from '@/components/ui/input'
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -31,8 +35,9 @@ const renderedBody = computed(() => {
 
 const props = defineProps<{
   settings: InspectorSettings
-  selectedItem: { type: 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'saved-file'; id: string } | null
+  selectedItem: { type: 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file'; id: string } | null
   releaseInfo?: ReleaseDisplayInfo | null
+  piniaFavoriteEditMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -41,6 +46,7 @@ const emit = defineEmits<{
   (e: 'ignore-version', version: string): void
   (e: 'download-update', url: string): void
   (e: 'edit'): void
+  (e: 'pinia-favorite-edit-done', newId?: string): void
 }>()
 
 useEscapeClose(
@@ -84,6 +90,39 @@ const favoriteData = computed<FavoriteItem | null>(() => {
   if (props.selectedItem?.type !== 'favorite') return null
   return props.settings.favorites.find(f => f.id === props.selectedItem!.id) || null
 })
+
+const piniaFavoriteData = computed<PiniaFavoriteItem | null>(() => {
+  if (props.selectedItem?.type !== 'pinia-favorite') return null
+  return props.settings.piniaFavorites?.find(f => f.id === props.selectedItem!.id) || null
+})
+
+// Pinia favorite edit state
+const editedPiniaFavoriteName = ref('')
+watch(
+  () => [props.piniaFavoriteEditMode, piniaFavoriteData.value] as const,
+  ([editMode, data]) => {
+    if (editMode && data) {
+      editedPiniaFavoriteName.value = data.name
+    }
+  },
+  { immediate: true }
+)
+
+function savePiniaFavoriteEdit() {
+  const fav = piniaFavoriteData.value
+  if (!fav || !props.settings.piniaFavorites) return
+  const newName = editedPiniaFavoriteName.value.trim()
+  if (!newName) return
+  const idx = props.settings.piniaFavorites.findIndex(f => f.id === fav.id)
+  if (idx === -1) return
+  const updated = { ...fav, id: newName, name: newName }
+  props.settings.piniaFavorites[idx] = updated
+  emit('pinia-favorite-edit-done', newName)
+}
+
+function cancelPiniaFavoriteEdit() {
+  emit('pinia-favorite-edit-done')
+}
 
 const savedFileData = computed<SavedFile | null>(() => {
   if (props.selectedItem?.type !== 'saved-file') return null
@@ -330,7 +369,7 @@ function formatTrigger(trigger: string): string {
           <ArrowLeft class="h-4 w-4" />
         </Button>
         <span class="text-sm font-semibold">
-          {{ selectedItem.type === 'saved-file' ? 'File Preview' : selectedItem.type.charAt(0).toUpperCase() + selectedItem.type.slice(1) + ' Details' }}
+          {{ selectedItem.type === 'saved-file' ? 'File Preview' : selectedItem.type === 'pinia-favorite' ? 'Favorite Store Details' : selectedItem.type.charAt(0).toUpperCase() + selectedItem.type.slice(1) + ' Details' }}
         </span>
         <div class="flex-1" />
         <Button
@@ -343,6 +382,22 @@ function formatTrigger(trigger: string): string {
           <Pencil class="h-3.5 w-3.5" />
           Edit
         </Button>
+        <!-- Pinia favorite: Edit/Cancel/Save icons -->
+        <template v-else-if="selectedItem.type === 'pinia-favorite' && piniaFavoriteData">
+          <template v-if="!piniaFavoriteEditMode">
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Edit" @click="emit('edit')">
+              <Edit class="h-4 w-4" />
+            </Button>
+          </template>
+          <template v-else>
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Cancel" @click="cancelPiniaFavoriteEdit">
+              <X class="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Save" :disabled="!editedPiniaFavoriteName.trim()" @click="savePiniaFavoriteEdit">
+              <Save class="h-4 w-4" />
+            </Button>
+          </template>
+        </template>
       </div>
 
       <!-- Content -->
@@ -494,6 +549,27 @@ function formatTrigger(trigger: string): string {
               <div>
                 <span class="text-xs text-muted-foreground">Added</span>
                 <p class="text-sm mt-1">{{ new Date(favoriteData.timestamp).toLocaleString() }}</p>
+              </div>
+            </div>
+          </template>
+
+          <!-- Pinia Favorite Details -->
+          <template v-else-if="selectedItem.type === 'pinia-favorite' && piniaFavoriteData">
+            <div class="space-y-3">
+              <div>
+                <span class="text-xs text-muted-foreground">Store Name</span>
+                <Input
+                  v-if="piniaFavoriteEditMode"
+                  v-model="editedPiniaFavoriteName"
+                  class="mt-1 font-mono"
+                  placeholder="Store name"
+                  @keydown.enter.prevent="savePiniaFavoriteEdit"
+                />
+                <p v-else class="font-mono text-sm mt-1">{{ piniaFavoriteData.name }}</p>
+              </div>
+              <div>
+                <span class="text-xs text-muted-foreground">Added</span>
+                <p class="text-sm mt-1">{{ new Date(piniaFavoriteData.timestamp).toLocaleString() }}</p>
               </div>
             </div>
           </template>

@@ -77,11 +77,12 @@ const sections = [
 ]
 
 // -------------------- SELECTED ITEM --------------------
-type SelectedItemType = 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'saved-file'
+type SelectedItemType = 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file'
 const selectedItem = ref<{ type: SelectedItemType; id: string } | null>(null)
 
 watch(activeSection, () => {
   selectedItem.value = null
+  piniaFavoriteEditMode.value = false
   if (activeSection.value !== 'about') {
     releaseInfo.value = null
   }
@@ -163,6 +164,8 @@ function handleEditFromDetails() {
     handleEditBreakpoint(selectedItem.value.id)
   } else if (selectedItem.value.type === 'mock') {
     handleEditMock(selectedItem.value.id)
+  } else if (selectedItem.value.type === 'pinia-favorite') {
+    piniaFavoriteEditMode.value = true
   }
 }
 
@@ -171,6 +174,21 @@ function handleEditFormBack() {
   editEntry.value = null
   editExistingBreakpoint.value = null
   editExistingMock.value = null
+  piniaFavoriteEditMode.value = false
+}
+
+const piniaFavoriteEditMode = ref(false)
+
+function handleEditPiniaFavorite(item: { type: 'pinia-favorite'; id: string }) {
+  selectedItem.value = item
+  piniaFavoriteEditMode.value = true
+}
+
+function handlePiniaFavoriteEditDone(newId?: string) {
+  piniaFavoriteEditMode.value = false
+  if (newId && selectedItem.value?.type === 'pinia-favorite') {
+    selectedItem.value = { type: 'pinia-favorite', id: newId }
+  }
 }
 
 function handleBreakpointEditConfirm(breakpoint: BreakpointItem) {
@@ -530,6 +548,9 @@ onMounted(async () => {
             <PiniaSection
               v-else-if="activeSection === 'pinia'"
               :settings="settings"
+              :selected-item-id="selectedItem?.type === 'pinia-favorite' ? selectedItem.id : null"
+              @select="onSelectItem"
+              @edit="handleEditPiniaFavorite"
             />
             <AboutSection
               v-else-if="activeSection === 'about'"
@@ -567,11 +588,13 @@ onMounted(async () => {
           :settings="settings"
           :selected-item="selectedItem"
           :release-info="activeSection === 'about' ? releaseInfo : null"
-          @close="selectedItem = null"
+          :pinia-favorite-edit-mode="piniaFavoriteEditMode"
+          @close="selectedItem = null; piniaFavoriteEditMode = false"
           @close-release="handleCloseRelease"
           @ignore-version="handleIgnoreVersion"
           @download-update="handleDownloadUpdate"
           @edit="handleEditFromDetails"
+          @pinia-favorite-edit-done="handlePiniaFavoriteEditDone"
         />
       </div>
     </div>

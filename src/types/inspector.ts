@@ -8,6 +8,17 @@ export interface FavoriteItem {
     timestamp: string
 }
 
+/** Pinia store favorite - identified by store name */
+export interface PiniaFavoriteItem {
+    /** Store name (used as identifier) */
+    id: string
+    /** Store ID for exact matching */
+    storeId?: string
+    /** Store name (display) */
+    name: string
+    timestamp: string
+}
+
 /**
  * Breakpoint trigger type - when to intercept
  */
@@ -183,6 +194,8 @@ export interface BaseInspectorSettings {
     displayMode: DisplayMode
     blacklist: { active: string[]; inactive: string[] }
     favorites: FavoriteItem[]
+    /** Pinia store favorites (by store name) */
+    piniaFavorites: PiniaFavoriteItem[]
     breakpoints: { active: BreakpointItem[]; inactive: BreakpointItem[] }
     /** Mock rules for Map Local feature - intercept requests and return fake responses */
     mocks: { active: MockRule[]; inactive: MockRule[] }

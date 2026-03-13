@@ -199,6 +199,11 @@ function migrateSearchSettings(saved: any): void {
         delete saved.piniaSearch.byRootElement
     }
 
+    // Миграция: добавляем piniaFavorites если отсутствует
+    if (!Array.isArray(saved.piniaFavorites)) {
+        saved.piniaFavorites = []
+    }
+
     // Миграция: networkSearch — byLabel -> byMethod, byName -> byPath, добавляем byStatus, удаляем byRootElement
     if (saved.networkSearch) {
         if (saved.networkSearch.byLabel !== undefined && saved.networkSearch.byMethod === undefined) {
