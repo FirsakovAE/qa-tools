@@ -100,21 +100,12 @@ export function handleInjectedMessage(event: MessageEvent): void {
   if (event.data.type === 'VUE_INSPECTOR_DETECTION_RESULT') {
     const { hasVue, hasPinia, vueVersion } = event.data
     
-    // Capture previous state for comparison
-    const wasFirstDetection = !detectionCompleted
-    const prevHasVue = featureFlags.hasVue
-    const prevHasPinia = featureFlags.hasPinia
-    
     // Update flags (one-way update: false -> true)
     const newFlags = { 
       hasVue: featureFlags.hasVue || hasVue, 
       hasPinia: featureFlags.hasPinia || hasPinia, 
       vueVersion: vueVersion ?? featureFlags.vueVersion 
     }
-    
-    const flagsChanged = 
-      (newFlags.hasVue !== prevHasVue) || 
-      (newFlags.hasPinia !== prevHasPinia)
     
     setFeatureFlags(newFlags)
     
@@ -123,10 +114,8 @@ export function handleInjectedMessage(event: MessageEvent): void {
       stopDetection()
     }
     
-    // Send flags to UI if something changed or first detection
-    if (flagsChanged || wasFirstDetection) {
-      sendFlagsToUI()
-    }
+    // Always send flags so overlay receives them (may have mounted late)
+    sendFlagsToUI()
     
     // Notify background
     try {

@@ -70,33 +70,6 @@ export function injectInspectorUI(): void {
     -webkit-user-select: none;
   `
 
-  let detectionDone = false
-  
-  // Detection result handler - keeps listening for updates
-  const handleDetectionForUI = (event: MessageEvent) => {
-    // Only process messages from injected script
-    if (!event.data?.__FROM_VUE_INSPECTOR__) return
-    
-    if (event.data.type === 'VUE_INSPECTOR_DETECTION_RESULT') {
-      // Mark first detection complete (don't remove listener - allow updates)
-      if (!detectionDone) {
-        detectionDone = true
-      }
-      
-      // Always send flags to UI on detection result
-      sendFlagsToUI()
-    }
-    
-    // Also handle PROPS_READY and PINIA_READY for reactive detection
-    if (event.data.type === 'VUE_INSPECTOR_PROPS_READY' || 
-        event.data.type === 'VUE_INSPECTOR_PINIA_READY') {
-      sendFlagsToUI()
-    }
-  }
-  
-  // Track if detection listener is active
-  let detectionListenerActive = false
-  
   // Function for lazy loading resources
   const loadResourcesIfNeeded = () => {
     if (iframeLoaded) return
@@ -108,13 +81,7 @@ export function injectInspectorUI(): void {
     // Initialize bridge for UI (only when iframe is created)
     setupUIMessageBridge()
     
-    // Listen for detection results (keep active for reactive detection)
-    if (!detectionListenerActive) {
-      window.addEventListener('message', handleDetectionForUI)
-      detectionListenerActive = true
-    }
-    
-    // Add global message listener (if not added yet)
+    // Add global message listener (handles detection + sendFlagsToUI)
     addMessageListenerIfNeeded()
     
     // 1. Load injected script (for detection)
@@ -128,10 +95,7 @@ export function injectInspectorUI(): void {
     iframe.style.display = 'block'
     
     iframe.onload = () => {
-      // Reset detection flags
-      resetDetectionState()
-      
-      // Request detection
+      // Request detection (reset already done at start of loadResourcesIfNeeded)
       window.postMessage({ type: 'VUE_INSPECTOR_CHECK_VUE' }, '*')
       
       // Replay queued network messages (breakpoint hits received while iframe was unloaded)
@@ -159,14 +123,6 @@ export function injectInspectorUI(): void {
     }
   }
   
-  // Cleanup detection listener
-  const cleanupDetectionListener = () => {
-    if (detectionListenerActive) {
-      window.removeEventListener('message', handleDetectionForUI)
-      detectionListenerActive = false
-    }
-  }
-
   // Create collapse button (sibling, not child) — premium SaaS style
   const toggle = document.createElement('button')
   toggle.id = 'vue-inspector-toggle'
@@ -237,7 +193,7 @@ export function injectInspectorUI(): void {
     if (!isCollapsed) {
       loadResourcesIfNeeded()
       
-      // When expanding: always request fresh detection and send current flags.
+      // When expanding with iframe already loaded: request fresh detection.
       // Fixes Vue/Pinia not being detected when switching from DevTools to Overlay mode.
       if (iframeLoaded && uiBridgeInitialized) {
         resetDetectionState()
@@ -246,12 +202,7 @@ export function injectInspectorUI(): void {
           setInjectedScriptLoaded(true)
         }
         addMessageListenerIfNeeded()
-        if (!detectionListenerActive) {
-          window.addEventListener('message', handleDetectionForUI)
-          detectionListenerActive = true
-        }
         window.postMessage({ type: 'VUE_INSPECTOR_CHECK_VUE' }, '*')
-        sendFlagsToUI()
       }
     }
     
@@ -267,10 +218,8 @@ export function injectInspectorUI(): void {
           visible: !isCollapsed
         }
       }, '*')
-      // Re-send flags when expanding — overlay may have mounted late (e.g. after media load)
-      if (!isCollapsed) {
-        sendFlagsToUI()
-      }
+      // Send flags when expanding — overlay may have mounted late (e.g. after media load)
+      if (!isCollapsed) sendFlagsToUI()
     }
     
     // RESOURCE SAVING: if Vue not found and panel collapsed - unload iframe
@@ -279,11 +228,9 @@ export function injectInspectorUI(): void {
       // Fully unload iframe - remove src and clear
       iframe.src = 'about:blank'
       iframeLoaded = false
-      detectionDone = false
       
       // Remove listeners (will be created again on next open)
       removeUIMessageBridge()
-      cleanupDetectionListener()
     }
   }
 
