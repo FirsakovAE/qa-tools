@@ -401,17 +401,15 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   padding: 0;
 }
 
-/* Props column - align with Getters (Pinia Store): w-80px, text-center */
+/* Props column - align with Getters (Pinia Store): w-80px, center */
 .props-cell-props {
   width: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   text-align: center;
-  padding-left: 16px;
-  padding-right: 8px;
-}
-
-/* Header Props cell - shift left to align with row content */
-.props-header .props-cell-props {
-  padding-left: 0px;
+  padding-left: 8px;
+  padding-right: 16px;
 }
 
 .props-cell-actions {

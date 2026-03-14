@@ -118,6 +118,7 @@ export interface SearchIndexEntry {
 export interface NetworkTableColumnsSettings {
     status: boolean
     method: boolean
+    name: boolean
     path: boolean
     time: boolean
     size: boolean

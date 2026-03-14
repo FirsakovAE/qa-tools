@@ -14,19 +14,29 @@ export interface ColumnDefinition {
   label: string
 }
 
-const props = defineProps<{
-  /** Column visibility state - object with column keys and boolean values */
-  columns: { [key: string]: boolean }
-  columnDefinitions: readonly ColumnDefinition[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** Column visibility state - object with column keys and boolean values */
+    columns: { [key: string]: boolean }
+    columnDefinitions: readonly ColumnDefinition[]
+    /** Column keys that cannot be toggled off (e.g. for AnyOf constraints) */
+    disabledColumns?: string[]
+  }>(),
+  { disabledColumns: () => [] }
+)
 
 const emit = defineEmits<{
   (e: 'update:column', key: string, value: boolean): void
 }>()
 
 function toggleColumn(key: string) {
+  if (props.disabledColumns?.includes(key)) return
   const current = props.columns[key] ?? true
   emit('update:column', key, !current)
+}
+
+function isColumnDisabled(key: string): boolean {
+  return props.disabledColumns?.includes(key) ?? false
 }
 </script>
 
@@ -46,11 +56,12 @@ function toggleColumn(key: string) {
       <DropdownMenuItem
         v-for="def in columnDefinitions"
         :key="def.key"
-        class="cursor-pointer"
-        @select="(e: Event) => { e.preventDefault(); toggleColumn(def.key) }"
+        :class="['cursor-pointer', isColumnDisabled(def.key) && 'opacity-50 cursor-not-allowed']"
+        @select="(e: Event) => { if (isColumnDisabled(def.key)) return; e.preventDefault(); toggleColumn(def.key) }"
       >
         <Checkbox
           :model-value="columns[def.key] ?? true"
+          :disabled="isColumnDisabled(def.key)"
           class="pointer-events-none mr-2 shrink-0"
         />
         {{ def.label }}

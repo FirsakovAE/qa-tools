@@ -216,9 +216,16 @@ function migrateSearchSettings(saved: any): void {
         saved.networkTableColumns = {
             status: true,
             method: true,
+            name: false,
             path: true,
             time: true,
             size: true,
+        }
+    } else {
+        if (saved.networkTableColumns.name === undefined) saved.networkTableColumns.name = false
+        // AnyOf: at least one of name/path must be enabled
+        if (!saved.networkTableColumns.name && !saved.networkTableColumns.path) {
+            saved.networkTableColumns.path = true
         }
     }
 

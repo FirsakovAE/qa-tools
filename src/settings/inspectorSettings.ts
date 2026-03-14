@@ -3,10 +3,11 @@ import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, Breakpoint
 export type InspectorSettings = BaseInspectorSettings
 export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType }
 
-/** Default Network table columns (all visible) */
+/** Default Network table columns (all visible except Name) */
 const defaultNetworkTableColumns: NetworkTableColumnsSettings = {
     status: true,
     method: true,
+    name: false,
     path: true,
     time: true,
     size: true,

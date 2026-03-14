@@ -80,6 +80,7 @@ const columns = computed(() => {
   return cols ?? {
     status: true,
     method: true,
+    name: false,
     path: true,
     time: true,
     size: true,
@@ -91,8 +92,23 @@ function setColumn(key: keyof NetworkTableColumnsSettings, value: boolean) {
   if (!settings.value.networkTableColumns) {
     settings.value.networkTableColumns = { ...defaultInspectorSettings.networkTableColumns! }
   }
+  // AnyOf: cannot disable both name and path — at least one must stay enabled
+  if ((key === 'name' || key === 'path') && value === false) {
+    const other = key === 'name' ? 'path' : 'name'
+    const otherVal = settings.value.networkTableColumns[other]
+    if (!otherVal) return // would leave both disabled — reject
+  }
   settings.value.networkTableColumns[key] = value
 }
+
+// Columns that cannot be toggled off (AnyOf: name | path must stay enabled)
+const networkDisabledColumns = computed(() => {
+  const name = columns.value.name
+  const path = columns.value.path
+  if (name && !path) return ['name'] // only name on — can't disable it
+  if (!name && path) return ['path'] // only path on — can't disable it
+  return []
+})
 
 onMounted(async () => {
   settings.value = await useInspectorSettings()
@@ -101,6 +117,8 @@ onMounted(async () => {
 const networkColumnDefs = [
   { key: 'status', label: 'Status' },
   { key: 'method', label: 'Method' },
+  { key: 'name', label: 'Name' },
+  { key: 'path', label: 'Path' },
   { key: 'time', label: 'Time' },
   { key: 'size', label: 'Size' },
 ] as const
@@ -130,14 +148,15 @@ function matchesMockPattern(entryId: string): boolean {
     </div>
 
     <div v-else class="h-full flex flex-col overflow-hidden table-scroll-x">
-      <div class="min-w-[460px] flex flex-col h-full">
-        <div class="shrink-0 border-b bg-muted/30">
-          <Table no-scroll>
-            <TableHeader class="[&_th]:h-10">
+      <div class="min-w-[460px] flex flex-col h-full min-h-0">
+        <ScrollArea class="flex-1 min-h-0">
+          <Table no-scroll class="table-fixed">
+            <TableHeader class="[&_th]:h-10 sticky top-0 z-10 bg-muted/30 border-b [&_tr]:border-b-0">
               <TableRow class="hover:bg-transparent">
                 <TableHead v-if="columns.status" class="w-[70px] text-xs font-semibold">Status</TableHead>
                 <TableHead v-if="columns.method" class="w-[70px] text-xs font-semibold">Method</TableHead>
-                <TableHead class="text-xs font-semibold">Path</TableHead>
+                <TableHead v-if="columns.name" :class="['min-w-0 text-xs font-semibold', columns.path ? 'w-[140px]' : '']">Name</TableHead>
+                <TableHead v-if="columns.path" class="min-w-0 text-xs font-semibold">Path</TableHead>
                 <TableHead v-if="columns.time" class="w-[80px] text-xs font-semibold text-center">Time</TableHead>
                 <TableHead v-if="columns.size" class="w-[80px] text-xs font-semibold text-center">Size</TableHead>
                 <TableHead class="w-[60px] py-2 p-0 text-center">
@@ -145,18 +164,14 @@ function matchesMockPattern(entryId: string): boolean {
                     <TableColumnSelector
                       :columns="{ ...columns }"
                       :column-definitions="networkColumnDefs"
+                      :disabled-columns="networkDisabledColumns"
                       @update:column="(k, v) => setColumn(k as keyof NetworkTableColumnsSettings, v)"
                     />
                   </div>
                 </TableHead>
               </TableRow>
             </TableHeader>
-          </Table>
-        </div>
-        
-        <ScrollArea class="flex-1 min-h-0">
-          <Table no-scroll>
-        <TableBody>
+            <TableBody>
           <ContextMenu v-for="entry in sortedEntries" :key="entry.id">
             <ContextMenuTrigger as-child>
               <TableRow
@@ -190,7 +205,13 @@ function matchesMockPattern(entryId: string): boolean {
                   </Badge>
                 </TableCell>
                 
-                <TableCell class="py-2 max-w-0">
+                <TableCell v-if="columns.name" :class="['py-2 max-w-0', columns.path ? 'w-[140px]' : '']">
+                  <div class="truncate text-sm" :title="entry.url">
+                    {{ entry.name }}
+                  </div>
+                </TableCell>
+                
+                <TableCell v-if="columns.path" class="py-2 max-w-0">
                   <div class="truncate text-sm" :title="entry.url">
                     {{ entry.path }}
                   </div>
@@ -256,8 +277,8 @@ function matchesMockPattern(entryId: string): boolean {
               @delete-mock="emit('deleteMock', $event)"
             />
           </ContextMenu>
-        </TableBody>
-      </Table>
+            </TableBody>
+          </Table>
         </ScrollArea>
       </div>
     </div>
