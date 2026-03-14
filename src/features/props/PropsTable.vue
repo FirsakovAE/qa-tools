@@ -366,10 +366,14 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   padding: 0 8px;
 }
 
+.props-row {
+  padding-right: 0;
+}
+
 .props-header {
   color: hsl(var(--muted-foreground));
-  /* Reserve scrollbar space so header and rows align (8px base + 8px scrollbar) */
-  padding-right: 16px;
+  /* Reserve scrollbar space so header and rows align (8px scrollbar) */
+  padding-right: 8px;
 }
 
 /* Cell sizes */
@@ -388,6 +392,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   flex: 1;
   min-width: 0;
   text-align: left;
+  padding-left: 8px;
 }
 
 .props-cell-element {
@@ -401,7 +406,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   width: 80px;
   text-align: center;
   padding-left: 16px;
-  padding-right: 16px;
+  padding-right: 8px;
 }
 
 /* Header Props cell - shift left to align with row content */

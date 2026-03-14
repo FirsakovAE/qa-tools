@@ -130,7 +130,8 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
 
       const s = settings()
       if (s?.autoSaveFiles) {
-        const alreadySaved = s.savedFiles.some(sf => sf.name === file.name && sf.size === file.size)
+        const allFiles = getAllAvailableFiles()
+        const alreadySaved = allFiles.some(f => f.name === file.name && f.size === file.size)
         if (!alreadySaved) {
           const fileId = generateId()
           const blob = dataUriToBlob(dataUri)
@@ -169,6 +170,13 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
   }
 
   // ---------- dropdown options ----------
+  // All available files: savedFiles + wallpapers (standalone stores image/video in wallpapers)
+  function getAllAvailableFiles(): Array<{ id: string; name: string; size: number; mimeType: string }> {
+    const s = settings()
+    const saved = s?.savedFiles ?? []
+    const wallpapers = s?.customize?.image?.wallpapers ?? []
+    return [...saved, ...wallpapers]
+  }
 
   function getFileOptions(fd: FormDataEntry): FileOption[] {
     const opts: FileOption[] = []
@@ -182,17 +190,17 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
       })
     }
 
-    const savedFiles = settings()?.savedFiles || []
-    for (const sf of savedFiles) {
+    const allFiles = getAllAvailableFiles()
+    for (const f of allFiles) {
       opts.push({
-        id: sf.id,
-        label: `${sf.name} (${(sf.size / 1024).toFixed(1)} KB)`,
+        id: f.id,
+        label: `${f.name} (${((f.size || 0) / 1024).toFixed(1)} KB)`,
       })
     }
 
     if (fd.value.startsWith(FILE_ID_PREFIX)) {
       const fileId = fd.value.slice(FILE_ID_PREFIX.length)
-      if (!savedFiles.some(sf => sf.id === fileId)) {
+      if (!allFiles.some(f => f.id === fileId)) {
         const sizeKb = fd.fileSize ? (fd.fileSize / 1024).toFixed(1) : '?'
         opts.push({
           id: '__custom__',
@@ -201,7 +209,7 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
       }
     }
     if (fd.value.startsWith('data:') && fd.fileName) {
-      const isSaved = savedFiles.some(sf => sf.name === fd.fileName && sf.size === fd.fileSize)
+      const isSaved = allFiles.some(f => f.name === fd.fileName && f.size === fd.fileSize)
       if (!isSaved) {
         const sizeKb = fd.fileSize ? (fd.fileSize / 1024).toFixed(1) : '?'
         opts.push({
@@ -218,12 +226,12 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
     if (fd.value === '(binary)') return '__original__'
     if (fd.value.startsWith(FILE_ID_PREFIX)) {
       const fileId = fd.value.slice(FILE_ID_PREFIX.length)
-      const savedFiles = settings()?.savedFiles || []
-      return savedFiles.some(sf => sf.id === fileId) ? fileId : '__custom__'
+      const allFiles = getAllAvailableFiles()
+      return allFiles.some(f => f.id === fileId) ? fileId : '__custom__'
     }
     if (fd.value.startsWith('data:') && fd.fileName) {
-      const savedFiles = settings()?.savedFiles || []
-      const match = savedFiles.find(sf => sf.name === fd.fileName && sf.size === fd.fileSize)
+      const allFiles = getAllAvailableFiles()
+      const match = allFiles.find(f => f.name === fd.fileName && f.size === fd.fileSize)
       if (match) return match.id
       return '__custom__'
     }
@@ -251,10 +259,11 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
       return
     }
 
-    const s = settings()
-    const savedFile = s?.savedFiles.find(sf => sf.id === optionId)
+    const allFiles = getAllAvailableFiles()
+    const file = allFiles.find(f => f.id === optionId)
 
-    if (!savedFile) {
+    if (!file) {
+      const s = settings()
       if (s) {
         s.savedFiles = s.savedFiles.filter(sf => sf.id !== optionId)
       }
@@ -274,16 +283,16 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
       return
     }
 
-    fd.value = FILE_ID_PREFIX + savedFile.id
-    fd.fileName = savedFile.name
-    fd.fileSize = savedFile.size
-    fd.fileType = savedFile.mimeType
+    fd.value = FILE_ID_PREFIX + file.id
+    fd.fileName = file.name
+    fd.fileSize = file.size
+    fd.fileType = file.mimeType
     syncFormDataToDraft()
   }
 
   const hasFileOptions = computed(() => {
-    const savedFiles = settings()?.savedFiles || []
-    return savedFiles.length > 0
+    const allFiles = getAllAvailableFiles()
+    return allFiles.length > 0
   })
 
   // ---------- computed ----------

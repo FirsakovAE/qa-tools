@@ -46,6 +46,7 @@ import { Info, Download, Upload, RotateCcw, Plus, MoreHorizontal, Pencil, Trash,
 import { Button } from '@/components/ui/button'
 import { getRuntimeAdapter } from '@/runtime'
 import ImagePickerDrawer from '@/features/settings/components/ImagePickerDrawer.vue'
+import { wallpapers, defaultWallpaperName } from '@/assets/wallpapers'
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -159,9 +160,17 @@ const customize = computed(() => props.settings.customize)
 const imagePickerOpen = ref(false)
 
 const currentImageLabel = computed(() => {
-  if (customize.value.image.fileName) return customize.value.image.fileName
   if (customize.value.image.url) return customize.value.image.url
-  return 'Default'
+  const savedFileId = customize.value.image.savedFileId
+  const fileName = customize.value.image.fileName
+  if (savedFileId && fileName) {
+    const exists =
+      (savedFileId.startsWith('wallpaper:') && wallpapers.some(w => w.id === savedFileId)) ||
+      (props.settings.customize?.image?.wallpapers ?? []).some(w => w.id === savedFileId) ||
+      (props.settings.savedFiles ?? []).some(f => f.id === savedFileId)
+    if (exists) return fileName
+  }
+  return defaultWallpaperName
 })
 
 function handlePickerSelectFile(id: string, name: string) {
@@ -308,6 +317,10 @@ async function removeSavedFile(fileId: string, isWallpaper = false) {
   if (!props.settings.savedFiles) return
   props.settings.savedFiles = props.settings.savedFiles.filter(f => f.id !== fileId)
   await removeMedia(fileId)
+  if (customize.value.image.savedFileId === fileId) {
+    customize.value.image.savedFileId = ''
+    customize.value.image.fileName = ''
+  }
   refreshMediaUsage()
 }
 

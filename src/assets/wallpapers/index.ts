@@ -17,8 +17,9 @@ export const wallpapers: Wallpaper[] = Object.entries(modules)
     })
     .sort((a, b) => a.name.localeCompare(b.name))
 
-const DEFAULT_WALLPAPER_NAME = 'Night Forest'
+export const DEFAULT_WALLPAPER_NAME = 'Night Forest'
 
 export const defaultWallpaper = wallpapers.find(w => w.name === DEFAULT_WALLPAPER_NAME) || wallpapers[0]
+export const defaultWallpaperName = defaultWallpaper?.name ?? DEFAULT_WALLPAPER_NAME
 export const defaultWallpaperUrl = defaultWallpaper?.url || ''
 export const defaultWallpaperId = defaultWallpaper?.id || ''

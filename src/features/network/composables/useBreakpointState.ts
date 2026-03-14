@@ -10,7 +10,7 @@ import { ref, computed, watch } from 'vue'
 import type { NetworkEntry } from '@/types/network'
 import { postToContentScript } from '@/utils/postToContentScript'
 import type { BreakpointItem } from '@/types/inspector'
-import { getMediaBlob } from '@/settings/mediaStore'
+import { getMediaBlob, getWallpaperBlob } from '@/settings/mediaStore'
 import { matchesBreakpoint, getMatchingEntryIds } from './useBreakpointMatching'
 import { parseUrl, deepClone } from '../utils'
 
@@ -34,7 +34,10 @@ async function resolveFileIdsInRequestBody(body: string): Promise<string> {
     for (const entry of parsed.entries) {
       if (entry.type === 'file' && typeof entry.value === 'string' && entry.value.startsWith(FILE_ID_PREFIX)) {
         const fileId = entry.value.slice(FILE_ID_PREFIX.length)
-        const blob = await getMediaBlob(fileId)
+        let blob = await getMediaBlob(fileId)
+        if (!blob && fileId.startsWith('wallpaper_')) {
+          blob = await getWallpaperBlob(fileId)
+        }
         if (blob) {
           entry.value = await blobToDataUri(blob)
           changed = true
