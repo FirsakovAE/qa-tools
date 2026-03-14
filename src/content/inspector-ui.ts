@@ -233,6 +233,24 @@ export function injectInspectorUI(): void {
     // LAZY LOADING: load ALL resources only on first open
     if (!isCollapsed) {
       loadResourcesIfNeeded()
+      
+      // When expanding: always request fresh detection and send current flags.
+      // Fixes Vue/Pinia not being detected when switching from DevTools to Overlay mode
+      // (loadResourcesIfNeeded returns early when iframe already loaded, skipping detection)
+      if (iframeLoaded && uiBridgeInitialized) {
+        resetDetectionState()
+        if (!injectedScriptLoaded) {
+          injectScript()
+          setInjectedScriptLoaded(true)
+        }
+        addMessageListenerIfNeeded()
+        if (!detectionListenerActive) {
+          window.addEventListener('message', handleDetectionForUI)
+          detectionListenerActive = true
+        }
+        window.postMessage({ type: 'VUE_INSPECTOR_CHECK_VUE' }, '*')
+        sendFlagsToUI()
+      }
     }
     
     updateCollapsedState()
