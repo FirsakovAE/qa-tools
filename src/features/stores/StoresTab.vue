@@ -542,6 +542,7 @@ onUnmounted(() => {
             :entries="sortedEntries"
             :selected-id="selectedStoreId"
             :pinia-favorites="settings?.piniaFavorites ?? []"
+            :is-loading="isLoading"
             @select="selectStore"
             @toggle-favorite="toggleFavorite"
           />

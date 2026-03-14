@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useElementSize } from '@vueuse/core'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/DropdownMenu'
 import { PropsTableActionsMenuContent } from '@/components/PropsTableActionsMenu'
 import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { defaultInspectorSettings } from '@/settings/inspectorSettings'
 import type { PropsTableColumnsSettings } from '@/types/inspector'
@@ -26,6 +28,7 @@ const runtime = useRuntime()
 const props = defineProps<{
   rows: PropsRow[]
   selectedId: string | null
+  isLoading?: boolean
 }>()
 
 // Column visibility from settings
@@ -51,6 +54,19 @@ const propsColumnDefs = [
   { key: 'rootElement', label: 'Root Element' },
   { key: 'props', label: 'Props' },
 ] as const
+
+const ROW_HEIGHT = 40
+const HEADER_HEIGHT = 40
+const MAX_SKELETON_ROWS = 15
+
+const tableContainerRef = ref<HTMLElement | null>(null)
+const { height: containerHeight } = useElementSize(tableContainerRef)
+const skeletonRowCount = computed(() => {
+  const h = containerHeight.value - HEADER_HEIGHT
+  if (h <= 0) return 1
+  const count = Math.floor(h / ROW_HEIGHT)
+  return Math.min(MAX_SKELETON_ROWS, Math.max(1, count))
+})
 
 const emit = defineEmits<{
   (e: 'select', row: PropsRow): void
@@ -191,7 +207,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 </script>
 
 <template>
-  <div class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
+  <div ref="tableContainerRef" class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
     <div class="min-w-[360px] flex flex-col h-full">
       <!-- Fixed Header -->
       <div class="shrink-0 border-b bg-muted/30">
@@ -310,9 +326,28 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
         </ContextMenu>
       </template>
       
-      <!-- Empty state -->
+      <!-- Loading skeleton (only when no data yet) -->
       <template #after>
-        <div v-if="rows.length === 0" class="h-32 flex items-center justify-center text-muted-foreground">
+        <div v-if="isLoading && rows.length === 0" class="flex flex-col gap-0">
+          <div v-for="i in skeletonRowCount" :key="i" class="props-row flex items-center h-10 px-2 border-b border-border/50">
+            <div class="props-cell props-cell-star w-10 flex justify-center">
+              <Skeleton class="h-3.5 w-3.5 rounded" />
+            </div>
+            <div class="props-cell props-cell-name flex-1 min-w-0">
+              <Skeleton class="h-4 w-32" />
+            </div>
+            <div v-if="columns.rootElement" class="props-cell props-cell-element">
+              <Skeleton class="h-5 w-24" />
+            </div>
+            <div v-if="columns.props" class="props-cell props-cell-props">
+              <Skeleton class="h-5 w-8 mx-auto" />
+            </div>
+            <div class="props-cell props-cell-actions w-11">
+              <Skeleton class="h-6 w-6 rounded mx-auto" />
+            </div>
+          </div>
+        </div>
+        <div v-else-if="rows.length === 0" class="h-32 flex items-center justify-center text-muted-foreground">
           No components found
         </div>
       </template>

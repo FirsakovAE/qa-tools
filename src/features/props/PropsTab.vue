@@ -655,6 +655,7 @@ onUnmounted(() => {
           <PropsTable
             :rows="visibleRows"
             :selected-id="selectedNode?.id || null"
+            :is-loading="isLoading"
             @select="selectEntry"
             @toggle-favorite="toggleFavorite"
             @ignore-by-name="ignoreByName"

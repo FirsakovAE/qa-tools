@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
+import { useElementSize } from '@vueuse/core'
 import {
   Table,
   TableBody,
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui/DropdownMenu'
 import { PiniaTableActionsMenuContent } from '@/components/PiniaTableActionsMenu'
 import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { defaultInspectorSettings } from '@/settings/inspectorSettings'
 import type { PiniaFavoriteItem, PiniaTableColumnsSettings } from '@/types/inspector'
@@ -40,6 +42,7 @@ const props = defineProps<{
   entries: StoreEntry[]
   selectedId: string | null
   piniaFavorites?: PiniaFavoriteItem[]
+  isLoading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -95,10 +98,23 @@ const piniaColumnDefs = [
   { key: 'state', label: 'State' },
   { key: 'getters', label: 'Getters' },
 ] as const
+
+const ROW_HEIGHT = 40
+const HEADER_HEIGHT = 40
+const MAX_SKELETON_ROWS = 15
+
+const tableContainerRef = ref<HTMLElement | null>(null)
+const { height: containerHeight } = useElementSize(tableContainerRef)
+const skeletonRowCount = computed(() => {
+  const h = containerHeight.value - HEADER_HEIGHT
+  if (h <= 0) return 1
+  const count = Math.floor(h / ROW_HEIGHT)
+  return Math.min(MAX_SKELETON_ROWS, Math.max(1, count))
+})
 </script>
 
 <template>
-  <div class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
+  <div ref="tableContainerRef" class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
     <div class="min-w-[360px] flex flex-col h-full">
       <div class="shrink-0 border-b bg-muted/30">
         <Table no-scroll>
@@ -204,7 +220,26 @@ const piniaColumnDefs = [
             />
           </ContextMenu>
           
-          <TableRow v-if="entries.length === 0">
+          <template v-if="isLoading && entries.length === 0">
+            <TableRow v-for="i in skeletonRowCount" :key="`skeleton-${i}`">
+              <TableCell class="pinia-cell-star py-2">
+                <Skeleton class="h-3.5 w-3.5 rounded mx-auto" />
+              </TableCell>
+              <TableCell class="py-2">
+                <Skeleton class="h-4 w-32" />
+              </TableCell>
+              <TableCell v-if="columns.state" class="w-[80px] py-2 text-center">
+                <Skeleton class="h-5 w-8 mx-auto" />
+              </TableCell>
+              <TableCell v-if="columns.getters" class="w-[80px] py-2 text-center">
+                <Skeleton class="h-5 w-8 mx-auto" />
+              </TableCell>
+              <TableCell class="pinia-cell-actions w-[60px] py-2 px-0">
+                <Skeleton class="h-6 w-6 rounded mx-auto" />
+              </TableCell>
+            </TableRow>
+          </template>
+          <TableRow v-else-if="entries.length === 0">
             <TableCell :colspan="3 + (columns.state ? 1 : 0) + (columns.getters ? 1 : 0)" class="h-32 text-center text-muted-foreground">
               No stores found
             </TableCell>
