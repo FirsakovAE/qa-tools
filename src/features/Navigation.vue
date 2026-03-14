@@ -144,6 +144,14 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     ) {
       incomingFlags = event.data.flags
     }
+    // Response format (from handleGetFlags via ui-bridge)
+    else if (
+      event.data?.__VUE_INSPECTOR__ &&
+      event.data?.response?.type === 'VUE_INSPECTOR_FEATURE_FLAGS' &&
+      event.data?.response?.flags
+    ) {
+      incomingFlags = event.data.response.flags
+    }
     // Detection result format (from injected/main.ts)
     else if (
       event.data?.type === 'VUE_INSPECTOR_DETECTION_RESULT' &&

@@ -201,13 +201,11 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
           <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
           <div v-if="columns.props" class="props-cell props-cell-props text-xs font-semibold">Props</div>
           <div class="props-cell props-cell-actions">
-            <div class="flex justify-end">
-              <TableColumnSelector
-                :columns="{ ...columns }"
-                :column-definitions="propsColumnDefs"
-                @update:column="(k, v) => setColumn(k as keyof PropsTableColumnsSettings, v)"
-              />
-            </div>
+            <TableColumnSelector
+              :columns="{ ...columns }"
+              :column-definitions="propsColumnDefs"
+              @update:column="(k, v) => setColumn(k as keyof PropsTableColumnsSettings, v)"
+            />
           </div>
         </div>
       </div>
@@ -335,8 +333,8 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 
 .props-header {
   color: hsl(var(--muted-foreground));
-  /* Reserve scrollbar space so header and rows align when scrollbar visible */
-  padding-right: 8px;
+  /* Reserve scrollbar space so header and rows align (8px base + 8px scrollbar) */
+  padding-right: 16px;
 }
 
 /* Cell sizes */
@@ -433,6 +431,8 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 :deep(.vue-recycle-scroller) {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
+  /* Reserve scrollbar space so header and content have same width */
+  scrollbar-gutter: stable;
 }
 
 :deep(.vue-recycle-scroller::-webkit-scrollbar) {

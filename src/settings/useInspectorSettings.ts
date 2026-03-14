@@ -95,35 +95,37 @@ async function loadFromStorage(): Promise<void> {
         Object.assign(state, structuredClone(defaultInspectorSettings))
     }
 
-    await initMediaStore(state.savedFiles || [])
-
-    if (isStandaloneMode()) {
-        const wallpapers = state.customize?.image?.wallpapers ?? []
-        const wpIds = new Set<string>(wallpapers.map(w => w.id))
-        const selectedId = state.customize?.image?.wallpaperId || state.customize?.image?.savedFileId
-        if (selectedId && selectedId.startsWith('wallpaper_')) {
-            wpIds.add(selectedId)
-        }
-        if (wpIds.size > 0) {
-            await initWallpapersStore([...wpIds])
-        }
-        // Update size for wallpapers with missing/zero size (migrated or legacy)
-        let sizesUpdated = false
-        for (const wp of wallpapers) {
-            if ((wp.size ?? 0) === 0) {
-                const blob = await getWallpaperBlob(wp.id)
-                if (blob && blob.size > 0) {
-                    wp.size = blob.size
-                    sizesUpdated = true
-                }
-            }
-        }
-        if (sizesUpdated) {
-            debouncedSave()
-        }
-    }
-
     isLoaded = true
+
+    // Defer media loading so app mounts sooner — fixes Vue detection when many saved files (e.g. mp4 wallpapers)
+    // block the main thread. App can receive detection flags before media blobs are loaded.
+    ;(async () => {
+        try {
+            await initMediaStore(state.savedFiles || [])
+            if (isStandaloneMode()) {
+                const wallpapers = state.customize?.image?.wallpapers ?? []
+                const wpIds = new Set<string>(wallpapers.map(w => w.id))
+                const selectedId = state.customize?.image?.wallpaperId || state.customize?.image?.savedFileId
+                if (selectedId && selectedId.startsWith('wallpaper_')) {
+                    wpIds.add(selectedId)
+                }
+                if (wpIds.size > 0) {
+                    await initWallpapersStore([...wpIds])
+                }
+                let sizesUpdated = false
+                for (const wp of wallpapers) {
+                    if ((wp.size ?? 0) === 0) {
+                        const blob = await getWallpaperBlob(wp.id)
+                        if (blob && blob.size > 0) {
+                            wp.size = blob.size
+                            sizesUpdated = true
+                        }
+                    }
+                }
+                if (sizesUpdated) debouncedSave()
+            }
+        } catch { /* IDB unavailable — fall back silently */ }
+    })()
 }
 
 function migrateFavoriteIds(saved: any): void {

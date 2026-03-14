@@ -102,6 +102,9 @@ export function injectInspectorUI(): void {
     if (iframeLoaded) return
     iframeLoaded = true
     
+    // Reset detection so overlay gets fresh Vue/Pinia flags (init() sets detectionCompleted=true)
+    resetDetectionState()
+    
     // Initialize bridge for UI (only when iframe is created)
     setupUIMessageBridge()
     
@@ -235,8 +238,7 @@ export function injectInspectorUI(): void {
       loadResourcesIfNeeded()
       
       // When expanding: always request fresh detection and send current flags.
-      // Fixes Vue/Pinia not being detected when switching from DevTools to Overlay mode
-      // (loadResourcesIfNeeded returns early when iframe already loaded, skipping detection)
+      // Fixes Vue/Pinia not being detected when switching from DevTools to Overlay mode.
       if (iframeLoaded && uiBridgeInitialized) {
         resetDetectionState()
         if (!injectedScriptLoaded) {
@@ -265,6 +267,10 @@ export function injectInspectorUI(): void {
           visible: !isCollapsed
         }
       }, '*')
+      // Re-send flags when expanding — overlay may have mounted late (e.g. after media load)
+      if (!isCollapsed) {
+        sendFlagsToUI()
+      }
     }
     
     // RESOURCE SAVING: if Vue not found and panel collapsed - unload iframe

@@ -128,6 +128,10 @@ export function setupDevtoolsBridge(): void {
     port.onDisconnect.addListener(() => {
       window.removeEventListener('message', broadcastListener)
 
+      // Trigger fresh detection so overlay gets correct Vue/Pinia flags when user switches to it
+      resetDetectionState()
+      window.postMessage({ type: 'VUE_INSPECTOR_CHECK_VUE' }, '*')
+
       // Clear active breakpoints and mocks so the injected interceptor stops
       window.postMessage({
         type: 'NETWORK_BREAKPOINTS_SYNC',
