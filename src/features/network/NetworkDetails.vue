@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { ArrowLeft, Copy, Check, Send } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue'
+import { ArrowLeft, Copy, Check, Send, MoreHorizontal } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,14 +29,26 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+} from '@/components/ui/DropdownMenu'
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+} from '@/components/ui/ContextMenu'
+import { NetworkActionsMenuContent } from '@/components/NetworkActionsMenu'
 import JsonEditor from '@/components/JsonEditor.vue'
 import type { NetworkEntry } from '@/types/network'
 import { getStatusCategory, formatBytes, formatDuration } from '@/types/network'
 import { copyToClipboard } from '@/utils/networkUtils'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
-import type { BaseInspectorSettings } from '@/types/inspector'
+import type { BaseInspectorSettings, BreakpointItem, MockRule } from '@/types/inspector'
 import { formatBodyForDisplay, detectLanguage } from './utils'
+
+type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
+type MockWithStatus = MockRule & { isActive: boolean }
 import {
   useBreakpointEditor,
   useFormDataEditor,
@@ -55,6 +67,10 @@ const props = defineProps<{
   breakpointMode?: boolean
   breakpointTrigger?: 'request' | 'response'
   breakpointDraft?: BreakpointDraft | null
+  breakpointMatchingIds?: Set<string>
+  mockMatchingIds?: Set<string>
+  allBreakpoints?: BreakpointWithStatus[]
+  allMocks?: MockWithStatus[]
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +78,13 @@ const emit = defineEmits<{
   (e: 'cancelBreakpoint', entryId: string): void
   (e: 'applyBreakpoint', data: BreakpointEditData): void
   (e: 'updateDraft', updates: Partial<BreakpointDraft>): void
+  (e: 'copyCurl', entry: NetworkEntry): void
+  (e: 'setBreakpoint', entry: NetworkEntry): void
+  (e: 'mockResponse', entry: NetworkEntry): void
+  (e: 'toggleBreakpoint', entry: NetworkEntry): void
+  (e: 'deleteBreakpoint', entry: NetworkEntry): void
+  (e: 'toggleMock', entry: NetworkEntry): void
+  (e: 'deleteMock', entry: NetworkEntry): void
 }>()
 
 // ============================================================================
@@ -121,12 +144,38 @@ const copiedHeaderIndex = ref<number | null>(null)
 const copiedResponseHeaderIndex = ref<number | null>(null)
 const { curlCopied, copyCurl: copyCurlCommand } = useCurlCopy()
 
+const urlRef = ref<HTMLElement | null>(null)
+const urlContainerRef = ref<HTMLElement | null>(null)
+const isUrlTruncated = ref(false)
+
+function checkUrlTruncation() {
+  if (!urlRef.value) return
+  isUrlTruncated.value = urlRef.value.scrollWidth > urlRef.value.clientWidth
+}
+
+let urlResizeObserver: ResizeObserver | null = null
+
 onMounted(async () => {
   try {
     settings.value = await useInspectorSettings()
     jsonMode.value = settings.value?.json?.mode ?? 'text'
   } catch { /* use defaults */ }
+  nextTick(() => {
+    checkUrlTruncation()
+    if (urlContainerRef.value) {
+      urlResizeObserver = new ResizeObserver(() => checkUrlTruncation())
+      urlResizeObserver.observe(urlContainerRef.value)
+    }
+  })
 })
+
+onUnmounted(() => urlResizeObserver?.disconnect())
+
+watch(
+  () => ({ id: props.entry?.id, url: displayUrl.value }),
+  () => nextTick(checkUrlTruncation),
+  { immediate: false }
+)
 
 // ============================================================================
 // Computed
@@ -241,13 +290,15 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
 <template>
   <TooltipProvider>
     <div class="h-full flex flex-col">
-      <!-- Header -->
-      <div class="shrink-0 flex items-center gap-3 p-3 border-b">
-        <Button variant="ghost" size="icon" class="h-8 w-8" @click="handleBack">
+      <!-- Header (ПКМ открывает меню действий) -->
+      <ContextMenu>
+        <ContextMenuTrigger as-child>
+          <div class="shrink-0 flex items-center gap-3 p-3 border-b">
+            <Button variant="ghost" size="icon" class="h-8 w-8" @click="handleBack">
           <ArrowLeft class="h-4 w-4" />
         </Button>
         
-        <div class="flex-1 min-w-0">
+        <div ref="urlContainerRef" class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
             <Badge variant="outline" class="font-mono text-xs" :class="{ 'text-amber-500 border-amber-500/50': breakpointMode && editableMethod !== entry.method }">
               {{ displayMethod }}
@@ -265,18 +316,37 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               Breakpoint
             </Badge>
           </div>
-          <div class="text-sm truncate text-muted-foreground" :title="displayUrl" :class="{ 'text-amber-500': breakpointMode && displayUrl !== entry.url }">
+          <Tooltip v-if="isUrlTruncated">
+            <TooltipTrigger as-child>
+              <div
+                ref="urlRef"
+                class="text-sm truncate text-muted-foreground cursor-default"
+                :class="{ 'text-amber-500': breakpointMode && displayUrl !== entry.url }"
+              >
+                {{ displayUrl }}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" class="max-w-[90vw] break-all font-mono text-xs">
+              {{ displayUrl }}
+            </TooltipContent>
+          </Tooltip>
+          <div
+            v-else
+            ref="urlRef"
+            class="text-sm truncate text-muted-foreground"
+            :class="{ 'text-amber-500': breakpointMode && displayUrl !== entry.url }"
+          >
             {{ displayUrl }}
           </div>
         </div>
         
-        <!-- Copy as cURL button with visual feedback -->
+        <!-- Copy as cURL button (desktop >= 1000px) -->
         <Tooltip>
           <TooltipTrigger as-child>
             <Button
               variant="outline"
               size="sm"
-              class="h-8 shrink-0 text-xs gap-1.5 transition-colors"
+              class="details-header-copy-curl h-8 shrink-0 text-xs gap-1.5 transition-colors"
               :class="{ 'text-green-500 border-green-500/50': curlCopied }"
               @click="copyCurlCommand(props.entry)"
             >
@@ -288,6 +358,34 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             Copy as cURL command (for Postman)
           </TooltipContent>
         </Tooltip>
+
+        <!-- 3-dot actions menu (mobile < 1000px, same as table) -->
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="outline"
+              size="icon"
+              class="details-header-actions-menu h-8 w-8 shrink-0"
+            >
+              <MoreHorizontal class="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <NetworkActionsMenuContent
+            variant="dropdown"
+            :entry="props.entry"
+            :breakpoint-matching-ids="props.breakpointMatchingIds"
+            :mock-matching-ids="props.mockMatchingIds"
+            :all-breakpoints="props.allBreakpoints"
+            :all-mocks="props.allMocks"
+            @copy-curl="emit('copyCurl', $event)"
+            @set-breakpoint="emit('setBreakpoint', $event)"
+            @mock-response="emit('mockResponse', $event)"
+            @toggle-breakpoint="emit('toggleBreakpoint', $event)"
+            @delete-breakpoint="emit('deleteBreakpoint', $event)"
+            @toggle-mock="emit('toggleMock', $event)"
+            @delete-mock="emit('deleteMock', $event)"
+          />
+        </DropdownMenu>
         
         <!-- Apply button for breakpoint mode -->
         <Tooltip v-if="breakpointMode">
@@ -306,7 +404,24 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             Apply changes and continue request
           </TooltipContent>
         </Tooltip>
-      </div>
+          </div>
+        </ContextMenuTrigger>
+        <NetworkActionsMenuContent
+          variant="context"
+          :entry="props.entry"
+          :breakpoint-matching-ids="props.breakpointMatchingIds"
+          :mock-matching-ids="props.mockMatchingIds"
+          :all-breakpoints="props.allBreakpoints"
+          :all-mocks="props.allMocks"
+          @copy-curl="emit('copyCurl', $event)"
+          @set-breakpoint="emit('setBreakpoint', $event)"
+          @mock-response="emit('mockResponse', $event)"
+          @toggle-breakpoint="emit('toggleBreakpoint', $event)"
+          @delete-breakpoint="emit('deleteBreakpoint', $event)"
+          @toggle-mock="emit('toggleMock', $event)"
+          @delete-mock="emit('deleteMock', $event)"
+        />
+      </ContextMenu>
       
       <!-- Section tabs (Menubar style) -->
       <div class="shrink-0 flex items-center gap-1 p-1 border-b bg-muted/30">
@@ -947,5 +1062,18 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
 .network-headers-table :deep(td) {
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* Single-screen mode (<1000px): Copy cURL → 3-dot menu */
+@media (max-width: 999px) {
+  .details-header-copy-curl {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1000px) {
+  .details-header-actions-menu {
+    display: none !important;
+  }
 }
 </style>

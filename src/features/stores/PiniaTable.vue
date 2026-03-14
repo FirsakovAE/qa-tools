@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import {
   Table,
   TableBody,
@@ -14,17 +14,17 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Star, StarOff, MoreHorizontal } from 'lucide-vue-next'
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
-import type { PiniaFavoriteItem } from '@/types/inspector'
+import { PiniaTableActionsMenuContent } from '@/components/PiniaTableActionsMenu'
+import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
+import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { defaultInspectorSettings } from '@/settings/inspectorSettings'
+import type { PiniaFavoriteItem, PiniaTableColumnsSettings } from '@/types/inspector'
 import { isStoreInFavorites } from '@/utils/piniaFavoritesMatcher'
 
 interface StoreEntry {
@@ -71,6 +71,30 @@ function hasGetterKeys(store: StoreEntry): boolean {
 const handleRowClick = (store: StoreEntry) => {
   emit('select', store)
 }
+
+// Column visibility from settings
+const settings = ref<Awaited<ReturnType<typeof useInspectorSettings>> | null>(null)
+const columns = computed(() => {
+  const cols = settings.value?.piniaTableColumns ?? defaultInspectorSettings.piniaTableColumns
+  return cols ?? { name: true, state: true, getters: true }
+})
+
+function setColumn(key: keyof PiniaTableColumnsSettings, value: boolean) {
+  if (!settings.value) return
+  if (!settings.value.piniaTableColumns) {
+    settings.value.piniaTableColumns = { ...defaultInspectorSettings.piniaTableColumns! }
+  }
+  settings.value.piniaTableColumns[key] = value
+}
+
+onMounted(async () => {
+  settings.value = await useInspectorSettings()
+})
+
+const piniaColumnDefs = [
+  { key: 'state', label: 'State' },
+  { key: 'getters', label: 'Getters' },
+] as const
 </script>
 
 <template>
@@ -82,9 +106,17 @@ const handleRowClick = (store: StoreEntry) => {
             <TableRow class="hover:bg-transparent">
               <TableHead class="pinia-cell-star pl-4" />
               <TableHead class="text-xs font-semibold">Name</TableHead>
-              <TableHead class="w-[80px] text-xs font-semibold text-center">State</TableHead>
-              <TableHead class="w-[80px] text-xs font-semibold text-center">Getters</TableHead>
-              <TableHead class="pinia-cell-actions w-[48px] p-0" />
+              <TableHead v-if="columns.state" class="w-[80px] text-xs font-semibold text-center">State</TableHead>
+              <TableHead v-if="columns.getters" class="w-[80px] text-xs font-semibold text-center">Getters</TableHead>
+              <TableHead class="pinia-cell-actions w-[60px] p-0">
+                <div class="flex justify-center">
+                  <TableColumnSelector
+                    :columns="{ ...columns }"
+                    :column-definitions="piniaColumnDefs"
+                    @update:column="(k, v) => setColumn(k as keyof PiniaTableColumnsSettings, v)"
+                  />
+                </div>
+              </TableHead>
             </TableRow>
           </TableHeader>
         </Table>
@@ -124,7 +156,7 @@ const handleRowClick = (store: StoreEntry) => {
                   </div>
                 </TableCell>
                 
-                <TableCell class="w-[80px] py-2 text-center">
+                <TableCell v-if="columns.state" class="w-[80px] py-2 text-center">
                   <Badge 
                     v-if="hasStateKeys(store)"
                     variant="secondary" 
@@ -135,7 +167,7 @@ const handleRowClick = (store: StoreEntry) => {
                   <span v-else class="text-xs text-muted-foreground">—</span>
                 </TableCell>
                 
-                <TableCell class="w-[80px] py-2 text-center">
+                <TableCell v-if="columns.getters" class="w-[80px] py-2 text-center">
                   <Badge 
                     v-if="hasGetterKeys(store)"
                     variant="outline" 
@@ -146,36 +178,34 @@ const handleRowClick = (store: StoreEntry) => {
                   <span v-else class="text-xs text-muted-foreground">—</span>
                 </TableCell>
 
-                <TableCell class="pinia-cell-actions w-[48px] py-2 px-0">
+                <TableCell class="pinia-cell-actions w-[60px] py-2 px-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                       <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
                         <MoreHorizontal class="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-44">
-                      <DropdownMenuItem @click.stop="handleToggleFavorite($event, store)">
-                        <StarOff v-if="isFavorite(store)" class="h-4 w-4 mr-2" />
-                        <Star v-else class="h-4 w-4 mr-2" />
-                        {{ isFavorite(store) ? 'Remove favorite' : 'Add favorite' }}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
+                    <PiniaTableActionsMenuContent
+                      variant="dropdown"
+                      :store="store"
+                      :is-favorite="isFavorite(store)"
+                      @toggle-favorite="handleToggleFavorite"
+                    />
                   </DropdownMenu>
                 </TableCell>
               </TableRow>
             </ContextMenuTrigger>
 
-            <ContextMenuContent class="w-44">
-              <ContextMenuItem @click="handleToggleFavorite($event, store)">
-                <StarOff v-if="isFavorite(store)" class="h-4 w-4 mr-2" />
-                <Star v-else class="h-4 w-4 mr-2" />
-                {{ isFavorite(store) ? 'Remove favorite' : 'Add favorite' }}
-              </ContextMenuItem>
-            </ContextMenuContent>
+            <PiniaTableActionsMenuContent
+              variant="context"
+              :store="store"
+              :is-favorite="isFavorite(store)"
+              @toggle-favorite="handleToggleFavorite"
+            />
           </ContextMenu>
           
           <TableRow v-if="entries.length === 0">
-            <TableCell colspan="5" class="h-32 text-center text-muted-foreground">
+            <TableCell :colspan="3 + (columns.state ? 1 : 0) + (columns.getters ? 1 : 0)" class="h-32 text-center text-muted-foreground">
               No stores found
             </TableCell>
           </TableRow>

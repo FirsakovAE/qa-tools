@@ -1,24 +1,23 @@
 <script setup lang="ts">
-import { onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { Badge } from '@/components/ui/badge'
-import { Star, StarOff, EyeOff, MoreHorizontal } from 'lucide-vue-next'
+import { Star, StarOff, MoreHorizontal } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
+import { PropsTableActionsMenuContent } from '@/components/PropsTableActionsMenu'
+import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
+import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { defaultInspectorSettings } from '@/settings/inspectorSettings'
+import type { PropsTableColumnsSettings } from '@/types/inspector'
 import type { PropsRow } from './types'
 import { useRuntime } from '@/runtime'
 
@@ -28,6 +27,30 @@ const props = defineProps<{
   rows: PropsRow[]
   selectedId: string | null
 }>()
+
+// Column visibility from settings
+const settings = ref<Awaited<ReturnType<typeof useInspectorSettings>> | null>(null)
+const columns = computed(() => {
+  const cols = settings.value?.propsTableColumns ?? defaultInspectorSettings.propsTableColumns
+  return cols ?? { name: true, rootElement: true, props: true }
+})
+
+function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
+  if (!settings.value) return
+  if (!settings.value.propsTableColumns) {
+    settings.value.propsTableColumns = { ...defaultInspectorSettings.propsTableColumns! }
+  }
+  settings.value.propsTableColumns[key] = value
+}
+
+onMounted(async () => {
+  settings.value = await useInspectorSettings()
+})
+
+const propsColumnDefs = [
+  { key: 'rootElement', label: 'Root Element' },
+  { key: 'props', label: 'Props' },
+] as const
 
 const emit = defineEmits<{
   (e: 'select', row: PropsRow): void
@@ -175,9 +198,17 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
         <div class="props-header">
           <div class="props-cell props-cell-star"></div>
           <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
-          <div class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
-          <div class="props-cell props-cell-props text-xs font-semibold">Props</div>
-          <div class="props-cell props-cell-actions"></div>
+          <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
+          <div v-if="columns.props" class="props-cell props-cell-props text-xs font-semibold">Props</div>
+          <div class="props-cell props-cell-actions">
+            <div class="flex justify-end">
+              <TableColumnSelector
+                :columns="{ ...columns }"
+                :column-definitions="propsColumnDefs"
+                @update:column="(k, v) => setColumn(k as keyof PropsTableColumnsSettings, v)"
+              />
+            </div>
+          </div>
         </div>
       </div>
       
@@ -231,7 +262,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               </div>
               
               <!-- Element Column -->
-              <div class="props-cell props-cell-element">
+              <div v-if="columns.rootElement" class="props-cell props-cell-element">
                 <Badge 
                   :variant="row.elementInfo === 'Logic only' ? 'destructive_text' : 'secondary'"
                   class="text-xs truncate max-w-full"
@@ -242,7 +273,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               </div>
               
               <!-- Props Column -->
-              <div class="props-cell props-cell-props">
+              <div v-if="columns.props" class="props-cell props-cell-props">
                 <Badge 
                   v-if="row.hasPropsFlag"
                   variant="outline" 
@@ -261,36 +292,23 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                       <MoreHorizontal class="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" class="w-48">
-                    <DropdownMenuItem @click.stop="emit('toggleFavorite', row)">
-                      <StarOff v-if="row.isFavoriteFlag" class="h-4 w-4 mr-2" />
-                      <Star v-else class="h-4 w-4 mr-2" />
-                      {{ row.isFavoriteFlag ? 'Remove favorite' : 'Add favorite' }}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem class="text-destructive_text" @click.stop="emit('ignoreByName', row)">
-                      <EyeOff class="h-4 w-4 mr-2" />
-                      Ignore by name
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
+                  <PropsTableActionsMenuContent
+                    variant="dropdown"
+                    :row="row"
+                    @toggle-favorite="emit('toggleFavorite', $event)"
+                    @ignore-by-name="emit('ignoreByName', $event)"
+                  />
                 </DropdownMenu>
               </div>
             </div>
           </ContextMenuTrigger>
 
-          <!-- Right-click context menu (appears at cursor) -->
-          <ContextMenuContent class="w-48">
-            <ContextMenuItem @click="emit('toggleFavorite', row)">
-              <StarOff v-if="row.isFavoriteFlag" class="h-4 w-4 mr-2" />
-              <Star v-else class="h-4 w-4 mr-2" />
-              {{ row.isFavoriteFlag ? 'Remove favorite' : 'Add favorite' }}
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem class="text-destructive_text" @click="emit('ignoreByName', row)">
-              <EyeOff class="h-4 w-4 mr-2" />
-              Ignore by name
-            </ContextMenuItem>
-          </ContextMenuContent>
+          <PropsTableActionsMenuContent
+            variant="context"
+            :row="row"
+            @toggle-favorite="emit('toggleFavorite', $event)"
+            @ignore-by-name="emit('ignoreByName', $event)"
+          />
         </ContextMenu>
       </template>
       
@@ -316,9 +334,9 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 }
 
 .props-header {
-  background: hsl(var(--muted) / 0.3);
+  color: hsl(var(--muted-foreground));
   /* Reserve scrollbar space so header and rows align when scrollbar visible */
-  padding-right: 16px;
+  padding-right: 8px;
 }
 
 /* Cell sizes */
@@ -340,17 +358,26 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 }
 
 .props-cell-element {
-  width: 140px;
+  width: 180px;
   text-align: left;
+  padding: 0;
 }
 
+/* Props column - align with Getters (Pinia Store): w-80px, text-center */
 .props-cell-props {
-  width: 40px;
-  text-align: left;
+  width: 80px;
+  text-align: center;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Header Props cell - shift left to align with row content */
+.props-header .props-cell-props {
+  padding-left: 0px;
 }
 
 .props-cell-actions {
-  width: 28px;
+  width: 44px;
   display: flex;
   justify-content: center;
 }

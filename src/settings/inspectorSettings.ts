@@ -1,7 +1,30 @@
-import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType } from '@/types/inspector'
+import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType } from '@/types/inspector'
 
 export type InspectorSettings = BaseInspectorSettings
-export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType }
+export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType }
+
+/** Default Network table columns (all visible) */
+const defaultNetworkTableColumns: NetworkTableColumnsSettings = {
+    status: true,
+    method: true,
+    path: true,
+    time: true,
+    size: true,
+}
+
+/** Default Props table columns (all visible) */
+const defaultPropsTableColumns: PropsTableColumnsSettings = {
+    name: true,
+    rootElement: true,
+    props: true,
+}
+
+/** Default Pinia table columns (all visible) */
+const defaultPiniaTableColumns: PiniaTableColumnsSettings = {
+    name: true,
+    state: true,
+    getters: true,
+}
 
 /** Default Network search settings */
 const defaultNetworkSearchSettings: NetworkSearchSettings = {
@@ -42,6 +65,9 @@ export const defaultInspectorSettings: InspectorSettings = {
     piniaFavorites: [],
     breakpoints: { active: [], inactive: [] },
     mocks: { active: [], inactive: [] },
+    networkTableColumns: { ...defaultNetworkTableColumns },
+    propsTableColumns: { ...defaultPropsTableColumns },
+    piniaTableColumns: { ...defaultPiniaTableColumns },
     networkSearch: { ...defaultNetworkSearchSettings },
     propsSearch: { ...defaultPropsSearchSettings },
     piniaSearch: { ...defaultPiniaSearchSettings },

@@ -541,10 +541,21 @@ onMounted(async () => {
           :breakpoint-mode="isShowingPendingBreakpoint"
           :breakpoint-trigger="breakpointState.breakpointTrigger.value"
           :breakpoint-draft="currentBreakpointDraft"
+          :breakpoint-matching-ids="breakpointState.entriesMatchingBreakpoints.value"
+          :mock-matching-ids="mockState.entriesMatchingMocks.value"
+          :all-breakpoints="allBreakpointsWithStatus"
+          :all-mocks="allMocksWithStatus"
           @back="deselectEntry"
           @cancel-breakpoint="handleCancelBreakpoint"
           @apply-breakpoint="handleApplyBreakpoint"
           @update-draft="handleDraftUpdate"
+          @copy-curl="handleCopyCurl"
+          @set-breakpoint="handleSetBreakpoint"
+          @mock-response="handleMockResponse"
+          @toggle-breakpoint="handleToggleBreakpoint"
+          @delete-breakpoint="handleDeleteBreakpoint"
+          @toggle-mock="handleToggleMock"
+          @delete-mock="handleDeleteMock"
         />
         
         <div

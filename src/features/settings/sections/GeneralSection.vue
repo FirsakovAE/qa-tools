@@ -35,18 +35,13 @@ import {
 } from '@/components/ui/table'
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
+import { OptionsItemActionsMenuContent, type MenuAction } from '@/components/OptionsItemActionsMenu'
 import { Info, Download, Upload, RotateCcw, Plus, MoreHorizontal, Pencil, Trash, Moon, Sun } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { getRuntimeAdapter } from '@/runtime'
@@ -415,6 +410,14 @@ const savedFilesTableHeight = computed(() => {
 })
 
 const savedFilesNeedsScroll = computed(() => savedFilesForTable.value.length > 4)
+
+type SavedFileRow = { id: string; name: string; size: number; mimeType: string; _isWallpaper: boolean }
+function getSavedFileActions(file: SavedFileRow): MenuAction[] {
+  return [
+    { label: 'Edit', icon: Pencil, slot: 'edit' },
+    { label: 'Delete', icon: Trash, onClick: () => removeSavedFile(file.id, file._isWallpaper), destructive: true },
+  ]
+}
 </script>
 
 <template>
@@ -706,39 +709,43 @@ const savedFilesNeedsScroll = computed(() => savedFilesForTable.value.length > 4
                                   <MoreHorizontal class="h-3.5 w-3.5" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" class="w-44">
-                                <DropdownMenuItem as-child>
-                                  <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground w-full">
+                              <OptionsItemActionsMenuContent
+                                variant="dropdown"
+                                :actions="getSavedFileActions(file)"
+                                :item="file"
+                              >
+                                <template #edit="{ item: f, variant }">
+                                  <label
+                                    class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors w-full"
+                                    :class="variant === 'dropdown' ? 'hover:bg-accent hover:text-accent-foreground' : 'hover:bg-secondary hover:text-secondary-foreground'"
+                                  >
                                     <Pencil class="h-4 w-4 mr-2" />
                                     Edit
-                                    <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id, file._isWallpaper)" />
+                                    <input type="file" class="sr-only" @change="handleEditFileChange($event, (f as SavedFileRow).id, (f as SavedFileRow)._isWallpaper)" />
                                   </label>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeSavedFile(file.id, file._isWallpaper)">
-                                  <Trash class="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
+                                </template>
+                              </OptionsItemActionsMenuContent>
                             </DropdownMenu>
                           </div>
                         </TableCell>
                     </TableRow>
                     </ContextMenuTrigger>
-                    <ContextMenuContent class="w-44">
-                    <ContextMenuItem as-child>
-                      <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-secondary hover:text-secondary-foreground w-full">
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getSavedFileActions(file)"
+                      :item="file"
+                    >
+<template #edit="{ item: f, variant }">
+                      <label
+                        class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors w-full"
+                        :class="variant === 'dropdown' ? 'hover:bg-accent hover:text-accent-foreground' : 'hover:bg-secondary hover:text-secondary-foreground'"
+                      >
                         <Pencil class="h-4 w-4 mr-2" />
                         Edit
-                        <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id, file._isWallpaper)" />
+                        <input type="file" class="sr-only" @change="handleEditFileChange($event, (f as SavedFileRow).id, (f as SavedFileRow)._isWallpaper)" />
                       </label>
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem class="text-destructive_text" @click="removeSavedFile(file.id, file._isWallpaper)">
-                      <Trash class="h-4 w-4 mr-2" />
-                      Delete
-                    </ContextMenuItem>
-                    </ContextMenuContent>
+                    </template>
+                    </OptionsItemActionsMenuContent>
                   </ContextMenu>
 
                   <TableRow class="h-[41px] hover:bg-muted/50 transition-colors">
@@ -778,39 +785,43 @@ const savedFilesNeedsScroll = computed(() => savedFilesForTable.value.length > 4
                               <MoreHorizontal class="h-3.5 w-3.5" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" class="w-44">
-                            <DropdownMenuItem as-child>
-                              <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground w-full">
-                                <Pencil class="h-4 w-4 mr-2" />
-                                Edit
-                                <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id, file._isWallpaper)" />
-                              </label>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeSavedFile(file.id, file._isWallpaper)">
-                              <Trash class="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
+                          <OptionsItemActionsMenuContent
+                            variant="dropdown"
+                            :actions="getSavedFileActions(file)"
+                            :item="file"
+                          >
+<template #edit="{ item: f, variant }">
+                      <label
+                        class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors w-full"
+                        :class="variant === 'dropdown' ? 'hover:bg-accent hover:text-accent-foreground' : 'hover:bg-secondary hover:text-secondary-foreground'"
+                      >
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Edit
+                        <input type="file" class="sr-only" @change="handleEditFileChange($event, (f as SavedFileRow).id, (f as SavedFileRow)._isWallpaper)" />
+                      </label>
+                    </template>
+                          </OptionsItemActionsMenuContent>
                         </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
                 </ContextMenuTrigger>
-                <ContextMenuContent class="w-44">
-                  <ContextMenuItem as-child>
-                    <label class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-secondary hover:text-secondary-foreground w-full">
-                      <Pencil class="h-4 w-4 mr-2" />
-                      Edit
-                      <input type="file" class="sr-only" @change="handleEditFileChange($event, file.id, file._isWallpaper)" />
-                    </label>
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem class="text-destructive_text" @click="removeSavedFile(file.id, file._isWallpaper)">
-                    <Trash class="h-4 w-4 mr-2" />
-                    Delete
-                  </ContextMenuItem>
-                </ContextMenuContent>
+                <OptionsItemActionsMenuContent
+                  variant="context"
+                  :actions="getSavedFileActions(file)"
+                  :item="file"
+                >
+<template #edit="{ item: f, variant }">
+                      <label
+                        class="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors w-full"
+                        :class="variant === 'dropdown' ? 'hover:bg-accent hover:text-accent-foreground' : 'hover:bg-secondary hover:text-secondary-foreground'"
+                      >
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Edit
+                        <input type="file" class="sr-only" @change="handleEditFileChange($event, (f as SavedFileRow).id, (f as SavedFileRow)._isWallpaper)" />
+                      </label>
+                    </template>
+                </OptionsItemActionsMenuContent>
               </ContextMenu>
               <TableRow class="h-[41px] hover:bg-muted/50 transition-colors">
                 <TableCell colspan="3" class="!p-0">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import {
   Table,
   TableBody,
@@ -12,25 +12,23 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
-import { MoreHorizontal, Terminal, PauseCircle, Shuffle, Power, Trash } from 'lucide-vue-next'
+import { NetworkActionsMenuContent } from '@/components/NetworkActionsMenu'
+import { MoreHorizontal } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
+import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
+import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { defaultInspectorSettings } from '@/settings/inspectorSettings'
 import type { NetworkEntry } from '@/types/network'
+import type { NetworkTableColumnsSettings } from '@/types/inspector'
 import type { BreakpointItem, MockRule } from '@/types/inspector'
 import { formatBytes, formatDuration } from '@/types/network'
 import { getStatusClass } from './utils'
-import { matchesBreakpoint, matchesMock } from './composables/useBreakpointMatching'
 
 type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
 type MockWithStatus = MockRule & { isActive: boolean }
@@ -75,6 +73,38 @@ function formatStatus(entry: NetworkEntry): string {
   return String(entry.status)
 }
 
+// Column visibility from settings
+const settings = ref<Awaited<ReturnType<typeof useInspectorSettings>> | null>(null)
+const columns = computed(() => {
+  const cols = settings.value?.networkTableColumns ?? defaultInspectorSettings.networkTableColumns
+  return cols ?? {
+    status: true,
+    method: true,
+    path: true,
+    time: true,
+    size: true,
+  }
+})
+
+function setColumn(key: keyof NetworkTableColumnsSettings, value: boolean) {
+  if (!settings.value) return
+  if (!settings.value.networkTableColumns) {
+    settings.value.networkTableColumns = { ...defaultInspectorSettings.networkTableColumns! }
+  }
+  settings.value.networkTableColumns[key] = value
+}
+
+onMounted(async () => {
+  settings.value = await useInspectorSettings()
+})
+
+const networkColumnDefs = [
+  { key: 'status', label: 'Status' },
+  { key: 'method', label: 'Method' },
+  { key: 'time', label: 'Time' },
+  { key: 'size', label: 'Size' },
+] as const
+
 // Sorted entries (newest first)
 const sortedEntries = computed(() => [...props.entries].reverse())
 
@@ -83,42 +113,12 @@ function hasBreakpoint(entryId: string): boolean {
   return props.breakpointEntryIds?.has(entryId) ?? false
 }
 
-// Check if entry matches a breakpoint pattern
 function matchesBreakpointPattern(entryId: string): boolean {
   return props.breakpointMatchingIds?.has(entryId) ?? false
 }
 
-// Check if entry matches a mock pattern
 function matchesMockPattern(entryId: string): boolean {
   return props.mockMatchingIds?.has(entryId) ?? false
-}
-
-/**
- * Find matching breakpoint active status for an entry (checks both active and inactive).
- * Returns true if active, false if inactive, null if no match.
- */
-function getMatchingBreakpointActive(entry: NetworkEntry): boolean | null {
-  if (!props.allBreakpoints?.length) return null
-  for (const bp of props.allBreakpoints) {
-    if (matchesBreakpoint(entry, { ...bp, enabled: true })) {
-      return bp.isActive
-    }
-  }
-  return null
-}
-
-/**
- * Find matching mock active status for an entry (checks both active and inactive).
- * Returns true if active, false if inactive, null if no match.
- */
-function getMatchingMockActive(entry: NetworkEntry): boolean | null {
-  if (!props.allMocks?.length) return null
-  for (const mock of props.allMocks) {
-    if (matchesMock(entry, { ...mock, enabled: true })) {
-      return mock.isActive
-    }
-  }
-  return null
 }
 
 </script>
@@ -135,12 +135,20 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
           <Table no-scroll>
             <TableHeader class="[&_th]:h-10">
               <TableRow class="hover:bg-transparent">
-                <TableHead class="w-[70px] text-xs font-semibold">Status</TableHead>
-                <TableHead class="w-[70px] text-xs font-semibold">Method</TableHead>
+                <TableHead v-if="columns.status" class="w-[70px] text-xs font-semibold">Status</TableHead>
+                <TableHead v-if="columns.method" class="w-[70px] text-xs font-semibold">Method</TableHead>
                 <TableHead class="text-xs font-semibold">Path</TableHead>
-                <TableHead class="w-[80px] text-xs font-semibold text-right">Time</TableHead>
-                <TableHead class="w-[80px] text-xs font-semibold text-right">Size</TableHead>
-                <TableHead class="w-[28px]" style="width: 60px;"></TableHead>
+                <TableHead v-if="columns.time" class="w-[80px] text-xs font-semibold text-center">Time</TableHead>
+                <TableHead v-if="columns.size" class="w-[80px] text-xs font-semibold text-center">Size</TableHead>
+                <TableHead class="w-[60px] py-2 p-0 text-center">
+                  <div class="flex justify-center">
+                    <TableColumnSelector
+                      :columns="{ ...columns }"
+                      :column-definitions="networkColumnDefs"
+                      @update:column="(k, v) => setColumn(k as keyof NetworkTableColumnsSettings, v)"
+                    />
+                  </div>
+                </TableHead>
               </TableRow>
             </TableHeader>
           </Table>
@@ -163,7 +171,7 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                 }"
                 @click="emit('select', entry.id)"
               >
-                <TableCell class="w-[70px] py-2">
+                <TableCell v-if="columns.status" class="w-[70px] py-2">
                   <Badge
                     variant="outline"
                     class="text-xs font-mono px-1.5 py-0"
@@ -173,7 +181,7 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                   </Badge>
                 </TableCell>
                 
-                <TableCell class="w-[70px] py-2">
+                <TableCell v-if="columns.method" class="w-[70px] py-2">
                   <Badge
                     :variant="getMethodVariant(entry.method)"
                     class="text-xs font-mono px-1.5 py-0"
@@ -195,101 +203,58 @@ function getMatchingMockActive(entry: NetworkEntry): boolean | null {
                   </div>
                 </TableCell>
                 
-                <TableCell class="w-[80px] py-2 text-right text-xs text-muted-foreground font-mono">
+                <TableCell v-if="columns.time" class="w-[80px] py-2 text-center text-xs text-muted-foreground font-mono">
                   {{ entry.pending ? '...' : formatDuration(entry.duration) }}
                 </TableCell>
 
-                <TableCell class="w-[80px] py-2 text-right text-xs text-muted-foreground font-mono">
+                <TableCell v-if="columns.size" class="w-[80px] py-2 text-center text-xs text-muted-foreground font-mono">
                   {{ entry.pending ? '...' : formatBytes(entry.size) }}
                 </TableCell>
                 
-                <TableCell class="w-[28px] py-2 pr-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                        <MoreHorizontal class="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-48">
-                      <DropdownMenuItem @click.stop="emit('copyCurl', entry)">
-                        <Terminal class="h-4 w-4 mr-2" />
-                        Copy cURL
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem @click.stop="emit('setBreakpoint', entry)">
-                        <PauseCircle class="h-4 w-4 mr-2" />
-                        {{ matchesBreakpointPattern(entry.id) ? 'Rewrite Breakpoint' : 'Breakpoint Request' }}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem @click.stop="emit('mockResponse', entry)">
-                        <Shuffle class="h-4 w-4 mr-2" />
-                        {{ matchesMockPattern(entry.id) ? 'Rewrite Mock' : 'Mock Response' }}
-                      </DropdownMenuItem>
-                      <template v-if="getMatchingBreakpointActive(entry) != null">
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem @click.stop="emit('toggleBreakpoint', entry)">
-                          <Power class="h-4 w-4 mr-2" />
-                          {{ getMatchingBreakpointActive(entry) ? 'Disable' : 'Enable' }} Breakpoint
-                        </DropdownMenuItem>
-                        <DropdownMenuItem class="text-destructive_text" @click.stop="emit('deleteBreakpoint', entry)">
-                          <Trash class="h-4 w-4 mr-2" />
-                          Delete Breakpoint
-                        </DropdownMenuItem>
-                      </template>
-                      <template v-if="getMatchingMockActive(entry) != null">
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem @click.stop="emit('toggleMock', entry)">
-                          <Power class="h-4 w-4 mr-2" />
-                          {{ getMatchingMockActive(entry) ? 'Disable' : 'Enable' }} Mock
-                        </DropdownMenuItem>
-                        <DropdownMenuItem class="text-destructive_text" @click.stop="emit('deleteMock', entry)">
-                          <Trash class="h-4 w-4 mr-2" />
-                          Delete Mock
-                        </DropdownMenuItem>
-                      </template>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <TableCell class="w-[60px] py-2 px-0 text-center">
+                  <div class="flex justify-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger as-child>
+                        <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                          <MoreHorizontal class="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <NetworkActionsMenuContent
+                        variant="dropdown"
+                        :entry="entry"
+                        :breakpoint-matching-ids="breakpointMatchingIds"
+                        :mock-matching-ids="mockMatchingIds"
+                        :all-breakpoints="allBreakpoints"
+                        :all-mocks="allMocks"
+                        @copy-curl="emit('copyCurl', $event)"
+                        @set-breakpoint="emit('setBreakpoint', $event)"
+                        @mock-response="emit('mockResponse', $event)"
+                        @toggle-breakpoint="emit('toggleBreakpoint', $event)"
+                        @delete-breakpoint="emit('deleteBreakpoint', $event)"
+                        @toggle-mock="emit('toggleMock', $event)"
+                        @delete-mock="emit('deleteMock', $event)"
+                      />
+                    </DropdownMenu>
+                  </div>
                 </TableCell>
               </TableRow>
             </ContextMenuTrigger>
 
-            <!-- Right-click context menu -->
-            <ContextMenuContent class="w-48">
-              <ContextMenuItem @click="emit('copyCurl', entry)">
-                <Terminal class="h-4 w-4 mr-2" />
-                Copy cURL
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem @click="emit('setBreakpoint', entry)">
-                <PauseCircle class="h-4 w-4 mr-2" />
-                {{ matchesBreakpointPattern(entry.id) ? 'Rewrite Breakpoint' : 'Breakpoint Request' }}
-              </ContextMenuItem>
-              <ContextMenuItem @click="emit('mockResponse', entry)">
-                <Shuffle class="h-4 w-4 mr-2" />
-                {{ matchesMockPattern(entry.id) ? 'Rewrite Mock' : 'Mock Response' }}
-              </ContextMenuItem>
-              <template v-if="getMatchingBreakpointActive(entry) != null">
-                <ContextMenuSeparator />
-                <ContextMenuItem @click="emit('toggleBreakpoint', entry)">
-                  <Power class="h-4 w-4 mr-2" />
-                  {{ getMatchingBreakpointActive(entry) ? 'Disable' : 'Enable' }} Breakpoint
-                </ContextMenuItem>
-                <ContextMenuItem class="text-destructive_text" @click="emit('deleteBreakpoint', entry)">
-                  <Trash class="h-4 w-4 mr-2" />
-                  Delete Breakpoint
-                </ContextMenuItem>
-              </template>
-              <template v-if="getMatchingMockActive(entry) != null">
-                <ContextMenuSeparator />
-                <ContextMenuItem @click="emit('toggleMock', entry)">
-                  <Power class="h-4 w-4 mr-2" />
-                  {{ getMatchingMockActive(entry) ? 'Disable' : 'Enable' }} Mock
-                </ContextMenuItem>
-                <ContextMenuItem class="text-destructive_text" @click="emit('deleteMock', entry)">
-                  <Trash class="h-4 w-4 mr-2" />
-                  Delete Mock
-                </ContextMenuItem>
-              </template>
-            </ContextMenuContent>
+            <NetworkActionsMenuContent
+              variant="context"
+              :entry="entry"
+              :breakpoint-matching-ids="breakpointMatchingIds"
+              :mock-matching-ids="mockMatchingIds"
+              :all-breakpoints="allBreakpoints"
+              :all-mocks="allMocks"
+              @copy-curl="emit('copyCurl', $event)"
+              @set-breakpoint="emit('setBreakpoint', $event)"
+              @mock-response="emit('mockResponse', $event)"
+              @toggle-breakpoint="emit('toggleBreakpoint', $event)"
+              @delete-breakpoint="emit('deleteBreakpoint', $event)"
+              @toggle-mock="emit('toggleMock', $event)"
+              @delete-mock="emit('deleteMock', $event)"
+            />
           </ContextMenu>
         </TableBody>
       </Table>

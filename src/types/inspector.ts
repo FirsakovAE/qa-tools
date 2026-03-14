@@ -114,6 +114,29 @@ export interface SearchIndexEntry {
     valueStr: string
 }
 
+/** Network table column visibility */
+export interface NetworkTableColumnsSettings {
+    status: boolean
+    method: boolean
+    path: boolean
+    time: boolean
+    size: boolean
+}
+
+/** Props table column visibility */
+export interface PropsTableColumnsSettings {
+    name: boolean
+    rootElement: boolean
+    props: boolean
+}
+
+/** Pinia table column visibility */
+export interface PiniaTableColumnsSettings {
+    name: boolean
+    state: boolean
+    getters: boolean
+}
+
 /** Network tab search settings */
 export interface NetworkSearchSettings {
     byPath: boolean
@@ -199,6 +222,12 @@ export interface BaseInspectorSettings {
     breakpoints: { active: BreakpointItem[]; inactive: BreakpointItem[] }
     /** Mock rules for Map Local feature - intercept requests and return fake responses */
     mocks: { active: MockRule[]; inactive: MockRule[] }
+    /** Network table column visibility */
+    networkTableColumns?: NetworkTableColumnsSettings
+    /** Props table column visibility */
+    propsTableColumns?: PropsTableColumnsSettings
+    /** Pinia table column visibility */
+    piniaTableColumns?: PiniaTableColumnsSettings
     /** @deprecated Kept for migration from older versions */
     search?: any
     /** Network tab search settings */

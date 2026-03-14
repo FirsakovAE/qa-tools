@@ -17,18 +17,13 @@ import {
 } from '@/components/ui/table'
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
+import { OptionsItemActionsMenuContent, type MenuAction } from '@/components/OptionsItemActionsMenu'
 import { MoreHorizontal, Trash, Pencil } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -85,6 +80,13 @@ const piniaFavoritesList = computed<PiniaFavoriteItem[]>(() => props.settings.pi
 
 function removeFromFavorites(id: string) {
   props.settings.piniaFavorites = props.settings.piniaFavorites.filter(f => f.id !== id)
+}
+
+function getPiniaFavoriteActions(fav: PiniaFavoriteItem): MenuAction[] {
+  return [
+    { label: 'Edit', icon: Pencil, onClick: () => emit('edit', { type: 'pinia-favorite', id: fav.id }) },
+    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructive: true },
+  ]
 }
 
 const favoritesTableHeight = computed(() => {
@@ -172,33 +174,19 @@ const favoritesNeedsScroll = computed(() => piniaFavoritesList.value.length > 4)
                                   <MoreHorizontal class="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" class="w-44">
-                                <DropdownMenuItem @click.stop="emit('edit', { type: 'pinia-favorite', id: fav.id })">
-                                  <Pencil class="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
-                                  <Trash class="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
+                              <OptionsItemActionsMenuContent
+                                variant="dropdown"
+                                :actions="getPiniaFavoriteActions(fav)"
+                              />
                             </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>
-                    <ContextMenuContent class="w-44">
-                      <ContextMenuItem @click="emit('edit', { type: 'pinia-favorite', id: fav.id })">
-                        <Pencil class="h-4 w-4 mr-2" />
-                        Edit
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem class="text-destructive_text" @click="removeFromFavorites(fav.id)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuContent>
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getPiniaFavoriteActions(fav)"
+                    />
                   </ContextMenu>
 
                   <TableRow v-if="!piniaFavoritesList.length">
@@ -236,33 +224,19 @@ const favoritesNeedsScroll = computed(() => piniaFavoritesList.value.length > 4)
                                 <MoreHorizontal class="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem @click.stop="emit('edit', { type: 'pinia-favorite', id: fav.id })">
-                                <Pencil class="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
-                                <Trash class="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
+                            <OptionsItemActionsMenuContent
+                              variant="dropdown"
+                              :actions="getPiniaFavoriteActions(fav)"
+                            />
                           </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
                   </ContextMenuTrigger>
-                  <ContextMenuContent class="w-44">
-                    <ContextMenuItem @click="emit('edit', { type: 'pinia-favorite', id: fav.id })">
-                      <Pencil class="h-4 w-4 mr-2" />
-                      Edit
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem class="text-destructive_text" @click="removeFromFavorites(fav.id)">
-                      <Trash class="h-4 w-4 mr-2" />
-                      Delete
-                    </ContextMenuItem>
-                  </ContextMenuContent>
+                  <OptionsItemActionsMenuContent
+                    variant="context"
+                    :actions="getPiniaFavoriteActions(fav)"
+                  />
                 </ContextMenu>
                 <TableRow v-if="!piniaFavoritesList.length">
                   <TableCell colspan="3" class="text-center text-muted-foreground py-8">

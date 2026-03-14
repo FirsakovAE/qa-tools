@@ -209,6 +209,35 @@ function migrateSearchSettings(saved: any): void {
         }
     }
 
+    // Миграция: добавляем networkTableColumns если отсутствует
+    if (!saved.networkTableColumns || typeof saved.networkTableColumns !== 'object') {
+        saved.networkTableColumns = {
+            status: true,
+            method: true,
+            path: true,
+            time: true,
+            size: true,
+        }
+    }
+
+    // Миграция: добавляем propsTableColumns если отсутствует
+    if (!saved.propsTableColumns || typeof saved.propsTableColumns !== 'object') {
+        saved.propsTableColumns = {
+            name: true,
+            rootElement: true,
+            props: true,
+        }
+    }
+
+    // Миграция: добавляем piniaTableColumns если отсутствует
+    if (!saved.piniaTableColumns || typeof saved.piniaTableColumns !== 'object') {
+        saved.piniaTableColumns = {
+            name: true,
+            state: true,
+            getters: true,
+        }
+    }
+
     // Миграция: удаляем version из настроек
     delete saved.version
 }

@@ -17,18 +17,13 @@ import {
 } from '@/components/ui/table'
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
+import { OptionsItemActionsMenuContent, type MenuAction } from '@/components/OptionsItemActionsMenu'
 import { MoreHorizontal, Power, Trash } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -97,11 +92,24 @@ function removeFromBlacklist(name: string) {
   props.settings.blacklist.inactive = props.settings.blacklist.inactive.filter(n => n !== name)
 }
 
+function getBlacklistActions(row: BlacklistRow): MenuAction[] {
+  return [
+    { label: row.active ? 'Allow' : 'Block', icon: Power, onClick: () => toggleBlacklist(row.name, row.active) },
+    { label: 'Delete', icon: Trash, onClick: () => removeFromBlacklist(row.name), destructive: true },
+  ]
+}
+
 // -------------------- FAVORITES --------------------
 const favoritesList = computed<FavoriteItem[]>(() => props.settings.favorites || [])
 
 function removeFromFavorites(id: string) {
   props.settings.favorites = props.settings.favorites.filter(f => f.id !== id)
+}
+
+function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
+  return [
+    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructive: true },
+  ]
 }
 
 const blacklistTableHeight = computed(() => {
@@ -198,33 +206,19 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                                   <MoreHorizontal class="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" class="w-44">
-                                <DropdownMenuItem @click.stop="toggleBlacklist(row.name, row.active)">
-                                <Power class="h-4 w-4 mr-2" />
-                                {{ row.active ? 'Allow' : 'Block' }}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromBlacklist(row.name)">
-                                <Trash class="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
+                              <OptionsItemActionsMenuContent
+                                variant="dropdown"
+                                :actions="getBlacklistActions(row)"
+                              />
                           </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>
-                    <ContextMenuContent class="w-44">
-                      <ContextMenuItem @click="toggleBlacklist(row.name, row.active)">
-                        <Power class="h-4 w-4 mr-2" />
-                        {{ row.active ? 'Allow' : 'Block' }}
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem class="text-destructive_text" @click="removeFromBlacklist(row.name)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuContent>
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getBlacklistActions(row)"
+                    />
                   </ContextMenu>
 
                   <TableRow v-if="!blacklistRows.length">
@@ -264,33 +258,19 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                                 <MoreHorizontal class="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem @click.stop="toggleBlacklist(row.name, row.active)">
-                              <Power class="h-4 w-4 mr-2" />
-                              {{ row.active ? 'Allow' : 'Block' }}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromBlacklist(row.name)">
-                              <Trash class="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
+                            <OptionsItemActionsMenuContent
+                              variant="dropdown"
+                              :actions="getBlacklistActions(row)"
+                            />
                         </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
                   </ContextMenuTrigger>
-                  <ContextMenuContent class="w-44">
-                    <ContextMenuItem @click="toggleBlacklist(row.name, row.active)">
-                      <Power class="h-4 w-4 mr-2" />
-                      {{ row.active ? 'Allow' : 'Block' }}
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem class="text-destructive_text" @click="removeFromBlacklist(row.name)">
-                      <Trash class="h-4 w-4 mr-2" />
-                      Delete
-                    </ContextMenuItem>
-                  </ContextMenuContent>
+                  <OptionsItemActionsMenuContent
+                    variant="context"
+                    :actions="getBlacklistActions(row)"
+                  />
                 </ContextMenu>
                 <TableRow v-if="!blacklistRows.length">
                   <TableCell colspan="3" class="text-center text-muted-foreground py-8">
@@ -354,23 +334,19 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                                   <MoreHorizontal class="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" class="w-44">
-                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
-                                  <Trash class="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
+                              <OptionsItemActionsMenuContent
+                                variant="dropdown"
+                                :actions="getFavoritesActions(fav)"
+                              />
                             </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>
-                    <ContextMenuContent class="w-44">
-                      <ContextMenuItem class="text-destructive_text" @click="removeFromFavorites(fav.id)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuContent>
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getFavoritesActions(fav)"
+                    />
                   </ContextMenu>
 
                   <TableRow v-if="!favoritesList.length">
@@ -411,23 +387,19 @@ const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
                                 <MoreHorizontal class="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeFromFavorites(fav.id)">
-                                  <Trash class="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
+                            <OptionsItemActionsMenuContent
+                              variant="dropdown"
+                              :actions="getFavoritesActions(fav)"
+                            />
                             </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>
-                    <ContextMenuContent class="w-44">
-                      <ContextMenuItem class="text-destructive_text" @click="removeFromFavorites(fav.id)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuContent>
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getFavoritesActions(fav)"
+                    />
                   </ContextMenu>
                   <TableRow v-if="!favoritesList.length">
                   <TableCell colspan="3" class="text-center text-muted-foreground py-8">

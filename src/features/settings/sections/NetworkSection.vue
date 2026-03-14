@@ -16,18 +16,13 @@ import {
 } from '@/components/ui/table'
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
+import { OptionsItemActionsMenuContent, type MenuAction } from '@/components/OptionsItemActionsMenu'
 import { MoreHorizontal, Power, Trash, Pencil } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -144,6 +139,22 @@ const mockTableHeight = computed(() => {
   return Math.min(rowCount * 41, 205)
 })
 const mockNeedsScroll = computed(() => mockRows.value.length > 4)
+
+function getBreakpointActions(row: BreakpointRow): MenuAction[] {
+  return [
+    { label: 'Edit', icon: Pencil, onClick: () => emit('edit-breakpoint', row.id) },
+    { label: row.active ? 'Disable' : 'Enable', icon: Power, onClick: () => toggleBreakpoint(row.id, row.active) },
+    { label: 'Delete', icon: Trash, onClick: () => removeBreakpoint(row.id), destructive: true },
+  ]
+}
+
+function getMockActions(row: MockRow): MenuAction[] {
+  return [
+    { label: 'Edit', icon: Pencil, onClick: () => emit('edit-mock', row.id) },
+    { label: row.active ? 'Disable' : 'Enable', icon: Power, onClick: () => toggleMock(row.id, row.active) },
+    { label: 'Delete', icon: Trash, onClick: () => removeMock(row.id), destructive: true },
+  ]
+}
 </script>
 
 <template>
@@ -217,41 +228,19 @@ const mockNeedsScroll = computed(() => mockRows.value.length > 4)
                                   <MoreHorizontal class="h-3.5 w-3.5" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" class="w-44">
-                                <DropdownMenuItem @click.stop="emit('edit-breakpoint', row.id)">
-                                  <Pencil class="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem @click.stop="toggleBreakpoint(row.id, row.active)">
-                                  <Power class="h-4 w-4 mr-2" />
-                                  {{ row.active ? 'Disable' : 'Enable' }}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeBreakpoint(row.id)">
-                                  <Trash class="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
+                              <OptionsItemActionsMenuContent
+                              variant="dropdown"
+                              :actions="getBreakpointActions(row)"
+                            />
                             </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>
-                    <ContextMenuContent class="w-44">
-                      <ContextMenuItem @click="emit('edit-breakpoint', row.id)">
-                        <Pencil class="h-4 w-4 mr-2" />
-                        Edit
-                      </ContextMenuItem>
-                      <ContextMenuItem @click="toggleBreakpoint(row.id, row.active)">
-                        <Power class="h-4 w-4 mr-2" />
-                        {{ row.active ? 'Disable' : 'Enable' }}
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem class="text-destructive_text" @click="removeBreakpoint(row.id)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuContent>
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getBreakpointActions(row)"
+                    />
                   </ContextMenu>
 
                   <TableRow v-if="!breakpointRows.length">
@@ -291,41 +280,19 @@ const mockNeedsScroll = computed(() => mockRows.value.length > 4)
                                 <MoreHorizontal class="h-3.5 w-3.5" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem @click.stop="emit('edit-breakpoint', row.id)">
-                                <Pencil class="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem @click.stop="toggleBreakpoint(row.id, row.active)">
-                                <Power class="h-4 w-4 mr-2" />
-                                {{ row.active ? 'Disable' : 'Enable' }}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeBreakpoint(row.id)">
-                                <Trash class="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
+                            <OptionsItemActionsMenuContent
+                              variant="dropdown"
+                              :actions="getBreakpointActions(row)"
+                            />
                           </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
                   </ContextMenuTrigger>
-                  <ContextMenuContent class="w-44">
-                    <ContextMenuItem @click="emit('edit-breakpoint', row.id)">
-                      <Pencil class="h-4 w-4 mr-2" />
-                      Edit
-                    </ContextMenuItem>
-                    <ContextMenuItem @click="toggleBreakpoint(row.id, row.active)">
-                      <Power class="h-4 w-4 mr-2" />
-                      {{ row.active ? 'Disable' : 'Enable' }}
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem class="text-destructive_text" @click="removeBreakpoint(row.id)">
-                      <Trash class="h-4 w-4 mr-2" />
-                      Delete
-                    </ContextMenuItem>
-                  </ContextMenuContent>
+                  <OptionsItemActionsMenuContent
+                    variant="context"
+                    :actions="getBreakpointActions(row)"
+                  />
                 </ContextMenu>
                 <TableRow v-if="!breakpointRows.length">
                   <TableCell colspan="3" class="text-center text-muted-foreground py-8">
@@ -411,41 +378,19 @@ const mockNeedsScroll = computed(() => mockRows.value.length > 4)
                                   <MoreHorizontal class="h-3.5 w-3.5" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" class="w-44">
-                                <DropdownMenuItem @click.stop="emit('edit-mock', row.id)">
-                                  <Pencil class="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
-                                  <Power class="h-4 w-4 mr-2" />
-                                  {{ row.active ? 'Disable' : 'Enable' }}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem class="text-destructive_text" @click.stop="removeMock(row.id)">
-                                  <Trash class="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
+                              <OptionsItemActionsMenuContent
+                                variant="dropdown"
+                                :actions="getMockActions(row)"
+                              />
                             </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>
-                    <ContextMenuContent class="w-44">
-                      <ContextMenuItem @click="emit('edit-mock', row.id)">
-                        <Pencil class="h-4 w-4 mr-2" />
-                        Edit
-                      </ContextMenuItem>
-                      <ContextMenuItem @click="toggleMock(row.id, row.active)">
-                        <Power class="h-4 w-4 mr-2" />
-                        {{ row.active ? 'Disable' : 'Enable' }}
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem class="text-destructive_text" @click="removeMock(row.id)">
-                        <Trash class="h-4 w-4 mr-2" />
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuContent>
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getMockActions(row)"
+                    />
                   </ContextMenu>
 
                   <TableRow v-if="!mockRows.length">
@@ -503,41 +448,19 @@ const mockNeedsScroll = computed(() => mockRows.value.length > 4)
                                 <MoreHorizontal class="h-3.5 w-3.5" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem @click.stop="emit('edit-mock', row.id)">
-                                <Pencil class="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem @click.stop="toggleMock(row.id, row.active)">
-                                <Power class="h-4 w-4 mr-2" />
-                                {{ row.active ? 'Disable' : 'Enable' }}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem class="text-destructive_text" @click.stop="removeMock(row.id)">
-                                <Trash class="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
+                            <OptionsItemActionsMenuContent
+                              variant="dropdown"
+                              :actions="getMockActions(row)"
+                            />
                           </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
                   </ContextMenuTrigger>
-                  <ContextMenuContent class="w-44">
-                    <ContextMenuItem @click="emit('edit-mock', row.id)">
-                      <Pencil class="h-4 w-4 mr-2" />
-                      Edit
-                    </ContextMenuItem>
-                    <ContextMenuItem @click="toggleMock(row.id, row.active)">
-                      <Power class="h-4 w-4 mr-2" />
-                      {{ row.active ? 'Disable' : 'Enable' }}
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem class="text-destructive_text" @click="removeMock(row.id)">
-                      <Trash class="h-4 w-4 mr-2" />
-                      Delete
-                    </ContextMenuItem>
-                  </ContextMenuContent>
+                  <OptionsItemActionsMenuContent
+                    variant="context"
+                    :actions="getMockActions(row)"
+                  />
                 </ContextMenu>
                 <TableRow v-if="!mockRows.length">
                   <TableCell colspan="5" class="text-center text-muted-foreground py-8">
