@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, shallowRef, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { SearchIcon, RefreshCw, Star } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -464,15 +464,36 @@ async function handleRefresh() {
   lastUpdated.value = formatDateTime(new Date())
 }
 
-/** Refresh tree and re-select current node to update details panel */
+/** Refresh only the selected component's props (no full tree reload) */
 async function handleRefreshSelected() {
-  if (isLoading.value) return
-  const currentId = selectedNode.value?.id ?? selectedNode.value?.componentUid
-  await refresh()
-  lastUpdated.value = formatDateTime(new Date())
-  if (currentId) {
-    const updated = rows.value.find(r => r.id === currentId || r.componentUid === currentId)
+  const node = selectedNode.value
+  if (!node || isLoading.value) return
+
+  const componentPath = node.id
+  if (!componentPath || !componentPath.startsWith('uid:')) return
+
+  isLoading.value = true
+  try {
+    const response = await runtime.sendMessage<{ props?: Record<string, any> }>({
+      type: 'GET_COMPONENT_PROPS',
+      componentUid: componentPath
+    })
+    const freshProps = response?.props ?? {}
+    selectedNode.value = {
+      ...node,
+      props: freshProps,
+      jsonProps: JSON.stringify(freshProps, null, 2)
+    }
+    lastUpdated.value = formatDateTime(new Date())
+  } catch {
+    // Fallback: full refresh if single-component refresh fails
+    await refresh()
+    await nextTick()
+    const updated = rows.value.find(r => r.id === node.id || r.componentUid === node.componentUid)
     if (updated) selectedNode.value = updated
+    lastUpdated.value = formatDateTime(new Date())
+  } finally {
+    isLoading.value = false
   }
 }
 

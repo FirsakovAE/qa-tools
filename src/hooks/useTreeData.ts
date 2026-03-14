@@ -59,16 +59,18 @@ export function useTreeData() {
         return false
     }
     
-    function updateStableData(newData: TreeNodeModel[]) {
+    function updateStableData(newData: TreeNodeModel[], forceUpdate = false) {
         // Check for flood protection
         if (isFlooding()) {
             return
         }
         
-        if (updateManager.shouldUpdate(newData)) {
+        if (forceUpdate || updateManager.shouldUpdate(newData)) {
             // Track update timestamp
             updateTimestamps.push(Date.now())
-            stableTreeData.value = updateManager.updateTree(stableTreeData.value, newData)
+            stableTreeData.value = forceUpdate
+                ? newData
+                : updateManager.updateTree(stableTreeData.value, newData)
         }
     }
 
@@ -84,13 +86,13 @@ export function useTreeData() {
         try {
             let data: TreeNodeModel[]
             if (search && dataService.value.refreshComponents) {
-                data = await dataService.value.getTreeData(search)
+                data = await dataService.value.getTreeData(search, forceReload)
             } else {
-                data = await dataService.value.getTreeData()
+                data = await dataService.value.getTreeData(undefined, forceReload)
             }
 
             rawTreeData.value = data
-            updateStableData(data)
+            updateStableData(data, forceReload)
             hasLoadedData.value = true
         } catch (e) {
             error.value = String(e)

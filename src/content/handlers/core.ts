@@ -69,10 +69,15 @@ export const handleGetComponents: RuntimeHandler = (message, sender, sendRespons
  * COLLECT_VUE_COMPONENTS handler
  */
 export const handleCollectVueComponents: RuntimeHandler = (message, sender, sendResponse) => {
+  const forceRefresh = !!(message as any).forceRefresh
+
   // PRIORITY: Use window.__VUE_INSPECTOR__ API directly if available
   const inspector = (window as any).__VUE_INSPECTOR__
   if (inspector && typeof inspector.getComponents === 'function') {
     try {
+      if (forceRefresh && typeof inspector.forceRefresh === 'function') {
+        inspector.forceRefresh()
+      }
       const components = inspector.getComponents()
       sendResponse({ components: components || [] })
       return true
@@ -82,7 +87,7 @@ export const handleCollectVueComponents: RuntimeHandler = (message, sender, send
   }
 
   // Fallback: Request components via injected script
-  requestWindow({ type: 'VUE_INSPECTOR_GET_COMPONENTS' }, 'VUE_INSPECTOR_COMPONENTS_DATA', 3000)
+  requestWindow({ type: 'VUE_INSPECTOR_GET_COMPONENTS', forceRefresh }, 'VUE_INSPECTOR_COMPONENTS_DATA', 3000)
     .then((response: any) => {
       sendResponse({ components: response.components || [] })
     })

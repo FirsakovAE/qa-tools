@@ -21,16 +21,16 @@ interface CollectComponentsResponse {
 export class RealDataService {
     private vueInstances: any[] = []
 
-    async getTreeData(search?: TreeSearchOptions): Promise<TreeNodeModel[]> {
-        const components = await this.collectVueComponents()
+    async getTreeData(search?: TreeSearchOptions, forceRefresh = false): Promise<TreeNodeModel[]> {
+        const components = await this.collectVueComponents(forceRefresh)
         return this.transformToTreeData(components, search)
     }
 
     async refreshComponents(): Promise<ComponentInfo[]> {
-        return this.collectVueComponents()
+        return this.collectVueComponents(true)
     }
 
-    private async collectVueComponents(): Promise<ComponentInfo[]> {
+    private async collectVueComponents(forceRefresh = false): Promise<ComponentInfo[]> {
         const runtime = getRuntimeAdapter()
         if (!runtime) {
             return []
@@ -41,7 +41,8 @@ export class RealDataService {
             // В extension mode отправится через chrome.tabs
             // В standalone mode отправится через postMessage
             const response = await runtime.sendMessage<CollectComponentsResponse>({
-                type: 'COLLECT_VUE_COMPONENTS'
+                type: 'COLLECT_VUE_COMPONENTS',
+                forceRefresh
             })
 
             if (response?.components) {

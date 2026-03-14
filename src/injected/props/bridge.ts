@@ -130,9 +130,9 @@ function metaToLegacyFormat(meta: any): any {
 /**
  * Get components in legacy format (for backwards compatibility)
  */
-function getLegacyComponents(): any[] {
-  // First scan structure
-  scanStructure()
+function getLegacyComponents(forceRefresh = false): any[] {
+  // First scan structure (force=true bypasses throttle when user explicitly refreshes)
+  scanStructure({ force: forceRefresh })
   
   const store = getMetaStore()
   const metas = store.getAllComponents()
@@ -241,7 +241,8 @@ function handleMessage(event: MessageEvent) {
   // Handle GET_COMPONENTS message (legacy, with props)
   if (event.source === window && event.data?.type === MESSAGE_TYPES.GET_COMPONENTS) {
     try {
-      const components = getLegacyComponents()
+      const forceRefresh = !!(event.data?.forceRefresh)
+      const components = getLegacyComponents(forceRefresh)
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,

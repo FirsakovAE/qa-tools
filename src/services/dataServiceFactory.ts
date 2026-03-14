@@ -3,7 +3,7 @@ import type { TreeNodeModel } from '@/types/tree'
 import type {TreeSearchOptions} from "../types/search.ts";
 
 export interface DataService {
-    getTreeData(search?: TreeSearchOptions): Promise<TreeNodeModel[]>
+    getTreeData(search?: TreeSearchOptions, forceRefresh?: boolean): Promise<TreeNodeModel[]>
     refreshComponents?(): Promise<any[]>
 }
 
