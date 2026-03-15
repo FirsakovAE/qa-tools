@@ -14,10 +14,6 @@
         })();
       `.replace(/\s+/g, ' ').trim();
       document.getElementById('bookmarklet').href = 'javascript:' + encodeURIComponent(code);
-      document.getElementById('bookmarklet').addEventListener('click', function(e) {
-        alert('Drag this button to your bookmarks bar,\nthen use it on any page with a Vue application.');
-        e.preventDefault();
-      });
     })();
 
 // ── Fade-in on scroll ──

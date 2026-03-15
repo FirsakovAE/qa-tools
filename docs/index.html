@@ -592,6 +592,19 @@ No proxies. No rebuilds. No DevTools limitations.
   <script src="./main.js"></script>
 
   <script>
+    // ── Bookmarklet (inline: runs even if main.js fails) ──
+    (function(){
+      var el = document.getElementById('bookmarklet');
+      if (el) {
+        var baseURL = location.hostname.endsWith('github.io')
+          ? location.origin + (location.pathname.split('/').filter(Boolean)[0] ? '/' + location.pathname.split('/').filter(Boolean)[0] : '')
+          : location.origin;
+        var loaderPath = '/loader.js';
+        var code = "(function(){if(window.__VUE_INSPECTOR_INITIALIZED__)return;var b='"+baseURL+"';window.__VUE_INSPECTOR_CONFIG__={baseURL:b};window.__VUE_INSPECTOR_INITIALIZED__=true;var s=document.createElement('script');s.src=b+'"+loaderPath+"';s.onerror=function(){alert('Vue Inspector: Failed to load from '+b)};document.head.appendChild(s);})();";
+        el.href = 'javascript:' + encodeURIComponent(code);
+        el.addEventListener('click', function(e) { alert('Drag this button to your bookmarks bar,\nthen use it on any page with a Vue application.'); e.preventDefault(); });
+      }
+    })();
     // ── GitHub Release (inline: runs even if main.js fails) ──
     (async function(){
       try {
