@@ -391,7 +391,13 @@ const selectedStore = computed(() => {
 
 const entriesCount = computed(() => sortedEntries.value.length)
 const totalCount = computed(() => entries.value.length)
-const favoritesCount = computed(() => sortedEntries.value.filter(s => isFavoriteStore(s)).length)
+const favoritesFound = computed(() => sortedEntries.value.filter(s => isFavoriteStore(s)).length)
+const favoritesTotal = computed(() => settings.value?.piniaFavorites?.length ?? 0)
+const favoritesLabel = computed(() => {
+  const total = favoritesTotal.value
+  if (total === 0) return '0'
+  return `${favoritesFound.value}/${total}`
+})
 
 // ============================================================================
 // Actions
@@ -500,13 +506,15 @@ onUnmounted(() => {
             </template>
           </Badge>
           <Badge
-            v-if="favoritesCount > 0"
             variant="outline"
-            class="text-yellow-500 border-yellow-500/30 cursor-pointer hover:bg-yellow-500/10 transition-colors"
+            class="cursor-pointer transition-colors"
+            :class="favoritesFound > 0
+              ? 'text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/10'
+              : 'text-muted-foreground border-muted hover:bg-muted/50'"
             @click="emit('navigateToOptions', 'pinia-favorites-section')"
           >
-            <Star class="h-3 w-3 mr-1 fill-yellow-500" />
-            {{ favoritesCount }}
+            <Star class="h-3 w-3 mr-1" :class="favoritesFound > 0 ? 'fill-yellow-500' : 'fill-muted-foreground'" />
+            {{ favoritesLabel }}
           </Badge>
           
           <!-- Refresh button -->

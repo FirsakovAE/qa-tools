@@ -55,6 +55,7 @@ git push origin master
 ```bash
 git log --oneline # Найти последний рабочий коммит
 git reset --hard <commit_hash> # Вернуться к рабочему состоянию
+git reset --hard HEAD~1
 git push --force origin master # Принудительно обновить master (осознанно)
 ```
 

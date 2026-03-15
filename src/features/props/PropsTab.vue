@@ -444,7 +444,13 @@ const activeSearchTypes = computed(() => {
 // Counts based on visibleRows (already computed and cached)
 const entriesCount = computed(() => visibleRows.value.length)
 const totalCount = computed(() => rows.value.length)
-const favoritesCount = computed(() => visibleRows.value.filter(r => r.isFavoriteFlag).length)
+const favoritesFound = computed(() => visibleRows.value.filter(r => r.isFavoriteFlag).length)
+const favoritesTotal = computed(() => settings.value?.favorites?.length ?? 0)
+const favoritesLabel = computed(() => {
+  const total = favoritesTotal.value
+  if (total === 0) return '0'
+  return `${favoritesFound.value}/${total}`
+})
 
 // ============================================================================
 // Actions
@@ -634,13 +640,15 @@ onUnmounted(() => {
             {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
           </Badge>
           <Badge
-            v-if="favoritesCount > 0"
             variant="outline"
-            class="text-yellow-500 border-yellow-500/30 cursor-pointer hover:bg-yellow-500/10 transition-colors"
+            class="cursor-pointer transition-colors"
+            :class="favoritesFound > 0
+              ? 'text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/10'
+              : 'text-muted-foreground border-muted hover:bg-muted/50'"
             @click="emit('navigateToOptions', 'favorites-section')"
           >
-            <Star class="h-3 w-3 mr-1 fill-yellow-500" />
-            {{ favoritesCount }}
+            <Star class="h-3 w-3 mr-1" :class="favoritesFound > 0 ? 'fill-yellow-500' : 'fill-muted-foreground'" />
+            {{ favoritesLabel }}
           </Badge>
           
           
