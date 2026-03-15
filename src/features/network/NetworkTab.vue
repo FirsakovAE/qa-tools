@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { Trash2, Pause, Play, SearchIcon, Download } from 'lucide-vue-next'
+import { Trash2, Pause, Play, SearchIcon, Upload } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -376,7 +376,7 @@ onMounted(async () => {
                   :disabled="filteredEntries.length === 0"
                   @click="downloadPostmanCollection(filteredEntries)"
                 >
-                  <Download class="h-3.5 w-3.5" />
+                  <Upload class="h-3.5 w-3.5" />
                   <span class="text-xs font-medium">Export Collection</span>
                 </Button>
               </TooltipTrigger>
@@ -403,7 +403,7 @@ onMounted(async () => {
                   :disabled="filteredEntries.length === 0"
                   @click="downloadPostmanCollection(filteredEntries)"
                 >
-                  <Download class="h-3.5 w-3.5" />
+                  <Upload class="h-3.5 w-3.5" />
                   <span class="text-xs font-medium">Export Collection</span>
                 </Button>
               </TooltipTrigger>
