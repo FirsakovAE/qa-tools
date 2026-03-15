@@ -590,5 +590,38 @@ No proxies. No rebuilds. No DevTools limitations.
 <!-- ═══ Scripts ═══ -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="./main.js"></script>
+
+  <script>
+    // ── GitHub Release (inline: runs even if main.js fails) ──
+    (async function(){
+      try {
+        var res = await fetch('https://api.github.com/repos/FirsakovAE/qa-tools/releases/latest');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var data = await res.json();
+        if (!data || !data.tag_name) return;
+        var version = data.tag_name;
+        var date = data.published_at ? new Date(data.published_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) : '';
+        var body = data.body || 'No release notes available.';
+        var bodyHtml = (typeof marked !== 'undefined' && marked && marked.parse) ? marked.parse(body) : body.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+        var dlUrl = null;
+        if (data.assets && data.assets.length > 0) {
+          var zip = data.assets.find(function(a){ return a.name.indexOf('.zip')>=0 || a.name.indexOf('.crx')>=0 || a.name.toLowerCase().indexOf('extension')>=0; });
+          dlUrl = zip ? zip.browser_download_url : data.assets[0].browser_download_url;
+        } else {
+          dlUrl = 'https://github.com/FirsakovAE/qa-tools/archive/refs/tags/' + version + '.zip';
+        }
+        var card = document.getElementById('releaseCard');
+        if (!card) return;
+        card.innerHTML = '<div class="release-header"><div><div class="release-version">'+version+'</div><div class="release-date">'+date+'</div></div><a id="releaseDownload" class="btn btn-primary btn-sm" href="'+(dlUrl||'#')+'" target="_blank">Download '+version+'</a></div><div class="release-body">'+bodyHtml+'</div>';
+        var dlLink = document.getElementById('downloadLink');
+        if (dlLink && dlUrl) { dlLink.href = dlUrl; dlLink.style.display = 'inline-flex'; }
+        var ctaDl = document.getElementById('ctaDownload');
+        if (ctaDl && dlUrl) { ctaDl.href = dlUrl; ctaDl.target = '_blank'; }
+      } catch (err) {
+        var card = document.getElementById('releaseCard');
+        if (card) card.innerHTML = '<div class="release-error">Failed to load release info. Visit <a href="https://github.com/FirsakovAE/qa-tools/releases" target="_blank">GitHub Releases</a> directly.</div>';
+      }
+    })();
+  </script>
 </body>
 </html>

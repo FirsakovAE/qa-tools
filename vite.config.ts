@@ -109,7 +109,8 @@ export default defineConfig({
           // Извлекаем inline-скрипт, применяем правки путей и сохраняем как main.js.
           // Это гарантирует, что любые изменения в public/standalone/index.html
           // автоматически попадают в docs/main.js при сборке.
-          const inlineScriptPattern = /  <script>([\s\S]*?)<\/script>\s*<\/body>/
+          // Extract first script (bookmarklet, carousel, fade-in); second script (fetch) stays inline
+          const inlineScriptPattern = /  <script>([\s\S]*?)<\/script>(?=\s*<script>|\s*<\/body>)/
           const inlineMatch = content.match(inlineScriptPattern)
 
           if (inlineMatch) {
@@ -138,8 +139,8 @@ export default defineConfig({
             writeFileSync(mainJsPath, scriptContent.trim(), 'utf-8')
           }
 
-          // Заменяем inline script на подключение внешнего файла
-          const externalScriptTag = `  <script src="./main.js"></script>\n</body>`
+          // Заменяем первый inline script на подключение внешнего файла (второй — fetch — остаётся inline)
+          const externalScriptTag = `  <script src="./main.js"></script>\n`
           content = content.replace(inlineScriptPattern, externalScriptTag)
           writeFileSync(indexHtmlPath, content, 'utf-8')
         }
