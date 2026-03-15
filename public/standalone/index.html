@@ -320,7 +320,8 @@ img{max-width:100%;display:block}
 .glow-hero{width:800px;height:800px;background:var(--accent);top:50%;left:50%;transform:translate(-50%,-50%);opacity:.06}
 
 /* ─── Fade-in animation ─── */
-.fade-in{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+/* Progressive enhancement: content visible by default (works without JS, e.g. on GitHub Pages) */
+.fade-in{opacity:1;transform:translateY(0);transition:opacity .7s ease,transform .7s ease}
 .fade-in.visible{opacity:1;transform:translateY(0)}
 
 /* ─── Responsive ─── */
