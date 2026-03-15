@@ -208,7 +208,7 @@ const vueInspectorAPI = {
   getRecentChanges: (count?: number) => getMetaStore().getRecentChanges(count),
   
   // Legacy (backwards compatibility)
-  getComponents: () => getVueComponents(),
+  getComponents: (options?: { blacklist?: { active: string[]; inactive: string[] } }) => getVueComponents(options),
   findComponentByPath: (path: string) => findComponentByPath(path),
   updateComponentProps: (path: string, newProps: Record<string, any>) => {
     return updateComponentProps(path, newProps)
@@ -226,9 +226,9 @@ const vueInspectorAPI = {
 // Assign API to global window object
 Object.assign(window as any, {
   __VUE_INSPECTOR__: vueInspectorAPI,
-  __VUE_INSPECTOR_INJECTED__: {
+    __VUE_INSPECTOR_INJECTED__: {
     // Legacy API
-    getComponents: () => getVueComponents(),
+    getComponents: (options?: { blacklist?: { active: string[]; inactive: string[] } }) => getVueComponents(options),
     isVueDetected: () => isVueDetected(),
     findComponentByPath: (path: string) => findComponentByPath(path),
     updateComponentProps: (path: string, newProps: Record<string, any>) => {

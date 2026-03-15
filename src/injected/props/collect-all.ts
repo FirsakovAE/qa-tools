@@ -18,6 +18,15 @@ import {
   getCachedComponentsAsInfo,
   type ComponentRef
 } from './collect'
+
+/** Inlined likeMatch - injected script must not use external imports (no type="module") */
+function likeMatch(value: string, pattern: string): boolean {
+  const v = value.toLowerCase()
+  const p = pattern.toLowerCase()
+  if (!p.includes('%') && !p.includes('*')) return v === p
+  const escaped = p.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&')
+  return new RegExp('^' + escaped.replace(/[%*]/g, '.*') + '$').test(v)
+}
 import { 
   TraversalState, 
   getComponentStore,
@@ -118,22 +127,52 @@ export function resetCollectionStats(): void {
   stats.cacheHits = 0
 }
 
+export interface GetVueComponentsOptions {
+  blacklist?: { active: string[]; inactive: string[] }
+}
+
+/** Normalize blacklist (safe for cross-context / postMessage) */
+function normalizeBlacklist(bl: GetVueComponentsOptions['blacklist']): GetVueComponentsOptions['blacklist'] {
+  if (!bl || typeof bl !== 'object' || !Array.isArray((bl as any).active)) return undefined
+  const b = bl as { active: unknown[]; inactive?: unknown[] }
+  return {
+    active: b.active.filter((r): r is string => typeof r === 'string'),
+    inactive: Array.isArray(b.inactive) ? b.inactive.filter((r): r is string => typeof r === 'string') : []
+  }
+}
+
+function isBlacklisted(name: string, norm: { active: string[]; inactive: string[] }): boolean {
+  if (!norm.active.length) return false
+  const n = name || ''
+  if (norm.inactive.some((rule: string) => likeMatch(n, rule))) return false
+  return norm.active.some((rule: string) => likeMatch(n, rule))
+}
+
+function filterByBlacklist<T extends { name?: string }>(items: T[], blacklist: GetVueComponentsOptions['blacklist']): T[] {
+  const norm = normalizeBlacklist(blacklist)
+  if (!norm?.active?.length) return items
+  return items.filter(item => !isBlacklisted(item.name ?? '', norm))
+}
+
 /**
  * Get Vue components with delta updates.
  * 
  * - Returns cached components if within debounce window
  * - Uses delta detection to reuse unchanged ComponentRef objects
  * - Serializes props lazily (only when accessed)
+ * - Blacklisted components excluded at source: no tree, no props extraction, no serialization
  * 
  * @returns Array of ComponentInfo with serialized props
  */
-export function getVueComponents(): ComponentInfo[] {
+export function getVueComponents(options?: GetVueComponentsOptions): ComponentInfo[] {
   const now = Date.now()
+  const blacklist = options?.blacklist
   
   // Check debounce - return cached if recent
   if (shouldUseCachedComponents()) {
     stats.cacheHits++
-    return getCachedComponentsAsInfo()
+    const cached = getCachedComponentsAsInfo()
+    return filterByBlacklist(cached, blacklist)
   }
   
   const startTime = performance.now()
@@ -188,8 +227,9 @@ export function getVueComponents(): ComponentInfo[] {
 
   lastCollectionTime = now
 
-  // Convert refs to ComponentInfo (props serialized lazily)
-  return allRefs.map(componentRefToInfo)
+  // Filter blacklisted BEFORE componentRefToInfo - no props extraction, no serialization
+  const filteredRefs = filterByBlacklist(allRefs, blacklist)
+  return filteredRefs.map(componentRefToInfo)
 }
 
 /**

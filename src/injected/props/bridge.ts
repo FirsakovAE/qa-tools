@@ -13,6 +13,15 @@ import { findComponentByPath } from './find-by-path'
 import { updateComponentProps } from './update-props'
 import { isVueDetected, findVueRoots, detectVueContext } from './vue-detect'
 import { serializeProps } from './serialize'
+
+/** Inlined likeMatch - injected script must not use external imports (no type="module") */
+function likeMatch(value: string, pattern: string): boolean {
+  const v = value.toLowerCase()
+  const p = pattern.toLowerCase()
+  if (!p.includes('%') && !p.includes('*')) return v === p
+  const escaped = p.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&')
+  return new RegExp('^' + escaped.replace(/[%*]/g, '.*') + '$').test(v)
+}
 import { disposeMetaStore, getMetaStore } from './meta-store'
 import { scanStructure, getComponentList, getScannerStats } from './structure-scanner'
 import { 
@@ -127,17 +136,43 @@ function metaToLegacyFormat(meta: any): any {
   }
 }
 
+/** Normalize blacklist from postMessage (may be corrupted by structured clone) */
+function normalizeBlacklist(bl: unknown): { active: string[]; inactive: string[] } | undefined {
+  if (!bl || typeof bl !== 'object' || !Array.isArray((bl as any).active)) return undefined
+  const b = bl as { active: unknown[]; inactive?: unknown[] }
+  return {
+    active: b.active.filter((r): r is string => typeof r === 'string'),
+    inactive: Array.isArray(b.inactive) ? b.inactive.filter((r): r is string => typeof r === 'string') : []
+  }
+}
+
 /**
- * Get components in legacy format (for backwards compatibility)
+ * Check if component name is blacklisted (filter at source - no tree, no props, no serialization)
  */
-function getLegacyComponents(forceRefresh = false): any[] {
+function isBlacklisted(name: string, blacklist: { active: string[]; inactive: string[] } | undefined): boolean {
+  if (!blacklist?.active?.length) return false
+  const n = name || ''
+  if (blacklist.inactive?.some((rule: string) => likeMatch(n, rule))) return false
+  return blacklist.active.some((rule: string) => likeMatch(n, rule))
+}
+
+/**
+ * Get components in legacy format (for backwards compatibility).
+ * Blacklisted components are excluded at source: no tree entry, no props extraction, no serialization.
+ */
+function getLegacyComponents(
+  forceRefresh = false,
+  blacklist?: { active: string[]; inactive: string[] }
+): any[] {
   // First scan structure (force=true bypasses throttle when user explicitly refreshes)
   scanStructure({ force: forceRefresh })
   
   const store = getMetaStore()
   const metas = store.getAllComponents()
   
-  return metas.map(metaToLegacyFormat)
+  return metas
+    .filter(meta => !isBlacklisted(meta.name ?? 'Anonymous', blacklist))
+    .map(metaToLegacyFormat)
 }
 
 // ============================================================================
@@ -242,7 +277,8 @@ function handleMessage(event: MessageEvent) {
   if (event.source === window && event.data?.type === MESSAGE_TYPES.GET_COMPONENTS) {
     try {
       const forceRefresh = !!(event.data?.forceRefresh)
-      const components = getLegacyComponents(forceRefresh)
+      const blacklist = normalizeBlacklist(event.data?.blacklist)
+      const components = getLegacyComponents(forceRefresh, blacklist)
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,

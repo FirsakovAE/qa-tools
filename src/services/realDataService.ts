@@ -21,8 +21,12 @@ interface CollectComponentsResponse {
 export class RealDataService {
     private vueInstances: any[] = []
 
-    async getTreeData(search?: TreeSearchOptions, forceRefresh = false): Promise<TreeNodeModel[]> {
-        const components = await this.collectVueComponents(forceRefresh)
+    async getTreeData(
+        search?: TreeSearchOptions,
+        forceRefresh = false,
+        options?: { blacklist?: { active: string[]; inactive: string[] } }
+    ): Promise<TreeNodeModel[]> {
+        const components = await this.collectVueComponents(forceRefresh, options?.blacklist)
         return this.transformToTreeData(components, search)
     }
 
@@ -30,19 +34,25 @@ export class RealDataService {
         return this.collectVueComponents(true)
     }
 
-    private async collectVueComponents(forceRefresh = false): Promise<ComponentInfo[]> {
+    private async collectVueComponents(
+        forceRefresh = false,
+        blacklist?: { active: string[]; inactive: string[] }
+    ): Promise<ComponentInfo[]> {
         const runtime = getRuntimeAdapter()
         if (!runtime) {
             return []
         }
 
         try {
-            // Используем runtime adapter вместо chrome.tabs.sendMessage
-            // В extension mode отправится через chrome.tabs
-            // В standalone mode отправится через postMessage
+            // Сериализуем blacklist для безопасной передачи через postMessage (iframe mode)
+            const serializedBlacklist = blacklist
+                ? JSON.parse(JSON.stringify(blacklist)) as { active: string[]; inactive: string[] }
+                : undefined
+
             const response = await runtime.sendMessage<CollectComponentsResponse>({
                 type: 'COLLECT_VUE_COMPONENTS',
-                forceRefresh
+                forceRefresh,
+                blacklist: serializedBlacklist
             })
 
             if (response?.components) {

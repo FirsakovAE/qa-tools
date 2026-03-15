@@ -84,11 +84,12 @@ export function useTreeData() {
         error.value = null
 
         try {
+            const options = { blacklist: settings.value?.blacklist }
             let data: TreeNodeModel[]
             if (search && dataService.value.refreshComponents) {
-                data = await dataService.value.getTreeData(search, forceReload)
+                data = await dataService.value.getTreeData(search, forceReload, options)
             } else {
-                data = await dataService.value.getTreeData(undefined, forceReload)
+                data = await dataService.value.getTreeData(undefined, forceReload, options)
             }
 
             rawTreeData.value = data
