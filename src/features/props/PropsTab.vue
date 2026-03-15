@@ -453,13 +453,17 @@ async function handleRefreshSelected() {
 
   isLoading.value = true
   try {
-    const response = await runtime.sendMessage<{ props?: Record<string, any> }>({
+    const response = await runtime.sendMessage<{ props?: Record<string, any>; newUid?: number }>({
       type: 'GET_COMPONENT_PROPS',
-      componentUid: componentPath
+      componentUid: componentPath,
+      componentPathFallback: node.componentUid || undefined
     })
     const freshProps = response?.props ?? {}
+    const newUid = response?.newUid
     selectedNode.value = {
       ...node,
+      id: newUid != null ? `uid:${newUid}` : node.id,
+      componentUid: node.componentUid,
       props: freshProps,
       jsonProps: JSON.stringify(freshProps, null, 2)
     }

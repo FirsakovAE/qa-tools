@@ -124,10 +124,14 @@ export const handleGetComponentProps: RuntimeHandler = (message, sender, sendRes
   // Request component props via injected script
   requestWindow({
     type: 'VUE_INSPECTOR_GET_COMPONENT_PROPS',
-    componentPath: message.componentUid
+    componentPath: message.componentUid,
+    componentPathFallback: message.componentPathFallback
   }, 'VUE_INSPECTOR_COMPONENT_PROPS_DATA', 3000)
     .then((response: any) => {
-      sendResponse({ props: response.props || {} })
+      sendResponse({
+        props: response.props || {},
+        newUid: response.newUid
+      })
     })
     .catch(() => {
       sendResponse({ props: {} })

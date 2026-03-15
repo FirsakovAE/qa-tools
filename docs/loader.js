@@ -392,6 +392,7 @@
       // Props
       'COLLECT_VUE_COMPONENTS': 'VUE_INSPECTOR_COMPONENTS_DATA',
       'VUE_INSPECTOR_GET_COMPONENTS': 'VUE_INSPECTOR_COMPONENTS_DATA',
+      'GET_COMPONENT_PROPS': 'VUE_INSPECTOR_COMPONENT_PROPS_DATA',
       'VUE_INSPECTOR_GET_COMPONENT_PROPS': 'VUE_INSPECTOR_COMPONENT_PROPS_DATA',
       'VUE_INSPECTOR_UPDATE_PROPS': 'VUE_INSPECTOR_UPDATE_PROPS_RESULT',
       'UPDATE_COMPONENT_PROPS': 'VUE_INSPECTOR_UPDATE_PROPS_RESULT',
@@ -529,6 +530,10 @@
         if (forwardMessage.type === 'COLLECT_VUE_COMPONENTS') {
           forwardMessage.type = 'VUE_INSPECTOR_GET_COMPONENTS';
         }
+        if (forwardMessage.type === 'GET_COMPONENT_PROPS') {
+          forwardMessage.type = 'VUE_INSPECTOR_GET_COMPONENT_PROPS';
+          forwardMessage.componentPath = forwardMessage.componentUid;
+        }
         if (forwardMessage.type === 'UPDATE_COMPONENT_PROPS') {
           forwardMessage.type = 'VUE_INSPECTOR_UPDATE_PROPS';
           forwardMessage.componentPath = forwardMessage.componentUid;
@@ -592,10 +597,15 @@
           var pending = pendingRequests[respondedRequestId];
           delete pendingRequests[respondedRequestId];
           if (pending.source) {
+            // Нормализуем ответ GET_COMPONENT_PROPS: UI ожидает { props, newUid? } как в Extension
+            var responsePayload = data;
+            if (data.type === 'VUE_INSPECTOR_COMPONENT_PROPS_DATA' && (pending.type === 'GET_COMPONENT_PROPS' || pending.type === 'VUE_INSPECTOR_GET_COMPONENT_PROPS')) {
+              responsePayload = { props: data.props || {}, newUid: data.newUid };
+            }
             pending.source.postMessage({
               __VUE_INSPECTOR__: true,
               responseId: respondedRequestId,
-              response: data
+              response: responsePayload
             }, '*');
           }
           return;

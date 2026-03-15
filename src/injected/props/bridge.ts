@@ -26,6 +26,7 @@ import { disposeMetaStore, getMetaStore } from './meta-store'
 import { scanStructure, getComponentList, getScannerStats } from './structure-scanner'
 import { 
   readPropsByUid, 
+  readPropsByMeta,
   expandAndReadProps, 
   collapseAndClearProps,
   readExpandedComponentsProps,
@@ -180,19 +181,51 @@ function getLegacyComponents(
 // ============================================================================
 
 /**
- * Get component props by path (legacy) or UID
+ * Find ComponentMeta by stable id (Name::elementInfo). Used when uid is stale after remount.
  */
-function getComponentProps(componentPath: string): Record<string, any> {
+function findMetaByStableId(stableId: string): { meta: any; uid: number } | null {
+  if (!stableId || typeof stableId !== 'string') return null
+  const store = getMetaStore()
+  for (const meta of store.getAllComponents()) {
+    const name = meta.name || 'Anonymous'
+    const elementInfo = buildElementInfo(meta.rootEl ?? null)
+    const componentUid = `${name}::${elementInfo}`
+    if (componentUid === stableId) {
+      return { meta, uid: meta.uid }
+    }
+  }
+  return null
+}
+
+/**
+ * Get component props by path (legacy) or UID.
+ * When uid lookup fails (component remounted, new uid), falls back to stable id (Name::element).
+ */
+function getComponentProps(
+  componentPath: string,
+  componentPathFallback?: string
+): { props: Record<string, any>; newUid?: number } {
   // Check if it's a UID-based path
   if (componentPath.startsWith('uid:')) {
     const uid = parseInt(componentPath.substring(4), 10)
     const result = readPropsByUid(uid)
-    return result?.props ?? {}
+    if (result) {
+      return { props: result.props ?? {} }
+    }
+    // UID not found (component remounted) — fallback to stable id
+    if (componentPathFallback) {
+      const found = findMetaByStableId(componentPathFallback)
+      if (found) {
+        const serialized = readPropsByMeta(found.meta)
+        return { props: serialized.props ?? {}, newUid: found.uid }
+      }
+    }
+    return { props: {} }
   }
   
   // Legacy path-based lookup
   const vnode = findComponentByPath(componentPath)
-  if (!vnode) return {}
+  if (!vnode) return { props: {} }
   
   const vueContext = detectVueContext()
   const isVue2 = vueContext.version === 2
@@ -211,7 +244,7 @@ function getComponentProps(componentPath: string): Record<string, any> {
     }
   }
   
-  return props
+  return { props }
 }
 
 // ============================================================================
@@ -253,13 +286,16 @@ function handleMessage(event: MessageEvent) {
   // Handle GET_COMPONENT_PROPS message
   if (event.source === window && event.data?.type === MESSAGE_TYPES.GET_COMPONENT_PROPS) {
     try {
-      const { componentPath } = event.data
-      const props = getComponentProps(componentPath)
+      const { componentPath, componentPathFallback } = event.data
+      // Обновляем meta-store для актуальных ссылок на компоненты (иначе — закэшированные props)
+      scanStructure({ force: true })
+      const { props, newUid } = getComponentProps(componentPath, componentPathFallback)
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENT_PROPS_DATA,
         props,
+        newUid,
         requestId
       }, '*')
     } catch (e) {

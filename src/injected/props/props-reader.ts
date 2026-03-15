@@ -225,6 +225,13 @@ export function readPropsByUid(uid: number): SerializedProps | null {
 }
 
 /**
+ * Read props by ComponentMeta (for fallback lookup by stable id).
+ */
+export function readPropsByMeta(meta: ComponentMeta): SerializedProps {
+  return readComponentPropsForce(meta)
+}
+
+/**
  * Force read props (bypasses shouldReadProps check).
  * Used for explicit user requests like viewing selected component.
  */
