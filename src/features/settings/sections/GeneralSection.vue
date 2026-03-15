@@ -141,10 +141,11 @@ const minLengthValue = ref(props.settings.searchParams.minLength ?? 2)
 watch(debounceValue, (val) => { props.settings.searchParams.debounce = val })
 watch(minLengthValue, (val) => { props.settings.searchParams.minLength = val })
 
-const jsonMode = computed({
-  get: () => props.settings.json?.mode ?? 'text',
-  set: (val: 'text' | 'tree') => { props.settings.json.mode = val }
-})
+// jsonMode — закомментировано вместе с JSON Editor Mode
+// const jsonMode = computed({
+//   get: () => props.settings.json?.mode ?? 'text',
+//   set: (val: 'text' | 'tree') => { props.settings.json.mode = val }
+// })
 
 const refreshIntervals = [
   { value: 1000, label: '1 second' },
@@ -632,7 +633,7 @@ function getSavedFileActions(file: SavedFileRow): MenuAction[] {
       </div>
     </div>
 
-    <!-- JSON EDITOR MODE -->
+    <!-- JSON EDITOR MODE (закомментировано)
     <div class="space-y-4 border-t pt-4">
       <h4 class="text-sm font-semibold">JSON Editor Mode</h4>
 
@@ -655,6 +656,7 @@ function getSavedFileActions(file: SavedFileRow): MenuAction[] {
         </TabsContent>
       </Tabs>
     </div>
+    -->
 
     <!-- SAVED FILES -->
     <div id="saved-files-section" class="space-y-2 border-t pt-4">

@@ -128,6 +128,13 @@ async function loadFromStorage(): Promise<void> {
     })()
 }
 
+function migrateJsonMode(saved: any): void {
+    // Пользователей с включённым tree mode определяем как text
+    if (saved.json && typeof saved.json === 'object' && saved.json.mode === 'tree') {
+        saved.json.mode = 'text'
+    }
+}
+
 function migrateFavoriteIds(saved: any): void {
     if (!Array.isArray(saved.favorites)) return
     let changed = false
@@ -296,6 +303,7 @@ function migrateCustomizeSettings(settings: any) {
 // Мердж настроек
 function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSettings>) {
     migrateSearchSettings(saved)
+    migrateJsonMode(saved)
     migrateFavoriteIds(saved)
     migrateCustomizeSettings(saved)
 
