@@ -149,10 +149,11 @@ function matchesMockPattern(entryId: string): boolean {
 
     <div v-else class="h-full flex flex-col overflow-hidden table-scroll-x">
       <div class="min-w-[460px] flex flex-col h-full min-h-0">
-        <ScrollArea class="flex-1 min-h-0">
+        <!-- Fixed header (outside scroll area) -->
+        <div class="shrink-0 border-b bg-muted/30">
           <Table no-scroll class="table-fixed">
-            <TableHeader class="[&_th]:h-10 sticky top-0 z-10 bg-muted/30 border-b [&_tr]:border-b-0">
-              <TableRow class="hover:bg-transparent">
+            <TableHeader>
+              <TableRow class="hover:bg-transparent [&_th]:h-10 [&_th]:border-b-0">
                 <TableHead v-if="columns.status" class="w-[70px] text-xs font-semibold">Status</TableHead>
                 <TableHead v-if="columns.method" class="w-[70px] text-xs font-semibold">Method</TableHead>
                 <TableHead v-if="columns.name" :class="['min-w-0 text-xs font-semibold', columns.path ? 'w-[140px]' : '']">Name</TableHead>
@@ -171,6 +172,11 @@ function matchesMockPattern(entryId: string): boolean {
                 </TableHead>
               </TableRow>
             </TableHeader>
+          </Table>
+        </div>
+        <!-- Scrollable body only -->
+        <ScrollArea class="flex-1 min-h-0">
+          <Table no-scroll class="table-fixed">
             <TableBody>
           <ContextMenu v-for="entry in sortedEntries" :key="entry.id">
             <ContextMenuTrigger as-child>
