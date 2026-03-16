@@ -180,23 +180,46 @@ function getComponentLabel(instance: any, vnode: any): string | undefined {
   return undefined
 }
 
-function getComponentRootEl(instance: any, vnode: any): HTMLElement | undefined {
-  // Vue 3
-  if (vnode?.el instanceof HTMLElement) {
-    return vnode.el
+/**
+ * Find first HTMLElement in vnode tree (for fragments, multi-root, or delayed mount).
+ * Used when vnode.el/elm is null but component has DOM descendants (e.g. Logic only
+ * components that render div.agreement-cars where class matches component name).
+ */
+function findFirstElementInVNode(vnode: any, depth = 0): HTMLElement | undefined {
+  if (!vnode || depth > 20) return undefined
+
+  if (vnode.el instanceof HTMLElement) return vnode.el
+  if (vnode.elm instanceof HTMLElement) return vnode.elm
+
+  if (vnode.component?.subTree) {
+    const found = findFirstElementInVNode(vnode.component.subTree, depth + 1)
+    if (found) return found
   }
 
-  // Vue 2
-  if (vnode?.elm instanceof HTMLElement) {
-    return vnode.elm
+  const instance = vnode.componentInstance || vnode.context
+  if (instance?.$vnode) {
+    const found = findFirstElementInVNode(instance.$vnode, depth + 1)
+    if (found) return found
   }
 
-  // Instance.$el
-  if (instance?.$el instanceof HTMLElement) {
-    return instance.$el
+  const children = Array.isArray(vnode.children) ? vnode.children : (vnode.children ? [vnode.children] : [])
+  for (const child of children) {
+    if (child) {
+      const found = findFirstElementInVNode(child, depth + 1)
+      if (found) return found
+    }
   }
 
   return undefined
+}
+
+function getComponentRootEl(instance: any, vnode: any): HTMLElement | undefined {
+  if (vnode?.el instanceof HTMLElement) return vnode.el
+  if (vnode?.elm instanceof HTMLElement) return vnode.elm
+  if (instance?.$el instanceof HTMLElement) return instance.$el
+
+  // Fallback: find first DOM element in subtree (Logic only / fragment / multi-root)
+  return findFirstElementInVNode(vnode)
 }
 
 // ============================================================================
