@@ -76,7 +76,7 @@ export interface MetaStoreConfig {
 }
 
 const DEFAULT_CONFIG: MetaStoreConfig = {
-  maxComponents: 2000,
+  maxComponents: 100000,
   maxHistorySize: 500,
   propsFloodLimit: 50,
   propsFloodWindow: 1000,

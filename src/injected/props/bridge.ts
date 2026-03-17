@@ -92,17 +92,22 @@ function buildElementInfo(el: HTMLElement | null): string {
   return tag + cls + id
 }
 
+/** Get props count without full serialization (for lightweight payload) */
+function getPropsCountLight(instance: any): number {
+  const raw = extractRawProps(instance)
+  return raw && typeof raw === 'object' ? Object.keys(raw).length : 0
+}
+
 /**
- * Convert ComponentMeta to legacy ComponentInfo format
+ * Convert ComponentMeta to legacy ComponentInfo format (FULL - with serialized props).
+ * WARNING: Can exceed 64MB port limit with many components or large props.
  */
 function metaToLegacyFormat(meta: any): any {
   const instance = meta.instance
   const rawProps = extractRawProps(instance)
   
-  // Get element info
   let element = null
   let rootElement = null
-  
   if (meta.rootEl) {
     element = {
       tagName: meta.rootEl.tagName?.toLowerCase(),
@@ -113,11 +118,7 @@ function metaToLegacyFormat(meta: any): any {
     rootElement = element
   }
   
-  // Serialize props
   const props = rawProps ? serializeProps(rawProps) : {}
-  
-  // Build stable componentUid: "ComponentName::element.class" format
-  // This format is stable for favorites matching
   const name = meta.name || 'Anonymous'
   const elementInfo = buildElementInfo(meta.rootEl)
   const componentUid = `${name}::${elementInfo}`
@@ -126,13 +127,48 @@ function metaToLegacyFormat(meta: any): any {
     name,
     props,
     path: `uid:${meta.uid}`,
-    // Use stable componentUid for favorites
     componentUid,
-    // Keep numeric ID for internal use
     id: `uid:${meta.uid}`,
     element,
     hasProps: Object.keys(props).length > 0,
     propsCount: Object.keys(props).length,
+    rootElement
+  }
+}
+
+/**
+ * Lightweight format: structure only, NO serialized props.
+ * Props loaded on-demand via GET_COMPONENT_PROPS. Keeps payload under 64MB.
+ */
+function metaToLegacyFormatLight(meta: any): any {
+  const propsCount = getPropsCountLight(meta.instance)
+  const hasProps = propsCount > 0
+  
+  let element = null
+  let rootElement = null
+  if (meta.rootEl) {
+    element = {
+      tagName: meta.rootEl.tagName?.toLowerCase(),
+      id: meta.rootEl.id || undefined,
+      className: meta.rootEl.className || undefined,
+      testId: meta.rootEl.getAttribute?.('data-testid') || undefined
+    }
+    rootElement = element
+  }
+  
+  const name = meta.name || 'Anonymous'
+  const elementInfo = buildElementInfo(meta.rootEl)
+  const componentUid = `${name}::${elementInfo}`
+  
+  return {
+    name,
+    props: {},
+    path: `uid:${meta.uid}`,
+    componentUid,
+    id: `uid:${meta.uid}`,
+    element,
+    hasProps,
+    propsCount,
     rootElement
   }
 }
@@ -159,21 +195,31 @@ function isBlacklisted(name: string, blacklist: { active: string[]; inactive: st
 
 /**
  * Get components in legacy format (for backwards compatibility).
- * Blacklisted components are excluded at source: no tree entry, no props extraction, no serialization.
+ * WARNING: Full format serializes all props - can exceed 64MB port limit.
  */
 function getLegacyComponents(
   forceRefresh = false,
   blacklist?: { active: string[]; inactive: string[] }
 ): any[] {
-  // First scan structure (force=true bypasses throttle when user explicitly refreshes)
   scanStructure({ force: forceRefresh })
-  
   const store = getMetaStore()
   const metas = store.getAllComponents()
-  
   return metas
     .filter(meta => !isBlacklisted(meta.name ?? 'Anonymous', blacklist))
     .map(metaToLegacyFormat)
+}
+
+/** Lightweight format - no serialized props, safe for 64MB limit */
+function getLegacyComponentsLight(
+  forceRefresh = false,
+  blacklist?: { active: string[]; inactive: string[] }
+): any[] {
+  scanStructure({ force: forceRefresh })
+  const store = getMetaStore()
+  const metas = store.getAllComponents()
+  return metas
+    .filter(meta => !isBlacklisted(meta.name ?? 'Anonymous', blacklist))
+    .map(metaToLegacyFormatLight)
 }
 
 // ============================================================================
@@ -311,12 +357,15 @@ function handleMessage(event: MessageEvent) {
     return
   }
 
-  // Handle GET_COMPONENTS message (legacy, with props)
+  // Handle GET_COMPONENTS message
   if (event.source === window && event.data?.type === MESSAGE_TYPES.GET_COMPONENTS) {
     try {
       const forceRefresh = !!(event.data?.forceRefresh)
       const blacklist = normalizeBlacklist(event.data?.blacklist)
-      const components = getLegacyComponents(forceRefresh, blacklist)
+      const light = event.data?.light !== false
+      const components = light
+        ? getLegacyComponentsLight(forceRefresh, blacklist)
+        : getLegacyComponents(forceRefresh, blacklist)
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,

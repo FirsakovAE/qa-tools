@@ -47,7 +47,7 @@ interface ScannerConfig {
 
 const DEFAULT_CONFIG: ScannerConfig = {
   maxDepth: 100,
-  maxComponents: 10000
+  maxComponents: 100000
 }
 
 // ============================================================================

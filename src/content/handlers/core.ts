@@ -82,29 +82,18 @@ export const handleGetComponents: RuntimeHandler = (message, sender, sendRespons
 
 /**
  * COLLECT_VUE_COMPONENTS handler
+ * Uses lightweight format (no serialized props) to avoid 64MB port.postMessage limit.
+ * Props loaded on-demand via GET_COMPONENT_PROPS when user selects a component.
  */
 export const handleCollectVueComponents: RuntimeHandler = (message, sender, sendResponse) => {
   const forceRefresh = !!(message as any).forceRefresh
   const blacklist = (message as any).blacklist as { active: string[]; inactive: string[] } | undefined
 
-  // PRIORITY: Use window.__VUE_INSPECTOR__ API directly if available
-  const inspector = (window as any).__VUE_INSPECTOR__
-  if (inspector && typeof inspector.getComponents === 'function') {
-    try {
-      if (forceRefresh && typeof inspector.forceRefresh === 'function') {
-        inspector.forceRefresh()
-      }
-      const components = inspector.getComponents({ blacklist })
-      sendResponse({ components: components || [] })
-      return true
-    } catch (error) {
-      console.error('[content/handlers/core] __VUE_INSPECTOR__.getComponents failed:', error)
-      // Continue with postMessage as fallback
-    }
-  }
-
-  // Fallback: Request components via injected script
-  requestWindow({ type: 'VUE_INSPECTOR_GET_COMPONENTS', forceRefresh, blacklist }, 'VUE_INSPECTOR_COMPONENTS_DATA', 3000)
+  requestWindow(
+    { type: 'VUE_INSPECTOR_GET_COMPONENTS', forceRefresh, blacklist, light: true },
+    'VUE_INSPECTOR_COMPONENTS_DATA',
+    3000
+  )
     .then((response: any) => {
       sendResponse({ components: response.components || [] })
     })

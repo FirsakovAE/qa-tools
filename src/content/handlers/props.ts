@@ -122,7 +122,6 @@ export const handleUpdateComponentProps: RuntimeHandler = (message, sender, send
  * GET_COMPONENT_PROPS handler
  */
 export const handleGetComponentProps: RuntimeHandler = (message, sender, sendResponse) => {
-  // Request component props via injected script
   requestWindow({
     type: 'VUE_INSPECTOR_GET_COMPONENT_PROPS',
     componentPath: message.componentUid,
@@ -137,6 +136,30 @@ export const handleGetComponentProps: RuntimeHandler = (message, sender, sendRes
     .catch((error) => {
       console.error('[content/handlers/props] GET_COMPONENT_PROPS failed:', error)
       sendResponse({ props: {} })
+    })
+
+  return true
+}
+
+/**
+ * PROPS_SEARCH handler - search by key/value in props (for lightweight format).
+ * Uses injected script's deep search with scope: explicitDeep.
+ */
+export const handlePropsSearch: RuntimeHandler = (message, sender, sendResponse) => {
+  const { query, searchByKey, searchByValue, exactMatch } = message
+  const type = searchByKey && searchByValue ? 'all' : searchByKey ? 'key' : 'value'
+
+  requestWindow({
+    type: 'VUE_INSPECTOR_SEARCH_COMPONENTS',
+    query: query || '',
+    options: { scope: 'explicitDeep', type, limit: 10000, exactMatch: !!exactMatch }
+  }, 'VUE_INSPECTOR_SEARCH_RESULTS', 15000)
+    .then((response: any) => {
+      sendResponse({ results: response.results || [] })
+    })
+    .catch((error) => {
+      console.error('[content/handlers/props] PROPS_SEARCH failed:', error)
+      sendResponse({ results: [] })
     })
 
   return true

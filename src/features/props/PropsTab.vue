@@ -22,6 +22,7 @@ import { useTreeData } from '@/hooks/useTreeData'
 import { useRuntime } from '@/runtime'
 import { safeRuntime, safeTabs, safeStorage } from '@/utils/extensionBridge'
 import { isInFavorites, findMatchingFavorite, matchFavoriteIds } from '@/utils/favoritesMatcher'
+import { parseSearchTerm } from '@/utils/searchUtils'
 import { 
   type PropsRow, 
   createPropsRow, 
@@ -104,16 +105,40 @@ function isFavoriteNode(node: TreeNodeModel): boolean {
   return isInFavorites(id, settings.value.favorites)
 }
 
-function applyFilters() {
+async function applyFilters() {
+  const term = debouncedSearchTerm.value
+  const { query, exactMatch } = parseSearchTerm(term)
+  const byKey = !!searchSettings.value.byKey
+  const byValue = !!searchSettings.value.byValue
+  const needsKeyValueSearch = (byKey || byValue) && query.length >= (searchSettings.value.minLength ?? 2)
+
+  let matchedUids: Set<number> | undefined
+  if (needsKeyValueSearch) {
+    try {
+      const res = await runtime.sendMessage<{ results?: Array<{ uid: number }> }>({
+        type: 'PROPS_SEARCH',
+        query,
+        searchByKey: byKey,
+        searchByValue: byValue,
+        exactMatch
+      })
+      matchedUids = new Set((res?.results ?? []).map(r => r.uid))
+    } catch (e) {
+      console.error('[props/PropsTab] PROPS_SEARCH failed:', e)
+      matchedUids = new Set()
+    }
+  }
+
   updateRowsVisibility(rows.value, {
-    searchTerm: debouncedSearchTerm.value,
+    searchTerm: query,
     searchByName: !!searchSettings.value.byName,
     searchByRootElement: !!searchSettings.value.byRootElement,
-    searchByKey: !!searchSettings.value.byKey,
-    searchByValue: !!searchSettings.value.byValue
+    searchByKey: byKey,
+    searchByValue: byValue,
+    exactMatch,
+    matchedUids
   })
 
-  // Trigger re-render (cheap - just increments a number)
   visibilityVersion.value++
 }
 
@@ -357,8 +382,10 @@ const favoritesLabel = computed(() => {
 // Actions
 // ============================================================================
 
-function selectEntry(node: PropsRow) {
+async function selectEntry(node: PropsRow) {
   selectedNode.value = node
+  const needsProps = node.hasPropsFlag && (!node.props || Object.keys(node.props).length === 0)
+  if (needsProps) await handleRefreshSelected()
 }
 
 function deselectEntry() {

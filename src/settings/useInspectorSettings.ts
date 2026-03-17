@@ -250,6 +250,8 @@ function migrateSearchSettings(saved: any): void {
             props: true,
         }
     }
+    // Миграция: удаляем size (колонка перенесена в Details)
+    delete saved.propsTableColumns?.size
 
     // Миграция: добавляем piniaTableColumns если отсутствует
     if (!saved.piniaTableColumns || typeof saved.piniaTableColumns !== 'object') {

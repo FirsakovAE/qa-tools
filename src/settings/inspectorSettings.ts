@@ -75,7 +75,7 @@ export const defaultInspectorSettings: InspectorSettings = {
     searchParams: { ...defaultSearchParams },
     json: { mode: 'text' },
     updates: { refreshIntervalMs: 1000, autoRefresh: false, autoRefreshInterval: 5000 },
-    data: { maxComponents: 1000, preserveState: true },
+    data: { maxComponents: 100000, preserveState: true },
     savedFiles: [],
     autoSaveFiles: false,
     customize: {

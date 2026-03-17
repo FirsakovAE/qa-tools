@@ -20,7 +20,8 @@ import {
   handleHighlightByUid,
   handleClearElementRegistry,
   handleUpdateComponentProps,
-  handleGetComponentProps
+  handleGetComponentProps,
+  handlePropsSearch
 } from './props'
 
 // Pinia handlers
@@ -63,6 +64,7 @@ export const runtimeHandlers: Record<string, RuntimeHandler> = {
   CLEAR_ELEMENT_REGISTRY: handleClearElementRegistry,
   UPDATE_COMPONENT_PROPS: handleUpdateComponentProps,
   GET_COMPONENT_PROPS: handleGetComponentProps,
+  PROPS_SEARCH: handlePropsSearch,
   
   // Pinia
   PINIA_GET_STORES_SUMMARY: handlePiniaGetStoresSummary,

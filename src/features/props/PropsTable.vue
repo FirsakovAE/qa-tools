@@ -187,7 +187,9 @@ function truncateElementInfo(info: string): string {
 }
 
 function getPropsCount(row: PropsRow): number {
-  return row.props ? Object.keys(row.props).length : 0
+  const fromProps = row.props ? Object.keys(row.props).length : 0
+  if (fromProps > 0) return fromProps
+  return row.propsCount ?? 0
 }
 
 function handleRowClick(row: PropsRow) {
@@ -379,7 +381,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   padding-left: 8px;
   padding-right: 16px;
 }
-
 
 /* Row states */
 .props-row {

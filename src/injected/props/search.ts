@@ -13,7 +13,7 @@
  */
 
 import { getMetaStore, type ComponentMeta } from './meta-store'
-import { getLoggedComponents, isLoggingEnabled } from './props-reader'
+import { getLoggedComponents, isLoggingEnabled, extractRawProps } from './props-reader'
 
 // ============================================================================
 // Types
@@ -49,13 +49,16 @@ export interface SearchOptions {
    * CRITICAL: 'explicitDeep' should only be used with user confirmation
    */
   scope?: SearchScope
+  /** Exact match when query wrapped in "" (default: false) */
+  exactMatch?: boolean
 }
 
 const DEFAULT_OPTIONS: Required<SearchOptions> = {
   type: 'all',
   caseSensitive: false,
   limit: 100,
-  scope: 'expandedAndLogged' // Safe default - only expanded and logged
+  scope: 'expandedAndLogged', // Safe default - only expanded and logged
+  exactMatch: false
 }
 
 // ============================================================================
@@ -89,7 +92,6 @@ function getComponentsInScope(scope: SearchScope): ComponentMeta[] {
     case 'explicitDeep':
       // DANGEROUS: Returns all components
       // Should only be used with explicit user confirmation
-      console.warn('[injected/props/search] Deep props search requested - this may be slow')
       return store.getAllComponents()
     
     default:
@@ -137,6 +139,9 @@ export function searchByName(
   const store = getMetaStore()
   const results: SearchResult[] = []
   const queryNorm = opts.caseSensitive ? query : query.toLowerCase()
+  const matchName = opts.exactMatch
+    ? (n: string) => n === queryNorm
+    : (n: string) => n.includes(queryNorm)
 
   for (const meta of store.getAllComponents()) {
     if (results.length >= opts.limit) break
@@ -144,7 +149,7 @@ export function searchByName(
     const name = meta.name ?? 'Anonymous'
     const nameNorm = opts.caseSensitive ? name : name.toLowerCase()
 
-    if (nameNorm.includes(queryNorm)) {
+    if (matchName(nameNorm)) {
       results.push({
         uid: meta.uid,
         name,
@@ -170,6 +175,9 @@ export function searchByLabel(
   const store = getMetaStore()
   const results: SearchResult[] = []
   const queryNorm = opts.caseSensitive ? query : query.toLowerCase()
+  const matchStr = opts.exactMatch
+    ? (s: string) => s === queryNorm
+    : (s: string) => s.includes(queryNorm)
 
   for (const meta of store.getAllComponents()) {
     if (results.length >= opts.limit) break
@@ -177,7 +185,7 @@ export function searchByLabel(
 
     const labelNorm = opts.caseSensitive ? meta.label : meta.label.toLowerCase()
 
-    if (labelNorm.includes(queryNorm)) {
+    if (matchStr(labelNorm)) {
       results.push({
         uid: meta.uid,
         name: meta.name ?? 'Anonymous',
@@ -202,6 +210,9 @@ export function fastSearch(
   const opts = { ...DEFAULT_OPTIONS, ...options }
   const resultMap = new Map<number, SearchResult>()
   const queryNorm = opts.caseSensitive ? query : query.toLowerCase()
+  const matchStr = opts.exactMatch
+    ? (s: string) => s === queryNorm
+    : (s: string) => s.includes(queryNorm)
   const store = getMetaStore()
 
   for (const meta of store.getAllComponents()) {
@@ -211,7 +222,7 @@ export function fastSearch(
     const nameNorm = opts.caseSensitive ? name : name.toLowerCase()
 
     // Match by name
-    if (nameNorm.includes(queryNorm)) {
+    if (matchStr(nameNorm)) {
       resultMap.set(meta.uid, {
         uid: meta.uid,
         name,
@@ -226,7 +237,7 @@ export function fastSearch(
     // Match by label
     if (meta.label) {
       const labelNorm = opts.caseSensitive ? meta.label : meta.label.toLowerCase()
-      if (labelNorm.includes(queryNorm)) {
+      if (matchStr(labelNorm)) {
         resultMap.set(meta.uid, {
           uid: meta.uid,
           name,
@@ -251,13 +262,20 @@ export function fastSearch(
  * Only uses already-loaded props, doesn't trigger new reads.
  */
 function getPropsForSearch(meta: ComponentMeta): Record<string, any> | null {
-  // Only read from existing snapshot - don't trigger new reads
-  if (!meta.propsSnapshot) {
-    return null
-  }
-  
-  // Return existing snapshot raw
+  if (!meta.propsSnapshot) return null
   return meta.propsSnapshot.raw as Record<string, any>
+}
+
+/**
+ * Get props for search - reads on-demand when scope is explicitDeep.
+ * Used for key/value search with lightweight component list (no pre-loaded props).
+ */
+function getPropsForSearchOrRead(meta: ComponentMeta, scope: SearchScope): Record<string, any> | null {
+  if (scope === 'explicitDeep') {
+    const raw = extractRawProps(meta.instance)
+    return raw && typeof raw === 'object' ? raw : null
+  }
+  return getPropsForSearch(meta)
 }
 
 /**
@@ -271,21 +289,22 @@ export function searchByPropKey(
   const opts = { ...DEFAULT_OPTIONS, ...options, type: 'key' as const }
   const results: SearchResult[] = []
   const queryNorm = opts.caseSensitive ? query : query.toLowerCase()
+  const matchKey = opts.exactMatch
+    ? (k: string) => k === queryNorm
+    : (k: string) => k.includes(queryNorm)
 
-  // Get components in scope - THIS IS THE CRITICAL LIMITATION
   const componentsInScope = getComponentsInScope(opts.scope)
   
   for (const meta of componentsInScope) {
     if (results.length >= opts.limit) break
 
-    // Only use existing props snapshot - don't trigger new reads
-    const props = getPropsForSearch(meta)
+    const props = getPropsForSearchOrRead(meta, opts.scope)
     if (!props) continue
 
     // Search in prop keys
     for (const key of Object.keys(props)) {
       const keyNorm = opts.caseSensitive ? key : key.toLowerCase()
-      if (keyNorm.includes(queryNorm)) {
+      if (matchKey(keyNorm)) {
         results.push({
           uid: meta.uid,
           name: meta.name ?? 'Anonymous',
@@ -314,19 +333,17 @@ export function searchByPropValue(
   const results: SearchResult[] = []
   const queryNorm = opts.caseSensitive ? query : query.toLowerCase()
 
-  // Get components in scope - THIS IS THE CRITICAL LIMITATION
   const componentsInScope = getComponentsInScope(opts.scope)
 
   for (const meta of componentsInScope) {
     if (results.length >= opts.limit) break
 
-    // Only use existing props snapshot - don't trigger new reads
-    const props = getPropsForSearch(meta)
+    const props = getPropsForSearchOrRead(meta, opts.scope)
     if (!props) continue
 
     // Search in prop values
     for (const [key, value] of Object.entries(props)) {
-      if (matchesValue(value, queryNorm, opts.caseSensitive)) {
+      if (matchesValue(value, queryNorm, opts.caseSensitive, opts.exactMatch)) {
         results.push({
           uid: meta.uid,
           name: meta.name ?? 'Anonymous',
@@ -355,20 +372,21 @@ export function lazySearch(
   const resultMap = new Map<number, SearchResult>()
   const queryNorm = opts.caseSensitive ? query : query.toLowerCase()
 
-  // Get components in scope - THIS IS THE CRITICAL LIMITATION
   const componentsInScope = getComponentsInScope(opts.scope)
 
   for (const meta of componentsInScope) {
     if (resultMap.size >= opts.limit) break
 
-    // Only use existing props snapshot - don't trigger new reads
-    const props = getPropsForSearch(meta)
+    const props = getPropsForSearchOrRead(meta, opts.scope)
     if (!props) continue
 
     // Search in keys
+    const matchKey = opts.exactMatch
+      ? (k: string) => k === queryNorm
+      : (k: string) => k.includes(queryNorm)
     for (const key of Object.keys(props)) {
       const keyNorm = opts.caseSensitive ? key : key.toLowerCase()
-      if (keyNorm.includes(queryNorm)) {
+      if (matchKey(keyNorm)) {
         resultMap.set(meta.uid, {
           uid: meta.uid,
           name: meta.name ?? 'Anonymous',
@@ -385,7 +403,7 @@ export function lazySearch(
 
     // Search in values
     for (const [key, value] of Object.entries(props)) {
-      if (matchesValue(value, queryNorm, opts.caseSensitive)) {
+      if (matchesValue(value, queryNorm, opts.caseSensitive, opts.exactMatch)) {
         resultMap.set(meta.uid, {
           uid: meta.uid,
           name: meta.name ?? 'Anonymous',
@@ -477,25 +495,26 @@ export function deepSearch(
 // Helpers
 // ============================================================================
 
-function matchesValue(value: any, query: string, caseSensitive: boolean): boolean {
+function matchesValue(value: any, query: string, caseSensitive: boolean, exactMatch: boolean): boolean {
   if (value === null || value === undefined) {
     return false
   }
 
   if (typeof value === 'string') {
     const valueNorm = caseSensitive ? value : value.toLowerCase()
-    return valueNorm.includes(query)
+    return exactMatch ? valueNorm === query : valueNorm.includes(query)
   }
 
   if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value).includes(query)
+    const str = String(value)
+    return exactMatch ? str === query : str.includes(query)
   }
 
   // For objects and arrays - DON'T stringify (expensive)
   // Just check shallow
   if (Array.isArray(value)) {
     for (const item of value.slice(0, 10)) { // Limit to first 10 items
-      if (matchesValue(item, query, caseSensitive)) {
+      if (matchesValue(item, query, caseSensitive, exactMatch)) {
         return true
       }
     }
@@ -506,7 +525,7 @@ function matchesValue(value: any, query: string, caseSensitive: boolean): boolea
     // Check only immediate values, not nested
     for (const v of Object.values(value).slice(0, 10)) {
       if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
-        if (matchesValue(v, query, caseSensitive)) {
+        if (matchesValue(v, query, caseSensitive, exactMatch)) {
           return true
         }
       }

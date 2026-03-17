@@ -168,6 +168,16 @@ const formattedTime = computed(() => {
   return d.toISOString().replace('T', ' ').slice(0, 19)
 })
 
+/** Фактический размер props в байтах (честный расчёт через TextEncoder) */
+const propsSizeFormatted = computed(() => {
+  const str = json.value
+  if (!str || str === '{}') return null
+  const bytes = new TextEncoder().encode(str).length
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+})
+
 // --- Actions ---
 function startEditing() {
   editedJson.value = json.value.trim()
@@ -238,6 +248,9 @@ async function saveChanges() {
                 {{ elementInfo }}
               </TooltipContent>
             </Tooltip>
+            <span v-if="propsSizeFormatted" class="text-xs text-muted-foreground font-mono shrink-0">
+              {{ propsSizeFormatted }}
+            </span>
           </div>
           <div class="text-xs text-muted-foreground">
             Updated: {{ formattedTime }}
