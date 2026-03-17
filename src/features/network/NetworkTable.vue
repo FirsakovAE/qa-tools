@@ -1,15 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -123,7 +115,7 @@ const networkColumnDefs = [
   { key: 'size', label: 'Size' },
 ] as const
 
-// Sorted entries (newest first)
+// Sorted entries (newest first) — virtualization requires array for scroll height
 const sortedEntries = computed(() => [...props.entries].reverse())
 
 // Check if entry has an active breakpoint
@@ -139,107 +131,96 @@ function matchesMockPattern(entryId: string): boolean {
   return props.mockMatchingIds?.has(entryId) ?? false
 }
 
+const ROW_HEIGHT = 40
 </script>
 
 <template>
-  <div class="h-full flex flex-col border rounded-lg overflow-hidden">
-    <div v-if="entries.length === 0" class="flex-1 min-h-0 flex items-center justify-center text-muted-foreground">
-      No network requests captured yet
-    </div>
+  <VirtualTable
+    :items="sortedEntries"
+    key-field="id"
+    :item-size="ROW_HEIGHT"
+    min-width="460px"
+    empty-message="No network requests captured yet"
+  >
+    <template #header>
+      <div v-if="columns.status" class="network-cell network-cell-status">Status</div>
+      <div v-if="columns.method" class="network-cell network-cell-method">Method</div>
+      <div v-if="columns.name" :class="['network-cell network-cell-name', columns.path ? 'network-cell-name-with-path' : '']">Name</div>
+      <div v-if="columns.path" class="network-cell network-cell-path">Path</div>
+      <div v-if="columns.time" class="network-cell network-cell-time">Time</div>
+      <div v-if="columns.size" class="network-cell network-cell-size">Size</div>
+      <div class="network-cell network-cell-actions virtual-table__cell-actions">
+        <TableColumnSelector
+          :columns="{ ...columns }"
+          :column-definitions="networkColumnDefs"
+          :disabled-columns="networkDisabledColumns"
+          @update:column="(k, v) => setColumn(k as keyof NetworkTableColumnsSettings, v)"
+        />
+      </div>
+    </template>
 
-    <div v-else class="h-full flex flex-col overflow-hidden table-scroll-x">
-      <div class="min-w-[460px] flex flex-col h-full min-h-0">
-        <!-- Fixed header (outside scroll area) -->
-        <div class="shrink-0 border-b bg-muted/30">
-          <Table no-scroll class="table-fixed">
-            <TableHeader>
-              <TableRow class="hover:bg-transparent [&_th]:h-10 [&_th]:border-b-0">
-                <TableHead v-if="columns.status" class="w-[70px] text-xs font-semibold">Status</TableHead>
-                <TableHead v-if="columns.method" class="w-[70px] text-xs font-semibold">Method</TableHead>
-                <TableHead v-if="columns.name" :class="['min-w-0 text-xs font-semibold', columns.path ? 'w-[140px]' : '']">Name</TableHead>
-                <TableHead v-if="columns.path" class="min-w-0 text-xs font-semibold">Path</TableHead>
-                <TableHead v-if="columns.time" class="w-[80px] text-xs font-semibold text-center">Time</TableHead>
-                <TableHead v-if="columns.size" class="w-[80px] text-xs font-semibold text-center">Size</TableHead>
-                <TableHead class="w-[60px] py-2 p-0 text-center">
-                  <div class="flex justify-center">
-                    <TableColumnSelector
-                      :columns="{ ...columns }"
-                      :column-definitions="networkColumnDefs"
-                      :disabled-columns="networkDisabledColumns"
-                      @update:column="(k, v) => setColumn(k as keyof NetworkTableColumnsSettings, v)"
-                    />
+    <template #default="{ item: entry }">
+            <ContextMenu>
+              <ContextMenuTrigger as-child>
+                <div
+                  class="network-row virtual-table__row"
+                  :class="{
+                    'network-row-selected': selectedId === entry.id && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
+                    'network-row-pending': entry.pending,
+                    'network-row-breakpoint': hasBreakpoint(entry.id),
+                    'network-row-breakpoint-match': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
+                    'network-row-mock-selected': matchesMockPattern(entry.id) && selectedId === entry.id && !hasBreakpoint(entry.id),
+                    'network-row-mock-match': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id)
+                  }"
+                  @click="emit('select', entry.id)"
+                >
+                  <div v-if="columns.status" class="network-cell network-cell-status">
+                    <Badge
+                      variant="outline"
+                      class="text-xs font-mono px-1.5 py-0"
+                      :class="getStatusClass(entry.status, entry.pending)"
+                    >
+                      {{ formatStatus(entry) }}
+                    </Badge>
                   </div>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-          </Table>
-        </div>
-        <!-- Scrollable body only -->
-        <ScrollArea class="flex-1 min-h-0">
-          <Table no-scroll class="table-fixed">
-            <TableBody>
-          <ContextMenu v-for="entry in sortedEntries" :key="entry.id">
-            <ContextMenuTrigger as-child>
-              <TableRow
-                class="cursor-pointer transition-colors group"
-                :class="{
-                  'bg-muted': selectedId === entry.id && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
-                  'opacity-60': entry.pending,
-                  'bg-amber-500/10 hover:bg-amber-500/20': hasBreakpoint(entry.id),
-                  'border-l-2 border-l-amber-500/50': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
-                  'bg-purple-500/10 hover:bg-purple-500/20': matchesMockPattern(entry.id) && selectedId === entry.id && !hasBreakpoint(entry.id),
-                  'border-l-2 border-l-purple-500/50': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id)
-                }"
-                @click="emit('select', entry.id)"
-              >
-                <TableCell v-if="columns.status" class="w-[70px] py-2">
-                  <Badge
-                    variant="outline"
-                    class="text-xs font-mono px-1.5 py-0"
-                    :class="getStatusClass(entry.status, entry.pending)"
-                  >
-                    {{ formatStatus(entry) }}
-                  </Badge>
-                </TableCell>
-                
-                <TableCell v-if="columns.method" class="w-[70px] py-2">
-                  <Badge
-                    :variant="getMethodVariant(entry.method)"
-                    class="text-xs font-mono px-1.5 py-0"
-                  >
-                    {{ entry.method }}
-                  </Badge>
-                </TableCell>
-                
-                <TableCell v-if="columns.name" :class="['py-2 max-w-0', columns.path ? 'w-[140px]' : '']">
-                  <div class="truncate text-sm" :title="entry.url">
-                    {{ entry.name }}
-                  </div>
-                </TableCell>
-                
-                <TableCell v-if="columns.path" class="py-2 max-w-0">
-                  <div class="truncate text-sm" :title="entry.url">
-                    {{ entry.path }}
-                  </div>
-                  <div
-                    v-if="entry.error"
-                    class="text-xs text-destructive_text truncate"
-                    :title="entry.error"
-                  >
-                    {{ entry.error }}
-                  </div>
-                </TableCell>
-                
-                <TableCell v-if="columns.time" class="w-[80px] py-2 text-center text-xs text-muted-foreground font-mono">
-                  {{ entry.pending ? '...' : formatDuration(entry.duration) }}
-                </TableCell>
 
-                <TableCell v-if="columns.size" class="w-[80px] py-2 text-center text-xs text-muted-foreground font-mono">
-                  {{ entry.pending ? '...' : formatBytes(entry.size) }}
-                </TableCell>
-                
-                <TableCell class="w-[60px] py-2 px-0 text-center">
-                  <div class="flex justify-center">
+                  <div v-if="columns.method" class="network-cell network-cell-method">
+                    <Badge
+                      :variant="getMethodVariant(entry.method)"
+                      class="text-xs font-mono px-1.5 py-0"
+                    >
+                      {{ entry.method }}
+                    </Badge>
+                  </div>
+
+                  <div v-if="columns.name" :class="['network-cell network-cell-name', columns.path ? 'network-cell-name-with-path' : '']">
+                    <div class="truncate text-sm" :title="entry.url">
+                      {{ entry.name }}
+                    </div>
+                  </div>
+
+                  <div v-if="columns.path" class="network-cell network-cell-path">
+                    <div class="truncate text-sm" :title="entry.url">
+                      {{ entry.path }}
+                    </div>
+                    <div
+                      v-if="entry.error"
+                      class="text-xs text-destructive_text truncate"
+                      :title="entry.error"
+                    >
+                      {{ entry.error }}
+                    </div>
+                  </div>
+
+                  <div v-if="columns.time" class="network-cell network-cell-time">
+                    {{ entry.pending ? '...' : formatDuration(entry.duration) }}
+                  </div>
+
+                  <div v-if="columns.size" class="network-cell network-cell-size">
+                    {{ entry.pending ? '...' : formatBytes(entry.size) }}
+                  </div>
+
+                  <div class="network-cell network-cell-actions virtual-table__cell-actions">
                     <DropdownMenu>
                       <DropdownMenuTrigger as-child>
                         <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
@@ -263,63 +244,127 @@ function matchesMockPattern(entryId: string): boolean {
                       />
                     </DropdownMenu>
                   </div>
-                </TableCell>
-              </TableRow>
-            </ContextMenuTrigger>
+                </div>
+              </ContextMenuTrigger>
 
-            <NetworkActionsMenuContent
-              variant="context"
-              :entry="entry"
-              :breakpoint-matching-ids="breakpointMatchingIds"
-              :mock-matching-ids="mockMatchingIds"
-              :all-breakpoints="allBreakpoints"
-              :all-mocks="allMocks"
-              @copy-curl="emit('copyCurl', $event)"
-              @set-breakpoint="emit('setBreakpoint', $event)"
-              @mock-response="emit('mockResponse', $event)"
-              @toggle-breakpoint="emit('toggleBreakpoint', $event)"
-              @delete-breakpoint="emit('deleteBreakpoint', $event)"
-              @toggle-mock="emit('toggleMock', $event)"
-              @delete-mock="emit('deleteMock', $event)"
-            />
-          </ContextMenu>
-            </TableBody>
-          </Table>
-        </ScrollArea>
-      </div>
-    </div>
-  </div>
+              <NetworkActionsMenuContent
+                variant="context"
+                :entry="entry"
+                :breakpoint-matching-ids="breakpointMatchingIds"
+                :mock-matching-ids="mockMatchingIds"
+                :all-breakpoints="allBreakpoints"
+                :all-mocks="allMocks"
+                @copy-curl="emit('copyCurl', $event)"
+                @set-breakpoint="emit('setBreakpoint', $event)"
+                @mock-response="emit('mockResponse', $event)"
+                @toggle-breakpoint="emit('toggleBreakpoint', $event)"
+                @delete-breakpoint="emit('deleteBreakpoint', $event)"
+                @toggle-mock="emit('toggleMock', $event)"
+                @delete-mock="emit('deleteMock', $event)"
+              />
+            </ContextMenu>
+          </template>
+  </VirtualTable>
 </template>
 
 <style scoped>
-.table-scroll-x {
-  overflow-x: auto;
-  overflow-y: hidden;
+.network-row {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 8px;
+  padding-right: 0; /* Align with header (scrollbar-gutter in RecycleScroller) */
+  cursor: pointer;
+  transition: background-color 0.1s, opacity 0.1s;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
 }
 
-.table-scroll-x {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
+.network-cell {
+  flex-shrink: 0;
+  padding: 0 4px;
 }
 
-.table-scroll-x::-webkit-scrollbar {
-  height: 8px;
+.network-cell-status {
+  width: 70px;
 }
 
-.table-scroll-x::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
+.network-cell-method {
+  width: 70px;
 }
 
-.table-scroll-x::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+.network-cell-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
 }
 
-.table-scroll-x::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--border) / 0.8);
-  background-clip: padding-box;
+.network-cell-name-with-path {
+  width: 140px;
+  flex: none;
+}
+
+.network-cell-path {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.network-cell-time {
+  width: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-family: ui-monospace, monospace;
+}
+
+.network-cell-size {
+  width: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-family: ui-monospace, monospace;
+}
+
+
+.network-row-pending {
+  opacity: 0.6;
+}
+
+.network-row-selected {
+  background: hsl(var(--muted));
+}
+
+.network-row-breakpoint {
+  background: hsl(48 97% 47% / 0.1);
+}
+
+.network-row-breakpoint:hover {
+  background: hsl(48 97% 47% / 0.2);
+}
+
+.network-row-breakpoint-match {
+  border-left: 2px solid hsl(48 97% 47% / 0.5);
+}
+
+.network-row-mock-selected {
+  background: hsl(262 83% 58% / 0.1);
+}
+
+.network-row-mock-selected:hover {
+  background: hsl(262 83% 58% / 0.2);
+}
+
+.network-row-mock-match {
+  border-left: 2px solid hsl(262 83% 58% / 0.5);
+}
+
+.network-row:hover:not(.network-row-selected):not(.network-row-breakpoint):not(.network-row-mock-selected) {
+  background: hsl(var(--accent));
 }
 </style>

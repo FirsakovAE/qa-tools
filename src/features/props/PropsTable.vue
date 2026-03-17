@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useElementSize } from '@vueuse/core'
-import { RecycleScroller } from 'vue-virtual-scroller'
-import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { Badge } from '@/components/ui/badge'
 import { Star, StarOff, MoreHorizontal } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -211,38 +210,35 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 </script>
 
 <template>
-  <div ref="tableContainerRef" class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
-    <div class="min-w-[360px] flex flex-col h-full">
-      <!-- Fixed Header -->
-      <div class="shrink-0 border-b bg-muted/30">
-        <div class="props-header">
-          <div class="props-cell props-cell-star"></div>
-          <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
-          <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
-          <div v-if="columns.props" class="props-cell props-cell-props text-xs font-semibold">Props</div>
-          <div class="props-cell props-cell-actions">
-            <TableColumnSelector
-              :columns="{ ...columns }"
-              :column-definitions="propsColumnDefs"
-              @update:column="(k, v) => setColumn(k as keyof PropsTableColumnsSettings, v)"
-            />
-          </div>
-        </div>
-      </div>
-      
-      <!-- Virtualized Body (RecycleScroller has its own scroll) -->
-      <RecycleScroller
-      class="flex-1 min-h-0"
+  <div ref="tableContainerRef" class="h-full">
+    <VirtualTable
       :items="rows"
-      :item-size="40"
       key-field="id"
+      :item-size="40"
+      min-width="360px"
+      empty-message="No components found"
+      :show-empty="false"
       @mouseleave="onScrollerLeave"
     >
+      <template #header>
+        <div class="props-cell props-cell-star"></div>
+        <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
+        <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
+        <div v-if="columns.props" class="props-cell props-cell-props text-xs font-semibold">Props</div>
+              <div class="props-cell props-cell-actions virtual-table__cell-actions">
+                <TableColumnSelector
+            :columns="{ ...columns }"
+            :column-definitions="propsColumnDefs"
+            @update:column="(k, v) => setColumn(k as keyof PropsTableColumnsSettings, v)"
+          />
+        </div>
+      </template>
+
       <template #default="{ item: row }">
         <ContextMenu>
           <ContextMenuTrigger as-child>
             <div
-              class="props-row"
+              class="props-row virtual-table__row"
               :class="{
                 'props-row-selected': selectedId === row.id,
                 'props-row-clickable': row.hasPropsFlag,
@@ -252,7 +248,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               @click="handleRowClick(row)"
               @mouseenter="onRowHover(row, $event)"
             >
-              <!-- Star Column -->
               <div class="props-cell props-cell-star">
                 <button
                   class="star-btn"
@@ -271,15 +266,11 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                   />
                 </button>
               </div>
-              
-              <!-- Name Column -->
               <div class="props-cell props-cell-name">
                 <div class="truncate text-sm font-medium" :title="row.name">
                   {{ row.name }}
                 </div>
               </div>
-              
-              <!-- Element Column -->
               <div v-if="columns.rootElement" class="props-cell props-cell-element">
                 <Badge 
                   :variant="row.elementInfo === 'Logic only' ? 'destructive_text' : 'secondary'"
@@ -289,8 +280,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                   {{ truncateElementInfo(row.elementInfo) }}
                 </Badge>
               </div>
-              
-              <!-- Props Column -->
               <div v-if="columns.props" class="props-cell props-cell-props">
                 <Badge 
                   v-if="row.hasPropsFlag"
@@ -301,9 +290,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                 </Badge>
                 <span v-else class="text-xs text-muted-foreground">—</span>
               </div>
-
-              <!-- Actions Column (3-dot button) -->
-              <div class="props-cell props-cell-actions">
+              <div class="props-cell props-cell-actions virtual-table__cell-actions">
                 <DropdownMenu>
                   <DropdownMenuTrigger as-child>
                     <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
@@ -320,7 +307,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               </div>
             </div>
           </ContextMenuTrigger>
-
           <PropsTableActionsMenuContent
             variant="context"
             :row="row"
@@ -329,11 +315,10 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
           />
         </ContextMenu>
       </template>
-      
-      <!-- Loading skeleton (only when no data yet) -->
+
       <template #after>
         <div v-if="isLoading && rows.length === 0" class="flex flex-col gap-0">
-          <div v-for="i in skeletonRowCount" :key="i" class="props-row flex items-center h-10 px-2 border-b border-border/50">
+          <div v-for="i in skeletonRowCount" :key="i" class="props-row virtual-table__row flex items-center h-10 px-2 border-b border-border/50">
             <div class="props-cell props-cell-star w-10 flex justify-center">
               <Skeleton class="h-3.5 w-3.5 rounded" />
             </div>
@@ -346,7 +331,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
             <div v-if="columns.props" class="props-cell props-cell-props">
               <Skeleton class="h-5 w-8 mx-auto" />
             </div>
-            <div class="props-cell props-cell-actions w-11">
+            <div class="props-cell props-cell-actions virtual-table__cell-actions">
               <Skeleton class="h-6 w-6 rounded mx-auto" />
             </div>
           </div>
@@ -355,29 +340,18 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
           No components found
         </div>
       </template>
-    </RecycleScroller>
-    </div>
+    </VirtualTable>
   </div>
 </template>
 
 <style scoped>
 /* Row layout */
-.props-header,
 .props-row {
   display: flex;
   align-items: center;
   height: 40px;
   padding: 0 8px;
-}
-
-.props-row {
   padding-right: 0;
-}
-
-.props-header {
-  color: hsl(var(--muted-foreground));
-  /* Reserve scrollbar space so header and rows align (8px scrollbar) */
-  padding-right: 8px;
 }
 
 /* Cell sizes */
@@ -416,11 +390,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   padding-right: 16px;
 }
 
-.props-cell-actions {
-  width: 44px;
-  display: flex;
-  justify-content: center;
-}
 
 /* Row states */
 .props-row {
@@ -469,66 +438,4 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   fill: hsl(48 100% 50%);
 }
 
-/* Custom scrollbar styling to match ui-kit ScrollArea */
-:deep(.vue-recycle-scroller) {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
-  /* Reserve scrollbar space so header and content have same width */
-  scrollbar-gutter: stable;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar) {
-  width: 8px;
-  height: 8px;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar-track) {
-  background: transparent;
-  border-radius: 4px;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar-thumb) {
-  background: hsl(var(--border));
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar-thumb:hover) {
-  background: hsl(var(--border) / 0.8);
-  background-clip: padding-box;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar-corner) {
-  background: transparent;
-}
-
-/* Horizontal scroll (min-width 360px) - Uikit-style */
-.table-scroll-x {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
-}
-
-.table-scroll-x::-webkit-scrollbar {
-  height: 8px;
-}
-
-.table-scroll-x::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-.table-scroll-x::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-.table-scroll-x::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--border) / 0.8);
-  background-clip: padding-box;
-}
 </style>

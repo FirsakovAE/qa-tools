@@ -38,7 +38,7 @@ git checkout -b features/{name}
 git add src/
 git commit -m "wip: pinia rewrite"
 # З. Запушить ветку
-git push -u origin features/features/2.2.0
+git push -u origin features/features/2.4.0
 # 3. Удалить ветку
 
 git checkout master
