@@ -30,6 +30,8 @@ export function useTreeData() {
         dataService.value = DataServiceFactory.createService()
         // Загружаем данные после инициализации настроек
         loadData()
+    }).catch((error) => {
+        console.error('[hooks/useTreeData] useInspectorSettings failed:', error)
     })
 
     /**
@@ -96,6 +98,7 @@ export function useTreeData() {
             updateStableData(data, forceReload)
             hasLoadedData.value = true
         } catch (e) {
+            console.error('[hooks/useTreeData] loadData failed:', e)
             error.value = String(e)
         } finally {
             isLoading.value = false

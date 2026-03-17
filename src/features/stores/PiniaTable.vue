@@ -91,7 +91,11 @@ function setColumn(key: keyof PiniaTableColumnsSettings, value: boolean) {
 }
 
 onMounted(async () => {
-  settings.value = await useInspectorSettings()
+  try {
+    settings.value = await useInspectorSettings()
+  } catch (error) {
+    console.error('[stores/PiniaTable] useInspectorSettings failed:', error)
+  }
 })
 
 const piniaColumnDefs = [

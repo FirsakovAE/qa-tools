@@ -89,7 +89,7 @@ function getComponentsInScope(scope: SearchScope): ComponentMeta[] {
     case 'explicitDeep':
       // DANGEROUS: Returns all components
       // Should only be used with explicit user confirmation
-      console.warn('[VueInspector] Deep props search requested - this may be slow')
+      console.warn('[injected/props/search] Deep props search requested - this may be slow')
       return store.getAllComponents()
     
     default:
@@ -469,7 +469,7 @@ export function deepSearch(
   query: string,
   options: Omit<SearchOptions, 'scope'> = {}
 ): SearchResult[] {
-  console.warn('[VueInspector] Deep search initiated - this scans all components')
+  console.warn('[injected/props/search] Deep search initiated - this scans all components')
   return search(query, { ...options, scope: 'explicitDeep' })
 }
 

@@ -30,7 +30,12 @@ marked.setOptions({ breaks: true, gfm: true })
 const renderedBody = computed(() => {
   const body = props.releaseInfo?.body
   if (!body) return ''
-  return marked.parse(body) as string
+  try {
+    return marked.parse(body) as string
+  } catch (error) {
+    console.error('[settings/SettingsDetails] marked.parse failed:', error)
+    return body
+  }
 })
 
 const props = defineProps<{
@@ -175,7 +180,8 @@ watch(savedFileData, async (file) => {
     } else {
       textPreviewContent.value = '(no data)'
     }
-  } catch {
+  } catch (error) {
+    console.error('[settings/SettingsDetails] getFileBlob/text failed:', error)
     textPreviewContent.value = '(unable to decode)'
   }
 }, { immediate: true })
@@ -207,16 +213,20 @@ function formatFileSize(bytes: number): string {
 }
 
 async function downloadSavedFile(file: SavedFile) {
-  const blob = await getFileBlob(file.id)
-  if (!blob) return
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = file.name
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  try {
+    const blob = await getFileBlob(file.id)
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = file.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('[settings/SettingsDetails] downloadSavedFile failed:', file.id, error)
+  }
 }
 
 function getFileUrl(file: SavedFile): string {
@@ -231,8 +241,12 @@ watch(savedFileData, async (file) => {
     officeBlobUrl.value = null
   }
   if (file && isOfficeFile(file.mimeType)) {
-    const blob = await getFileBlob(file.id)
-    if (blob) officeBlobUrl.value = URL.createObjectURL(blob)
+    try {
+      const blob = await getFileBlob(file.id)
+      if (blob) officeBlobUrl.value = URL.createObjectURL(blob)
+    } catch (error) {
+      console.error('[settings/SettingsDetails] officeBlobUrl getFileBlob failed:', file.id, error)
+    }
   }
 }, { immediate: true })
 

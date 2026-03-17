@@ -5,6 +5,8 @@
  *
  * Chrome API actions: performSearch, nextSearchResult, previousSearchResult, cancelSearch
  */
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
+
 const SEARCH_PORT_NAME = 'vue-inspector-devtools-search'
 
 function setupSearchListener(port: chrome.runtime.Port) {
@@ -57,12 +59,17 @@ export function useDevtoolsSearch() {
   if (typeof chrome === 'undefined' || !chrome.runtime?.connect) return
 
   function connect() {
-    const port = chrome.runtime.connect({ name: SEARCH_PORT_NAME })
-    setupSearchListener(port)
-    port.onDisconnect.addListener(() => {
-      // Service worker may have restarted; reconnect when user searches again
-      setTimeout(connect, 100)
-    })
+    try {
+      const port = chrome.runtime.connect({ name: SEARCH_PORT_NAME })
+      setupSearchListener(port)
+      port.onDisconnect.addListener(() => {
+        // Service worker may have restarted; reconnect when user searches again
+        setTimeout(connect, 100)
+      })
+    } catch (error) {
+      if (isExpectedExtensionError(error)) return
+      console.error('[useDevtoolsSearch] Failed to connect to extension:', error)
+    }
   }
   connect()
 }

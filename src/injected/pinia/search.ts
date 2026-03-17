@@ -54,15 +54,47 @@ export function buildStoreSearchIndex(): SearchIndexEntry[] {
   if (!pinia) return index
 
   for (const [storeId, store] of pinia._s.entries()) {
-    const baseId = normalizeStoreId(storeId)
+    try {
+      const baseId = normalizeStoreId(storeId)
 
-    // ---- STATE ----
-    const stateSnapshot = getStoreState(storeId)
-    if (stateSnapshot) {
-      const flatState = flattenObject(stateSnapshot)
+      // ---- STATE ----
+      const stateSnapshot = getStoreState(storeId)
+      if (stateSnapshot) {
+        const flatState = flattenObject(stateSnapshot)
 
-      for (const key in flatState) {
-        const value = flatState[key]
+        for (const key in flatState) {
+          const value = flatState[key]
+          let valueStr: string
+
+          if (value === null) {
+            valueStr = 'null'
+          } else if (value === undefined) {
+            valueStr = 'undefined'
+          } else if (typeof value === 'object') {
+            valueStr = JSON.stringify(value)
+          } else {
+            valueStr = String(value)
+          }
+
+          valueStr = valueStr.toLowerCase()
+
+          index.push({
+            storeId,
+            baseId,
+            type: 'state' as const,
+            key,
+            value,
+            valueStr
+          })
+        }
+      }
+
+      // ---- GETTERS ----
+      const getters = getStoreGetters(storeId)
+      const flatGetters = flattenObject(getters)
+
+      for (const key in flatGetters) {
+        const value = flatGetters[key]
         let valueStr: string
 
         if (value === null) {
@@ -80,42 +112,14 @@ export function buildStoreSearchIndex(): SearchIndexEntry[] {
         index.push({
           storeId,
           baseId,
-          type: 'state' as const,
+          type: 'getter' as const,
           key,
           value,
           valueStr
         })
       }
-    }
-
-    // ---- GETTERS ----
-    const getters = getStoreGetters(storeId)
-    const flatGetters = flattenObject(getters)
-
-    for (const key in flatGetters) {
-      const value = flatGetters[key]
-      let valueStr: string
-
-      if (value === null) {
-        valueStr = 'null'
-      } else if (value === undefined) {
-        valueStr = 'undefined'
-      } else if (typeof value === 'object') {
-        valueStr = JSON.stringify(value)
-      } else {
-        valueStr = String(value)
-      }
-
-      valueStr = valueStr.toLowerCase()
-
-      index.push({
-        storeId,
-        baseId,
-        type: 'getter' as const,
-        key,
-        value,
-        valueStr
-      })
+    } catch (e) {
+      console.error('[injected/pinia/search] buildStoreSearchIndex store failed:', storeId, e)
     }
   }
 

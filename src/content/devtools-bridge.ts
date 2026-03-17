@@ -24,7 +24,8 @@ import { addMessageListenerIfNeeded } from './detection'
 export function setupDevtoolsBridge(): void {
   try {
     if (!chrome?.runtime?.id) return
-  } catch {
+  } catch (error) {
+    console.error('[content/devtools-bridge] Chrome runtime not available:', error)
     return
   }
 
@@ -46,7 +47,9 @@ export function setupDevtoolsBridge(): void {
       const sendResponse = (response: any) => {
         try {
           port.postMessage({ responseId: requestId, response })
-        } catch {}
+        } catch (error) {
+          console.error('[content/devtools-bridge] port.postMessage failed:', error)
+        }
       }
 
       // Network commands → forward to injected script, ack immediately
@@ -84,7 +87,9 @@ export function setupDevtoolsBridge(): void {
       if (data.__FROM_VUE_INSPECTOR__ && data.__NETWORK__) {
         try {
           port.postMessage({ broadcast: true, message: data })
-        } catch {}
+        } catch (error) {
+          console.error('[content/devtools-bridge] port.postMessage (network) failed:', error)
+        }
         return
       }
 
@@ -98,7 +103,9 @@ export function setupDevtoolsBridge(): void {
               flags: featureFlags
             }
           })
-        } catch {}
+        } catch (error) {
+          console.error('[content/devtools-bridge] port.postMessage (detection) failed:', error)
+        }
         return
       }
 
@@ -119,7 +126,9 @@ export function setupDevtoolsBridge(): void {
             broadcast: true,
             message: data
           })
-        } catch {}
+        } catch (error) {
+          console.error('[content/devtools-bridge] port.postMessage (props/pinia) failed:', error)
+        }
       }
     }
     window.addEventListener('message', broadcastListener)
@@ -153,9 +162,13 @@ export function setupDevtoolsBridge(): void {
     // Restore breakpoints and mocks from settings after a short delay
     // (injected network bridge needs time to initialize)
     setTimeout(() => {
-      try {
-        chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (settings) => {
-          if (chrome.runtime.lastError || !settings || typeof settings !== 'object') return
+        try {
+          chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (settings) => {
+          if (chrome.runtime.lastError) {
+            console.error('[content/devtools-bridge] GET_SETTINGS failed:', chrome.runtime.lastError.message)
+            return
+          }
+          if (!settings || typeof settings !== 'object') return
 
           const activeBps = settings.breakpoints?.active
           if (Array.isArray(activeBps) && activeBps.length > 0) {
@@ -190,7 +203,9 @@ export function setupDevtoolsBridge(): void {
             }, '*')
           }
         })
-      } catch {}
+      } catch (error) {
+        console.error('[content/devtools-bridge] Failed to restore breakpoints/mocks:', error)
+      }
     }, 500)
   })
 }

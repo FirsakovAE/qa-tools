@@ -47,7 +47,11 @@ function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
 }
 
 onMounted(async () => {
-  settings.value = await useInspectorSettings()
+  try {
+    settings.value = await useInspectorSettings()
+  } catch (error) {
+    console.error('[props/PropsTable] useInspectorSettings failed:', error)
+  }
 })
 
 const propsColumnDefs = [
@@ -111,8 +115,8 @@ async function sendHighlight(uid: number) {
       type: 'HIGHLIGHT_BY_UID',
       uid
     })
-  } catch {
-    // Silently ignore
+  } catch (error) {
+    console.error('[props/PropsTable] sendHighlight failed:', error)
   }
 }
 
@@ -121,8 +125,8 @@ async function sendUnhighlight() {
     await runtime.sendMessage({
       type: 'UNHIGHLIGHT_ELEMENT'
     })
-  } catch {
-    // Silently ignore
+  } catch (error) {
+    console.error('[props/PropsTable] sendUnhighlight failed:', error)
   }
 }
 

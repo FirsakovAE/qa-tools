@@ -86,6 +86,7 @@ function handleMessage(event: MessageEvent) {
     try {
       handler(event.data)
     } catch (e) {
+      console.error('[injected/pinia/bridge] handler failed:', event.data?.type, e)
     }
   }
 }
@@ -101,6 +102,7 @@ function handleGetStoresSummary(data: GetStoresSummaryMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
+    console.error('[injected/pinia/bridge] handleGetStoresSummary failed:', e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_STORES_SUMMARY_DATA',
@@ -122,6 +124,7 @@ function handleBuildSearchIndex(data: BuildSearchIndexMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
+    console.error('[injected/pinia/bridge] handleBuildSearchIndex failed:', e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_SEARCH_INDEX_READY',
@@ -136,10 +139,13 @@ function handleGetStoreState(data: GetStoreStateMessage) {
   let state = null, getters = {}, actions = {}
 
   try { state = getStoreState(data.storeId) } catch (e) {
+    console.error('[injected/pinia/bridge] getStoreState failed:', data.storeId, e)
   }
   try { getters = getStoreGetters(data.storeId) } catch (e) {
+    console.error('[injected/pinia/bridge] getStoreGetters failed:', data.storeId, e)
   }
   try { actions = getStoreActions(data.storeId) } catch (e) {
+    console.error('[injected/pinia/bridge] getStoreActions failed:', data.storeId, e)
   }
 
   window.postMessage({
@@ -166,6 +172,7 @@ function handlePatchState(data: PatchStateMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
+    console.error('[injected/pinia/bridge] handlePatchState failed:', data.storeId, data.path, e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_PATCH_STATE_RESULT',
@@ -189,6 +196,7 @@ function handleReplaceState(data: ReplaceStateMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
+    console.error('[injected/pinia/bridge] handleReplaceState failed:', data.storeId, e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_REPLACE_STATE_RESULT',
@@ -211,6 +219,7 @@ function handlePatchGetters(data: PatchGettersMessage) {
       requestId: data.requestId
     }, '*')
   } catch (e) {
+    console.error('[injected/pinia/bridge] handlePatchGetters failed:', data.storeId, e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_PATCH_GETTERS_RESULT',
@@ -239,6 +248,7 @@ function handleCallAction(data: CallActionMessage) {
       }, '*')
     })
     .catch(e => {
+      console.error('[injected/pinia/bridge] handleCallAction failed:', storeId, actionName, e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: 'PINIA_CALL_ACTION_RESULT',
@@ -252,16 +262,28 @@ function handleCallAction(data: CallActionMessage) {
 }
 
 function handleCheckDetected(data: CheckDetectedMessage) {
-  const detected = isPiniaDetected()
-  const storeCount = getStoresList().length
-  
-  window.postMessage({
-    __FROM_VUE_INSPECTOR__: true,
-    type: 'PINIA_DETECTED_RESULT',
-    detected,
-    storeCount,
-    requestId: data.requestId
-  }, '*')
+  try {
+    const detected = isPiniaDetected()
+    const storeCount = getStoresList().length
+
+    window.postMessage({
+      __FROM_VUE_INSPECTOR__: true,
+      type: 'PINIA_DETECTED_RESULT',
+      detected,
+      storeCount,
+      requestId: data.requestId
+    }, '*')
+  } catch (e) {
+    console.error('[injected/pinia/bridge] handleCheckDetected failed:', e)
+    window.postMessage({
+      __FROM_VUE_INSPECTOR__: true,
+      type: 'PINIA_DETECTED_RESULT',
+      detected: false,
+      storeCount: 0,
+      error: String(e),
+      requestId: data.requestId
+    }, '*')
+  }
 }
 
 // Форматирует время в строку
@@ -303,6 +325,7 @@ function getAllStoresSummary(): Record<string, any> {
         lastUpdatedFormatted: formatTimestamp(now)
       }
     } catch (e) {
+      console.error('[injected/pinia/bridge] getAllStoresSummary store failed:', storeId, e)
     }
   }
   return summary
@@ -319,13 +342,17 @@ export function initPiniaBridge() {
   window.addEventListener('message', handleMessage)
 
   // Инициализируем Pinia контекст
-  waitForPinia(2000).then(pinia => {
-    if (pinia) {
-      updatePiniaContext()
-
-      watchPiniaStores(pinia, () => {
+  waitForPinia(2000)
+    .then(pinia => {
+      if (pinia) {
         updatePiniaContext()
-      })
-    }
-  })
+
+        watchPiniaStores(pinia, () => {
+          updatePiniaContext()
+        })
+      }
+    })
+    .catch(e => {
+      console.error('[injected/pinia/bridge] initPiniaBridge waitForPinia failed:', e)
+    })
 }

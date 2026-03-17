@@ -73,6 +73,15 @@ async function handleReleaseNotes() {
       version: result.release.tag_name.replace(/^v/, ''),
       downloadUrl: result.release.assets?.[0]?.browser_download_url ?? null,
     })
+  } catch (error) {
+    console.error('[settings/AboutSection] handleReleaseNotes failed:', error)
+    emit('show-release', {
+      type: 'release-notes',
+      body: '',
+      version: '',
+      downloadUrl: null,
+      error: error instanceof Error ? error.message : 'Failed to fetch release notes.',
+    })
   } finally {
     loadingReleaseNotes.value = false
   }
@@ -103,6 +112,15 @@ async function handleCheckUpdates() {
       body: result.release.body || 'No release notes available.',
       version: remoteVersion,
       downloadUrl: result.release.assets?.[0]?.browser_download_url ?? null,
+    })
+  } catch (error) {
+    console.error('[settings/AboutSection] handleCheckUpdates failed:', error)
+    emit('show-release', {
+      type: 'release-notes',
+      body: '',
+      version: '',
+      downloadUrl: null,
+      error: error instanceof Error ? error.message : 'Failed to check for updates.',
     })
   } finally {
     loadingCheckUpdates.value = false

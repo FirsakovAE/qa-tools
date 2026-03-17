@@ -26,12 +26,22 @@ export class RealDataService {
         forceRefresh = false,
         options?: { blacklist?: { active: string[]; inactive: string[] } }
     ): Promise<TreeNodeModel[]> {
-        const components = await this.collectVueComponents(forceRefresh, options?.blacklist)
-        return this.transformToTreeData(components, search)
+        try {
+            const components = await this.collectVueComponents(forceRefresh, options?.blacklist)
+            return this.transformToTreeData(components, search)
+        } catch (e) {
+            console.error('[services/realDataService] getTreeData failed:', e)
+            return []
+        }
     }
 
     async refreshComponents(): Promise<ComponentInfo[]> {
-        return this.collectVueComponents(true)
+        try {
+            return await this.collectVueComponents(true)
+        } catch (e) {
+            console.error('[services/realDataService] refreshComponents failed:', e)
+            return []
+        }
     }
 
     private async collectVueComponents(
@@ -61,6 +71,7 @@ export class RealDataService {
                 return []
             }
         } catch (error) {
+            console.error('[services/realDataService] collectVueComponents failed:', error)
             return []
         }
     }
@@ -79,35 +90,50 @@ export class RealDataService {
 
     private transformToTreeData(components: ComponentInfo[], search?: TreeSearchOptions): TreeNodeModel[] {
         return components.map((comp, index) => {
-            const rootElement = comp.rootElement || comp.element
-            const elementInfo = comp.element
+            try {
+                const rootElement = comp.rootElement || comp.element
+                const elementInfo = comp.element
 
-            const stableUid = comp.componentUid && !comp.componentUid.startsWith('uid:')
-                ? comp.componentUid
-                : this.buildStableComponentUid(comp)
+                const stableUid = comp.componentUid && !comp.componentUid.startsWith('uid:')
+                    ? comp.componentUid
+                    : this.buildStableComponentUid(comp)
 
-            return {
-                id: comp.path || `component-${index}`,
-                name: comp.name || 'Anonymous',
-                label: comp.name,
-                props: comp.props || {},
-                jsonProps: JSON.stringify(comp.props || {}, null, 2),
-                timestamp: new Date().toISOString(),
-                children: [],
-                rootElement: rootElement ? {
-                    tagName: rootElement.tagName || 'div',
-                    id: rootElement.id,
-                    className: rootElement.className
-                } : undefined,
-                componentUid: stableUid,
-                element: elementInfo ? {
-                    tagName: elementInfo.tagName || 'div',
-                    id: elementInfo.id,
-                    className: elementInfo.className,
-                    testId: elementInfo.testId
-                } : undefined,
-                hasProps: comp.hasProps || false,
-                propsCount: comp.propsCount || 0
+                return {
+                    id: comp.path || `component-${index}`,
+                    name: comp.name || 'Anonymous',
+                    label: comp.name,
+                    props: comp.props || {},
+                    jsonProps: JSON.stringify(comp.props || {}, null, 2),
+                    timestamp: new Date().toISOString(),
+                    children: [],
+                    rootElement: rootElement ? {
+                        tagName: rootElement.tagName || 'div',
+                        id: rootElement.id,
+                        className: rootElement.className
+                    } : undefined,
+                    componentUid: stableUid,
+                    element: elementInfo ? {
+                        tagName: elementInfo.tagName || 'div',
+                        id: elementInfo.id,
+                        className: elementInfo.className,
+                        testId: elementInfo.testId
+                    } : undefined,
+                    hasProps: comp.hasProps || false,
+                    propsCount: comp.propsCount || 0
+                }
+            } catch (e) {
+                console.error('[services/realDataService] transformToTreeData component failed:', comp.path, e)
+                return {
+                    id: comp.path || `component-${index}`,
+                    name: comp.name || 'Anonymous',
+                    label: comp.name || 'Anonymous',
+                    props: {},
+                    jsonProps: '{}',
+                    timestamp: new Date().toISOString(),
+                    children: [],
+                    hasProps: false,
+                    propsCount: 0
+                }
             }
         })
     }

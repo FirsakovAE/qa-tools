@@ -1,4 +1,17 @@
 // Фоновый скрипт для расширения
+// NOTE: No imports from @/ — service worker is built as a single file without module support
+
+function isExpectedExtensionError(e: unknown): boolean {
+  const msg = String((e as Error)?.message ?? '')
+  return (
+    msg.includes('Receiving end does not exist') ||
+    msg.includes('Could not establish connection') ||
+    msg.includes('Extension context invalidated') ||
+    msg.includes('disconnected port') ||
+    msg.includes('Attempting to use a disconnected port') ||
+    msg.includes('Port disconnected')
+  )
+}
 
 // URL validation for injection
 function isInjectableUrl(url?: string): boolean {
@@ -147,6 +160,7 @@ async function syncSettingsToChromeStorage(settings: any) {
       'vue-inspector-settings-version': chrome.runtime.getManifest?.()?.version || '1.0.0'
     })
   } catch (error) {
+    console.error('[background] syncSettingsToChromeStorage failed:', error)
   }
 }
 
@@ -174,6 +188,7 @@ async function loadSettingsWithFallback(): Promise<any> {
 
     return null
   } catch (error) {
+    console.error('[background] loadSettingsWithFallback failed:', error)
     return null
   }
 }
@@ -188,6 +203,7 @@ async function saveSettings(settings: any) {
     await syncSettingsToChromeStorage(settings)
 
   } catch (error) {
+    console.error('[background] saveSettings failed:', error)
   }
 }
 
@@ -221,7 +237,7 @@ async function checkContentScriptReady(tabId: number): Promise<boolean> {
 
         return pingResponse?.ready === true
     } catch (error) {
-        // Content script не готов или не существует
+        console.error('[background] checkContentScriptReady failed:', error)
         return false
     }
 }
@@ -249,6 +265,7 @@ async function sendMessageWithRetry(tabId: number, message: any, messageType: st
 
             // Если это финальная попытка, логируем как ошибку
             if (attempt === maxRetries - 1) {
+                console.error('[background] sendMessageWithRetry failed:', error)
             }
 
             if (attempt < maxRetries - 1) {
@@ -266,6 +283,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     try {
         await settingsStorage.init()
     } catch (error) {
+        console.error('[background] settingsStorage.init failed:', error)
     }
 
 })
@@ -292,11 +310,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'PINIA_SEARCH_INDEX_READY':
             // Пересылаем Pinia сообщения в popup (если открыт)
             try {
-                chrome.runtime.sendMessage(message).catch(() => {
-                    // Popup не открыт - это нормально
+                chrome.runtime.sendMessage(message).catch((e) => {
+                    if (!isExpectedExtensionError(e)) console.error('[background] Pinia relay sendMessage failed:', e)
                 })
-            } catch {
-                // Receiver не существует - это нормально
+            } catch (e) {
+                if (!isExpectedExtensionError(e)) console.error('[background] Pinia relay sendMessage threw:', e)
             }
             break
 
@@ -315,7 +333,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 .then(settings => {
                     sendResponse({ displayMode: settings?.displayMode || 'overlay' })
                 })
-                .catch(() => {
+                .catch((e) => {
+                    console.error('[background] GET_DISPLAY_MODE loadSettings failed:', e)
                     sendResponse({ displayMode: 'overlay' })
                 })
             return true
@@ -326,7 +345,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 .then(settings => {
                     sendResponse(settings || {})
                 })
-                .catch(error => {
+                .catch((error) => {
+                    console.error('[background] GET_SETTINGS loadSettings failed:', error)
                     sendResponse({})
                 })
             return true // Указываем, что ответ будет асинхронным
@@ -337,7 +357,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 .then(() => {
                     sendResponse({ success: true })
                 })
-                .catch(error => {
+                .catch((error) => {
+                    console.error('[background] UPDATE_SETTINGS saveSettings failed:', error)
                     sendResponse({ success: false, error: error.message })
                 })
             return true // Асинхронный ответ
@@ -350,7 +371,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     await chrome.storage.local.remove(['vue-inspector-settings', 'vue-inspector-settings-version'])
                     sendResponse({ success: true })
                 })
-                .catch(error => {
+                .catch((error) => {
+                    console.error('[background] RESET_SETTINGS clearSettings failed:', error)
                     sendResponse({ success: false, error: error.message })
                 })
             return true // Асинхронный ответ
@@ -366,7 +388,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     .then(isReady => {
                         sendResponse({ ready: isReady })
                     })
-                    .catch(error => {
+                    .catch((error) => {
+                        console.error('[background] PING_CONTENT_SCRIPT failed:', error)
                         sendResponse({ ready: false, error: (error as Error).message })
                     })
                 return true // Асинхронный ответ

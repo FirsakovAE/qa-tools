@@ -124,9 +124,13 @@ export function handleInjectedMessage(event: MessageEvent): void {
           type: 'VUE_INSPECTOR_FLAGS',
           flags: newFlags,
           url: window.location.href
-        }).catch(() => {})
+        }).catch((error) => {
+          console.error('[content/detection] Failed to send VUE_INSPECTOR_FLAGS:', error)
+        })
       }
-    } catch {}
+    } catch (error) {
+      console.error('[content/detection] chrome.runtime.sendMessage error:', error)
+    }
     
     return
   }

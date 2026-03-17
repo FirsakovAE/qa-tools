@@ -35,7 +35,9 @@ export function detectStaticSite(): StaticDetectionResult {
     if (navEntries?.[0]?.type === 'navigate') {
       reasons.push('navigation type = navigate')
     }
-  } catch {}
+  } catch (e) {
+    console.error('[utils/staticSiteDetector] getEntriesByType failed:', e)
+  }
 
   // 4. Ссылки выглядят как MPA
   const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 20)
@@ -52,18 +54,22 @@ export function detectStaticSite(): StaticDetectionResult {
   const root = document.documentElement
 
   const observer = new MutationObserver(mutations => {
-    for (const m of mutations) {
-      if (
-        m.type === 'childList' &&
-        m.target === root &&
-        m.addedNodes.length > 5 &&
-        m.removedNodes.length > 5
-      ) {
-        fullDomReplaced = true
-        reasons.push('full DOM replacement detected')
-        observer.disconnect()
-        break
+    try {
+      for (const m of mutations) {
+        if (
+          m.type === 'childList' &&
+          m.target === root &&
+          m.addedNodes.length > 5 &&
+          m.removedNodes.length > 5
+        ) {
+          fullDomReplaced = true
+          reasons.push('full DOM replacement detected')
+          observer.disconnect()
+          break
+        }
       }
+    } catch (e) {
+      console.error('[utils/staticSiteDetector] MutationObserver callback failed:', e)
     }
   })
 

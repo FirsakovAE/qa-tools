@@ -47,8 +47,8 @@ export function buildCurlCommand(entry: NetworkEntry): string {
     try {
       const parsed = JSON.parse(entry.requestBody.text)
       formattedBody = JSON.stringify(parsed, null, 4)
-    } catch {
-      // Keep original if not valid JSON
+    } catch (e) {
+      console.error('[utils/networkUtils] buildCurlCommand JSON.parse failed:', e)
     }
     const escapedBody = formattedBody.replace(/'/g, "'\\''")
     parts.push(`--data '${escapedBody}'`)
@@ -145,7 +145,8 @@ function parseUrlForPostman(rawUrl: string): PostmanUrl {
       })
     }
     return result
-  } catch {
+  } catch (e) {
+    console.error('[utils/networkUtils] parseUrlForPostman failed:', rawUrl, e)
     return { raw: rawUrl, protocol: 'https', host: [], path: [] }
   }
 }
@@ -180,7 +181,9 @@ function entryToPostmanItem(entry: NetworkEntry): PostmanItem {
     if (isJson) {
       try {
         raw = JSON.stringify(JSON.parse(raw), null, 4).replace(/\n/g, '\r\n')
-      } catch { /* keep original */ }
+      } catch (e) {
+        console.error('[utils/networkUtils] entryToPostmanItem JSON.parse failed:', e)
+      }
     }
     request.body = {
       mode: 'raw',
@@ -210,17 +213,21 @@ export function buildPostmanCollection(entries: NetworkEntry[], name?: string): 
 }
 
 export function downloadPostmanCollection(entries: NetworkEntry[], name?: string): void {
-  const collection = buildPostmanCollection(entries, name)
-  const json = JSON.stringify(collection, null, 2)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${collection.info.name.replace(/\s+/g, '_')}.postman_collection.json`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  try {
+    const collection = buildPostmanCollection(entries, name)
+    const json = JSON.stringify(collection, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${collection.info.name.replace(/\s+/g, '_')}.postman_collection.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('[utils/networkUtils] downloadPostmanCollection failed:', e)
+  }
 }
 
 /**
@@ -246,6 +253,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
         document.body.removeChild(textArea)
         resolve(success)
       } catch (error) {
+        console.error('[utils/networkUtils] copyToClipboard failed:', error)
         resolve(false)
       }
     }, 0)

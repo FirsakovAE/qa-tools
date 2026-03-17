@@ -244,8 +244,12 @@ function handleCloseRelease() {
 }
 
 async function handleIgnoreVersion(version: string) {
-  await ignoreVersion(version)
-  releaseInfo.value = null
+  try {
+    await ignoreVersion(version)
+    releaseInfo.value = null
+  } catch (error) {
+    console.error('[settings/OptionsTab] handleIgnoreVersion failed:', error)
+  }
 }
 
 function handleDownloadUpdate(url: string) {
@@ -365,6 +369,7 @@ async function handleExport() {
     URL.revokeObjectURL(url)
     showAlert('Export Complete', 'Settings have been exported to a file.', 'success')
   } catch (error) {
+    console.error('[settings/OptionsTab] handleExport failed:', error)
     showAlert('Export Failed', 'Failed to export settings. Please try again.', 'error')
   }
 }
@@ -387,6 +392,7 @@ async function handleImport() {
       syncMocks()
       showAlert('Import Complete', 'Settings have been imported successfully.', 'success')
     } catch (error) {
+      console.error('[settings/OptionsTab] handleImport failed:', error)
       importError.value = error instanceof Error ? error.message : 'Invalid settings file'
       showAlert('Import Failed', error instanceof Error ? error.message : 'Invalid settings file', 'error')
     }
@@ -404,6 +410,7 @@ async function handleReset() {
     selectedItem.value = null
     showAlert('Reset Complete', 'All settings have been reset to defaults.', 'success')
   } catch (error) {
+    console.error('[settings/OptionsTab] handleReset failed:', error)
     showAlert('Reset Failed', 'Failed to reset settings. Please try again.', 'error')
   }
 }
@@ -447,6 +454,7 @@ onMounted(async () => {
       loadedSettings.mocks = { active: [], inactive: [] }
     }
   } catch (error) {
+    console.error('[settings/OptionsTab] useInspectorSettings failed:', error)
   } finally {
     nextTick(() => {
       isLoading.value = false

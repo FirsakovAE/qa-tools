@@ -23,6 +23,7 @@ export const handlePiniaGetStoresSummary: RuntimeHandler = (message, sender, sen
       sendResponse(result)
     })
     .catch((error) => {
+      if (error?.message !== 'Timeout') console.error('[content/handlers/pinia] PINIA_GET_STORES_SUMMARY failed:', error)
       const result = {
         type: 'PINIA_STORES_SUMMARY_DATA',
         summary: {},
@@ -55,7 +56,8 @@ export const handlePiniaGetStoreState: RuntimeHandler = (message, sender, sendRe
       try { chrome.runtime?.sendMessage?.(result) } catch {}
       sendResponse(result)
     })
-    .catch(() => {
+    .catch((error) => {
+      if (error?.message !== 'Timeout') console.error('[content/handlers/pinia] PINIA_GET_STORE_STATE failed:', error)
       const result = {
         type: 'PINIA_STORE_STATE_DATA',
         storeId: message.storeId,
@@ -83,7 +85,8 @@ export const handlePiniaBuildSearchIndex: RuntimeHandler = (message, sender, sen
       try { chrome.runtime?.sendMessage?.(result) } catch {}
       sendResponse(result)
     })
-    .catch(() => {
+    .catch((error) => {
+      if (error?.message !== 'Timeout') console.error('[content/handlers/pinia] PINIA_BUILD_SEARCH_INDEX failed:', error)
       const result = {
         type: 'PINIA_SEARCH_INDEX_READY',
         index: [],
@@ -117,7 +120,8 @@ export const handlePiniaPatchState: RuntimeHandler = (message, sender, sendRespo
       try { chrome.runtime?.sendMessage?.(result) } catch {}
       sendResponse(result)
     })
-    .catch(() => {
+    .catch((error) => {
+      if (error?.message !== 'Timeout') console.error('[content/handlers/pinia] PINIA_PATCH_STATE failed:', error)
       sendResponse({ type: 'PINIA_PATCH_STATE_RESULT', success: false, error: 'Timeout' })
     })
 
@@ -143,7 +147,8 @@ export const handlePiniaReplaceState: RuntimeHandler = (message, sender, sendRes
       try { chrome.runtime?.sendMessage?.(result) } catch {}
       sendResponse(result)
     })
-    .catch(() => {
+    .catch((error) => {
+      if (error?.message !== 'Timeout') console.error('[content/handlers/pinia] PINIA_REPLACE_STATE failed:', error)
       sendResponse({ type: 'PINIA_REPLACE_STATE_RESULT', success: false, error: 'Timeout' })
     })
 
@@ -171,7 +176,8 @@ export const handlePiniaPatchGetters: RuntimeHandler = (message, sender, sendRes
       try { chrome.runtime?.sendMessage?.(result) } catch {}
       sendResponse(result)
     })
-    .catch(() => {
+    .catch((error) => {
+      if (error?.message !== 'Timeout') console.error('[content/handlers/pinia] PINIA_PATCH_GETTERS failed:', error)
       sendResponse({ type: 'PINIA_PATCH_GETTERS_RESULT', success: false, error: 'Timeout' })
     })
 
@@ -200,7 +206,8 @@ export const handlePiniaCallAction: RuntimeHandler = (message, sender, sendRespo
       try { chrome.runtime?.sendMessage?.(result) } catch {}
       sendResponse(result)
     })
-    .catch(() => {
+    .catch((error) => {
+      if (error?.message !== 'Timeout') console.error('[content/handlers/pinia] PINIA_CALL_ACTION failed:', error)
       sendResponse({ type: 'PINIA_CALL_ACTION_RESULT', success: false, error: 'Timeout' })
     })
 

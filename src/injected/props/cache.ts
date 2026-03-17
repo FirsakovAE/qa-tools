@@ -414,7 +414,8 @@ export function generatePropsHash(props: any): string {
     }
     
     return parts.join('|')
-  } catch {
+  } catch (e) {
+    console.error('[injected/props/cache] generatePropsHash failed:', e)
     return 'error'
   }
 }

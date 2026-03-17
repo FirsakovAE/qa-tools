@@ -31,7 +31,7 @@ async function clearHighlightOnPopupClose() {
       tabId: tabs[0].id
     })
   } catch (error) {
-    // Silent error handling
+    console.error('[main] clearHighlightOnPopupClose failed:', error)
   }
 }
 

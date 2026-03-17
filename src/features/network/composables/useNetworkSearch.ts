@@ -80,19 +80,29 @@ function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
   
   try {
     if (entry.requestBody?.text) {
-      const parsed = JSON.parse(entry.requestBody.text)
-      requestBodyKeys = extractJsonKeys(parsed)
-      requestBodyValues = extractJsonValues(parsed)
+      const t = entry.requestBody.text.trim()
+      if (t.startsWith('{') || t.startsWith('[')) {
+        const parsed = JSON.parse(entry.requestBody.text)
+        requestBodyKeys = extractJsonKeys(parsed)
+        requestBodyValues = extractJsonValues(parsed)
+      }
     }
-  } catch { /* ignore */ }
+  } catch (error) {
+    console.error('[network/useNetworkSearch] buildIndexEntry requestBody parse failed:', entry.id, error)
+  }
   
   try {
     if (entry.responseBody?.text) {
-      const parsed = JSON.parse(entry.responseBody.text)
-      responseBodyKeys = extractJsonKeys(parsed)
-      responseBodyValues = extractJsonValues(parsed)
+      const t = entry.responseBody.text.trim()
+      if (t.startsWith('{') || t.startsWith('[')) {
+        const parsed = JSON.parse(entry.responseBody.text)
+        responseBodyKeys = extractJsonKeys(parsed)
+        responseBodyValues = extractJsonValues(parsed)
+      }
     }
-  } catch { /* ignore */ }
+  } catch (error) {
+    console.error('[network/useNetworkSearch] buildIndexEntry responseBody parse failed:', entry.id, error)
+  }
   
   return {
     entryId: entry.id,

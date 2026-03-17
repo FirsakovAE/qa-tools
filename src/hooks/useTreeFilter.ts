@@ -9,7 +9,9 @@ export function useTreeFilter(treeData: TreeNodeModel[]) {
     const searchTerm = ref('')
     const propsOnly = ref(false)
 
-    useInspectorSettings().then(s => { settings.value = s ?? null })
+    useInspectorSettings().then(s => { settings.value = s ?? null }).catch((error) => {
+        console.error('[hooks/useTreeFilter] useInspectorSettings failed:', error)
+    })
 
     function isBlocked(node: TreeNodeModel): boolean {
         if (!settings.value) return false

@@ -13,20 +13,33 @@ export function transformVirtualStoreToNodes(virtualData: {
     }
 
     return Object.keys(virtualData.stores).map(storeId => {
-        const store = virtualData.stores[storeId]
+        try {
+            const store = virtualData.stores[storeId]
 
-        return {
-            id: store.id,
-            name: store.id,
-            stateCount: Object.keys(store.state || {}).length,
-            getterKeys: Object.keys(store.getters || {}).length,
-            hasState: Object.keys(store.state || {}).length > 0,
-            hasGetters: Object.keys(store.getters || {}).length > 0,
-            data: {
+            return {
                 id: store.id,
-                state: store.state || {},
-                getters: store.getters || {},
-                piniaMethods: store.piniaMethods || []
+                name: store.id,
+                stateCount: Object.keys(store.state || {}).length,
+                getterKeys: Object.keys(store.getters || {}).length,
+                hasState: Object.keys(store.state || {}).length > 0,
+                hasGetters: Object.keys(store.getters || {}).length > 0,
+                data: {
+                    id: store.id,
+                    state: store.state || {},
+                    getters: store.getters || {},
+                    piniaMethods: store.piniaMethods || []
+                }
+            }
+        } catch (e) {
+            console.error('[utils/piniaDataTransformers] transformVirtualStoreToNodes store failed:', storeId, e)
+            return {
+                id: storeId,
+                name: storeId,
+                stateCount: 0,
+                getterKeys: 0,
+                hasState: false,
+                hasGetters: false,
+                data: { id: storeId, state: {}, getters: {}, piniaMethods: [] }
             }
         }
     })

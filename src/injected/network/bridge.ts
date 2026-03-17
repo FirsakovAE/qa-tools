@@ -96,7 +96,8 @@ function extractUrlName(url: string): string {
     const urlObj = new URL(url)
     const segments = urlObj.pathname.split('/').filter(Boolean)
     return segments.length > 0 ? segments[segments.length - 1] : urlObj.host
-  } catch {
+  } catch (error) {
+    console.error('[injected/network] extractUrlName failed:', url, error)
     return url.substring(0, 50)
   }
 }
@@ -104,7 +105,8 @@ function extractUrlName(url: string): string {
 function extractUrlPath(url: string): string {
   try {
     return new URL(url).pathname
-  } catch {
+  } catch (error) {
+    console.error('[injected/network] extractUrlPath failed:', url, error)
     return url
   }
 }
@@ -115,7 +117,8 @@ function parseUrlParams(url: string): UrlParam[] {
     const params: UrlParam[] = []
     urlObj.searchParams.forEach((value, key) => params.push({ key, value }))
     return params
-  } catch {
+  } catch (error) {
+    console.error('[injected/network] parseUrlParams failed:', url, error)
     return []
   }
 }
@@ -144,7 +147,8 @@ function extractAuthorization(headers: HeaderEntry[]): AuthorizationInfo {
       const decoded = atob(value.substring(6))
       const [username] = decoded.split(':')
       return { type: 'Basic', token: value.substring(6), username }
-    } catch {
+    } catch (error) {
+      console.error('[injected/network] extractAuthorization Basic decode failed:', error)
       return { type: 'Basic', token: value.substring(6) }
     }
   }
@@ -206,7 +210,8 @@ function matchUrl(url: string, pattern: { scheme?: string; host?: string; port?:
     }
     
     return true
-  } catch {
+  } catch (error) {
+    console.error('[injected/network] matchUrl failed:', url, error)
     return false
   }
 }
@@ -265,12 +270,17 @@ function createBodyContent(body: string | null, contentType: string, originalSiz
 
   let formData: FormDataEntry[] | undefined
   if (!isBinary) {
-    try {
-      const parsed = JSON.parse(body)
-      if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
-        formData = parsed.entries as FormDataEntry[]
+    const trimmed = body.trim()
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(body)
+        if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
+          formData = parsed.entries as FormDataEntry[]
+        }
+      } catch (error) {
+        console.error('[injected/network] createBodyContent parse failed:', error)
       }
-    } catch { /* not JSON — ignore */ }
+    }
   }
 
   return {

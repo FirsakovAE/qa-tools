@@ -337,7 +337,7 @@ export class ComponentMetaStore {
     // Check flood protection
     if (this.isPropsFlooding(meta.uid)) {
       meta.propsDisabled = true
-      console.warn(`[VueInspector] Props tracking disabled for component ${meta.uid} due to flood`)
+      console.warn('[injected/props/meta-store] Props tracking disabled for component', meta.uid, 'due to flood')
       return false
     }
 
@@ -912,7 +912,8 @@ export class ComponentMetaStore {
       }
 
       return parts.join('|')
-    } catch {
+    } catch (e) {
+      console.error('[injected/props/meta-store] hashProps failed:', e)
       return 'error'
     }
   }

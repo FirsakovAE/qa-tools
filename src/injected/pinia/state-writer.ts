@@ -127,6 +127,7 @@ export function patchState(storeId: string, path: string, value: any): boolean {
     
     return true
   } catch (e) {
+    console.error('[injected/pinia/state-writer] patchState failed:', storeId, path, e)
     return false
   }
 }
@@ -198,6 +199,7 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
     }
     return true
   } catch (e) {
+    console.error('[injected/pinia/state-writer] replaceState failed:', storeId, e)
     return false
   }
 }
@@ -268,6 +270,7 @@ export function patchGetters(storeId: string, newGetters: Record<string, any>): 
 
     return { success: true, updated }
   } catch (e) {
+    console.error('[injected/pinia/state-writer] patchGetters failed:', storeId, e)
     return { success: false, updated }
   }
 }

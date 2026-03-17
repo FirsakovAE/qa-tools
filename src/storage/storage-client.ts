@@ -94,29 +94,38 @@ export class StorageClient {
   // ── Lifecycle ─────────────────────────
 
   destroy(): void {
-    if (this.listener) {
-      window.removeEventListener('message', this.listener)
-      this.listener = null
+    try {
+      if (this.listener) {
+        window.removeEventListener('message', this.listener)
+        this.listener = null
+      }
+      if (this.iframe) {
+        this.iframe.remove()
+        this.iframe = null
+      }
+      for (const { reject, timer } of this.pending.values()) {
+        clearTimeout(timer)
+        reject(new Error('StorageClient destroyed'))
+      }
+      this.pending.clear()
+    } catch (e) {
+      console.error('[storage/storage-client] destroy failed:', e)
     }
-    if (this.iframe) {
-      this.iframe.remove()
-      this.iframe = null
-    }
-    for (const { reject, timer } of this.pending.values()) {
-      clearTimeout(timer)
-      reject(new Error('StorageClient destroyed'))
-    }
-    this.pending.clear()
   }
 
   // ── Internal ──────────────────────────
 
   private createIframe(url: string): void {
-    const iframe = document.createElement('iframe')
-    iframe.style.display = 'none'
-    iframe.src = url
-    document.body.appendChild(iframe)
-    this.iframe = iframe
+    try {
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      this.iframe = iframe
+    } catch (e) {
+      console.error('[storage/storage-client] createIframe failed:', url, e)
+      throw e
+    }
   }
 
   private setupListener(): void {
@@ -162,10 +171,24 @@ export class StorageClient {
 
       this.pending.set(requestId, { resolve, reject, timer })
 
-      this.iframe!.contentWindow!.postMessage(
-        { [STORAGE_PREFIX]: true, requestId, action, ...payload },
-        this.origin,
-      )
+      try {
+        const win = this.iframe?.contentWindow
+        if (!win) {
+          this.pending.delete(requestId)
+          clearTimeout(timer)
+          reject(new Error('Storage iframe not ready'))
+          return
+        }
+        win.postMessage(
+          { [STORAGE_PREFIX]: true, requestId, action, ...payload },
+          this.origin,
+        )
+      } catch (e) {
+        this.pending.delete(requestId)
+        clearTimeout(timer)
+        console.error('[storage/storage-client] send postMessage failed:', action, e)
+        reject(e)
+      }
     })
   }
 }
@@ -175,9 +198,14 @@ export class StorageClient {
 let _client: StorageClient | null = null
 
 export function createStorageClient(storageUrl: string): StorageClient {
-  if (_client) _client.destroy()
-  _client = new StorageClient(storageUrl)
-  return _client
+  try {
+    if (_client) _client.destroy()
+    _client = new StorageClient(storageUrl)
+    return _client
+  } catch (e) {
+    console.error('[storage/storage-client] createStorageClient failed:', storageUrl, e)
+    throw e
+  }
 }
 
 export function getStorageClient(): StorageClient | null {

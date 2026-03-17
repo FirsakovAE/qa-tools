@@ -134,7 +134,8 @@ function createPropsHash(props: Record<string, any>): string {
     }
 
     return parts.join('|')
-  } catch {
+  } catch (e) {
+    console.error('[injected/props/props-reader] createPropsHash failed:', e)
     return 'error'
   }
 }
@@ -281,14 +282,28 @@ export function readExpandedComponentsProps(): ComponentWithProps[] {
   const store = getMetaStore()
   const expandedMetas = store.getExpandedComponents()
 
-  return expandedMetas.map(meta => ({
-    uid: meta.uid,
-    name: meta.name ?? 'Anonymous',
-    label: meta.label,
-    hasRootEl: !!meta.rootEl,
-    isExpanded: meta.isExpanded,
-    props: readComponentProps(meta)
-  }))
+  return expandedMetas.map(meta => {
+    try {
+      return {
+        uid: meta.uid,
+        name: meta.name ?? 'Anonymous',
+        label: meta.label,
+        hasRootEl: !!meta.rootEl,
+        isExpanded: meta.isExpanded,
+        props: readComponentProps(meta)
+      }
+    } catch (e) {
+      console.error('[injected/props/props-reader] readExpandedComponentsProps meta failed:', meta.uid, e)
+      return {
+        uid: meta.uid,
+        name: meta.name ?? 'Anonymous',
+        label: meta.label,
+        hasRootEl: !!meta.rootEl,
+        isExpanded: meta.isExpanded,
+        props: { props: {}, count: 0, loaded: false, lastUpdated: 0 }
+      }
+    }
+  })
 }
 
 /**

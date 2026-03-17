@@ -77,7 +77,8 @@ function getUrlDisplayName(url: string): string {
     const path = u.pathname
     const name = path.split('/').filter(Boolean).pop() || u.hostname
     return decodeURIComponent(name)
-  } catch {
+  } catch (error) {
+    console.error('[settings/ImagePickerDrawer] getUrlDisplayName failed:', url, error)
     return url.slice(0, 40) + (url.length > 40 ? '…' : '')
   }
 }

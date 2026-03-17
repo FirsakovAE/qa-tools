@@ -65,6 +65,7 @@ export function usePiniaStores() {
         }, 3000)
       }
     } catch (e) {
+      console.error('[stores/usePiniaStores] load failed:', e)
       error.value = e instanceof Error ? e.message : 'Failed to load stores'
       loading.value = false
     }

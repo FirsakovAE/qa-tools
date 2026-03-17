@@ -102,7 +102,8 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
             displayMode = response.displayMode
           }
         }
-      } catch {
+      } catch (error) {
+        console.error('[content] Failed to get display mode:', error)
         // Fallback to overlay
       }
 
@@ -119,9 +120,13 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
           chrome.runtime.sendMessage({
             type: 'SET_STATIC_SITE',
             isStatic: detection.isLikelyStatic
-          }).catch(() => {})
+          }).catch((error) => {
+            console.error('[content] Failed to send SET_STATIC_SITE:', error)
+          })
         }
-      } catch {}
+      } catch (error) {
+        console.error('[content] chrome.runtime.sendMessage (SET_STATIC_SITE) error:', error)
+      }
 
       // Show overlay ONLY in overlay mode, on non-static sites
       if (displayMode === 'overlay' && !detection.isLikelyStatic && !uiInjected) {

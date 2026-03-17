@@ -78,14 +78,18 @@ export function initVisibilityAwareness(): void {
   if (typeof document === 'undefined') return
   
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      // Page is hidden - reduce scanning by 10x
-      visibilityThrottleMultiplier = 10
-      console.debug('[VueInspector] Page hidden - reducing scan frequency')
-    } else {
-      // Page is visible - normal scanning
-      visibilityThrottleMultiplier = 1
-      console.debug('[VueInspector] Page visible - normal scan frequency')
+    try {
+      if (document.visibilityState === 'hidden') {
+        // Page is hidden - reduce scanning by 10x
+        visibilityThrottleMultiplier = 10
+        console.debug('[VueInspector] Page hidden - reducing scan frequency')
+      } else {
+        // Page is visible - normal scanning
+        visibilityThrottleMultiplier = 1
+        console.debug('[VueInspector] Page visible - normal scan frequency')
+      }
+    } catch (e) {
+      console.error('[injected/props/structure-scanner] visibilitychange failed:', e)
     }
   })
 }
@@ -403,14 +407,14 @@ export function scanStructure(options: { minIntervalMs?: number; force?: boolean
   }
   
   const startTime = performance.now()
-  const store = getMetaStore()
-  const vueRoots = findVueRoots()
-  
   let total = 0
   let mounted = 0
   let updated = 0
-  
   const currentUids = new Set<number>()
+
+  try {
+    const store = getMetaStore()
+    const vueRoots = findVueRoots()
 
   if (vueRoots.length > 0) {
     for (const root of vueRoots) {
@@ -467,6 +471,16 @@ export function scanStructure(options: { minIntervalMs?: number; force?: boolean
 
   stats.lastScanResult = result
   return result
+  } catch (e) {
+    console.error('[injected/props/structure-scanner] scanStructure failed:', e)
+    return stats.lastScanResult ?? {
+      total: 0,
+      mounted: 0,
+      unmounted: 0,
+      updated: 0,
+      duration: performance.now() - startTime
+    }
+  }
 }
 
 /**

@@ -111,6 +111,7 @@ export const handleUpdateComponentProps: RuntimeHandler = (message, sender, send
       sendResponse({ success: response.success || false, error: response.error })
     })
     .catch((error) => {
+      console.error('[content/handlers/props] UPDATE_COMPONENT_PROPS failed:', error)
       sendResponse({ success: false, error: error.message })
     })
 
@@ -133,7 +134,8 @@ export const handleGetComponentProps: RuntimeHandler = (message, sender, sendRes
         newUid: response.newUid
       })
     })
-    .catch(() => {
+    .catch((error) => {
+      console.error('[content/handlers/props] GET_COMPONENT_PROPS failed:', error)
       sendResponse({ props: {} })
     })
 

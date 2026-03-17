@@ -82,7 +82,8 @@ export const handleCollectVueComponents: RuntimeHandler = (message, sender, send
       const components = inspector.getComponents({ blacklist })
       sendResponse({ components: components || [] })
       return true
-    } catch {
+    } catch (error) {
+      console.error('[content/handlers/core] __VUE_INSPECTOR__.getComponents failed:', error)
       // Continue with postMessage as fallback
     }
   }
@@ -92,12 +93,14 @@ export const handleCollectVueComponents: RuntimeHandler = (message, sender, send
     .then((response: any) => {
       sendResponse({ components: response.components || [] })
     })
-    .catch(() => {
+    .catch((err) => {
+      console.error('[content/handlers/core] requestWindow for components failed:', err)
       // Try to get components directly from DOM as fallback
       try {
         const components = collectVueComponentsFromDOM()
         sendResponse({ components })
       } catch (error) {
+        console.error('[content/handlers/core] collectVueComponentsFromDOM fallback failed:', error)
         sendResponse({ components: [], error: String(error) })
       }
     })

@@ -64,6 +64,7 @@ function uiBridgeMessageHandler(event: MessageEvent): void {
       // Call handler (sender is fake since this isn't chrome messaging)
       handler(message, {} as chrome.runtime.MessageSender, sendResponse)
     } catch (error) {
+      console.error('[content/ui-bridge] Handler error for', message.type, error)
       sendResponse({ success: false, error: String(error) })
     }
   } else {
@@ -81,7 +82,10 @@ function uiBridgeMessageHandler(event: MessageEvent): void {
     // Forward to injected script and wait for response
     requestWindow(message, getExpectedResponseType(message.type), 5000)
       .then(sendResponse)
-      .catch((err) => sendResponse({ error: err.message }))
+      .catch((err) => {
+        console.error('[content/ui-bridge] requestWindow failed for', message.type, err)
+        sendResponse({ error: err.message })
+      })
   }
 }
 

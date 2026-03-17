@@ -213,7 +213,8 @@ async function readResponseBody(response: Response, clone: Response): Promise<st
   
   try {
     return await clone.text()
-  } catch {
+  } catch (error) {
+    console.error('[injected/network] readResponseBody failed:', error)
     return null
   }
 }
@@ -278,7 +279,8 @@ function serializeRequestBody(body: BodyInit | null | undefined): string | null 
   
   try {
     return JSON.stringify(body)
-  } catch {
+  } catch (error) {
+    console.error('[injected/network] serializeRequestBody failed:', error)
     return '[Object]'
   }
 }
@@ -336,7 +338,7 @@ function buildModifiedUrl(
     
     return url.toString()
   } catch (e) {
-    console.warn('[VueInspector Interceptor] Failed to build modified URL:', e)
+    console.error('[injected/network] buildModifiedUrl failed:', e)
     return originalUrl
   }
 }
@@ -490,8 +492,8 @@ async function deserializeBodyForRequest(
             try {
               const resp = await originalFetch.call(window, fileUri)
               blob = await resp.blob()
-            } catch {
-              console.warn('[VueInspector] Cannot fetch file from path (browser security restriction):', rawValue)
+            } catch (err) {
+              console.error('[injected/network] Cannot fetch file from path:', rawValue, err)
               blob = new Blob([], { type: 'application/octet-stream' })
             }
             fd.append(entry.key, blob, fileName)
@@ -506,7 +508,10 @@ async function deserializeBodyForRequest(
       }
       return fd
     }
-  } catch { /* not JSON — send as raw string */ }
+  } catch (error) {
+    console.error('[injected/network] deserializeBodyForRequest parse failed:', error)
+    /* not JSON — send as raw string */
+  }
   return body
 }
 
@@ -693,7 +698,7 @@ function interceptFetch(): void {
           return mockResponse
           
         } catch (mockError) {
-          console.error('[VueInspector Interceptor] ❌ Error creating mock response:', mockError)
+          console.error('[injected/network] Error creating mock response:', mockError)
           // Fall through to real network call if mock fails
         }
       }
@@ -924,6 +929,7 @@ function interceptFetch(): void {
       return finalResponse
     } catch (error) {
       originalFormDataBodies.delete(requestId)
+      console.error('[injected/network] Fetch request failed:', requestId, error)
       // Notify about error
       if (callbacks?.onError) {
         callbacks.onError(
@@ -1299,7 +1305,7 @@ function interceptXHR(): void {
             callStoredHandlers(xhr, data)
             
           } catch (mockError) {
-            console.error('[VueInspector Interceptor] ❌ Error applying XHR mock:', mockError)
+            console.error('[injected/network] Error applying XHR mock:', mockError)
             // If mock fails, we can't recover for XHR - just log error
           }
         }
@@ -1384,7 +1390,9 @@ function interceptXHR(): void {
                 if (isFormDataBody && h.name.toLowerCase() === 'content-type') return
                 try {
                   originalXHRSetRequestHeader.call(xhr, h.name, h.value)
-                } catch { /* Some headers can't be set */ }
+                } catch (err) {
+                  console.error('[injected/network] XHR setRequestHeader failed:', h.name, err)
+                }
               })
               
               // Update data for logging
@@ -1678,7 +1686,7 @@ function interceptXHR(): void {
           handler.handleEvent(loadEvent)
         }
       } catch (err) {
-        console.error('[VueInspector Interceptor] Error calling load handler:', err)
+        console.error('[injected/network] Error calling load handler:', err)
       }
     }
     
@@ -1692,7 +1700,7 @@ function interceptXHR(): void {
           handler.handleEvent(readystateEvent)
         }
       } catch (err) {
-        console.error('[VueInspector Interceptor] Error calling readystatechange handler:', err)
+        console.error('[injected/network] Error calling readystatechange handler:', err)
       }
     }
   }
@@ -1711,7 +1719,7 @@ function interceptXHR(): void {
           handler.handleEvent(errorEvent)
         }
       } catch (err) {
-        console.error('[VueInspector Interceptor] Error calling error handler:', err)
+        console.error('[injected/network] Error calling error handler:', err)
       }
     }
   }

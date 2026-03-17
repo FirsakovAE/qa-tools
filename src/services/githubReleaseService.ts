@@ -102,6 +102,7 @@ async function fetchRelease(url: string): Promise<ReleaseResult> {
       notModified: false,
     }
   } catch (error) {
+    console.error('[services/githubReleaseService] fetchRelease failed:', url, error)
     return {
       release: null,
       error: error instanceof Error ? error.message : 'Network error',

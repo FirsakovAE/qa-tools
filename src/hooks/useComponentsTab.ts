@@ -53,16 +53,22 @@ export function useComponentsTab(
         if (savedPropsOnlyVal !== null && typeof savedPropsOnlyVal === 'boolean') {
             localPropsOnly.value = savedPropsOnlyVal
         }
+    }).catch((error) => {
+        console.error('[hooks/useComponentsTab] storage.get failed:', error)
     })
     
     // Сохраняем состояние поиска при изменении
     watch(searchTerm, (value) => {
-        runtime.storage.set(STORAGE_KEY_SEARCH, value)
+        runtime.storage.set(STORAGE_KEY_SEARCH, value).catch((error) => {
+            console.error('[hooks/useComponentsTab] storage.set search failed:', error)
+        })
     })
     
     // Сохраняем состояние фильтра при изменении
     watch(localPropsOnly, (value) => {
-        runtime.storage.set(STORAGE_KEY_PROPS_ONLY, value)
+        runtime.storage.set(STORAGE_KEY_PROPS_ONLY, value).catch((error) => {
+            console.error('[hooks/useComponentsTab] storage.set propsOnly failed:', error)
+        })
     })
 
     // Редактирование пропсов
@@ -73,6 +79,8 @@ export function useComponentsTab(
     // Загружаем настройки
     useInspectorSettings().then(s => {
         settingsRef.value = s
+    }).catch((error) => {
+        console.error('[hooks/useComponentsTab] useInspectorSettings failed:', error)
     })
     
     // Создаем сервис для редактирования пропсов
@@ -144,6 +152,7 @@ export function useComponentsTab(
                 return false
             }
         } catch (error) {
+            console.error('[hooks/useComponentsTab] saveEditedProps failed:', error)
             return false
         }
     }

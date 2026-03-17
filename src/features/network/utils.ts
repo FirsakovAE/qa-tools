@@ -30,7 +30,8 @@ export function parseUrl(url: string): ParsedUrl {
       path: urlObj.pathname || '/',
       query: urlObj.search ? urlObj.search.substring(1) : ''
     }
-  } catch {
+  } catch (error) {
+    console.error('[network/utils] parseUrl failed:', url, error)
     return {
       scheme: 'https',
       host: '',
@@ -107,7 +108,8 @@ export function formatJson(text: string | undefined | null): string {
       return JSON.stringify(parsed, null, 2)
     }
     return text
-  } catch {
+  } catch (error) {
+    console.error('[network/utils] formatJson failed:', error)
     return text
   }
 }
@@ -137,7 +139,8 @@ export function formatBodyForDisplay(text: string | undefined | null, contentTyp
         return JSON.stringify(parsed, null, 2)
       }
       return text
-    } catch {
+    } catch (error) {
+      console.error('[network/utils] formatBodyForDisplay failed:', error)
       return text
     }
   }

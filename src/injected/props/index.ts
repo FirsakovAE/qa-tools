@@ -78,8 +78,12 @@ export function initPropsModule() {
     // Handle visibilitychange for mobile browsers
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
-        // Clear props caches when page is hidden
-        forceMemoryCleanup()
+        try {
+          // Clear props caches when page is hidden
+          forceMemoryCleanup()
+        } catch (e) {
+          console.error('[injected/props] visibilitychange forceMemoryCleanup failed:', e)
+        }
         // Scanning is automatically throttled by initVisibilityAwareness
       }
     })

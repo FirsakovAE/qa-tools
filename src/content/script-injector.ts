@@ -30,6 +30,7 @@ export function injectScript(): void {
   }
   
   script.onerror = function() {
+    console.error('[content/script-injector] Failed to load injected script')
     // Remove script tag on error to allow retry
     const scriptEl = document.getElementById('vue-inspector-injected-script')
     if (scriptEl?.parentNode) {

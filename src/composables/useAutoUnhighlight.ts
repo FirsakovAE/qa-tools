@@ -12,9 +12,10 @@ async function unhighlightElements() {
     runtime.sendMessage({
       type: 'UNHIGHLIGHT_ELEMENT'
     }).catch(error => {
-      // Игнорируем ошибки - подсветка может быть уже снята или content script не готов
+      console.error('[useAutoUnhighlight] Failed to send UNHIGHLIGHT_ELEMENT:', error)
     })
   } catch (error) {
+    console.error('[useAutoUnhighlight] Failed to unhighlight elements:', error)
   }
 }
 

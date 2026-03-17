@@ -13,6 +13,11 @@ export interface DataService {
 
 export class DataServiceFactory {
     static createService(): DataService {
+        try {
             return new RealDataService()
+        } catch (e) {
+            console.error('[services/dataServiceFactory] createService failed:', e)
+            throw e
+        }
     }
 }

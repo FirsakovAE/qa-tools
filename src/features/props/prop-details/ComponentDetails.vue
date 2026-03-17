@@ -37,7 +37,10 @@ onMounted(async () => {
   try {
     settings.value = await useInspectorSettings()
     jsonMode.value = settings.value?.json?.mode ?? 'text'
-  } catch { /* use defaults */ }
+  } catch (error) {
+    console.error('[props/ComponentDetails] useInspectorSettings failed:', error)
+    /* use defaults */
+  }
 })
 
 // --- Favorites ---
@@ -128,7 +131,7 @@ async function toggleFavorite() {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
   } catch (error) {
-    // Ignore save errors
+    console.error('[props/ComponentDetails] toggleFavorite save failed:', error)
   }
 }
 
@@ -256,6 +259,7 @@ async function saveChanges() {
     
     isEditing.value = false
   } catch (err) {
+    console.error('[props/ComponentDetails] saveChanges failed:', err)
     // Keep editing on error
   }
 }

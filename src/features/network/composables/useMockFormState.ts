@@ -46,7 +46,10 @@ export function useMockFormState(options: UseMockFormStateOptions) {
       try {
         settings.value = await useInspectorSettings()
         jsonMode.value = settings.value?.json?.mode ?? 'text'
-      } catch { /* use defaults */ }
+      } catch (error) {
+        console.error('[network/useMockFormState] useInspectorSettings failed:', error)
+        /* use defaults */
+      }
     },
     { immediate: true }
   )
@@ -188,8 +191,8 @@ export function useMockFormState(options: UseMockFormStateOptions) {
 
   const sections: Array<{ id: SectionId; label: string }> = [
     { id: 'matching', label: 'URL Matching' },
-    { id: 'response', label: 'Response' },
     { id: 'headers', label: 'Headers' },
+    { id: 'response', label: 'Response' },
   ]
 
   function handleConfirm() {

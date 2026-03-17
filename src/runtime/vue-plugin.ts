@@ -17,14 +17,17 @@ export const CapabilitiesKey: InjectionKey<RuntimeCapabilities> = Symbol('Runtim
  */
 export const RuntimePlugin = {
   install(app: App) {
-    // Предоставляем runtime через provide
-    const runtime = useRuntime()
-    app.provide(RuntimeKey, runtime)
-    app.provide(CapabilitiesKey, runtime.capabilities)
-    
-    // Глобальное свойство для быстрого доступа в шаблонах
-    app.config.globalProperties.$runtime = runtime
-    app.config.globalProperties.$capabilities = runtime.capabilities
+    try {
+      const runtime = useRuntime()
+      app.provide(RuntimeKey, runtime)
+      app.provide(CapabilitiesKey, runtime.capabilities)
+
+      app.config.globalProperties.$runtime = runtime
+      app.config.globalProperties.$capabilities = runtime.capabilities
+    } catch (e) {
+      console.error('[runtime/vue-plugin] RuntimePlugin.install failed:', e)
+      throw e
+    }
   }
 }
 

@@ -71,7 +71,9 @@ const storageClient = isStandalone ? getStorageClient() : null
 
 async function refreshMediaUsage() {
   if (!storageClient) return
-  try { mediaUsedBytes.value = await storageClient.getTotalMediaSize() } catch { /* ignore */ }
+  try { mediaUsedBytes.value = await storageClient.getTotalMediaSize() } catch (error) {
+    console.error('[settings/GeneralSection] refreshMediaUsage failed:', error)
+  }
 }
 
 const mediaUsagePercent = computed(() =>

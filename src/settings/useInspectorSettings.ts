@@ -27,7 +27,9 @@ function trySyncPreload(): void {
             const merged = mergeSettings(defaultInspectorSettings, saved)
             Object.assign(state, merged)
         }
-    } catch { /* sync preload failed — async path will handle it */ }
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] trySyncPreload failed:', e)
+    }
 }
 
 trySyncPreload()
@@ -45,6 +47,7 @@ async function saveToStorage() {
         try {
             settingsToSave = structuredClone(toRaw(state))
         } catch {
+            // structuredClone fails for non-cloneable types (File, Blob, etc.); JSON fallback handles plain data
             settingsToSave = JSON.parse(JSON.stringify(toRaw(state)))
         }
 
@@ -68,8 +71,8 @@ async function saveToStorage() {
                 settings: settingsToSave
             })
         }
-    } catch {
-        // Silent fail
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] saveToStorage failed:', e)
     }
 }
 
@@ -91,7 +94,8 @@ async function loadFromStorage(): Promise<void> {
             Object.assign(state, structuredClone(defaultInspectorSettings))
             saveToStorage()
         }
-    } catch {
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] loadFromStorage failed:', e)
         Object.assign(state, structuredClone(defaultInspectorSettings))
     }
 
@@ -124,7 +128,9 @@ async function loadFromStorage(): Promise<void> {
                 }
                 if (sizesUpdated) debouncedSave()
             }
-        } catch { /* IDB unavailable — fall back silently */ }
+        } catch (e) {
+            console.error('[settings/useInspectorSettings] loadFromStorage media init failed:', e)
+        }
     })()
 }
 
@@ -380,7 +386,9 @@ export async function resetInspectorSettings() {
 
     try {
         await clearAllMedia()
-    } catch { /* best-effort */ }
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] resetInspectorSettings clearAllMedia failed:', e)
+    }
 
     try {
         if (isStandaloneMode()) {
@@ -388,7 +396,8 @@ export async function resetInspectorSettings() {
         } else {
             await safeSendMessage({ type: 'RESET_SETTINGS' })
         }
-    } catch {
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] resetInspectorSettings save failed:', e)
         await saveToStorage()
     }
 }
@@ -402,7 +411,9 @@ export async function exportSettings(): Promise<string> {
                 try {
                     const blob = await getMediaBlob(sf.id)
                     if (blob) sf.dataUri = await blobToDataUri(blob)
-                } catch { /* ignore */ }
+                } catch (e) {
+                    console.error('[settings/useInspectorSettings] exportSettings getMediaBlob failed:', sf.id, e)
+                }
             }
         }
     } else {
@@ -420,6 +431,7 @@ export async function importSettings(json: string): Promise<void> {
         Object.assign(state, mergeSettings(defaultInspectorSettings, imported))
         await saveToStorage()
     } catch (error: any) {
+        console.error('[settings/useInspectorSettings] importSettings failed:', error)
         throw error
     }
 }

@@ -95,8 +95,8 @@ async function toggleFavorite() {
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
-  } catch {
-    // Ignore save errors
+  } catch (error) {
+    console.error('[stores/PiniaDetails] toggleFavorite save failed:', error)
   }
 }
 
@@ -181,7 +181,7 @@ async function loadStoreData() {
     const now = new Date()
     lastFetched.value = now.toISOString().replace('T', ' ').slice(0, 19)
   } catch (err) {
-    console.error('[PiniaDetails] Error loading store data:', err)
+    console.error('[stores/PiniaDetails] loadStoreData failed:', err)
     // Set empty objects to show "empty" state instead of loading
     stateData.value = {}
     gettersData.value = {}
@@ -200,7 +200,7 @@ function handlePiniaMessage(message: any) {
     if (message.success) {
       loadStoreData()
     } else {
-      console.warn('[PiniaDetails] Failed to replace state:', message.error)
+      console.error('[stores/PiniaDetails] Failed to replace state:', message.error)
     }
   }
   
@@ -208,7 +208,7 @@ function handlePiniaMessage(message: any) {
     if (message.success) {
       loadStoreData()
     } else {
-      console.warn('[PiniaDetails] Failed to patch getters:', message.error)
+      console.error('[stores/PiniaDetails] Failed to patch getters:', message.error)
     }
   }
 }
@@ -265,10 +265,10 @@ async function saveStateChanges() {
       stateData.value = newState
       isEditingState.value = false
     } else {
-      console.warn('[PiniaDetails] Failed to save state:', response?.error)
+      console.error('[stores/PiniaDetails] Failed to save state:', response?.error)
     }
   } catch (err) {
-    console.warn('[PiniaDetails] Error saving state:', err)
+    console.error('[stores/PiniaDetails] saveStateChanges failed:', err)
   }
 }
 
@@ -290,10 +290,10 @@ async function saveGettersChanges() {
       gettersData.value = newGetters
       isEditingGetters.value = false
     } else {
-      console.warn('[PiniaDetails] Failed to save getters:', response?.error)
+      console.error('[stores/PiniaDetails] Failed to save getters:', response?.error)
     }
   } catch (err) {
-    console.warn('[PiniaDetails] Error saving getters:', err)
+    console.error('[stores/PiniaDetails] saveGettersChanges failed:', err)
   }
 }
 
@@ -304,9 +304,13 @@ onMounted(async () => {
   unsubscribeMessage = runtime.onMessage(handlePiniaMessage)
 
   // Load settings (for favorites and JSON mode)
-  const loadedSettings = await useInspectorSettings()
-  settings.value = loadedSettings
-  jsonMode.value = loadedSettings?.json?.mode ?? 'text'
+  try {
+    const loadedSettings = await useInspectorSettings()
+    settings.value = loadedSettings
+    jsonMode.value = loadedSettings?.json?.mode ?? 'text'
+  } catch (error) {
+    console.error('[stores/PiniaDetails] useInspectorSettings failed:', error)
+  }
   
   // Load store data
   loadStoreData()

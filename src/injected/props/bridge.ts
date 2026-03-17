@@ -272,6 +272,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] UPDATE_PROPS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.UPDATE_PROPS_RESULT,
@@ -299,6 +300,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] GET_COMPONENT_PROPS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENT_PROPS_DATA,
@@ -323,6 +325,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] GET_COMPONENTS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENTS_DATA,
@@ -361,6 +364,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] SCAN_STRUCTURE failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.STRUCTURE_DATA,
@@ -384,6 +388,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] GET_COMPONENT_LIST failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENT_LIST_DATA,
@@ -407,6 +412,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] EXPAND_COMPONENT failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENT_PROPS_DATA,
@@ -430,6 +436,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] COLLAPSE_COMPONENT failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.UPDATE_PROPS_RESULT,
@@ -453,6 +460,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] SEARCH_COMPONENTS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.SEARCH_RESULTS,
@@ -475,6 +483,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] GET_EXPANDED_PROPS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.EXPANDED_PROPS_DATA,
@@ -487,18 +496,32 @@ function handleMessage(event: MessageEvent) {
 
   // Handle CHECK_VUE message
   if (event.source === window && event.data?.type === MESSAGE_TYPES.CHECK_VUE) {
-    const detected = isVueDetected()
-    const vueRoots = findVueRoots()
+    try {
+      const detected = isVueDetected()
+      const vueRoots = findVueRoots()
 
-    window.postMessage({
-      __FROM_VUE_INSPECTOR__: true,
-      type: MESSAGE_TYPES.VUE_DETECTED,
-      detected: detected,
-      url: window.location.href,
-      appCount: vueRoots.length,
-      hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
-      hasVue2: !!(window as any).__VUE__
-    }, '*')
+      window.postMessage({
+        __FROM_VUE_INSPECTOR__: true,
+        type: MESSAGE_TYPES.VUE_DETECTED,
+        detected: detected,
+        url: window.location.href,
+        appCount: vueRoots.length,
+        hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
+        hasVue2: !!(window as any).__VUE__
+      }, '*')
+    } catch (e) {
+      console.error('[injected/props/bridge] CHECK_VUE failed:', e)
+      window.postMessage({
+        __FROM_VUE_INSPECTOR__: true,
+        type: MESSAGE_TYPES.VUE_DETECTED,
+        detected: false,
+        url: window.location.href,
+        appCount: 0,
+        hasDevToolsHook: false,
+        hasVue2: false,
+        error: String(e)
+      }, '*')
+    }
     return
   }
 
@@ -526,17 +549,21 @@ export function initPropsBridge() {
   window.addEventListener('beforeunload', cleanupPropsBridge)
   window.addEventListener('pagehide', cleanupPropsBridge)
 
-  if (isVueDetected()) {
-    const vueRoots = findVueRoots()
-    window.postMessage({
-      __FROM_VUE_INSPECTOR__: true,
-      type: MESSAGE_TYPES.VUE_DETECTED,
-      detected: true,
-      url: window.location.href,
-      appCount: vueRoots.length,
-      hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
-      hasVue2: !!(window as any).__VUE__
-    }, '*')
+  try {
+    if (isVueDetected()) {
+      const vueRoots = findVueRoots()
+      window.postMessage({
+        __FROM_VUE_INSPECTOR__: true,
+        type: MESSAGE_TYPES.VUE_DETECTED,
+        detected: true,
+        url: window.location.href,
+        appCount: vueRoots.length,
+        hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
+        hasVue2: !!(window as any).__VUE__
+      }, '*')
+    }
+  } catch (e) {
+    console.error('[injected/props/bridge] initPropsBridge Vue detection failed:', e)
   }
 
   window.postMessage({

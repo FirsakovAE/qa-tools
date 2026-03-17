@@ -236,8 +236,12 @@ function updateFavoriteFlags() {
       }
       try {
         const settingsToSave = JSON.parse(JSON.stringify(settings.value))
-        runtime.storage.set('vue-inspector-settings', settingsToSave).catch(() => {})
-      } catch { /* ignore */ }
+        runtime.storage.set('vue-inspector-settings', settingsToSave).catch((error) => {
+          console.error('[props/PropsTab] Failed to save favorites nodeId:', error)
+        })
+      } catch (error) {
+        console.error('[props/PropsTab] updateFavoriteFlags JSON/save failed:', error)
+      }
     }
   } finally {
     updatingFavorites = false
@@ -251,7 +255,10 @@ function updateFavoriteFlags() {
 onMounted(async () => {
   try {
     settings.value = await useInspectorSettings()
-  } catch { /* use defaults */ }
+  } catch (error) {
+    console.error('[props/PropsTab] useInspectorSettings failed:', error)
+    /* use defaults */
+  }
 })
 
 // Sync favorite flags on any favorites mutation (add/remove from table,
@@ -282,7 +289,9 @@ if (storage?.onChanged) {
     if (changes[settingsKey]) {
       useInspectorSettings().then(newSettings => {
         settings.value = newSettings
-      }).catch(() => {})
+      }).catch((error) => {
+        console.error('[props/PropsTab] storageListener useInspectorSettings failed:', error)
+      })
     }
   }
   storage.onChanged.addListener(storageListener)
@@ -468,7 +477,8 @@ async function handleRefreshSelected() {
       jsonProps: JSON.stringify(freshProps, null, 2)
     }
     lastUpdated.value = formatDateTime(new Date())
-  } catch {
+  } catch (error) {
+    console.error('[props/PropsTab] handleRefreshSelected GET_COMPONENT_PROPS failed:', error)
     // Fallback: full refresh if single-component refresh fails
     await refresh()
     await nextTick()
@@ -493,8 +503,8 @@ async function ignoreByName(node: PropsRow) {
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
-  } catch {
-    // Ignore save errors
+  } catch (error) {
+    console.error('[props/PropsTab] ignoreByName save failed:', error)
   }
 }
 
@@ -532,8 +542,8 @@ async function toggleFavorite(node: PropsRow) {
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
-  } catch {
-    // Ignore save errors
+  } catch (error) {
+    console.error('[props/PropsTab] toggleFavorite save failed:', error)
   }
 }
 
@@ -554,7 +564,9 @@ async function unhighlightElements() {
       type: 'UNHIGHLIGHT_ELEMENT',
       tabId: tabs[0].id
     })
-  } catch { /* ignore */ }
+  } catch (error) {
+    console.error('[props/PropsTab] unhighlightElements failed:', error)
+  }
 }
 
 watch(searchTerm, val => {

@@ -67,7 +67,10 @@ const isLoadingStoreData = ref(false)
 onMounted(async () => {
   try {
     settings.value = await useInspectorSettings()
-  } catch { /* use defaults */ }
+  } catch (error) {
+    console.error('[stores/StoresTab] useInspectorSettings failed:', error)
+    /* use defaults */
+  }
 })
 
 // Search settings from inspector settings
@@ -129,7 +132,8 @@ async function loadStoresSummary() {
       if (pingResponse?.pong) {
         contentScriptReady = true
       }
-    } catch {
+    } catch (error) {
+      console.error('[stores/StoresTab] PING failed:', error)
       contentScriptReady = false
     }
 
@@ -175,6 +179,7 @@ async function loadStoresSummary() {
     }
 
   } catch (err: any) {
+    console.error('[stores/StoresTab] loadStoresSummary failed:', err)
     const errorMessage = err.message || 'Failed to load stores'
 
     if (errorMessage.includes('Could not establish connection') ||
@@ -217,8 +222,8 @@ async function loadAllStoresData() {
             store.getters = response.getters ?? {}
           }
         }
-      } catch {
-        // Ignore individual store errors
+      } catch (error) {
+        console.error('[stores/StoresTab] PINIA_GET_STORE_STATE failed for', store.id, error)
       }
     })
     
@@ -440,8 +445,8 @@ async function toggleFavorite(store: StoreEntry) {
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
-  } catch {
-    // Ignore save errors
+  } catch (error) {
+    console.error('[stores/StoresTab] toggleFavorite save failed:', error)
   }
 }
 

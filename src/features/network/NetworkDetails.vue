@@ -266,7 +266,7 @@ watch(
       copiedHeaderIndex.value = null
       copiedResponseHeaderIndex.value = null
       if (!props.breakpointMode) {
-        activeSection.value = 'headers'
+        activeSection.value = 'response'
       }
     }
   },

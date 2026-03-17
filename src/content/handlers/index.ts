@@ -100,11 +100,12 @@ export function setupRuntimeMessageListener(): void {
       try {
         return handler(message, sender, sendResponse) ?? true
       } catch (error) {
+        console.error('[content/handlers] Handler error for', message?.type, error)
         sendResponse({ success: false, error: String(error) })
         return true
       }
     })
-  } catch {
-    // Extension context not available
+  } catch (error) {
+    console.error('[content/handlers] Failed to setup runtime message listener:', error)
   }
 }

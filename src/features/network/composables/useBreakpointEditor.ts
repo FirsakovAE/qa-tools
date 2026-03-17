@@ -56,7 +56,8 @@ function formatJsonForEdit(text: string | undefined | null): string {
       return JSON.stringify(parsed, null, 2)
     }
     return text
-  } catch {
+  } catch (error) {
+    console.error('[network/useBreakpointEditor] formatJsonForEdit failed:', error)
     return text
   }
 }
@@ -85,7 +86,7 @@ export function useBreakpointEditor(options: UseBreakpointEditorOptions) {
   const editableResponseBody = ref<string>('')
 
   const initializedEntryId = ref<string | null>(null)
-  const activeSection = ref<'url' | 'params' | 'headers' | 'request' | 'response'>('headers')
+  const activeSection = ref<'url' | 'params' | 'headers' | 'request' | 'response'>('response')
 
   // Initialize editable data from DRAFT once when entering breakpoint mode
   watch(

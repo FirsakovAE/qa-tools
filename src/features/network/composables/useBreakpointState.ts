@@ -45,7 +45,8 @@ async function resolveFileIdsInRequestBody(body: string): Promise<string> {
       }
     }
     return changed ? JSON.stringify(parsed) : body
-  } catch {
+  } catch (error) {
+    console.error('[network/useBreakpointState] resolveFileIdsInRequestBody failed:', error)
     return body
   }
 }
