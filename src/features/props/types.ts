@@ -136,7 +136,7 @@ function buildElementSelector(
   return sel
 }
 
-function getElementInfo(node: TreeNodeModel): string {
+export function getElementInfo(node: TreeNodeModel): string {
   if (node.element) {
     if (node.element instanceof HTMLElement) {
       return buildElementSelector(

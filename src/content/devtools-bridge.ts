@@ -10,12 +10,10 @@
  *    DevTools panel reconnects to the new content script instance
  */
 
-import { runtimeHandlers } from './handlers'
-import { requestWindow, getExpectedResponseType } from './ipc'
+import { routeRequest, forwardInjectedBroadcast } from './message-router'
 import {
   injectedScriptLoaded,
   setInjectedScriptLoaded,
-  featureFlags,
   resetDetectionState
 } from './state'
 import { injectScript } from './script-injector'
@@ -52,30 +50,7 @@ export function setupDevtoolsBridge(): void {
         }
       }
 
-      // Network commands → forward to injected script, ack immediately
-      if (message.__NETWORK_CMD__) {
-        window.postMessage({
-          ...message,
-          __VUE_INSPECTOR__: true,
-          __NETWORK_CMD__: true
-        }, '*')
-        sendResponse({ success: true })
-        return
-      }
-
-      const handler = runtimeHandlers[message.type]
-
-      if (handler) {
-        try {
-          handler(message, {} as chrome.runtime.MessageSender, sendResponse)
-        } catch (error) {
-          sendResponse({ success: false, error: String(error) })
-        }
-      } else {
-        requestWindow(message, getExpectedResponseType(message.type), 5000)
-          .then(sendResponse)
-          .catch((err: Error) => sendResponse({ error: err.message }))
-      }
+      routeRequest(message, sendResponse, '[content/devtools-bridge]')
     })
 
     // Forward broadcasts from injected script to DevTools panel
@@ -83,53 +58,13 @@ export function setupDevtoolsBridge(): void {
       const data = event.data
       if (!data || typeof data !== 'object') return
 
-      // Network events from injected script
-      if (data.__FROM_VUE_INSPECTOR__ && data.__NETWORK__) {
+      forwardInjectedBroadcast(data, (msg) => {
         try {
-          port.postMessage({ broadcast: true, message: data })
+          port.postMessage(msg)
         } catch (error) {
-          console.error('[content/devtools-bridge] port.postMessage (network) failed:', error)
+          console.error('[content/devtools-bridge] port.postMessage (broadcast) failed:', error)
         }
-        return
-      }
-
-      // Detection results → send feature flags broadcast
-      if (data.__FROM_VUE_INSPECTOR__ && data.type === 'VUE_INSPECTOR_DETECTION_RESULT') {
-        try {
-          port.postMessage({
-            broadcast: true,
-            message: {
-              type: 'VUE_INSPECTOR_FEATURE_FLAGS',
-              flags: featureFlags
-            }
-          })
-        } catch (error) {
-          console.error('[content/devtools-bridge] port.postMessage (detection) failed:', error)
-        }
-        return
-      }
-
-      // Props/Pinia ready → send both formats
-      if (data.__FROM_VUE_INSPECTOR__ && (
-        data.type === 'VUE_INSPECTOR_PROPS_READY' ||
-        data.type === 'VUE_INSPECTOR_PINIA_READY'
-      )) {
-        try {
-          port.postMessage({
-            broadcast: true,
-            message: {
-              type: 'VUE_INSPECTOR_FEATURE_FLAGS',
-              flags: featureFlags
-            }
-          })
-          port.postMessage({
-            broadcast: true,
-            message: data
-          })
-        } catch (error) {
-          console.error('[content/devtools-bridge] port.postMessage (props/pinia) failed:', error)
-        }
-      }
+      })
     }
     window.addEventListener('message', broadcastListener)
 

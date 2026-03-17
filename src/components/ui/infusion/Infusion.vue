@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, type CSSProperties } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted, type CSSProperties } from 'vue';
+import { useResizeInProgress } from '@/composables/useResizeInProgress';
 
 interface Props {
   src: string;
@@ -49,38 +50,33 @@ const imageStyle = computed(() => ({
   'mixBlendMode': props.blendMode,
 }));
 
-const noiseDataUrl = computed(() => {
-  if (props.noiseIntensity === 0) {
-    return '';
+// Static noise — cached once on mount to avoid recomputation on every reactive update
+const noiseDataUrl = ref('')
+
+onMounted(() => {
+  if (props.noiseIntensity > 0 && typeof document !== 'undefined') {
+    const canvas = document.createElement('canvas')
+    canvas.width = 256
+    canvas.height = 256
+    const context = canvas.getContext('2d')
+
+    if (context) {
+      const imageData = context.createImageData(canvas.width, canvas.height)
+      const data = imageData.data
+
+      for (let index = 0; index < data.length; index += 4) {
+        const value = Math.random() * 255
+        data[index] = value
+        data[index + 1] = value
+        data[index + 2] = value
+        data[index + 3] = props.noiseIntensity * 255
+      }
+
+      context.putImageData(imageData, 0, 0)
+      noiseDataUrl.value = canvas.toDataURL()
+    }
   }
-
-  if (typeof document === 'undefined') {
-    return '';
-  }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const context = canvas.getContext('2d');
-
-  if (!context) {
-    return '';
-  }
-
-  const imageData = context.createImageData(canvas.width, canvas.height);
-  const data = imageData.data;
-
-  for (let index = 0; index < data.length; index += 4) {
-    const value = Math.random() * 255;
-    data[index] = value;
-    data[index + 1] = value;
-    data[index + 2] = value;
-    data[index + 3] = props.noiseIntensity * 255;
-  }
-
-  context.putImageData(imageData, 0, 0);
-  return canvas.toDataURL();
-});
+})
 
 const containerClass = computed(() => [
   'top-0 left-0 overflow-hidden pointer-events-none z-(--infusion-z-index)',
@@ -98,6 +94,40 @@ const mediaStyle = computed(() => ({
 }));
 
 const noiseClass = 'absolute top-0 left-0 w-full h-full bg-repeat mix-blend-overlay';
+
+// Page Visibility API + resize detection — pause video when tab hidden or resizing to reduce CPU/GPU load
+const videoRef = ref<HTMLVideoElement | null>(null)
+const { isResizing } = useResizeInProgress()
+
+function shouldPauseVideo() {
+  return document.hidden || isResizing.value
+}
+
+function updateVideoPlayback() {
+  const video = videoRef.value
+  if (shouldPauseVideo()) {
+    video?.pause()
+  } else {
+    video?.play().catch(() => {})
+  }
+}
+
+watch(() => props.type, (type) => {
+  if (type === 'video') {
+    document.addEventListener('visibilitychange', updateVideoPlayback)
+    updateVideoPlayback() // sync initial state
+  } else {
+    document.removeEventListener('visibilitychange', updateVideoPlayback)
+  }
+}, { immediate: true })
+
+watch(isResizing, () => {
+  if (props.type === 'video') updateVideoPlayback()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', updateVideoPlayback)
+})
 </script>
 
 <template>
@@ -117,12 +147,14 @@ const noiseClass = 'absolute top-0 left-0 w-full h-full bg-repeat mix-blend-over
     >
     <video
       v-if="props.type === 'video'"
+      ref="videoRef"
       :class="mediaClass"
       :src="props.src"
       :style="{
         ...mediaStyle,
         filter: `blur(var(--infusion-blur))`,
       }"
+      preload="metadata"
       autoplay
       loop
       muted

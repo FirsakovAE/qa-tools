@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick, onUnmounted, defineAsyncComponent } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { ArrowLeft, Copy, Check, Send, MoreHorizontal } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
@@ -38,17 +39,22 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
 import { NetworkActionsMenuContent } from '@/components/NetworkActionsMenu'
-import JsonEditor from '@/components/JsonEditor.vue'
+
+/** Lazy load JsonEditor (Prism, tree) - only when user opens Request/Response tab */
+const JsonEditor = defineAsyncComponent({
+  loader: () => import('@/components/JsonEditor.vue'),
+  loadingComponent: {
+    template: '<div class="flex items-center justify-center h-full text-sm text-muted-foreground">Loading...</div>'
+  },
+  delay: 100
+})
 import type { NetworkEntry } from '@/types/network'
 import { getStatusCategory, formatBytes, formatDuration } from '@/types/network'
 import { copyToClipboard } from '@/utils/networkUtils'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
-import type { BaseInspectorSettings, BreakpointItem, MockRule } from '@/types/inspector'
+import type { BaseInspectorSettings, BreakpointWithStatus, MockWithStatus } from '@/types/inspector'
 import { formatBodyForDisplay, detectLanguage } from './utils'
-
-type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
-type MockWithStatus = MockRule & { isActive: boolean }
 import {
   useBreakpointEditor,
   useFormDataEditor,
@@ -138,7 +144,7 @@ const {
 // Local UI state
 // ============================================================================
 
-const settings = ref<BaseInspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
 const jsonMode = ref<'text' | 'tree'>('text')
 const copiedHeaderIndex = ref<number | null>(null)
 const copiedResponseHeaderIndex = ref<number | null>(null)
@@ -153,17 +159,19 @@ function checkUrlTruncation() {
   isUrlTruncated.value = urlRef.value.scrollWidth > urlRef.value.clientWidth
 }
 
+const debouncedCheckUrlTruncation = useDebounceFn(checkUrlTruncation, 50)
+
 let urlResizeObserver: ResizeObserver | null = null
 
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-    jsonMode.value = settings.value?.json?.mode ?? 'text'
-  } catch { /* use defaults */ }
+watch(settings, (s) => {
+  if (s) jsonMode.value = s.json?.mode ?? 'text'
+}, { immediate: true })
+
+onMounted(() => {
   nextTick(() => {
     checkUrlTruncation()
     if (urlContainerRef.value) {
-      urlResizeObserver = new ResizeObserver(() => checkUrlTruncation())
+      urlResizeObserver = new ResizeObserver(() => debouncedCheckUrlTruncation())
       urlResizeObserver.observe(urlContainerRef.value)
     }
   })

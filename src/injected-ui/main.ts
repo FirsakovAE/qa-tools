@@ -23,6 +23,7 @@ function initRuntime() {
     if (params.get('devtools') === '1') {
       const tabId = Number(params.get('tabId'))
       if (tabId) {
+        document.documentElement.setAttribute('data-devtools', 'true')
         const adapter = createDevtoolsAdapter(tabId)
         setRuntimeAdapter(adapter)
         useDevtoolsSearch()

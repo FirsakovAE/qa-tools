@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/tooltip'
 import PiniaTable from './PiniaTable.vue'
 import PiniaDetails from './PiniaDetails.vue'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
+import { useSearchSettings } from '@/composables/useSearchSettings'
 import { useRuntime } from '@/runtime'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import { deepSearchKey, deepSearchValue } from '@/features/props'
@@ -54,56 +55,25 @@ const lastUpdated = ref<string>('')
 
 // Search state
 const searchTerm = ref('')
-const settings = ref<InspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
+
+const {
+  searchSettings,
+  selectedSearchTypes,
+  searchTypeOptions: piniaSearchTypeOptions
+} = useSearchSettings({
+  settings,
+  searchKey: 'piniaSearch',
+  typeMap: {
+    'Name': 'byName',
+    'Key': 'byKey',
+    'Value': 'byValue',
+  }
+})
 
 // Track which stores have their data loaded (for key/value search)
 const storesDataLoaded = ref(false)
 const isLoadingStoreData = ref(false)
-
-// ============================================================================
-// Settings
-// ============================================================================
-
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-  } catch (error) {
-    console.error('[stores/StoresTab] useInspectorSettings failed:', error)
-    /* use defaults */
-  }
-})
-
-// Search settings from inspector settings
-const searchSettings = computed(() => ({
-  byName: settings.value?.piniaSearch?.byName ?? true,
-  byKey: settings.value?.piniaSearch?.byKey ?? false,
-  byValue: settings.value?.piniaSearch?.byValue ?? false,
-  debounce: settings.value?.searchParams?.debounce ?? 300,
-  minLength: settings.value?.searchParams?.minLength ?? 2
-}))
-
-// Search type options for FacetedFilter
-type PiniaSearchKey = 'byName' | 'byKey' | 'byValue'
-const piniaSearchTypeMap: Record<string, PiniaSearchKey> = {
-  'Name': 'byName',
-  'Key': 'byKey',
-  'Value': 'byValue',
-}
-const piniaSearchTypeOptions = Object.keys(piniaSearchTypeMap)
-
-const selectedSearchTypes = computed<string[]>({
-  get() {
-    if (!settings.value?.piniaSearch) return []
-    return piniaSearchTypeOptions.filter(label => settings.value!.piniaSearch[piniaSearchTypeMap[label]] as boolean)
-  },
-  set(selected: string[]) {
-    if (!settings.value?.piniaSearch) return
-    for (const label of piniaSearchTypeOptions) {
-      const key = piniaSearchTypeMap[label]
-      ;(settings.value.piniaSearch as any)[key] = selected.includes(label)
-    }
-  }
-})
 
 // ============================================================================
 // Data loading
@@ -374,15 +344,6 @@ const sortedEntries = computed(() => {
     if (!aFav && bFav) return 1
     return 0
   })
-})
-
-// Active search types for badges
-const activeSearchTypes = computed(() => {
-  const types: string[] = []
-  if (searchSettings.value.byName) types.push('Name')
-  if (searchSettings.value.byKey) types.push('Key')
-  if (searchSettings.value.byValue) types.push('Value')
-  return types
 })
 
 // ============================================================================

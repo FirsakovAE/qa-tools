@@ -68,6 +68,7 @@ export class DevtoolsAdapter implements RuntimeAdapter {
   private destroyed = false
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private hasConnectedOnce = false
+  private portDisconnected = false
 
   constructor(private tabId: number) {
     this.portMessageHandler = this.handlePortMessage.bind(this)
@@ -75,6 +76,7 @@ export class DevtoolsAdapter implements RuntimeAdapter {
   }
 
   private connect(): void {
+    this.portDisconnected = false
     try {
       this.port = chrome.tabs.connect(this.tabId, { name: 'devtools' })
     } catch (e) {
@@ -90,6 +92,7 @@ export class DevtoolsAdapter implements RuntimeAdapter {
 
     this.port.onDisconnect.addListener(() => {
       void chrome.runtime.lastError
+      this.portDisconnected = true
       for (const { timeout, reject } of this.pendingRequests.values()) {
         clearTimeout(timeout)
         reject(new Error('Port disconnected'))
@@ -173,6 +176,10 @@ export class DevtoolsAdapter implements RuntimeAdapter {
     return new Promise((resolve, reject) => {
       if (this.destroyed) {
         reject(new Error('Adapter destroyed'))
+        return
+      }
+      if (this.portDisconnected) {
+        reject(new Error('Port disconnected'))
         return
       }
 

@@ -7,6 +7,21 @@ import { requestWindow } from '../ipc'
 import { featureFlags, detectionCompleted } from '../state'
 import { collectVueComponentsFromDOM } from '../utils'
 
+// Inline check - content script cannot use ES modules (no import from shared chunks)
+function isExpectedExtensionError(e: unknown): boolean {
+  const msg = String((e as Error)?.message ?? '')
+  return (
+    msg.includes('Receiving end does not exist') ||
+    msg.includes('Could not establish connection') ||
+    msg.includes('Extension context invalidated') ||
+    msg.includes('disconnected port') ||
+    msg.includes('Attempting to use a disconnected port') ||
+    msg.includes('Port disconnected') ||
+    msg === 'Timeout' ||
+    msg.includes('Message timeout')
+  )
+}
+
 /**
  * PING handler - responds with ready status
  */
@@ -94,7 +109,9 @@ export const handleCollectVueComponents: RuntimeHandler = (message, sender, send
       sendResponse({ components: response.components || [] })
     })
     .catch((err) => {
-      console.error('[content/handlers/core] requestWindow for components failed:', err)
+      if (!isExpectedExtensionError(err)) {
+        console.error('[content/handlers/core] requestWindow for components failed:', err)
+      }
       // Try to get components directly from DOM as fallback
       try {
         const components = collectVueComponentsFromDOM()

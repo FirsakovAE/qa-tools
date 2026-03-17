@@ -1,4 +1,4 @@
-import { reactive, watch, toRaw } from 'vue'
+import { reactive, ref, watch, toRaw, onMounted, type Ref } from 'vue'
 import { defaultInspectorSettings, type InspectorSettings } from '@/settings/inspectorSettings'
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
@@ -368,6 +368,20 @@ watch(
 function handleBeforeUnload() {
     if (saveTimeout) clearTimeout(saveTimeout)
     saveToStorage()
+}
+
+/**
+ * Composable that loads settings on mount and returns a ref.
+ * Use in components that need settings in a ref for reactive access.
+ */
+export function useInspectorSettingsSync(): Ref<InspectorSettings | null> {
+  const settings = ref<InspectorSettings | null>(null)
+  onMounted(async () => {
+    try {
+      settings.value = await useInspectorSettings()
+    } catch { /* use defaults */ }
+  })
+  return settings
 }
 
 // Основная функция

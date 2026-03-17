@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useElementSize } from '@vueuse/core'
 import {
   Table,
@@ -12,7 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Star, StarOff, MoreHorizontal } from 'lucide-vue-next'
+import { Star, MoreHorizontal } from 'lucide-vue-next'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -24,7 +24,7 @@ import {
 import { PiniaTableActionsMenuContent } from '@/components/PiniaTableActionsMenu'
 import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { defaultInspectorSettings } from '@/settings/inspectorSettings'
 import type { PiniaFavoriteItem, PiniaTableColumnsSettings } from '@/types/inspector'
 import { isStoreInFavorites } from '@/utils/piniaFavoritesMatcher'
@@ -76,7 +76,7 @@ const handleRowClick = (store: StoreEntry) => {
 }
 
 // Column visibility from settings
-const settings = ref<Awaited<ReturnType<typeof useInspectorSettings>> | null>(null)
+const settings = useInspectorSettingsSync()
 const columns = computed(() => {
   const cols = settings.value?.piniaTableColumns ?? defaultInspectorSettings.piniaTableColumns
   return cols ?? { name: true, state: true, getters: true }
@@ -90,13 +90,6 @@ function setColumn(key: keyof PiniaTableColumnsSettings, value: boolean) {
   settings.value.piniaTableColumns[key] = value
 }
 
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-  } catch (error) {
-    console.error('[stores/PiniaTable] useInspectorSettings failed:', error)
-  }
-})
 
 const piniaColumnDefs = [
   { key: 'state', label: 'State' },
@@ -142,8 +135,12 @@ const skeletonRowCount = computed(() => {
         </Table>
       </div>
       
-      <ScrollArea class="flex-1 min-h-0">
-        <Table no-scroll>
+      <ScrollArea class="flex-1 min-h-0 pinia-scroll-area">
+        <div class="pinia-scroll-content">
+        <div v-if="entries.length === 0 && !isLoading" class="pinia-empty-container">
+          No stores found
+        </div>
+        <Table v-else no-scroll>
         <TableBody>
           <ContextMenu v-for="store in entries" :key="store.id">
             <ContextMenuTrigger as-child>
@@ -243,13 +240,9 @@ const skeletonRowCount = computed(() => {
               </TableCell>
             </TableRow>
           </template>
-          <TableRow v-else-if="entries.length === 0">
-            <TableCell :colspan="3 + (columns.state ? 1 : 0) + (columns.getters ? 1 : 0)" class="h-32 text-center text-muted-foreground">
-              No stores found
-            </TableCell>
-          </TableRow>
         </TableBody>
       </Table>
+        </div>
       </ScrollArea>
     </div>
   </div>
@@ -259,10 +252,6 @@ const skeletonRowCount = computed(() => {
 .table-scroll-x {
   overflow-x: auto;
   overflow-y: hidden;
-}
-
-/* Uikit-style scrollbar for horizontal scroll */
-.table-scroll-x {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
@@ -303,6 +292,28 @@ const skeletonRowCount = computed(() => {
 
 .pinia-cell-actions {
   text-align: center;
+}
+
+/* Ensure ScrollArea viewport and content fill height so empty state can center */
+.pinia-scroll-area :deep([data-reka-scroll-area-viewport]),
+.pinia-scroll-area :deep([data-reka-scroll-area-viewport] > *) {
+  height: 100%;
+}
+
+/* Scroll content wrapper - fills viewport for empty state centering */
+.pinia-scroll-content {
+  position: relative;
+  min-height: 100%;
+}
+
+/* Empty state: fills container, centered in the middle */
+.pinia-empty-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
 }
 
 /* Star button - hidden for non-favorites, visible for favorites */

@@ -105,6 +105,12 @@ export interface MockRule {
     description?: string
 }
 
+/** Breakpoint with active/inactive status for UI display */
+export type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
+
+/** Mock rule with active/inactive status for UI display */
+export type MockWithStatus = MockRule & { isActive: boolean }
+
 export interface SearchIndexEntry {
     storeId: string
     baseId: string

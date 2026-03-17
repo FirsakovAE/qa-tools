@@ -2,29 +2,12 @@
 import { computed, ref } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { FavoriteItem } from '@/types/inspector'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu'
-import {
-  ContextMenu,
-  ContextMenuTrigger,
-} from '@/components/ui/ContextMenu'
-import { OptionsItemActionsMenuContent, type MenuAction } from '@/components/OptionsItemActionsMenu'
-import { MoreHorizontal, Power, Trash } from 'lucide-vue-next'
+import { TableCell } from '@/components/ui/table'
+import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
+import SettingsTableSection from '../components/SettingsTableSection.vue'
+import type { TableColumn } from '../components/SettingsTableSection.vue'
+import type { MenuAction } from '@/components/OptionsItemActionsMenu'
+import { Power, Trash } from 'lucide-vue-next'
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -61,6 +44,11 @@ const blacklistRows = computed<BlacklistRow[]>(() => {
     ...props.settings.blacklist.inactive.map(name => ({ name, active: false })),
   ]
 })
+
+const blacklistColumns: TableColumn[] = [
+  { header: 'Component Name' },
+  { header: 'Status', width: '70px', class: 'text-center' },
+]
 
 function addToBlacklist() {
   const value = newBlockedName.value.trim()
@@ -102,6 +90,11 @@ function getBlacklistActions(row: BlacklistRow): MenuAction[] {
 // -------------------- FAVORITES --------------------
 const favoritesList = computed<FavoriteItem[]>(() => props.settings.favorites || [])
 
+const favoritesColumns: TableColumn[] = [
+  { header: 'Component' },
+  { header: 'Added', width: '80px', class: 'text-center' },
+]
+
 function removeFromFavorites(id: string) {
   props.settings.favorites = props.settings.favorites.filter(f => f.id !== id)
 }
@@ -111,306 +104,70 @@ function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
     { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructive: true },
   ]
 }
-
-const blacklistTableHeight = computed(() => {
-  const rowCount = Math.max(blacklistRows.value.length, 1)
-  return Math.min(rowCount * 41, 205)
-})
-const blacklistNeedsScroll = computed(() => blacklistRows.value.length > 4)
-
-const favoritesTableHeight = computed(() => {
-  const rowCount = Math.max(favoritesList.value.length, 1)
-  return Math.min(rowCount * 41, 205)
-})
-const favoritesNeedsScroll = computed(() => favoritesList.value.length > 4)
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- Search Settings -->
-    <div class="space-y-3">
-      <h4 class="text-sm font-semibold">Search Settings</h4>
-      <div class="grid grid-cols-1 gap-2">
-        <div v-for="item in searchItems" :key="item.key" class="flex items-center space-x-3">
-          <Checkbox
-            :id="`props-search-${item.key}`"
-            :model-value="settings.propsSearch[item.key]"
-            @update:model-value="toggleSearch(item.key)"
-          />
-          <Label :for="`props-search-${item.key}`" class="text-sm">
-            {{ item.label }}
-          </Label>
-        </div>
-      </div>
-    </div>
+    <SearchSettingsBlock
+      :search-settings="settings.propsSearch as unknown as Record<string, boolean>"
+      :search-items="searchItems"
+      id-prefix="props-search"
+      @toggle="(k) => toggleSearch(k as SearchKey)"
+    />
 
-    <!-- Component Blacklist -->
-    <div class="space-y-2 border-t pt-4">
-      <h4 class="text-sm font-semibold">Component Blacklist</h4>
+    <SettingsTableSection
+      title="Component Blacklist"
+      :columns="blacklistColumns"
+      :rows="blacklistRows"
+      :row-key="(r) => (r as BlacklistRow).name"
+      :get-actions="(row) => getBlacklistActions(row as BlacklistRow)"
+      empty-message="No components in blacklist"
+      :selected-item-id="selectedItemId"
+      show-add
+      add-placeholder="Component name (supports wildcards: *Comp*)"
+      v-model:add-model-value="newBlockedName"
+      :add-error="blacklistError"
+      @add="addToBlacklist"
+      @select="(row) => emit('select', { type: 'blacklist', id: (row as BlacklistRow).name })"
+    >
+      <template #row="{ row }">
+        <TableCell class="overflow-hidden !py-2">
+          <div :class="!(row as BlacklistRow).active ? 'opacity-50' : ''" class="font-mono text-sm truncate">
+            {{ (row as BlacklistRow).name }}
+          </div>
+        </TableCell>
+        <TableCell class="w-[70px] text-center !py-2">
+          <div :class="!(row as BlacklistRow).active ? 'opacity-50' : ''" class="text-xs">
+            {{ (row as BlacklistRow).active ? 'Blocked' : 'Allowed' }}
+          </div>
+        </TableCell>
+      </template>
+    </SettingsTableSection>
 
-      <div class="flex gap-2">
-        <Input
-          v-model="newBlockedName"
-          placeholder="Component name (supports wildcards: *Comp*)"
-          @keydown.enter.prevent="addToBlacklist"
-          :aria-invalid="!!blacklistError"
-          class="flex-1 h-8"
-        />
-        <Button size="sm" @click="addToBlacklist" class="h-8">Add</Button>
-      </div>
-
-      <p v-if="blacklistError" class="text-sm text-destructive_text">{{ blacklistError }}</p>
-
-      <div class="flex flex-col border rounded-lg overflow-hidden">
-        <!-- Fixed Header -->
-        <div class="shrink-0 border-b bg-muted/30">
-          <Table class="table-fixed">
-            <TableHeader class="[&_th]:h-10">
-              <TableRow class="hover:bg-transparent">
-                <TableHead class="text-xs font-semibold">Component Name</TableHead>
-                <TableHead class="text-xs font-semibold w-[70px] text-center">Status</TableHead>
-                <TableHead class="w-[48px] text-center p-0" />
-              </TableRow>
-            </TableHeader>
-          </Table>
-        </div>
-
-        <!-- Scrollable Body -->
-        <div class="min-h-0 max-h-[205px] overflow-hidden">
-          <template v-if="blacklistNeedsScroll">
-            <ScrollArea :style="{ height: `${blacklistTableHeight}px` }">
-              <Table class="table-fixed">
-                <TableBody>
-                  <ContextMenu v-for="row in blacklistRows" :key="row.name">
-                    <ContextMenuTrigger as-child>
-                      <TableRow
-                        class="h-[41px] cursor-pointer transition-colors"
-                        :class="{ 'bg-muted': selectedItemId === row.name }"
-                        @click="emit('select', { type: 'blacklist', id: row.name })"
-                      >
-                        <TableCell class="overflow-hidden !py-2">
-                          <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm truncate">
-                            {{ row.name }}
-                          </div>
-                        </TableCell>
-                        <TableCell class="w-[70px] text-center !py-2">
-                          <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
-                            {{ row.active ? 'Blocked' : 'Allowed' }}
-                          </div>
-                        </TableCell>
-                        <TableCell class="w-[48px] text-center p-0">
-                          <div class="flex justify-center items-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger as-child>
-                                <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                                  <MoreHorizontal class="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <OptionsItemActionsMenuContent
-                                variant="dropdown"
-                                :actions="getBlacklistActions(row)"
-                              />
-                          </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    </ContextMenuTrigger>
-                    <OptionsItemActionsMenuContent
-                      variant="context"
-                      :actions="getBlacklistActions(row)"
-                    />
-                  </ContextMenu>
-
-                  <TableRow v-if="!blacklistRows.length">
-                    <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                      No components in blacklist
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </template>
-          <template v-else>
-            <Table class="table-fixed">
-              <TableBody>
-                <ContextMenu v-for="row in blacklistRows" :key="row.name">
-                  <ContextMenuTrigger as-child>
-                    <TableRow
-                      class="h-[41px] cursor-pointer transition-colors"
-                      :class="{ 'bg-muted': selectedItemId === row.name }"
-                      @click="emit('select', { type: 'blacklist', id: row.name })"
-                    >
-                      <TableCell class="overflow-hidden !py-2">
-                        <div :class="!row.active ? 'opacity-50' : ''" class="font-mono text-sm truncate">
-                          {{ row.name }}
-                        </div>
-                      </TableCell>
-                      <TableCell class="w-[70px] text-center !py-2">
-                        <div :class="!row.active ? 'opacity-50' : ''" class="text-xs">
-                          {{ row.active ? 'Blocked' : 'Allowed' }}
-                        </div>
-                      </TableCell>
-                      <TableCell class="w-[48px] text-center p-0">
-                        <div class="flex justify-center items-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger as-child>
-                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                                <MoreHorizontal class="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <OptionsItemActionsMenuContent
-                              variant="dropdown"
-                              :actions="getBlacklistActions(row)"
-                            />
-                        </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  </ContextMenuTrigger>
-                  <OptionsItemActionsMenuContent
-                    variant="context"
-                    :actions="getBlacklistActions(row)"
-                  />
-                </ContextMenu>
-                <TableRow v-if="!blacklistRows.length">
-                  <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                    No components in blacklist
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </template>
-        </div>
-      </div>
-    </div>
-
-    <!-- Favorite Components -->
-    <div id="favorites-section" class="space-y-2 border-t pt-4">
-      <h4 class="text-sm font-semibold">Favorite Components</h4>
-
-      <div class="flex flex-col border rounded-lg overflow-hidden">
-        <!-- Fixed Header -->
-        <div class="shrink-0 border-b bg-muted/30">
-          <Table class="table-fixed">
-            <TableHeader class="[&_th]:h-10">
-              <TableRow class="hover:bg-transparent">
-                <TableHead class="text-xs font-semibold">Component</TableHead>
-                <TableHead class="text-xs font-semibold w-[80px] text-center">Added</TableHead>
-                <TableHead class="w-[48px] text-center p-0" />
-              </TableRow>
-            </TableHeader>
-          </Table>
-        </div>
-
-        <!-- Scrollable Body -->
-        <div class="min-h-0 max-h-[205px] overflow-hidden">
-          <template v-if="favoritesNeedsScroll">
-            <ScrollArea :style="{ height: `${favoritesTableHeight}px` }">
-              <Table class="table-fixed">
-                <TableBody>
-                  <ContextMenu v-for="fav in favoritesList" :key="fav.id">
-                    <ContextMenuTrigger as-child>
-                      <TableRow
-                        class="h-[41px] cursor-pointer transition-colors"
-                        :class="{ 'bg-muted': selectedItemId === fav.id }"
-                        @click="emit('select', { type: 'favorite', id: fav.id })"
-                      >
-                        <TableCell class="overflow-hidden !py-2">
-                          <div class="font-mono text-sm truncate">{{ fav.name }}</div>
-                          <div class="text-xs text-muted-foreground mt-0.5 font-mono truncate">
-                            {{ fav.tagName }}{{ fav.className ? '.' + fav.className : '' }}
-                          </div>
-                        </TableCell>
-                        <TableCell class="w-[80px] text-center !py-2">
-                          <div class="text-xs text-muted-foreground">
-                            {{ new Date(fav.timestamp).toLocaleDateString() }}
-                          </div>
-                        </TableCell>
-                        <TableCell class="w-[48px] text-center p-0">
-                          <div class="flex justify-center items-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger as-child>
-                                <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                                  <MoreHorizontal class="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <OptionsItemActionsMenuContent
-                                variant="dropdown"
-                                :actions="getFavoritesActions(fav)"
-                              />
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    </ContextMenuTrigger>
-                    <OptionsItemActionsMenuContent
-                      variant="context"
-                      :actions="getFavoritesActions(fav)"
-                    />
-                  </ContextMenu>
-
-                  <TableRow v-if="!favoritesList.length">
-                    <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                      No favorite components
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </template>
-          <template v-else>
-            <Table class="table-fixed">
-              <TableBody>
-                <ContextMenu v-for="fav in favoritesList" :key="fav.id">
-                  <ContextMenuTrigger as-child>
-                    <TableRow
-                      class="h-[41px] cursor-pointer transition-colors"
-                      :class="{ 'bg-muted': selectedItemId === fav.id }"
-                      @click="emit('select', { type: 'favorite', id: fav.id })"
-                    >
-                      <TableCell class="overflow-hidden !py-2">
-                        <div class="font-mono text-sm truncate">{{ fav.name }}</div>
-                        <div class="text-xs text-muted-foreground mt-0.5 font-mono truncate">
-                          {{ fav.tagName }}{{ fav.className ? '.' + fav.className : '' }}
-                        </div>
-                      </TableCell>
-                      <TableCell class="w-[80px] text-center !py-2">
-                        <div class="text-xs text-muted-foreground">
-                          {{ new Date(fav.timestamp).toLocaleDateString() }}
-                        </div>
-                      </TableCell>
-                      <TableCell class="w-[48px] text-center p-0">
-                        <div class="flex justify-center items-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger as-child>
-                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                                <MoreHorizontal class="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <OptionsItemActionsMenuContent
-                              variant="dropdown"
-                              :actions="getFavoritesActions(fav)"
-                            />
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    </ContextMenuTrigger>
-                    <OptionsItemActionsMenuContent
-                      variant="context"
-                      :actions="getFavoritesActions(fav)"
-                    />
-                  </ContextMenu>
-                  <TableRow v-if="!favoritesList.length">
-                  <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                    No favorite components
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </template>
-        </div>
-      </div>
-    </div>
+    <SettingsTableSection
+      section-id="favorites-section"
+      title="Favorite Components"
+      :columns="favoritesColumns"
+      :rows="favoritesList"
+      :row-key="(r) => (r as FavoriteItem).id"
+      :get-actions="(row) => getFavoritesActions(row as FavoriteItem)"
+      empty-message="No favorite components"
+      :selected-item-id="selectedItemId"
+      @select="(row) => emit('select', { type: 'favorite', id: (row as FavoriteItem).id })"
+    >
+      <template #row="{ row }">
+        <TableCell class="overflow-hidden !py-2">
+          <div class="font-mono text-sm truncate">{{ (row as FavoriteItem).name }}</div>
+          <div class="text-xs text-muted-foreground mt-0.5 font-mono truncate">
+            {{ (row as FavoriteItem).tagName }}{{ (row as FavoriteItem).className ? '.' + (row as FavoriteItem).className : '' }}
+          </div>
+        </TableCell>
+        <TableCell class="w-[80px] text-center !py-2">
+          <div class="text-xs text-muted-foreground">
+            {{ new Date((row as FavoriteItem).timestamp).toLocaleDateString() }}
+          </div>
+        </TableCell>
+      </template>
+    </SettingsTableSection>
   </div>
 </template>

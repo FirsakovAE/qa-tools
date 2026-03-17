@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useElementSize } from '@vueuse/core'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +16,7 @@ import {
 import { PropsTableActionsMenuContent } from '@/components/PropsTableActionsMenu'
 import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { defaultInspectorSettings } from '@/settings/inspectorSettings'
 import type { PropsTableColumnsSettings } from '@/types/inspector'
 import type { PropsRow } from './types'
@@ -31,7 +31,7 @@ const props = defineProps<{
 }>()
 
 // Column visibility from settings
-const settings = ref<Awaited<ReturnType<typeof useInspectorSettings>> | null>(null)
+const settings = useInspectorSettingsSync()
 const columns = computed(() => {
   const cols = settings.value?.propsTableColumns ?? defaultInspectorSettings.propsTableColumns
   return cols ?? { name: true, rootElement: true, props: true }
@@ -45,13 +45,6 @@ function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
   settings.value.propsTableColumns[key] = value
 }
 
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-  } catch (error) {
-    console.error('[props/PropsTable] useInspectorSettings failed:', error)
-  }
-})
 
 const propsColumnDefs = [
   { key: 'rootElement', label: 'Root Element' },
@@ -217,7 +210,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
       :item-size="40"
       min-width="360px"
       empty-message="No components found"
-      :show-empty="false"
+      :is-loading="isLoading"
       @mouseleave="onScrollerLeave"
     >
       <template #header>
@@ -335,9 +328,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               <Skeleton class="h-6 w-6 rounded mx-auto" />
             </div>
           </div>
-        </div>
-        <div v-else-if="rows.length === 0" class="h-32 flex items-center justify-center text-muted-foreground">
-          No components found
         </div>
       </template>
     </VirtualTable>

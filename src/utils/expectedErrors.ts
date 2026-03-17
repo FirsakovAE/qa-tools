@@ -1,7 +1,7 @@
 /**
- * Expected errors that occur in normal operation and should not be logged.
- * - Extension/port: popup closed, page reloaded, extension updated
- * - Cross-origin: iframe cannot access parent when origins differ
+ * Expected extension errors that occur during normal operation
+ * (e.g. page refresh, tab close, port disconnection).
+ * These should not be logged to console.
  */
 export function isExpectedExtensionError(e: unknown): boolean {
   const msg = String((e as Error)?.message ?? '')
@@ -11,7 +11,9 @@ export function isExpectedExtensionError(e: unknown): boolean {
     msg.includes('Extension context invalidated') ||
     msg.includes('disconnected port') ||
     msg.includes('Attempting to use a disconnected port') ||
-    msg.includes('Port disconnected')
+    msg.includes('Port disconnected') ||
+    msg === 'Timeout' ||
+    msg.includes('Message timeout')
   )
 }
 

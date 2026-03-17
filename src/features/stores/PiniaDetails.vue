@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ArrowLeft, Edit, X, Save, RefreshCw, Star } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import {
   TooltipTrigger
 } from '@/components/ui/tooltip'
 import JsonEditor from '@/components/JsonEditor.vue'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
 import type { BaseInspectorSettings, PiniaFavoriteItem } from '@/types/inspector'
 import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavoritesMatcher'
@@ -63,7 +63,7 @@ const isGettersJsonValid = computed(() => {
 const jsonMode = ref<'text' | 'tree'>('text')
 
 // --- Favorites (by store name) ---
-const settings = ref<BaseInspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
 const storeName = computed(() => props.store.baseId || 'Unknown Store')
 const isFavorite = computed(() => {
   if (!settings.value?.piniaFavorites) return false
@@ -299,20 +299,13 @@ async function saveGettersChanges() {
 
 let unsubscribeMessage: (() => void) | null = null
 
-// Mount - load data once
-onMounted(async () => {
-  unsubscribeMessage = runtime.onMessage(handlePiniaMessage)
+watch(settings, (s: BaseInspectorSettings | null) => {
+  if (s) jsonMode.value = s.json?.mode ?? 'text'
+}, { immediate: true })
 
-  // Load settings (for favorites and JSON mode)
-  try {
-    const loadedSettings = await useInspectorSettings()
-    settings.value = loadedSettings
-    jsonMode.value = loadedSettings?.json?.mode ?? 'text'
-  } catch (error) {
-    console.error('[stores/PiniaDetails] useInspectorSettings failed:', error)
-  }
-  
-  // Load store data
+// Mount - load data once
+onMounted(() => {
+  unsubscribeMessage = runtime.onMessage(handlePiniaMessage)
   loadStoreData()
 })
 

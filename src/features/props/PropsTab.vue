@@ -16,7 +16,8 @@ import PropsTable from './PropsTable.vue'
 import ComponentDetails from './prop-details/ComponentDetails.vue'
 import type { TreeNodeModel } from '@/types/tree'
 import type { BaseInspectorSettings, FavoriteItem } from '@/types/inspector'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettings, useInspectorSettingsSync } from '@/settings/useInspectorSettings'
+import { useSearchSettings } from '@/composables/useSearchSettings'
 import { useTreeData } from '@/hooks/useTreeData'
 import { useRuntime } from '@/runtime'
 import { safeRuntime, safeTabs, safeStorage } from '@/utils/extensionBridge'
@@ -25,7 +26,8 @@ import {
   type PropsRow, 
   createPropsRow, 
   updateRowsVisibility,
-  sortRowsByFavorite 
+  sortRowsByFavorite,
+  getElementInfo
 } from './types'
 
 const runtime = useRuntime()
@@ -52,48 +54,28 @@ const lastUpdated = ref<string>('')
 // Search state
 const searchTerm = ref('')
 const debouncedSearchTerm = ref('')
-const settings = ref<BaseInspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
+
+const {
+  searchSettings,
+  selectedSearchTypes,
+  searchTypeOptions: propsSearchTypeOptions
+} = useSearchSettings({
+  settings,
+  searchKey: 'propsSearch',
+  typeMap: {
+    'Name': 'byName',
+    'Label': 'byLabel',
+    'Root': 'byRootElement',
+    'Key': 'byKey',
+    'Value': 'byValue',
+  }
+})
 
 // Favorites (pass full objects for proper matching)
 const favorites = computed(() => {
   if (!settings.value?.favorites) return []
   return settings.value.favorites
-})
-
-// Search settings from inspector settings
-const searchSettings = computed(() => ({
-  byName: settings.value?.propsSearch?.byName ?? true,
-  byLabel: settings.value?.propsSearch?.byLabel ?? false,
-  byRootElement: settings.value?.propsSearch?.byRootElement ?? false,
-  byKey: settings.value?.propsSearch?.byKey ?? false,
-  byValue: settings.value?.propsSearch?.byValue ?? false,
-  debounce: settings.value?.searchParams?.debounce ?? 300,
-  minLength: settings.value?.searchParams?.minLength ?? 2
-}))
-
-// Search type options for FacetedFilter
-type PropsSearchKey = 'byName' | 'byLabel' | 'byRootElement' | 'byKey' | 'byValue'
-const propsSearchTypeMap: Record<string, PropsSearchKey> = {
-  'Name': 'byName',
-  'Label': 'byLabel',
-  'Root': 'byRootElement',
-  'Key': 'byKey',
-  'Value': 'byValue',
-}
-const propsSearchTypeOptions = Object.keys(propsSearchTypeMap)
-
-const selectedSearchTypes = computed<string[]>({
-  get() {
-    if (!settings.value?.propsSearch) return []
-    return propsSearchTypeOptions.filter(label => settings.value!.propsSearch[propsSearchTypeMap[label]] as boolean)
-  },
-  set(selected: string[]) {
-    if (!settings.value?.propsSearch) return
-    for (const label of propsSearchTypeOptions) {
-      const key = propsSearchTypeMap[label]
-      ;(settings.value.propsSearch as any)[key] = selected.includes(label)
-    }
-  }
 })
 
 // ============================================================================
@@ -108,50 +90,6 @@ function formatDateTime(date: Date): string {
   const minutes = String(date.getMinutes()).padStart(2, '0')
   const seconds = String(date.getSeconds()).padStart(2, '0')
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
-}
-
-function buildElementSelector(
-  tag: string,
-  elId?: string,
-  cls?: string,
-  testId?: string
-): string {
-  let sel = tag.toLowerCase()
-  if (elId) sel += '#' + elId
-  if (cls) sel += '.' + cls.trim().replace(/\s+/g, '.')
-  if (testId) sel += `[${testId}]`
-  return sel
-}
-
-function getElementInfo(node: TreeNodeModel): string {
-  if (node.element) {
-    if (node.element instanceof HTMLElement) {
-      return buildElementSelector(
-        node.element.tagName,
-        node.element.id || undefined,
-        node.element.className || undefined,
-        node.element.getAttribute?.('data-testid') || undefined
-      )
-    } else if (node.element.tagName) {
-      return buildElementSelector(
-        node.element.tagName,
-        node.element.id,
-        node.element.className,
-        node.element.testId
-      )
-    }
-  }
-
-  if (node.rootElement?.tagName) {
-    return buildElementSelector(
-      node.rootElement.tagName,
-      node.rootElement.id,
-      node.rootElement.className,
-      node.rootElement.testId
-    )
-  }
-
-  return 'Logic only'
 }
 
 function getNodeId(node: TreeNodeModel): string {
@@ -169,10 +107,10 @@ function isFavoriteNode(node: TreeNodeModel): boolean {
 function applyFilters() {
   updateRowsVisibility(rows.value, {
     searchTerm: debouncedSearchTerm.value,
-    searchByName: searchSettings.value.byName,
-    searchByRootElement: searchSettings.value.byRootElement,
-    searchByKey: searchSettings.value.byKey,
-    searchByValue: searchSettings.value.byValue
+    searchByName: !!searchSettings.value.byName,
+    searchByRootElement: !!searchSettings.value.byRootElement,
+    searchByKey: !!searchSettings.value.byKey,
+    searchByValue: !!searchSettings.value.byValue
   })
 
   // Trigger re-render (cheap - just increments a number)
@@ -252,14 +190,6 @@ function updateFavoriteFlags() {
 // Settings
 // ============================================================================
 
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-  } catch (error) {
-    console.error('[props/PropsTab] useInspectorSettings failed:', error)
-    /* use defaults */
-  }
-})
 
 // Sync favorite flags on any favorites mutation (add/remove from table,
 // details panel, settings load, or external storage change).
@@ -318,10 +248,10 @@ watch(treeData, (data) => {
     // Apply current visibility filters
     updateRowsVisibility(rows.value, {
       searchTerm: debouncedSearchTerm.value,
-      searchByName: searchSettings.value.byName,
-      searchByRootElement: searchSettings.value.byRootElement,
-      searchByKey: searchSettings.value.byKey,
-      searchByValue: searchSettings.value.byValue
+      searchByName: !!searchSettings.value.byName,
+      searchByRootElement: !!searchSettings.value.byRootElement,
+      searchByKey: !!searchSettings.value.byKey,
+      searchByValue: !!searchSettings.value.byValue
     })
     
     lastUpdated.value = formatDateTime(new Date())
@@ -406,17 +336,6 @@ const visibleRows = computed(() => {
   // Touch visibilityVersion to create dependency
   void visibilityVersion.value
   return rows.value.filter(r => r.visible)
-})
-
-// Active search types for badges
-const activeSearchTypes = computed(() => {
-  const types: string[] = []
-  if (searchSettings.value.byName) types.push('Name')
-  if (searchSettings.value.byLabel) types.push('Label')
-  if (searchSettings.value.byRootElement) types.push('Root')
-  if (searchSettings.value.byKey) types.push('Key')
-  if (searchSettings.value.byValue) types.push('Value')
-  return types
 })
 
 // ============================================================================

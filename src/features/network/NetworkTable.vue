@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -14,16 +14,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
 import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { defaultInspectorSettings } from '@/settings/inspectorSettings'
 import type { NetworkEntry } from '@/types/network'
 import type { NetworkTableColumnsSettings } from '@/types/inspector'
-import type { BreakpointItem, MockRule } from '@/types/inspector'
+import type { BreakpointWithStatus, MockWithStatus } from '@/types/inspector'
 import { formatBytes, formatDuration } from '@/types/network'
 import { getStatusClass } from './utils'
-
-type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
-type MockWithStatus = MockRule & { isActive: boolean }
 
 const props = defineProps<{
   entries: NetworkEntry[]
@@ -66,7 +63,7 @@ function formatStatus(entry: NetworkEntry): string {
 }
 
 // Column visibility from settings
-const settings = ref<Awaited<ReturnType<typeof useInspectorSettings>> | null>(null)
+const settings = useInspectorSettingsSync()
 const columns = computed(() => {
   const cols = settings.value?.networkTableColumns ?? defaultInspectorSettings.networkTableColumns
   return cols ?? {
@@ -102,9 +99,6 @@ const networkDisabledColumns = computed(() => {
   return []
 })
 
-onMounted(async () => {
-  settings.value = await useInspectorSettings()
-})
 
 const networkColumnDefs = [
   { key: 'status', label: 'Status' },

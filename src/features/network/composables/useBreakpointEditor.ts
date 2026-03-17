@@ -120,7 +120,7 @@ export function useBreakpointEditor(options: UseBreakpointEditorOptions) {
         if (breakpointTrigger() === 'response') {
           activeSection.value = 'response'
         } else if (breakpointTrigger() === 'request') {
-          activeSection.value = 'url'
+          activeSection.value = 'request'
         }
       }
 

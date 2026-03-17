@@ -21,6 +21,8 @@ const props = withDefaults(
     minWidth?: string
     emptyMessage?: string
     showEmpty?: boolean
+    /** When true and empty, shows #after slot (e.g. skeleton) instead of emptyMessage */
+    isLoading?: boolean
   }>(),
   {
     keyField: 'id',
@@ -28,6 +30,7 @@ const props = withDefaults(
     minWidth: '360px',
     emptyMessage: '',
     showEmpty: true,
+    isLoading: false,
   }
 )
 
@@ -68,12 +71,12 @@ const emit = defineEmits<{
         </RecycleScroller>
       </div>
 
-      <!-- When empty: show after slot if provided, else empty message -->
+      <!-- When empty: show after slot (skeleton) if loading, else empty state with alignment -->
       <div v-else class="flex-1 min-h-0 overflow-auto">
-        <slot v-if="$slots.after" name="after" />
+        <slot v-if="isLoading && $slots.after" name="after" />
         <div
           v-else-if="showEmpty && emptyMessage"
-          class="h-full flex items-center justify-center text-muted-foreground"
+          class="virtual-table__empty"
         >
           {{ emptyMessage }}
         </div>
@@ -92,6 +95,15 @@ const emit = defineEmits<{
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+/* Empty state: centered placeholder when no items */
+.virtual-table__empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
 }
 
 /* Shared: actions column (TableColumnSelector) */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { ArrowLeft, Star, X, Save, Edit, RefreshCw } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
@@ -14,11 +14,12 @@ import JsonEditor from '@/components/JsonEditor.vue'
 
 import type { TreeNodeModel } from '@/types/tree'
 import type { FavoriteItem, BaseInspectorSettings } from '@/types/inspector'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
 import { isInFavorites, matchFavoriteIds } from '@/utils/favoritesMatcher'
 import { useComponentsTab } from '@/hooks/useComponentsTab'
 import { ref as createRef } from 'vue'
+import { getElementInfo } from '../types'
 
 const runtime = useRuntime()
 
@@ -30,18 +31,12 @@ const props = withDefaults(
 const emit = defineEmits<{ (e: 'back'): void; (e: 'refresh'): void }>()
 
 // --- Settings ---
-const settings = ref<BaseInspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
 const jsonMode = ref<'text' | 'tree'>('text')
 
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-    jsonMode.value = settings.value?.json?.mode ?? 'text'
-  } catch (error) {
-    console.error('[props/ComponentDetails] useInspectorSettings failed:', error)
-    /* use defaults */
-  }
-})
+watch(settings, (s) => {
+  if (s) jsonMode.value = s.json?.mode ?? 'text'
+}, { immediate: true })
 
 // --- Favorites ---
 const isFavorite = computed(() => {
@@ -56,50 +51,6 @@ function getElementIdentifier(node: TreeNodeModel): string {
   }
   const elementInfo = getElementInfo(node)
   return `${node.name}::${elementInfo}`
-}
-
-function buildElementSelector(
-  tag: string,
-  elId?: string,
-  cls?: string,
-  testId?: string
-): string {
-  let sel = tag.toLowerCase()
-  if (elId) sel += '#' + elId
-  if (cls) sel += '.' + cls.trim().replace(/\s+/g, '.')
-  if (testId) sel += `[${testId}]`
-  return sel
-}
-
-function getElementInfo(node: TreeNodeModel): string {
-  if (node.element) {
-    if (node.element instanceof HTMLElement) {
-      return buildElementSelector(
-        node.element.tagName,
-        node.element.id || undefined,
-        node.element.className || undefined,
-        node.element.getAttribute?.('data-testid') || undefined
-      )
-    } else if (node.element.tagName) {
-      return buildElementSelector(
-        node.element.tagName,
-        node.element.id,
-        node.element.className,
-        node.element.testId
-      )
-    }
-  }
-
-  if (node.rootElement?.tagName) {
-    return buildElementSelector(
-      node.rootElement.tagName,
-      node.rootElement.id,
-      node.rootElement.className,
-      node.rootElement.testId
-    )
-  }
-
-  return 'div'
 }
 
 async function toggleFavorite() {

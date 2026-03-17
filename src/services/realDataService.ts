@@ -1,6 +1,7 @@
 import type { TreeNodeModel } from '@/types/tree'
 import type { TreeSearchOptions } from '@/types/search'
 import { getRuntimeAdapter } from '@/runtime'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 interface ComponentInfo {
     name: string
@@ -71,7 +72,9 @@ export class RealDataService {
                 return []
             }
         } catch (error) {
-            console.error('[services/realDataService] collectVueComponents failed:', error)
+            if (!isExpectedExtensionError(error)) {
+                console.error('[services/realDataService] collectVueComponents failed:', error)
+            }
             return []
         }
     }

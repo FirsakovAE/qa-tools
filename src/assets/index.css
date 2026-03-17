@@ -144,6 +144,12 @@
     font-size: 1rem;
   }
 
+  /* DevTools panel: CSS containment to reduce layout thrashing during resize */
+  html[data-devtools] .app-content,
+  html[data-devtools] .app-shell {
+    contain: layout style;
+  }
+
   /* ---------------------------------
      Borders (sigma-ui expectation)
      --------------------------------- */
