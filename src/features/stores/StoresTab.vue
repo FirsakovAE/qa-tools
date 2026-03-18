@@ -18,7 +18,7 @@ import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useSearchSettings } from '@/composables/useSearchSettings'
 import { useRuntime } from '@/runtime'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import { deepSearchKey, deepSearchValue } from '@/features/props'
+import { parseSearchTerm } from '@/utils/searchUtils'
 import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavoritesMatcher'
 
 const runtime = useRuntime()
@@ -38,9 +38,6 @@ interface StoreEntry {
   getterKeys: number
   lastUpdated?: number
   lastUpdatedFormatted?: string
-  // Lazy-loaded for key/value search
-  state?: Record<string, any>
-  getters?: Record<string, any>
 }
 
 // ============================================================================
@@ -71,9 +68,8 @@ const {
   }
 })
 
-// Track which stores have their data loaded (for key/value search)
-const storesDataLoaded = ref(false)
-const isLoadingStoreData = ref(false)
+// Matched store IDs from PINIA_SEARCH (for key/value filter)
+const matchedStoreIds = ref<Set<string>>(new Set())
 
 // ============================================================================
 // Data loading
@@ -126,13 +122,7 @@ async function loadStoresSummary() {
       entries.value = Object.values(response.summary)
       lastUpdated.value = formatDateTime(new Date())
       isLoading.value = false
-      // Reset store data loaded flag - data needs to be reloaded for key/value search
-      storesDataLoaded.value = false
-      
-      // If key/value search is active, reload store data immediately
-      if (needsStoreData.value) {
-        loadAllStoresData()
-      }
+      applyFilters()
     } else if (response?.error) {
       error.value = response.error
       isLoading.value = false
@@ -160,47 +150,6 @@ async function loadStoresSummary() {
     }
 
     isLoading.value = false
-  }
-}
-
-// Load state/getters data for all stores (for key/value search)
-async function loadAllStoresData() {
-  if (storesDataLoaded.value || isLoadingStoreData.value) return
-  if (entries.value.length === 0) return
-  
-  isLoadingStoreData.value = true
-  
-  try {
-    // Load data for each store in parallel
-    const loadPromises = entries.value.map(async (store) => {
-      try {
-        const response = await runtime.sendMessage<{
-          state?: any
-          getters?: any
-          error?: string
-        }>({
-          type: 'PINIA_GET_STORE_STATE',
-          storeId: store.id
-        })
-        
-        if (response) {
-          // Update store entry with state/getters
-          if ('state' in response) {
-            store.state = response.state ?? {}
-          }
-          if ('getters' in response) {
-            store.getters = response.getters ?? {}
-          }
-        }
-      } catch (error) {
-        console.error('[stores/StoresTab] PINIA_GET_STORE_STATE failed for', store.id, error)
-      }
-    })
-    
-    await Promise.all(loadPromises)
-    storesDataLoaded.value = true
-  } finally {
-    isLoadingStoreData.value = false
   }
 }
 
@@ -265,7 +214,7 @@ const broadcastHandler = (event: MessageEvent) => {
 }
 
 // ============================================================================
-// Filtering
+// Filtering (like PropsTab - PINIA_SEARCH for key/value, local for name)
 // ============================================================================
 
 const debouncedSearchTerm = ref('')
@@ -280,18 +229,34 @@ watch(searchTerm, (term) => {
   }
 })
 
-// Trigger data loading when key/value search is active
-const needsStoreData = computed(() => 
-  (searchSettings.value.byKey || searchSettings.value.byValue) && 
-  debouncedSearchTerm.value.trim().length > 0
-)
+async function applyFilters() {
+  const term = debouncedSearchTerm.value
+  const { query, exactMatch } = parseSearchTerm(term)
+  const byKey = !!searchSettings.value.byKey
+  const byValue = !!searchSettings.value.byValue
+  const needsKeyValueSearch = (byKey || byValue) && query.length >= (searchSettings.value.minLength ?? 2)
 
-// Watch for when we need store data
-watch(needsStoreData, (needs) => {
-  if (needs && !storesDataLoaded.value) {
-    loadAllStoresData()
+  let matched: Set<string> | undefined
+  if (needsKeyValueSearch) {
+    try {
+      const res = await runtime.sendMessage<{ results?: Array<{ storeId: string }> }>({
+        type: 'PINIA_SEARCH',
+        query,
+        searchByKey: byKey,
+        searchByValue: byValue,
+        exactMatch
+      })
+      matched = new Set((res?.results ?? []).map(r => r.storeId))
+    } catch (e) {
+      console.error('[stores/StoresTab] PINIA_SEARCH failed:', e)
+      matched = new Set()
+    }
   }
-})
+  matchedStoreIds.value = matched ?? new Set()
+}
+
+watch(debouncedSearchTerm, applyFilters)
+watch(searchSettings, applyFilters, { deep: true })
 
 function isFavoriteStore(store: StoreEntry): boolean {
   if (!settings.value?.piniaFavorites?.length) return false
@@ -299,37 +264,24 @@ function isFavoriteStore(store: StoreEntry): boolean {
   return isStoreInFavorites(name, settings.value.piniaFavorites)
 }
 
-// Filter stores
+// Filter stores (name: local, key/value: via matchedStoreIds from PINIA_SEARCH)
 const filteredEntries = computed(() => {
-  const q = debouncedSearchTerm.value.toLowerCase().trim()
+  const term = debouncedSearchTerm.value
+  const { query, exactMatch } = parseSearchTerm(term)
+  const q = query.toLowerCase().trim()
   if (!q) return entries.value
-  
+
+  const matchStr = exactMatch
+    ? (s: string) => s === q
+    : (s: string) => s.includes(q)
+
   return entries.value.filter(store => {
-    // Search by name
-    if (searchSettings.value.byName && store.baseId?.toLowerCase().includes(q)) {
+    if (searchSettings.value.byName && store.baseId && matchStr(store.baseId.toLowerCase())) {
       return true
     }
-    
-    // Search by key in state/getters (deep search)
-    if (searchSettings.value.byKey) {
-      if (store.state && deepSearchKey(store.state, q)) {
-        return true
-      }
-      if (store.getters && deepSearchKey(store.getters, q)) {
-        return true
-      }
+    if ((searchSettings.value.byKey || searchSettings.value.byValue) && matchedStoreIds.value.has(store.id)) {
+      return true
     }
-    
-    // Search by value in state/getters (deep search)
-    if (searchSettings.value.byValue) {
-      if (store.state && deepSearchValue(store.state, q)) {
-        return true
-      }
-      if (store.getters && deepSearchValue(store.getters, q)) {
-        return true
-      }
-    }
-    
     return false
   })
 })
@@ -466,10 +418,7 @@ onUnmounted(() => {
         <!-- Right block: Status badges and controls -->
         <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
           <Badge variant="secondary" class="font-mono">
-            <span v-if="isLoadingStoreData" class="text-muted-foreground">...</span>
-            <template v-else>
-              {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
-            </template>
+            {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
           </Badge>
           <Badge
             variant="outline"

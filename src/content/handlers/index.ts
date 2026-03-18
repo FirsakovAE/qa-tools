@@ -28,7 +28,7 @@ import {
 import {
   handlePiniaGetStoresSummary,
   handlePiniaGetStoreState,
-  handlePiniaBuildSearchIndex,
+  handlePiniaSearch,
   handlePiniaPatchState,
   handlePiniaReplaceState,
   handlePiniaPatchGetters,
@@ -69,7 +69,7 @@ export const runtimeHandlers: Record<string, RuntimeHandler> = {
   // Pinia
   PINIA_GET_STORES_SUMMARY: handlePiniaGetStoresSummary,
   PINIA_GET_STORE_STATE: handlePiniaGetStoreState,
-  PINIA_BUILD_SEARCH_INDEX: handlePiniaBuildSearchIndex,
+  PINIA_SEARCH: handlePiniaSearch,
   PINIA_PATCH_STATE: handlePiniaPatchState,
   PINIA_REPLACE_STATE: handlePiniaReplaceState,
   PINIA_PATCH_GETTERS: handlePiniaPatchGetters,

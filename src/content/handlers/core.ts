@@ -90,7 +90,7 @@ export const handleCollectVueComponents: RuntimeHandler = (message, sender, send
   const blacklist = (message as any).blacklist as { active: string[]; inactive: string[] } | undefined
 
   requestWindow(
-    { type: 'VUE_INSPECTOR_GET_COMPONENTS', forceRefresh, blacklist, light: true },
+    { type: 'VUE_INSPECTOR_GET_COMPONENTS', forceRefresh, blacklist },
     'VUE_INSPECTOR_COMPONENTS_DATA',
     3000
   )

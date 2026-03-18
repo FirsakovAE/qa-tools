@@ -34,7 +34,7 @@ const props = defineProps<{
 const settings = useInspectorSettingsSync()
 const columns = computed(() => {
   const cols = settings.value?.propsTableColumns ?? defaultInspectorSettings.propsTableColumns
-  return cols ?? { name: true, rootElement: true, props: true }
+  return cols ?? { name: true, rootElement: true, propsPassed: true, propsDeclared: true }
 })
 
 function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
@@ -48,7 +48,8 @@ function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
 
 const propsColumnDefs = [
   { key: 'rootElement', label: 'Root Element' },
-  { key: 'props', label: 'Props' },
+  { key: 'propsPassed', label: 'Passed' },
+  { key: 'propsDeclared', label: 'Declared' },
 ] as const
 
 const ROW_HEIGHT = 40
@@ -186,9 +187,14 @@ function truncateElementInfo(info: string): string {
   return info.length > 25 ? info.substring(0, 25) + '...' : info
 }
 
-function getPropsCount(row: PropsRow): number {
-  const fromProps = row.props ? Object.keys(row.props).length : 0
-  if (fromProps > 0) return fromProps
+function getPropsPassed(row: PropsRow): number {
+  if (row.props && Object.keys(row.props).length > 0) {
+    return Object.keys(row.props).length
+  }
+  return row.propsCountPassed ?? row.propsCount ?? 0
+}
+
+function getPropsDeclared(row: PropsRow): number {
   return row.propsCount ?? 0
 }
 
@@ -219,7 +225,8 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
         <div class="props-cell props-cell-star"></div>
         <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
         <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
-        <div v-if="columns.props" class="props-cell props-cell-props text-xs font-semibold">Props</div>
+        <div v-if="columns.propsPassed" class="props-cell props-cell-props text-xs font-semibold">Passed</div>
+        <div v-if="columns.propsDeclared" class="props-cell props-cell-props text-xs font-semibold">Declared</div>
               <div class="props-cell props-cell-actions virtual-table__cell-actions">
                 <TableColumnSelector
             :columns="{ ...columns }"
@@ -275,13 +282,23 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                   {{ truncateElementInfo(row.elementInfo) }}
                 </Badge>
               </div>
-              <div v-if="columns.props" class="props-cell props-cell-props">
+              <div v-if="columns.propsPassed" class="props-cell props-cell-props">
                 <Badge 
                   v-if="row.hasPropsFlag"
                   variant="outline" 
                   class="text-xs font-mono"
                 >
-                  {{ getPropsCount(row) }}
+                  {{ getPropsPassed(row) }}
+                </Badge>
+                <span v-else class="text-xs text-muted-foreground">—</span>
+              </div>
+              <div v-if="columns.propsDeclared" class="props-cell props-cell-props">
+                <Badge 
+                  v-if="row.hasPropsFlag"
+                  variant="outline" 
+                  class="text-xs font-mono"
+                >
+                  {{ getPropsDeclared(row) }}
                 </Badge>
                 <span v-else class="text-xs text-muted-foreground">—</span>
               </div>
@@ -323,7 +340,10 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
             <div v-if="columns.rootElement" class="props-cell props-cell-element">
               <Skeleton class="h-5 w-24" />
             </div>
-            <div v-if="columns.props" class="props-cell props-cell-props">
+            <div v-if="columns.propsPassed" class="props-cell props-cell-props">
+              <Skeleton class="h-5 w-8 mx-auto" />
+            </div>
+            <div v-if="columns.propsDeclared" class="props-cell props-cell-props">
               <Skeleton class="h-5 w-8 mx-auto" />
             </div>
             <div class="props-cell props-cell-actions virtual-table__cell-actions">
@@ -366,20 +386,20 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 }
 
 .props-cell-element {
-  width: 180px;
+  width: 120px;
   text-align: left;
   padding: 0;
 }
 
-/* Props column - align with Getters (Pinia Store): w-80px, center */
+/* Props columns (Passed / Declared) */
 .props-cell-props {
-  width: 80px;
+  width: 56px;
   display: flex;
   justify-content: center;
   align-items: center;
   text-align: center;
-  padding-left: 8px;
-  padding-right: 16px;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 /* Row states */

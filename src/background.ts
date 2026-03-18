@@ -307,7 +307,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'PINIA_REPLACE_STATE_RESULT':
         case 'PINIA_PATCH_GETTERS_RESULT':
         case 'PINIA_CALL_ACTION_RESULT':
-        case 'PINIA_SEARCH_INDEX_READY':
             // Пересылаем Pinia сообщения в popup (если открыт)
             try {
                 chrome.runtime.sendMessage(message).catch((e) => {

@@ -92,48 +92,14 @@ function buildElementInfo(el: HTMLElement | null): string {
   return tag + cls + id
 }
 
-/** Get props count without full serialization (for lightweight payload) */
-function getPropsCountLight(instance: any): number {
+/** Get props counts without full serialization (for lightweight payload) */
+function getPropsCountsLight(instance: any): { passed: number; declared: number } {
   const raw = extractRawProps(instance)
-  return raw && typeof raw === 'object' ? Object.keys(raw).length : 0
-}
-
-/**
- * Convert ComponentMeta to legacy ComponentInfo format (FULL - with serialized props).
- * WARNING: Can exceed 64MB port limit with many components or large props.
- */
-function metaToLegacyFormat(meta: any): any {
-  const instance = meta.instance
-  const rawProps = extractRawProps(instance)
-  
-  let element = null
-  let rootElement = null
-  if (meta.rootEl) {
-    element = {
-      tagName: meta.rootEl.tagName?.toLowerCase(),
-      id: meta.rootEl.id || undefined,
-      className: meta.rootEl.className || undefined,
-      testId: meta.rootEl.getAttribute?.('data-testid') || undefined
-    }
-    rootElement = element
-  }
-  
-  const props = rawProps ? serializeProps(rawProps) : {}
-  const name = meta.name || 'Anonymous'
-  const elementInfo = buildElementInfo(meta.rootEl)
-  const componentUid = `${name}::${elementInfo}`
-  
-  return {
-    name,
-    props,
-    path: `uid:${meta.uid}`,
-    componentUid,
-    id: `uid:${meta.uid}`,
-    element,
-    hasProps: Object.keys(props).length > 0,
-    propsCount: Object.keys(props).length,
-    rootElement
-  }
+  if (!raw || typeof raw !== 'object') return { passed: 0, declared: 0 }
+  const keys = Object.keys(raw)
+  const declared = keys.length
+  const passed = keys.filter(k => raw[k] !== undefined).length
+  return { passed, declared }
 }
 
 /**
@@ -141,7 +107,7 @@ function metaToLegacyFormat(meta: any): any {
  * Props loaded on-demand via GET_COMPONENT_PROPS. Keeps payload under 64MB.
  */
 function metaToLegacyFormatLight(meta: any): any {
-  const propsCount = getPropsCountLight(meta.instance)
+  const { passed: propsCountPassed, declared: propsCount } = getPropsCountsLight(meta.instance)
   const hasProps = propsCount > 0
   
   let element = null
@@ -169,6 +135,7 @@ function metaToLegacyFormatLight(meta: any): any {
     element,
     hasProps,
     propsCount,
+    propsCountPassed,
     rootElement
   }
 }
@@ -193,24 +160,8 @@ function isBlacklisted(name: string, blacklist: { active: string[]; inactive: st
   return blacklist.active.some((rule: string) => likeMatch(n, rule))
 }
 
-/**
- * Get components in legacy format (for backwards compatibility).
- * WARNING: Full format serializes all props - can exceed 64MB port limit.
- */
-function getLegacyComponents(
-  forceRefresh = false,
-  blacklist?: { active: string[]; inactive: string[] }
-): any[] {
-  scanStructure({ force: forceRefresh })
-  const store = getMetaStore()
-  const metas = store.getAllComponents()
-  return metas
-    .filter(meta => !isBlacklisted(meta.name ?? 'Anonymous', blacklist))
-    .map(metaToLegacyFormat)
-}
-
 /** Lightweight format - no serialized props, safe for 64MB limit */
-function getLegacyComponentsLight(
+function getLegacyComponents(
   forceRefresh = false,
   blacklist?: { active: string[]; inactive: string[] }
 ): any[] {
@@ -221,6 +172,7 @@ function getLegacyComponentsLight(
     .filter(meta => !isBlacklisted(meta.name ?? 'Anonymous', blacklist))
     .map(metaToLegacyFormatLight)
 }
+
 
 // ============================================================================
 // Component Getters
@@ -357,15 +309,12 @@ function handleMessage(event: MessageEvent) {
     return
   }
 
-  // Handle GET_COMPONENTS message
+  // Handle GET_COMPONENTS message (always lightweight - no serialized props)
   if (event.source === window && event.data?.type === MESSAGE_TYPES.GET_COMPONENTS) {
     try {
       const forceRefresh = !!(event.data?.forceRefresh)
       const blacklist = normalizeBlacklist(event.data?.blacklist)
-      const light = event.data?.light !== false
-      const components = light
-        ? getLegacyComponentsLight(forceRefresh, blacklist)
-        : getLegacyComponents(forceRefresh, blacklist)
+      const components = getLegacyComponents(forceRefresh, blacklist)
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,

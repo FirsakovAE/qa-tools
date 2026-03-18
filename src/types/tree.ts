@@ -22,4 +22,6 @@ export interface TreeNodeModel {
     } | HTMLElement
     hasProps?: boolean
     propsCount?: number
+    /** Count of props with defined values (passed), for display as passed/declared */
+    propsCountPassed?: number
 }

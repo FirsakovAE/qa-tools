@@ -72,30 +72,24 @@ export const handlePiniaGetStoreState: RuntimeHandler = (message, sender, sendRe
 }
 
 /**
- * PINIA_BUILD_SEARCH_INDEX handler
+ * PINIA_SEARCH handler - search by key/value in state/getters (on-demand, like PROPS_SEARCH)
  */
-export const handlePiniaBuildSearchIndex: RuntimeHandler = (message, sender, sendResponse) => {
-  requestWindow({ type: 'PINIA_BUILD_SEARCH_INDEX' }, 'PINIA_SEARCH_INDEX_READY', 2000)
+export const handlePiniaSearch: RuntimeHandler = (message, sender, sendResponse) => {
+  const { query, searchByKey, searchByValue, exactMatch } = message
+  requestWindow({
+    type: 'PINIA_SEARCH',
+    query: query || '',
+    searchByKey: !!searchByKey,
+    searchByValue: !!searchByValue,
+    exactMatch: !!exactMatch
+  }, 'PINIA_SEARCH_RESULTS', 15000)
     .then((response: any) => {
-      const result = {
-        type: 'PINIA_SEARCH_INDEX_READY',
-        index: response.index || [],
-        error: response.error
-      }
-      try { chrome.runtime?.sendMessage?.(result) } catch {}
-      sendResponse(result)
+      sendResponse({ results: response.results || [] })
     })
     .catch((error) => {
-      if (error?.message !== 'Timeout') console.error('[content/handlers/pinia] PINIA_BUILD_SEARCH_INDEX failed:', error)
-      const result = {
-        type: 'PINIA_SEARCH_INDEX_READY',
-        index: [],
-        error: 'Timeout'
-      }
-      try { chrome.runtime?.sendMessage?.(result) } catch {}
-      sendResponse(result)
+      console.error('[content/handlers/pinia] PINIA_SEARCH failed:', error)
+      sendResponse({ results: [] })
     })
-
   return true
 }
 

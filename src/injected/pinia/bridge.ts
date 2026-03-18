@@ -1,8 +1,8 @@
-import { getStoresList, getStoreState } from './state-reader'
+import { getStoresList, getStoreState, getStore } from './state-reader'
 import { getStoreGetters } from './getters'
 import { getStoreActions, callActionUnwrapped } from './actions'
 import { isPiniaDetected, waitForPinia, watchPiniaStores } from './detect'
-import { buildStoreSearchIndex } from './search'
+import { searchStores } from './search'
 import { patchState, replaceState, patchGetters } from './state-writer'
 import { getStoreStateKeys, getGetterKeys, getActionKeys, normalizeStoreId } from './store-meta'
 import { updatePiniaContext } from './context'
@@ -53,8 +53,12 @@ interface CheckDetectedMessage extends PiniaMessage {
   type: 'PINIA_CHECK_DETECTED'
 }
 
-interface BuildSearchIndexMessage extends PiniaMessage {
-  type: 'PINIA_BUILD_SEARCH_INDEX'
+interface PiniaSearchMessage extends PiniaMessage {
+  type: 'PINIA_SEARCH'
+  query?: string
+  searchByKey?: boolean
+  searchByValue?: boolean
+  exactMatch?: boolean
 }
 
 let initialized = false
@@ -62,7 +66,7 @@ let initialized = false
 // Обработчики сообщений
 const handlers: { [key: string]: (data: any) => void } = {
   'PINIA_GET_STORES_SUMMARY': handleGetStoresSummary,
-  'PINIA_BUILD_SEARCH_INDEX': handleBuildSearchIndex,
+  'PINIA_SEARCH': handlePiniaSearch,
   'PINIA_GET_STORE_STATE': handleGetStoreState,
   'PINIA_PATCH_STATE': handlePatchState,
   'PINIA_REPLACE_STATE': handleReplaceState,
@@ -93,7 +97,7 @@ function handleMessage(event: MessageEvent) {
 
 function handleGetStoresSummary(data: GetStoresSummaryMessage) {
   try {
-    const summary = getAllStoresSummary()
+    const summary = getAllStoresSummaryLight()
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_STORES_SUMMARY_DATA',
@@ -114,21 +118,25 @@ function handleGetStoresSummary(data: GetStoresSummaryMessage) {
   }
 }
 
-function handleBuildSearchIndex(data: BuildSearchIndexMessage) {
+function handlePiniaSearch(data: PiniaSearchMessage) {
   try {
-    const index = buildStoreSearchIndex()
+    const results = searchStores(data.query || '', {
+      searchByKey: !!data.searchByKey,
+      searchByValue: !!data.searchByValue,
+      exactMatch: !!data.exactMatch
+    })
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
-      type: 'PINIA_SEARCH_INDEX_READY',
-      index,
+      type: 'PINIA_SEARCH_RESULTS',
+      results: results.map(r => ({ storeId: r.storeId })),
       requestId: data.requestId
     }, '*')
   } catch (e) {
-    console.error('[injected/pinia/bridge] handleBuildSearchIndex failed:', e)
+    console.error('[injected/pinia/bridge] handlePiniaSearch failed:', e)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
-      type: 'PINIA_SEARCH_INDEX_READY',
-      index: [],
+      type: 'PINIA_SEARCH_RESULTS',
+      results: [],
       error: String(e),
       requestId: data.requestId
     }, '*')
@@ -295,23 +303,19 @@ function formatTimestamp(ts: number): string {
   })
 }
 
-// Функция получения сводки по всем хранилищам (оптимизировано) - всегда получает свежие данные
-function getAllStoresSummary(): Record<string, any> {
+/** Lightweight: store ids + counts only, no full state/getters (like Props metaToLegacyFormatLight) */
+function getAllStoresSummaryLight(): Record<string, any> {
   const storeIds = getStoresList()
-
-  if (storeIds.length === 0) {
-    return {}
-  }
+  if (storeIds.length === 0) return {}
 
   const summary: Record<string, any> = {}
   const now = Date.now()
 
   for (const storeId of storeIds) {
     try {
-      const store = getStoreState(storeId)
+      const store = getStore(storeId)
       const stateKeys = store ? getStoreStateKeys(store as any).length : 0
-      const getters = getStoreGetters(storeId)
-      const getterKeys = getters ? getGetterKeys(getters as any).length : 0
+      const getterKeys = store ? getGetterKeys(store as any).length : 0
       const actions = getStoreActions(storeId)
       const actionKeys = actions ? getActionKeys(actions as any).length : 0
 
@@ -325,7 +329,7 @@ function getAllStoresSummary(): Record<string, any> {
         lastUpdatedFormatted: formatTimestamp(now)
       }
     } catch (e) {
-      console.error('[injected/pinia/bridge] getAllStoresSummary store failed:', storeId, e)
+      console.error('[injected/pinia/bridge] getAllStoresSummaryLight store failed:', storeId, e)
     }
   }
   return summary

@@ -11,6 +11,7 @@ interface ComponentInfo {
     element?: { tagName?: string; id?: string; className?: string; testId?: string } | null
     hasProps: boolean
     propsCount: number
+    propsCountPassed?: number
     rootElement?: { tagName?: string; id?: string; className?: string; testId?: string } | null
 }
 
@@ -122,7 +123,8 @@ export class RealDataService {
                         testId: elementInfo.testId
                     } : undefined,
                     hasProps: comp.hasProps || false,
-                    propsCount: comp.propsCount || 0
+                    propsCount: comp.propsCount || 0,
+                    propsCountPassed: comp.propsCountPassed ?? comp.propsCount ?? 0
                 }
             } catch (e) {
                 console.error('[services/realDataService] transformToTreeData component failed:', comp.path, e)
@@ -135,7 +137,8 @@ export class RealDataService {
                     timestamp: new Date().toISOString(),
                     children: [],
                     hasProps: false,
-                    propsCount: 0
+                    propsCount: 0,
+                    propsCountPassed: 0
                 }
             }
         })

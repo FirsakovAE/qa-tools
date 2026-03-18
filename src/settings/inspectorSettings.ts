@@ -17,7 +17,8 @@ const defaultNetworkTableColumns: NetworkTableColumnsSettings = {
 const defaultPropsTableColumns: PropsTableColumnsSettings = {
     name: true,
     rootElement: true,
-    props: true,
+    propsPassed: true,
+    propsDeclared: true,
 }
 
 /** Default Pinia table columns (all visible) */

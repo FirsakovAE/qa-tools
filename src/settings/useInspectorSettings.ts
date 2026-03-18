@@ -247,8 +247,16 @@ function migrateSearchSettings(saved: any): void {
         saved.propsTableColumns = {
             name: true,
             rootElement: true,
-            props: true,
+            propsPassed: true,
+            propsDeclared: true,
         }
+    }
+    // Миграция: props -> propsPassed, propsDeclared
+    if (saved.propsTableColumns?.props !== undefined) {
+        const v = !!saved.propsTableColumns.props
+        saved.propsTableColumns.propsPassed = v
+        saved.propsTableColumns.propsDeclared = v
+        delete saved.propsTableColumns.props
     }
     // Миграция: удаляем size (колонка перенесена в Details)
     delete saved.propsTableColumns?.size

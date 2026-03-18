@@ -134,7 +134,8 @@ export interface NetworkTableColumnsSettings {
 export interface PropsTableColumnsSettings {
     name: boolean
     rootElement: boolean
-    props: boolean
+    propsPassed: boolean
+    propsDeclared: boolean
 }
 
 /** Pinia table column visibility */
