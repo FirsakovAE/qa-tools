@@ -88,9 +88,10 @@ export const handleGetComponents: RuntimeHandler = (message, sender, sendRespons
 export const handleCollectVueComponents: RuntimeHandler = (message, sender, sendResponse) => {
   const forceRefresh = !!(message as any).forceRefresh
   const blacklist = (message as any).blacklist as { active: string[]; inactive: string[] } | undefined
+  const rootElementUid = (message as any).rootElementUid as number | undefined
 
   requestWindow(
-    { type: 'VUE_INSPECTOR_GET_COMPONENTS', forceRefresh, blacklist },
+    { type: 'VUE_INSPECTOR_GET_COMPONENTS', forceRefresh, blacklist, rootElementUid },
     'VUE_INSPECTOR_COMPONENTS_DATA',
     3000
   )

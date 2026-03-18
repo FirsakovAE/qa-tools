@@ -26,10 +26,10 @@ export class RealDataService {
     async getTreeData(
         search?: TreeSearchOptions,
         forceRefresh = false,
-        options?: { blacklist?: { active: string[]; inactive: string[] } }
+        options?: { blacklist?: { active: string[]; inactive: string[] }; rootFilter?: { rootElementUid: number } }
     ): Promise<TreeNodeModel[]> {
         try {
-            const components = await this.collectVueComponents(forceRefresh, options?.blacklist)
+            const components = await this.collectVueComponents(forceRefresh, options?.blacklist, options?.rootFilter?.rootElementUid)
             return this.transformToTreeData(components, search)
         } catch (e) {
             console.error('[services/realDataService] getTreeData failed:', e)
@@ -48,7 +48,8 @@ export class RealDataService {
 
     private async collectVueComponents(
         forceRefresh = false,
-        blacklist?: { active: string[]; inactive: string[] }
+        blacklist?: { active: string[]; inactive: string[] },
+        rootElementUid?: number
     ): Promise<ComponentInfo[]> {
         const runtime = getRuntimeAdapter()
         if (!runtime) {
@@ -64,7 +65,8 @@ export class RealDataService {
             const response = await runtime.sendMessage<CollectComponentsResponse>({
                 type: 'COLLECT_VUE_COMPONENTS',
                 forceRefresh,
-                blacklist: serializedBlacklist
+                blacklist: serializedBlacklist,
+                rootElementUid
             })
 
             if (response?.components) {

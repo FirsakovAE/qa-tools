@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { SearchIcon, RefreshCw, Star } from 'lucide-vue-next'
+import { SearchIcon, RefreshCw, Star, MousePointer2, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -51,6 +51,10 @@ const selectedNode = ref<TreeNodeModel | null>(null)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const lastUpdated = ref<string>('')
+
+// Inspector mode (element picker like Chrome DevTools Elements)
+const isInspectorMode = ref(false)
+const inspectRootUid = ref<number | null>(null)
 
 // Search state
 const searchTerm = ref('')
@@ -394,7 +398,7 @@ function deselectEntry() {
 
 async function handleRefresh() {
   if (isLoading.value) return
-  await refresh()
+  await refresh(inspectRootUid.value != null ? { rootElementUid: inspectRootUid.value } : undefined)
   lastUpdated.value = formatDateTime(new Date())
 }
 
@@ -408,18 +412,20 @@ async function handleRefreshSelected() {
 
   isLoading.value = true
   try {
-    const response = await runtime.sendMessage<{ props?: Record<string, any>; newUid?: number }>({
+    const response = await runtime.sendMessage<{ props?: Record<string, any>; rawProps?: Record<string, any>; newUid?: number }>({
       type: 'GET_COMPONENT_PROPS',
       componentUid: componentPath,
       componentPathFallback: node.componentUid || undefined
     })
     const freshProps = response?.props ?? {}
+    const rawProps = response?.rawProps ?? {}
     const newUid = response?.newUid
     selectedNode.value = {
       ...node,
       id: newUid != null ? `uid:${newUid}` : node.id,
       componentUid: node.componentUid,
       props: freshProps,
+      rawProps,
       jsonProps: JSON.stringify(freshProps, null, 2)
     }
     lastUpdated.value = formatDateTime(new Date())
@@ -494,6 +500,59 @@ async function toggleFavorite(node: PropsRow) {
 }
 
 // ============================================================================
+// Inspector mode (element picker)
+// ============================================================================
+
+async function toggleInspectorMode() {
+  if (isInspectorMode.value) {
+    // Exit inspector mode only (filter stays)
+    isInspectorMode.value = false
+    await runtime.sendMessage({ type: 'PROPS_INSPECTOR_STOP' })
+  } else {
+    // Enter: refresh first (lazy load), then start inspector
+    await refresh(inspectRootUid.value != null ? { rootElementUid: inspectRootUid.value } : undefined)
+    isInspectorMode.value = true
+    await runtime.sendMessage({
+      type: 'PROPS_INSPECTOR_START',
+      theme: settings.value?.theme ?? 'dark'
+    })
+  }
+}
+
+async function handleInspectorElementSelected(uid: number) {
+  inspectRootUid.value = uid
+  isInspectorMode.value = false
+  await runtime.sendMessage({ type: 'PROPS_INSPECTOR_STOP' })
+  refresh({ rootElementUid: uid })
+}
+
+async function clearInspectFilter() {
+  inspectRootUid.value = null
+  await refresh()
+}
+
+// Listen for inspector events from content script (via devtools port broadcast)
+let inspectorUnsubscribe: (() => void) | null = null
+onMounted(() => {
+  inspectorUnsubscribe = runtime.onMessage((msg: { type?: string; uid?: number }) => {
+    if (msg.type === 'PROPS_INSPECTOR_ELEMENT_SELECTED' && typeof msg.uid === 'number') {
+      handleInspectorElementSelected(msg.uid)
+    }
+  })
+})
+
+// Exit inspector on tab switch, DevTools close
+onUnmounted(() => {
+  if (inspectorUnsubscribe) {
+    inspectorUnsubscribe()
+    inspectorUnsubscribe = null
+  }
+  if (isInspectorMode.value) {
+    runtime.sendMessage({ type: 'PROPS_INSPECTOR_STOP' }).catch(() => {})
+  }
+})
+
+// ============================================================================
 // Highlight
 // ============================================================================
 
@@ -566,11 +625,73 @@ onUnmounted(() => {
               title="Search by"
               :options="propsSearchTypeOptions"
             />
+
+            <!-- Inspect (inline — hidden when toolbar is narrow) -->
+            <div class="inspect-inline">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="inspect-btn h-8 gap-1.5"
+                    :class="isInspectorMode ? 'border-primary bg-primary/10 text-primary' : ''"
+                    :disabled="isLoading"
+                    @click="toggleInspectorMode"
+                  >
+                    <MousePointer2 class="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span class="inspect-btn-label text-xs font-medium">Inspect</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  Select element on page to filter Props
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </div>
         
         <!-- Right block: Status badges and controls -->
         <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
+          <!-- Inspect (wrapped — shown when toolbar is narrow) -->
+          <div class="hidden inspect-wrapped">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="inspect-btn h-8 gap-1.5"
+                  :class="isInspectorMode ? 'border-primary bg-primary/10 text-primary' : ''"
+                  :disabled="isLoading"
+                  @click="toggleInspectorMode"
+                >
+                  <MousePointer2 class="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span class="inspect-btn-label text-xs font-medium">Inspect</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Select element on page to filter Props
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <div class="hidden flex-1 inspect-spacer" />
+
+          <!-- Inspect filter reset (when filtered by element) -->
+          <Tooltip v-if="inspectRootUid != null">
+            <TooltipTrigger as-child>
+              <Badge
+                variant="outline"
+                class="filtered-badge cursor-pointer gap-1.5 pl-2 pr-1.5 py-1 text-amber-600 border-amber-500/40 hover:bg-amber-500/10 dark:text-amber-400 dark:border-amber-400/40 dark:hover:bg-amber-400/10 transition-colors"
+                @click="clearInspectFilter"
+              >
+                <MousePointer2 class="h-3 w-3 shrink-0" aria-hidden />
+                <span class="filtered-badge-label text-xs font-medium">Filtered</span>
+                <X class="h-3 w-3 shrink-0 ml-0.5 opacity-70" aria-hidden />
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Clear element filter, show full list
+            </TooltipContent>
+          </Tooltip>
           <Badge variant="secondary" class="font-mono">
             {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
           </Badge>

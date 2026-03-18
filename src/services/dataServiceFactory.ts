@@ -1,9 +1,10 @@
 import { RealDataService } from './realDataService'
 import type { TreeNodeModel } from '@/types/tree'
-import type {TreeSearchOptions} from "../types/search.ts";
+import type { TreeSearchOptions, TreeRootFilter } from '../types/search'
 
 export interface TreeDataOptions {
     blacklist?: { active: string[]; inactive: string[] }
+    rootFilter?: TreeRootFilter
 }
 
 export interface DataService {

@@ -333,13 +333,16 @@
 }
 
 @container toolbar (max-width: 850px) {
-  .export-inline {
+  .export-inline,
+  .inspect-inline {
     display: none !important;
   }
-  .export-wrapped {
+  .export-wrapped,
+  .inspect-wrapped {
     display: block !important;
   }
-  .export-spacer {
+  .export-spacer,
+  .inspect-spacer {
     display: block !important;
   }
   .toolbar-right-block {
@@ -361,7 +364,21 @@
   }
 }
 
-@container toolbar (max-width: 400px) {
+@container toolbar (max-width: 450px) {
+  .filtered-badge-label {
+    display: none !important;
+  }
+  .filtered-badge {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  .inspect-btn-label {
+    display: none !important;
+  }
+  .inspect-btn {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
   .faceted-badges {
     display: none !important;
   }
@@ -373,7 +390,7 @@
   }
 }
 
-@container toolbar (min-width: 401px) {
+@container toolbar (min-width: 451px) {
   .badge-label {
     margin-left: 0.25em;
   }

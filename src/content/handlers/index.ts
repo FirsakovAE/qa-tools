@@ -24,6 +24,11 @@ import {
   handlePropsSearch
 } from './props'
 
+import {
+  handlePropsInspectorStart,
+  handlePropsInspectorStop
+} from './propsInspector'
+
 // Pinia handlers
 import {
   handlePiniaGetStoresSummary,
@@ -65,7 +70,9 @@ export const runtimeHandlers: Record<string, RuntimeHandler> = {
   UPDATE_COMPONENT_PROPS: handleUpdateComponentProps,
   GET_COMPONENT_PROPS: handleGetComponentProps,
   PROPS_SEARCH: handlePropsSearch,
-  
+  PROPS_INSPECTOR_START: handlePropsInspectorStart,
+  PROPS_INSPECTOR_STOP: handlePropsInspectorStop,
+
   // Pinia
   PINIA_GET_STORES_SUMMARY: handlePiniaGetStoresSummary,
   PINIA_GET_STORE_STATE: handlePiniaGetStoreState,

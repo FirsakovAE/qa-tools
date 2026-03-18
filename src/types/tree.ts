@@ -3,6 +3,8 @@ export interface TreeNodeModel {
     name: string
     label?: string
     props?: Record<string, any>
+    /** Raw props (declared) for Declared section - all keys including undefined */
+    rawProps?: Record<string, any>
     jsonProps?: string
     timestamp?: string
     children?: TreeNodeModel[]

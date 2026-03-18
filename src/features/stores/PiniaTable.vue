@@ -114,14 +114,14 @@ const skeletonRowCount = computed(() => {
   <div ref="tableContainerRef" class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
     <div class="min-w-[360px] flex flex-col h-full">
       <div class="shrink-0 border-b bg-muted/30">
-        <Table no-scroll>
-          <TableHeader class="[&_th]:h-10">
+        <Table no-scroll class="pinia-table">
+          <TableHeader class="[&_th]:h-10 [&_th]:px-2">
             <TableRow class="hover:bg-transparent">
-              <TableHead class="pinia-cell-star pl-4" />
+              <TableHead class="pinia-cell-star" />
               <TableHead class="text-xs font-semibold">Name</TableHead>
-              <TableHead v-if="columns.state" class="w-[80px] text-xs font-semibold text-center">State</TableHead>
-              <TableHead v-if="columns.getters" class="w-[80px] text-xs font-semibold text-center">Getters</TableHead>
-              <TableHead class="pinia-cell-actions w-[60px] p-0">
+              <TableHead v-if="columns.state" class="pinia-cell-state text-xs font-semibold text-center">State</TableHead>
+              <TableHead v-if="columns.getters" class="pinia-cell-getters text-xs font-semibold text-center">Getters</TableHead>
+              <TableHead class="pinia-cell-actions">
                 <div class="flex justify-center">
                   <TableColumnSelector
                     :columns="{ ...columns }"
@@ -140,7 +140,7 @@ const skeletonRowCount = computed(() => {
         <div v-if="entries.length === 0 && !isLoading" class="pinia-empty-container">
           No stores found
         </div>
-        <Table v-else no-scroll>
+        <Table v-else no-scroll class="pinia-table">
         <TableBody>
           <ContextMenu v-for="store in entries" :key="store.id">
             <ContextMenuTrigger as-child>
@@ -173,10 +173,10 @@ const skeletonRowCount = computed(() => {
                   </div>
                 </TableCell>
                 
-                <TableCell v-if="columns.state" class="w-[80px] py-2 text-center">
+                <TableCell v-if="columns.state" class="pinia-cell-state py-2 text-center">
                   <Badge 
                     v-if="hasStateKeys(store)"
-                    variant="secondary" 
+                    variant="outline" 
                     class="text-xs font-mono"
                   >
                     {{ store.stateKeys }}
@@ -184,10 +184,10 @@ const skeletonRowCount = computed(() => {
                   <span v-else class="text-xs text-muted-foreground">—</span>
                 </TableCell>
                 
-                <TableCell v-if="columns.getters" class="w-[80px] py-2 text-center">
+                <TableCell v-if="columns.getters" class="pinia-cell-getters py-2 text-center">
                   <Badge 
                     v-if="hasGetterKeys(store)"
-                    variant="outline" 
+                    variant="secondary" 
                     class="text-xs font-mono"
                   >
                     {{ store.getterKeys }}
@@ -195,7 +195,7 @@ const skeletonRowCount = computed(() => {
                   <span v-else class="text-xs text-muted-foreground">—</span>
                 </TableCell>
 
-                <TableCell class="pinia-cell-actions w-[60px] py-2 px-0">
+                <TableCell class="pinia-cell-actions py-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                       <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
@@ -229,13 +229,13 @@ const skeletonRowCount = computed(() => {
               <TableCell class="py-2">
                 <Skeleton class="h-4 w-32" />
               </TableCell>
-              <TableCell v-if="columns.state" class="w-[80px] py-2 text-center">
+              <TableCell v-if="columns.state" class="pinia-cell-state py-2 text-center">
                 <Skeleton class="h-5 w-8 mx-auto" />
               </TableCell>
-              <TableCell v-if="columns.getters" class="w-[80px] py-2 text-center">
+              <TableCell v-if="columns.getters" class="pinia-cell-getters py-2 text-center">
                 <Skeleton class="h-5 w-8 mx-auto" />
               </TableCell>
-              <TableCell class="pinia-cell-actions w-[60px] py-2 px-0">
+              <TableCell class="pinia-cell-actions py-2">
                 <Skeleton class="h-6 w-6 rounded mx-auto" />
               </TableCell>
             </TableRow>
@@ -277,11 +277,11 @@ const skeletonRowCount = computed(() => {
   background-clip: padding-box;
 }
 
-/* Star column - align like Props */
+/* Star column - align like Props (8px padding to match header/row) */
 .pinia-cell-star {
   width: 40px;
-  padding-left: 16px;
-  padding-right: 4px;
+  padding-left: 8px !important;
+  padding-right: 4px !important;
 }
 
 .star-cell {
@@ -290,14 +290,40 @@ const skeletonRowCount = computed(() => {
   align-items: center;
 }
 
-.pinia-cell-actions {
+/* State / Getters - align with Props Passed/Declared (56px) */
+.pinia-cell-state,
+.pinia-cell-getters {
+  width: 56px;
+  min-width: 56px;
   text-align: center;
 }
 
-/* Ensure ScrollArea viewport and content fill height so empty state can center */
+.pinia-cell-actions {
+  width: 44px;
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Ensure header and body tables have same column widths - reserve scrollbar space */
+.pinia-scroll-area :deep([data-reka-scroll-area-viewport]) {
+  scrollbar-gutter: stable;
+}
+
 .pinia-scroll-area :deep([data-reka-scroll-area-viewport]),
 .pinia-scroll-area :deep([data-reka-scroll-area-viewport] > *) {
   height: 100%;
+}
+
+/* Override TableCell default p-4 - use 8px to match header [&_th]:px-2 for alignment */
+.pinia-table :deep(th),
+.pinia-table :deep(td) {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.pinia-table :deep(.pinia-cell-star),
+.pinia-table :deep(.pinia-cell-actions) {
+  padding-right: 18px;
 }
 
 /* Scroll content wrapper - fills viewport for empty state centering */

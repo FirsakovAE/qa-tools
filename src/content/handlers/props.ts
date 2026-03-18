@@ -130,12 +130,13 @@ export const handleGetComponentProps: RuntimeHandler = (message, sender, sendRes
     .then((response: any) => {
       sendResponse({
         props: response.props || {},
+        rawProps: response.rawProps || {},
         newUid: response.newUid
       })
     })
     .catch((error) => {
       console.error('[content/handlers/props] GET_COMPONENT_PROPS failed:', error)
-      sendResponse({ props: {} })
+      sendResponse({ props: {}, rawProps: {} })
     })
 
   return true

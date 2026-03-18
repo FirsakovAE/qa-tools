@@ -11,7 +11,7 @@
  */
 
 import { getMetaStore, type ComponentMeta, type PropsSnapshot } from './meta-store'
-import { serializeProps } from './serialize'
+import { serializeProps, serializeRawPropsForDeclared } from './serialize'
 
 // ============================================================================
 // Types
@@ -223,6 +223,37 @@ export function readPropsByUid(uid: number): SerializedProps | null {
 
   // Explicit request - read props regardless of expanded state
   return readComponentPropsForce(meta)
+}
+
+/**
+ * Read props and rawProps (declared) by UID.
+ * Returns both passed (serialized) and declared (rawProps as JSON-serializable) for Passed/Declared sections.
+ */
+export function readPropsWithRawByUid(uid: number): { props: Record<string, any>; rawProps: Record<string, any> } | null {
+  const store = getMetaStore()
+  const meta = store.getByUid(uid)
+  if (!meta) return null
+
+  const instance = getVueInstance(meta)
+  const raw = extractRawProps(instance)
+  if (!raw || typeof raw !== 'object') return { props: {}, rawProps: {} }
+
+  const props = serializeProps(raw) as Record<string, any>
+  const rawProps = serializeRawPropsForDeclared(raw)
+  return { props, rawProps }
+}
+
+/**
+ * Read props and rawProps by meta (for fallback lookup by stable id).
+ */
+export function readPropsWithRawByMeta(meta: ComponentMeta): { props: Record<string, any>; rawProps: Record<string, any> } {
+  const instance = getVueInstance(meta)
+  const raw = extractRawProps(instance)
+  if (!raw || typeof raw !== 'object') return { props: {}, rawProps: {} }
+
+  const props = serializeProps(raw) as Record<string, any>
+  const rawProps = serializeRawPropsForDeclared(raw)
+  return { props, rawProps }
 }
 
 /**

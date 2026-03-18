@@ -100,6 +100,15 @@ const componentPath = computed(() =>
   props.node.id?.startsWith('uid:') ? props.node.id : (props.node.componentUid || props.node.id || '')
 )
 
+// --- Sections (Received / Declared, like PiniaDetails State / Getters) ---
+type SectionId = 'received' | 'declared'
+const activeSection = ref<SectionId>('received')
+
+const sections = computed<Array<{ id: SectionId; label: string }>>(() => [
+  { id: 'received', label: 'Received' },
+  { id: 'declared', label: 'Declared' }
+])
+
 // --- JSON State ---
 const json = computed(() => {
   if (props.node.props) return JSON.stringify(props.node.props, null, 2)
@@ -112,6 +121,13 @@ const isEditing = ref(false)
 
 const isJsonValid = computed(() => {
   try { JSON.parse(editedJson.value); return true } catch { return false }
+})
+
+/** Declared section: rawProps as JSON (read-only) */
+const rawPropsJson = computed(() => {
+  const raw = props.node.rawProps
+  if (!raw || typeof raw !== 'object') return '{}'
+  return JSON.stringify(raw, null, 2)
 })
 
 // Watch for node changes
@@ -240,7 +256,7 @@ async function saveChanges() {
             <span class="font-semibold truncate">{{ nodeName }}</span>
             <Tooltip>
               <TooltipTrigger as-child>
-                <Badge variant="outline" class="text-xs truncate max-w-[200px]">
+                <Badge variant="secondary" class="text-xs truncate max-w-[200px]">
                   {{ truncatedElementInfo }}
                 </Badge>
               </TooltipTrigger>
@@ -248,9 +264,9 @@ async function saveChanges() {
                 {{ elementInfo }}
               </TooltipContent>
             </Tooltip>
-            <span v-if="propsSizeFormatted" class="text-xs text-muted-foreground font-mono shrink-0">
+            <Badge v-if="propsSizeFormatted" variant="outline" class="text-xs font-mono shrink-0">
               {{ propsSizeFormatted }}
-            </span>
+            </Badge>
           </div>
           <div class="text-xs text-muted-foreground">
             Updated: {{ formattedTime }}
@@ -297,8 +313,8 @@ async function saveChanges() {
             </TooltipContent>
           </Tooltip>
           
-          <!-- Edit/Save/Cancel buttons -->
-          <Tooltip v-if="!isEditing">
+          <!-- Edit/Save/Cancel buttons (only for Received section) -->
+          <Tooltip v-if="!isEditing && activeSection === 'received'">
             <TooltipTrigger as-child>
               <Button
                 variant="ghost"
@@ -351,16 +367,51 @@ async function saveChanges() {
         </div>
       </div>
 
-      <!-- JSON Editor -->
-      <div class="flex-1 min-h-0">
-        <JsonEditor
-          v-model="editedJson"
-          :editable="isEditing"
-          :show-copy="true"
-          :mode="jsonMode"
-          :full-height="true"
-          class="h-full"
-        />
+      <!-- Section tabs (Menubar style - like PiniaDetails) -->
+      <div class="shrink-0 flex items-center gap-1 p-1 border-b bg-muted/30">
+        <button
+          v-for="section in sections"
+          :key="section.id"
+          class="px-3 py-1.5 text-sm font-medium rounded-sm transition-colors"
+          :class="{
+            'bg-secondary text-secondary-foreground': activeSection === section.id,
+            'hover:bg-secondary/50 text-muted-foreground': activeSection !== section.id
+          }"
+          @click="activeSection = section.id"
+        >
+          {{ section.label }}
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div class="flex-1 min-h-0 overflow-hidden">
+        <!-- Received section: current data (editable) -->
+        <div v-if="activeSection === 'received'" class="h-full flex flex-col">
+          <div class="flex-1 min-h-0">
+            <JsonEditor
+              v-model="editedJson"
+              :editable="isEditing"
+              :show-copy="true"
+              :mode="jsonMode"
+              :full-height="true"
+              class="h-full"
+            />
+          </div>
+        </div>
+
+        <!-- Declared section: rawProps as JSON (read-only) -->
+        <div v-else-if="activeSection === 'declared'" class="h-full flex flex-col">
+          <div class="flex-1 min-h-0">
+            <JsonEditor
+              :model-value="rawPropsJson"
+              :editable="false"
+              :show-copy="true"
+              :mode="jsonMode"
+              :full-height="true"
+              class="h-full"
+            />
+          </div>
+        </div>
       </div>
     </div>
   </TooltipProvider>

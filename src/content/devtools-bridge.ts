@@ -19,6 +19,30 @@ import {
 import { injectScript } from './script-injector'
 import { addMessageListenerIfNeeded } from './detection'
 
+let devtoolsPort: chrome.runtime.Port | null = null
+const onDisconnectCleanups: Array<() => void> = []
+
+/**
+ * Register a cleanup to run when DevTools panel disconnects (e.g. stop props inspector)
+ */
+export function registerOnDisconnectCleanup(fn: () => void): void {
+  onDisconnectCleanups.push(fn)
+}
+
+/**
+ * Send a broadcast message to the DevTools panel (e.g. PROPS_INSPECTOR_ELEMENT_SELECTED).
+ * Only works when panel is connected via port.
+ */
+export function sendBroadcastToPanel(msg: { type: string; [key: string]: unknown }): void {
+  if (devtoolsPort) {
+    try {
+      devtoolsPort.postMessage({ broadcast: true, message: msg })
+    } catch (e) {
+      console.error('[content/devtools-bridge] sendBroadcastToPanel failed:', e)
+    }
+  }
+}
+
 export function setupDevtoolsBridge(): void {
   try {
     if (!chrome?.runtime?.id) return
@@ -29,6 +53,8 @@ export function setupDevtoolsBridge(): void {
 
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== 'devtools') return
+
+    devtoolsPort = port
 
     // Inject detection script if not loaded yet
     if (!injectedScriptLoaded) {
@@ -70,6 +96,15 @@ export function setupDevtoolsBridge(): void {
 
     // DevTools panel closed → clean up injected interception
     port.onDisconnect.addListener(() => {
+      devtoolsPort = null
+      for (const fn of onDisconnectCleanups) {
+        try {
+          fn()
+        } catch (e) {
+          console.error('[content/devtools-bridge] onDisconnect cleanup failed:', e)
+        }
+      }
+      onDisconnectCleanups.length = 0
       window.removeEventListener('message', broadcastListener)
 
       // Trigger fresh detection so overlay gets correct Vue/Pinia flags when user switches to it

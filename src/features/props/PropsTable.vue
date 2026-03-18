@@ -34,7 +34,7 @@ const props = defineProps<{
 const settings = useInspectorSettingsSync()
 const columns = computed(() => {
   const cols = settings.value?.propsTableColumns ?? defaultInspectorSettings.propsTableColumns
-  return cols ?? { name: true, rootElement: true, propsPassed: true, propsDeclared: true }
+  return cols ?? { name: true, rootElement: true, propsReceived: true, propsDeclared: true }
 })
 
 function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
@@ -48,7 +48,7 @@ function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
 
 const propsColumnDefs = [
   { key: 'rootElement', label: 'Root Element' },
-  { key: 'propsPassed', label: 'Passed' },
+  { key: 'propsReceived', label: 'Received' },
   { key: 'propsDeclared', label: 'Declared' },
 ] as const
 
@@ -225,7 +225,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
         <div class="props-cell props-cell-star"></div>
         <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
         <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
-        <div v-if="columns.propsPassed" class="props-cell props-cell-props text-xs font-semibold">Passed</div>
+        <div v-if="columns.propsReceived" class="props-cell props-cell-props text-xs font-semibold">Received</div>
         <div v-if="columns.propsDeclared" class="props-cell props-cell-props text-xs font-semibold">Declared</div>
               <div class="props-cell props-cell-actions virtual-table__cell-actions">
                 <TableColumnSelector
@@ -282,7 +282,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                   {{ truncateElementInfo(row.elementInfo) }}
                 </Badge>
               </div>
-              <div v-if="columns.propsPassed" class="props-cell props-cell-props">
+              <div v-if="columns.propsReceived" class="props-cell props-cell-props">
                 <Badge 
                   v-if="row.hasPropsFlag"
                   variant="outline" 
@@ -295,7 +295,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               <div v-if="columns.propsDeclared" class="props-cell props-cell-props">
                 <Badge 
                   v-if="row.hasPropsFlag"
-                  variant="outline" 
+                  variant="secondary" 
                   class="text-xs font-mono"
                 >
                   {{ getPropsDeclared(row) }}
@@ -340,7 +340,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
             <div v-if="columns.rootElement" class="props-cell props-cell-element">
               <Skeleton class="h-5 w-24" />
             </div>
-            <div v-if="columns.propsPassed" class="props-cell props-cell-props">
+            <div v-if="columns.propsReceived" class="props-cell props-cell-props">
               <Skeleton class="h-5 w-8 mx-auto" />
             </div>
             <div v-if="columns.propsDeclared" class="props-cell props-cell-props">
@@ -357,7 +357,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 </template>
 
 <style scoped>
-/* Row layout */
+/* Row layout - padding matches header (padding-right: 0 when scrollbar-gutter reserves space) */
 .props-row {
   display: flex;
   align-items: center;
@@ -378,20 +378,25 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   justify-content: center;
 }
 
+/* Name: shrinks first (high flex-shrink), min 130px; Root Element shrinks only after Name hits min */
 .props-cell-name {
-  flex: 1;
-  min-width: 0;
+  flex: 1 10 0;
+  min-width: 130px;
   text-align: left;
   padding-left: 8px;
+  overflow: hidden;
 }
 
+/* Root Element: default 180px, min 100px, shrinks when Name already at min */
 .props-cell-element {
-  width: 120px;
+  flex: 0 1 180px;
+  min-width: 100px;
   text-align: left;
   padding: 0;
+  overflow: hidden;
 }
 
-/* Props columns (Passed / Declared) */
+/* Props columns (Received / Declared) */
 .props-cell-props {
   width: 56px;
   display: flex;

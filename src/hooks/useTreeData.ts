@@ -4,7 +4,7 @@ import type { TreeNodeModel } from '@/types/tree'
 import { StableUpdateManager } from '@/utils/stableUpdate'
 import { DataServiceFactory } from '@/services/dataServiceFactory'
 import type { DataService } from '@/services/dataServiceFactory'
-import type { TreeSearchOptions } from '@/types/search'
+import type { TreeSearchOptions, TreeRootFilter } from '@/types/search'
 
 // Flood protection constants
 const FLOOD_WINDOW_MS = 5000 // 5 seconds window
@@ -76,17 +76,17 @@ export function useTreeData() {
         }
     }
 
-    async function loadData(search?: TreeSearchOptions, forceReload = false) {
+    async function loadData(search?: TreeSearchOptions, forceReload = false, rootFilter?: TreeRootFilter) {
         if (!settings.value || !dataService.value || isLoading.value) return
 
         // Если данные уже загружены и не требуется принудительная перезагрузка, пропускаем
-        if (hasLoadedData.value && !forceReload && !search) return
+        if (hasLoadedData.value && !forceReload && !search && !rootFilter) return
 
         isLoading.value = true
         error.value = null
 
         try {
-            const options = { blacklist: settings.value?.blacklist }
+            const options = { blacklist: settings.value?.blacklist, rootFilter }
             let data: TreeNodeModel[]
             if (search && dataService.value.refreshComponents) {
                 data = await dataService.value.getTreeData(search, forceReload, options)
@@ -176,7 +176,7 @@ export function useTreeData() {
         window.removeEventListener('message', broadcastHandler)
     })
 
-    const refresh = () => loadData(undefined, true)
+    const refresh = (rootFilter?: TreeRootFilter) => loadData(undefined, true, rootFilter)
 
     return {
         treeData: readonly(stableTreeData),

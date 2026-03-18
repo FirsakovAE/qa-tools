@@ -134,7 +134,7 @@ export interface NetworkTableColumnsSettings {
 export interface PropsTableColumnsSettings {
     name: boolean
     rootElement: boolean
-    propsPassed: boolean
+    propsReceived: boolean
     propsDeclared: boolean
 }
 

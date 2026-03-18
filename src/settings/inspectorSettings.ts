@@ -17,7 +17,7 @@ const defaultNetworkTableColumns: NetworkTableColumnsSettings = {
 const defaultPropsTableColumns: PropsTableColumnsSettings = {
     name: true,
     rootElement: true,
-    propsPassed: true,
+    propsReceived: true,
     propsDeclared: true,
 }
 

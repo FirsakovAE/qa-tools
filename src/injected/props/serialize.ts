@@ -450,6 +450,37 @@ export function serializeProps(props: any, visited?: WeakSet<object>): any {
 }
 
 /**
+ * Serialize raw props for Declared section - includes ALL keys (including undefined).
+ * Converts non-JSON-serializable values to placeholders.
+ */
+export function serializeRawPropsForDeclared(rawProps: any): Record<string, any> {
+  if (rawProps === null || rawProps === undefined || typeof rawProps !== 'object') {
+    return {}
+  }
+
+  const normalized: Record<string, any> = {}
+  try {
+    for (const key of Object.keys(rawProps)) {
+      const v = rawProps[key]
+      if (v === undefined) {
+        normalized[key] = null
+      } else if (typeof v === 'function') {
+        normalized[key] = '[Function]'
+      } else if (v && typeof v === 'object' && typeof (v as any).nodeType === 'number') {
+        normalized[key] = '[DOM Node]'
+      } else {
+        normalized[key] = v
+      }
+    }
+  } catch (e) {
+    console.error('[injected/props/serialize] serializeRawPropsForDeclared failed:', e)
+    return {}
+  }
+
+  return serializeProps(normalized) as Record<string, any>
+}
+
+/**
  * Lightweight check if a value can be safely serialized
  */
 export function canSerialize(value: any): boolean {
