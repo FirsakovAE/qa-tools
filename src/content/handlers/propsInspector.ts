@@ -7,6 +7,7 @@
  *
  * PROPS_INSPECTOR_START: adds capture overlay, mousemove/pointerdown listeners.
  * PROPS_INSPECTOR_STOP: removes overlay, listeners, unhighlights, hides panel.
+ * Escape: exits pick mode and notifies panel/UI (PROPS_INSPECTOR_CANCELLED).
  */
 
 import type { RuntimeHandler } from '../types'
@@ -271,6 +272,16 @@ function onScrollResize(): void {
   }
 }
 
+function onInspectorKeyDown(e: KeyboardEvent): void {
+  if (!isInspectorActive) return
+  if (e.key !== 'Escape') return
+  e.preventDefault()
+  e.stopPropagation()
+  stopPropsInspector()
+  sendBroadcastToPanel({ type: 'PROPS_INSPECTOR_CANCELLED' })
+  broadcastToUI({ type: 'PROPS_INSPECTOR_CANCELLED' })
+}
+
 function createCaptureOverlay(): HTMLDivElement {
   if (captureOverlay) return captureOverlay
   const overlay = document.createElement('div')
@@ -328,6 +339,7 @@ export function stopPropsInspector(): void {
   }
   window.removeEventListener('scroll', onScrollResize, { passive: true } as AddEventListenerOptions)
   window.removeEventListener('resize', onScrollResize)
+  window.removeEventListener('keydown', onInspectorKeyDown, true)
 }
 
 function startInspector(): void {
@@ -337,6 +349,7 @@ function startInspector(): void {
   injectPickModeStyles()
   document.body.classList.add('vue-inspector-pick-mode')
   createCaptureOverlay()
+  window.addEventListener('keydown', onInspectorKeyDown, true)
 }
 
 export const handlePropsInspectorStart: RuntimeHandler = (message, sender, sendResponse) => {

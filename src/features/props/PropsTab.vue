@@ -531,18 +531,38 @@ async function clearInspectFilter() {
   await refresh()
 }
 
+/** Esc while focus is in DevTools / UI iframe — content script on the page never sees this key. */
+function onInspectorEscapeKeydown(e: KeyboardEvent) {
+  if (!isInspectorMode.value || e.key !== 'Escape') return
+  e.preventDefault()
+  e.stopPropagation()
+  isInspectorMode.value = false
+  runtime.sendMessage({ type: 'PROPS_INSPECTOR_STOP' }).catch(() => {})
+}
+
+watch(isInspectorMode, active => {
+  if (active) {
+    window.addEventListener('keydown', onInspectorEscapeKeydown, true)
+  } else {
+    window.removeEventListener('keydown', onInspectorEscapeKeydown, true)
+  }
+})
+
 // Listen for inspector events from content script (via devtools port broadcast)
 let inspectorUnsubscribe: (() => void) | null = null
 onMounted(() => {
   inspectorUnsubscribe = runtime.onMessage((msg: { type?: string; uid?: number }) => {
     if (msg.type === 'PROPS_INSPECTOR_ELEMENT_SELECTED' && typeof msg.uid === 'number') {
       handleInspectorElementSelected(msg.uid)
+    } else if (msg.type === 'PROPS_INSPECTOR_CANCELLED') {
+      isInspectorMode.value = false
     }
   })
 })
 
 // Exit inspector on tab switch, DevTools close
 onUnmounted(() => {
+  window.removeEventListener('keydown', onInspectorEscapeKeydown, true)
   if (inspectorUnsubscribe) {
     inspectorUnsubscribe()
     inspectorUnsubscribe = null
