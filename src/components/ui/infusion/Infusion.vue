@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted, type CSSProperties } from 'vue';
+import { computed, ref, watch, onUnmounted, type CSSProperties } from 'vue';
 import { useResizeInProgress } from '@/composables/useResizeInProgress';
 
 interface Props {
@@ -11,9 +11,6 @@ interface Props {
   positionX?: number;
   positionY?: number;
   scale?: number;
-  noiseIntensity?: number;
-  noiseScale?: number;
-  noiseOpacity?: number;
   blendMode?: CSSProperties['mixBlendMode'];
   relative?: boolean;
   type?: 'image' | 'video';
@@ -28,9 +25,6 @@ const props = withDefaults(defineProps<Props>(), {
   positionX: 50,
   positionY: 50,
   scale: 100,
-  noiseIntensity: 0.2,
-  noiseScale: 1,
-  noiseOpacity: 0.05,
   blendMode: 'normal',
   relative: false,
   type: 'image',
@@ -44,39 +38,8 @@ const imageStyle = computed(() => ({
   '--infusion-position-x': `${props.positionX}%`,
   '--infusion-position-y': `${props.positionY}%`,
   '--infusion-scale': (props.scale / 100) * 1.1,
-  '--infusion-noise-intensity': props.noiseIntensity,
-  '--infusion-noise-scale': props.noiseScale,
-  '--infusion-noise-opacity': props.noiseOpacity,
   'mixBlendMode': props.blendMode,
 }));
-
-// Static noise — cached once on mount to avoid recomputation on every reactive update
-const noiseDataUrl = ref('')
-
-onMounted(() => {
-  if (props.noiseIntensity > 0 && typeof document !== 'undefined') {
-    const canvas = document.createElement('canvas')
-    canvas.width = 256
-    canvas.height = 256
-    const context = canvas.getContext('2d')
-
-    if (context) {
-      const imageData = context.createImageData(canvas.width, canvas.height)
-      const data = imageData.data
-
-      for (let index = 0; index < data.length; index += 4) {
-        const value = Math.random() * 255
-        data[index] = value
-        data[index + 1] = value
-        data[index + 2] = value
-        data[index + 3] = props.noiseIntensity * 255
-      }
-
-      context.putImageData(imageData, 0, 0)
-      noiseDataUrl.value = canvas.toDataURL()
-    }
-  }
-})
 
 const containerClass = computed(() => [
   'top-0 left-0 overflow-hidden pointer-events-none z-(--infusion-z-index)',
@@ -92,8 +55,6 @@ const mediaStyle = computed(() => ({
   transformOrigin: `var(--infusion-position-x) var(--infusion-position-y)`,
   transform: `scale(var(--infusion-scale))`,
 }));
-
-const noiseClass = 'absolute top-0 left-0 w-full h-full bg-repeat mix-blend-overlay';
 
 // Page Visibility API + resize detection — pause video when tab hidden or resizing to reduce CPU/GPU load
 const videoRef = ref<HTMLVideoElement | null>(null)
@@ -160,15 +121,6 @@ onUnmounted(() => {
       muted
       playsinline
       alt=""
-    />
-    <div
-      v-if="noiseIntensity > 0"
-      :class="noiseClass"
-      :style="{
-        backgroundImage: `url(${noiseDataUrl})`,
-        backgroundSize: 'calc(256px * var(--infusion-noise-scale))',
-        opacity: 'var(--infusion-noise-opacity)',
-      }"
     />
   </div>
 </template>
