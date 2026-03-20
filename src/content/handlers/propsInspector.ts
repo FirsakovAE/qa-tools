@@ -8,6 +8,9 @@
  * PROPS_INSPECTOR_START: adds capture overlay, mousemove/pointerdown listeners.
  * PROPS_INSPECTOR_STOP: removes overlay, listeners, unhighlights, hides panel.
  * Escape: exits pick mode and notifies panel/UI (PROPS_INSPECTOR_CANCELLED).
+ *
+ * Overlay (iframe): capture-слой ниже #vue-inspector-root; движение/клики по шеврону и панели
+ * не в режиме прицела; глобальный crosshair в CSS исключён для chrome инспектора.
  */
 
 import type { RuntimeHandler } from '../types'
@@ -20,6 +23,8 @@ import { requestWindow } from '../ipc'
 const HIGHLIGHT_OVERLAY_ID = 'vue-inspector-highlight-overlay'
 const INFO_PANEL_ID = 'vue-inspector-info-panel'
 const CAPTURE_OVERLAY_ID = 'vue-inspector-capture-overlay'
+/** Ниже плашки Props overlay (#vue-inspector-root), чтобы шеврон/iframe были поверх и имели обычный курсор */
+const CAPTURE_OVERLAY_Z_INDEX = 2147483645
 
 let isInspectorActive = false
 let captureOverlay: HTMLDivElement | null = null
@@ -84,6 +89,16 @@ function getUidFromElement(el: Element | null): number | null {
   if (!uidStr) return null
   const uid = parseInt(uidStr, 10)
   return isNaN(uid) ? null : uid
+}
+
+/** Overlay iframe/chevron и плавающая info-панель — не зона пикинга, обычный курсор и без подсветки. */
+function isPointOverPickModeChrome(x: number, y: number): boolean {
+  const el = document.elementFromPoint(x, y)
+  if (!el) return false
+  return (
+    el.closest('#vue-inspector-root') != null ||
+    el.closest(`#${INFO_PANEL_ID}`) != null
+  )
 }
 
 function createInfoPanel(): HTMLDivElement {
@@ -217,9 +232,26 @@ let lastMoveCoords: { x: number; y: number } | null = null
 let fetchDebounceTimer: number | null = null
 const FETCH_DEBOUNCE_MS = 60
 
-function onPointerMove(e: PointerEvent): void {
+function onPickPointerMove(e: PointerEvent): void {
   if (!isInspectorActive) return
-  lastMoveCoords = { x: e.clientX, y: e.clientY }
+  const cx = e.clientX
+  const cy = e.clientY
+
+  if (isPointOverPickModeChrome(cx, cy)) {
+    if (moveRafId) {
+      cancelAnimationFrame(moveRafId)
+      moveRafId = null
+    }
+    lastMoveCoords = null
+    if (lastHoveredUid !== null) {
+      lastHoveredUid = null
+      unhighlightElement()
+    }
+    hideInfoPanel()
+    return
+  }
+
+  lastMoveCoords = { x: cx, y: cy }
   if (moveRafId) return
   moveRafId = requestAnimationFrame(() => {
     moveRafId = null
@@ -246,14 +278,15 @@ function onPointerMove(e: PointerEvent): void {
   })
 }
 
-function onPointerDown(e: PointerEvent): void {
+function onPickPointerDown(e: PointerEvent): void {
   if (!isInspectorActive) return
+  const x = e.clientX
+  const y = e.clientY
+  if (isPointOverPickModeChrome(x, y)) return
 
   e.preventDefault()
   e.stopPropagation()
 
-  const x = e.clientX
-  const y = e.clientY
 
   const el = getElementAtPoint(x, y)
   const uid = getUidFromElement(el)
@@ -289,12 +322,10 @@ function createCaptureOverlay(): HTMLDivElement {
   overlay.style.cssText = `
     position: fixed;
     inset: 0;
-    z-index: 2147483647;
+    z-index: ${CAPTURE_OVERLAY_Z_INDEX};
     pointer-events: auto;
     cursor: crosshair;
   `
-  overlay.addEventListener('pointermove', onPointerMove, { passive: true })
-  overlay.addEventListener('pointerdown', onPointerDown, { capture: true })
   window.addEventListener('scroll', onScrollResize, { passive: true })
   window.addEventListener('resize', onScrollResize)
   document.documentElement.appendChild(overlay)
@@ -310,6 +341,17 @@ function injectPickModeStyles(): void {
     body.vue-inspector-pick-mode,
     body.vue-inspector-pick-mode * {
       cursor: crosshair !important;
+    }
+    #vue-inspector-root,
+    #vue-inspector-host,
+    #vue-inspector-ui {
+      cursor: auto !important;
+    }
+    #vue-inspector-toggle {
+      cursor: pointer !important;
+    }
+    #vue-inspector-resize-handle {
+      cursor: ns-resize !important;
     }
   `
   document.head.appendChild(style)
@@ -340,6 +382,8 @@ export function stopPropsInspector(): void {
   window.removeEventListener('scroll', onScrollResize, { passive: true } as AddEventListenerOptions)
   window.removeEventListener('resize', onScrollResize)
   window.removeEventListener('keydown', onInspectorKeyDown, true)
+  window.removeEventListener('pointermove', onPickPointerMove, { capture: true })
+  window.removeEventListener('pointerdown', onPickPointerDown, { capture: true })
 }
 
 function startInspector(): void {
@@ -350,6 +394,8 @@ function startInspector(): void {
   document.body.classList.add('vue-inspector-pick-mode')
   createCaptureOverlay()
   window.addEventListener('keydown', onInspectorKeyDown, true)
+  window.addEventListener('pointermove', onPickPointerMove, { passive: true, capture: true })
+  window.addEventListener('pointerdown', onPickPointerDown, { capture: true })
 }
 
 export const handlePropsInspectorStart: RuntimeHandler = (message, sender, sendResponse) => {

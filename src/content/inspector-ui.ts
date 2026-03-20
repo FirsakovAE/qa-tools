@@ -35,7 +35,7 @@ export function injectInspectorUI(): void {
     left: 0;
     bottom: 0;
     width: 100vw;
-    z-index: 1000000;
+    z-index: 2147483647;
     pointer-events: none;
     user-select: none;
     -webkit-user-select: none;
@@ -236,6 +236,7 @@ export function injectInspectorUI(): void {
 
   // Create resize handle
   const resizeHandle = document.createElement('div')
+  resizeHandle.id = 'vue-inspector-resize-handle'
   resizeHandle.style.cssText = `
     position: absolute;
     top: 0;
