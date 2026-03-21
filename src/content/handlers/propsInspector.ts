@@ -11,6 +11,7 @@
  *
  * Overlay (iframe): capture-слой ниже #vue-inspector-root; движение/клики по шеврону и панели
  * не в режиме прицела; глобальный crosshair в CSS исключён для chrome инспектора.
+ * В режиме overlay панель сворачивается на время pick и восстанавливается после выбора/Esc.
  */
 
 import type { RuntimeHandler } from '../types'
@@ -19,6 +20,10 @@ import { ELEMENT_UID_ATTRIBUTE, getElementByUid } from '../state'
 import { sendBroadcastToPanel, registerOnDisconnectCleanup } from '../devtools-bridge'
 import { broadcastToUI } from '../ui-bridge'
 import { requestWindow } from '../ipc'
+import {
+  onPropsInspectOverlaySessionEnd,
+  onPropsInspectOverlaySessionStart
+} from '../inspector-ui'
 
 const HIGHLIGHT_OVERLAY_ID = 'vue-inspector-highlight-overlay'
 const INFO_PANEL_ID = 'vue-inspector-info-panel'
@@ -27,6 +32,8 @@ const CAPTURE_OVERLAY_ID = 'vue-inspector-capture-overlay'
 const CAPTURE_OVERLAY_Z_INDEX = 2147483645
 
 let isInspectorActive = false
+/** When true, overlay iframe collapse/restore is tied to this pick session (from settings). */
+let overlayCollapseSyncForSession = false
 let captureOverlay: HTMLDivElement | null = null
 let lastHoveredUid: number | null = null
 let infoPanel: HTMLDivElement | null = null
@@ -384,10 +391,18 @@ export function stopPropsInspector(): void {
   window.removeEventListener('keydown', onInspectorKeyDown, true)
   window.removeEventListener('pointermove', onPickPointerMove, { capture: true })
   window.removeEventListener('pointerdown', onPickPointerDown, { capture: true })
+
+  if (overlayCollapseSyncForSession) {
+    onPropsInspectOverlaySessionEnd()
+    overlayCollapseSyncForSession = false
+  }
 }
 
 function startInspector(): void {
   if (isInspectorActive) return
+  if (overlayCollapseSyncForSession) {
+    onPropsInspectOverlaySessionStart()
+  }
   isInspectorActive = true
 
   injectPickModeStyles()
@@ -402,6 +417,7 @@ export const handlePropsInspectorStart: RuntimeHandler = (message, sender, sendR
   const theme = message.theme === 'light' ? 'light' : 'dark'
   infoPanelTheme = theme
   if (infoPanel) applyPanelTheme(infoPanel, theme)
+  overlayCollapseSyncForSession = message.collapseOverlayOnPropsInspect !== false
   registerOnDisconnectCleanup(stopPropsInspector)
   startInspector()
   sendResponse({ success: true })

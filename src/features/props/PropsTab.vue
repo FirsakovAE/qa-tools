@@ -514,7 +514,8 @@ async function toggleInspectorMode() {
     isInspectorMode.value = true
     await runtime.sendMessage({
       type: 'PROPS_INSPECTOR_START',
-      theme: settings.value?.theme ?? 'dark'
+      theme: settings.value?.theme ?? 'dark',
+      collapseOverlayOnPropsInspect: settings.value?.collapseOverlayOnPropsInspect !== false
     })
   }
 }

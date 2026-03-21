@@ -7,6 +7,8 @@ import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
 import SettingsTableSection from '../components/SettingsTableSection.vue'
 import type { TableColumn } from '../components/SettingsTableSection.vue'
 import type { MenuAction } from '@/components/OptionsItemActionsMenu'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { Power, Trash } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -114,6 +116,20 @@ function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
       id-prefix="props-search"
       @toggle="(k) => toggleSearch(k as SearchKey)"
     />
+
+    <div class="space-y-4 border-t border-border pt-4">
+      <h4 class="text-sm font-semibold">Inspect Mode</h4>
+      <div class="flex items-center space-x-3">
+        <Checkbox
+          id="props-collapse-overlay-inspect"
+          :model-value="settings.collapseOverlayOnPropsInspect"
+          @update:model-value="settings.collapseOverlayOnPropsInspect = $event as boolean"
+        />
+        <Label for="props-collapse-overlay-inspect" class="text-sm leading-snug cursor-pointer">
+          Hide overlay while inspecting
+        </Label>
+      </div>
+    </div>
 
     <SettingsTableSection
       title="Component Blacklist"

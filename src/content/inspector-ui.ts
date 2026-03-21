@@ -13,6 +13,21 @@ import { injectScript } from './script-injector'
 import { setupUIMessageBridge, removeUIMessageBridge, sendFlagsToUI, broadcastToUI, UI_MESSAGE_PREFIX } from './ui-bridge'
 import { addMessageListenerIfNeeded } from './detection'
 
+/** Overlay iframe: collapse while Props pick mode is active; restore after (Esc / select). Set by injectInspectorUI. */
+let propsInspectOverlayHooks: {
+  onSessionStart: () => void
+  onSessionEnd: () => void
+} | null = null
+
+/** Called from propsInspector when overlay exists; no-op if DevTools-only (no overlay host). */
+export function onPropsInspectOverlaySessionStart(): void {
+  propsInspectOverlayHooks?.onSessionStart()
+}
+
+export function onPropsInspectOverlaySessionEnd(): void {
+  propsInspectOverlayHooks?.onSessionEnd()
+}
+
 /**
  * Injects the Vue Inspector UI panel into the page
  */
@@ -185,14 +200,15 @@ export function injectInspectorUI(): void {
     }
   }
 
-  toggle.onclick = () => {
-    isCollapsed = !isCollapsed
+  const applyCollapsed = (nextCollapsed: boolean) => {
+    if (isCollapsed === nextCollapsed) return
+    isCollapsed = nextCollapsed
     chevron.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(180deg)'
-    
+
     // LAZY LOADING: load ALL resources only on first open
     if (!isCollapsed) {
       loadResourcesIfNeeded()
-      
+
       // When expanding with iframe already loaded: request fresh detection.
       // Fixes Vue/Pinia not being detected when switching from DevTools to Overlay mode.
       if (iframeLoaded && uiBridgeInitialized) {
@@ -205,9 +221,9 @@ export function injectInspectorUI(): void {
         window.postMessage({ type: 'VUE_INSPECTOR_CHECK_VUE' }, '*')
       }
     }
-    
+
     updateCollapsedState()
-    
+
     // Notify iframe about visibility state (for auto-refresh pause)
     if (iframe.contentWindow) {
       iframe.contentWindow.postMessage({
@@ -221,16 +237,29 @@ export function injectInspectorUI(): void {
       // Send flags when expanding — overlay may have mounted late (e.g. after media load)
       if (!isCollapsed) sendFlagsToUI()
     }
-    
+
     // RESOURCE SAVING: if Vue not found and panel collapsed - unload iframe
     // This frees ~300-500MB RAM on sites without Vue
     if (isCollapsed && !featureFlags.hasVue && iframeLoaded) {
-      // Fully unload iframe - remove src and clear
       iframe.src = 'about:blank'
       iframeLoaded = false
-      
-      // Remove listeners (will be created again on next open)
       removeUIMessageBridge()
+    }
+  }
+
+  toggle.onclick = () => applyCollapsed(!isCollapsed)
+
+  let collapsedBeforePropsInspect: boolean | null = null
+  propsInspectOverlayHooks = {
+    onSessionStart() {
+      collapsedBeforePropsInspect = isCollapsed
+      if (!isCollapsed) applyCollapsed(true)
+    },
+    onSessionEnd() {
+      if (collapsedBeforePropsInspect === null) return
+      const wasCollapsed = collapsedBeforePropsInspect
+      collapsedBeforePropsInspect = null
+      if (!wasCollapsed) applyCollapsed(false)
     }
   }
 
@@ -314,11 +343,7 @@ export function injectInspectorUI(): void {
     // Handle EXPAND_INSPECTOR from iframe (Vue site, iframe loaded but collapsed)
     if (data[UI_MESSAGE_PREFIX] && data.message?.type === 'EXPAND_INSPECTOR' &&
         event.source === iframe.contentWindow) {
-      if (isCollapsed) {
-        isCollapsed = false
-        chevron.style.transform = 'rotate(180deg)'
-        updateCollapsedState()
-      }
+      if (isCollapsed) applyCollapsed(false)
       return
     }
     
@@ -328,10 +353,7 @@ export function injectInspectorUI(): void {
         pendingNetworkMessages.push(data)
         
         // Auto-expand and reload iframe so user can interact with the breakpoint
-        isCollapsed = false
-        chevron.style.transform = 'rotate(180deg)'
-        loadResourcesIfNeeded()
-        updateCollapsedState()
+        applyCollapsed(false)
       }
     }
   })

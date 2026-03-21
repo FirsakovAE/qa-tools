@@ -242,6 +242,11 @@ export interface BaseInspectorSettings {
     networkSearch: NetworkSearchSettings
     /** Props tab search settings */
     propsSearch: PropsSearchSettings
+    /**
+     * Overlay mode: collapse the inspector iframe while Props Inspect (element picker) is active.
+     * Default true; restore panel when pick ends (Esc / selection).
+     */
+    collapseOverlayOnPropsInspect: boolean
     /** Pinia Store tab search settings */
     piniaSearch: PiniaSearchSettings
     /** Global search parameters (debounce, minLength) shared across all modules */

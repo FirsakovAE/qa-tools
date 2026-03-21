@@ -72,6 +72,7 @@ export const defaultInspectorSettings: InspectorSettings = {
     piniaTableColumns: { ...defaultPiniaTableColumns },
     networkSearch: { ...defaultNetworkSearchSettings },
     propsSearch: { ...defaultPropsSearchSettings },
+    collapseOverlayOnPropsInspect: true,
     piniaSearch: { ...defaultPiniaSearchSettings },
     searchParams: { ...defaultSearchParams },
     json: { mode: 'text' },
