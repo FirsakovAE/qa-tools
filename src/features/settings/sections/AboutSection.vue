@@ -130,6 +130,7 @@ async function handleCheckUpdates() {
 
 <template>
   <div class="space-y-6">
+    <!-- 1. Product -->
     <div class="space-y-3">
       <h4 class="text-sm font-semibold">Vue Inspector</h4>
       <div class="space-y-2 text-sm text-muted-foreground">
@@ -138,13 +139,15 @@ async function handleCheckUpdates() {
           components, props, Pinia stores, and network requests.
         </p>
         <p>
-          Version: <span class="font-mono">{{ appVersion }}</span>
+          Version <span class="font-mono">{{ appVersion }}</span>
         </p>
       </div>
     </div>
 
+    <!-- 2. Actions -->
     <div class="space-y-3">
-      <div class="flex gap-2">
+      <h4 class="text-sm font-semibold">Actions</h4>
+      <div class="flex flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -172,7 +175,8 @@ async function handleCheckUpdates() {
       </div>
     </div>
 
-    <div class="border-t pt-4 space-y-3">
+    <!-- 3. Links -->
+    <div class="border-t border-border pt-4 space-y-3">
       <h4 class="text-sm font-semibold">Links</h4>
       <div class="flex flex-col gap-2">
         <Button
@@ -182,12 +186,26 @@ async function handleCheckUpdates() {
           as="a"
           href="https://github.com/FirsakovAE/qa-tools"
           target="_blank"
+          rel="noopener noreferrer"
         >
           <Github class="w-3.5 h-3.5" />
-          GitHub Repository
+          GitHub
           <ExternalLink class="w-3 h-3 ml-auto opacity-50" />
         </Button>
       </div>
+    </div>
+
+    <!-- 4. Legal footer -->
+    <div class="border-t border-border pt-4 space-y-1.5 text-xs text-muted-foreground">
+      <p>© 2026 FirsakovAE</p>
+      <p>
+        <a
+          href="https://www.gnu.org/licenses/gpl-3.0.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-foreground/90 underline-offset-4 hover:underline"
+        >GNU General Public License v3.0</a>
+      </p>
     </div>
   </div>
 </template>
