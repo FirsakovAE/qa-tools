@@ -6,6 +6,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
+import { execSync } from 'node:child_process'
 
 export default defineConfig({
   base: './',
@@ -167,6 +168,14 @@ export default defineConfig({
           if (existsSync(target)) {
             rmSync(target, { recursive: true, force: true })
           }
+        })
+
+        // 3. VitePress → docs/docs/ (маршрут /docs/ для serve и GitHub Pages)
+        execSync('npx vitepress build documentation', {
+          stdio: 'inherit',
+          cwd: process.cwd(),
+          env: process.env,
+          shell: true,
         })
       }
     }

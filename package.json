@@ -8,6 +8,8 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:extension": "vue-tsc -b && vite build",
+    "docs:dev": "vitepress dev documentation",
+    "docs:build": "vitepress build documentation",
     "build:standalone": "npm run build && echo 'Standalone build ready in docs/'",
     "preview": "vite preview",
     "serve:standalone": "npx serve docs -p 5174 --cors"
@@ -44,6 +46,7 @@
     "vite": "^7.2.4",
     "vite-plugin-singlefile": "^2.3.0",
     "vite-plugin-static-copy": "^3.1.4",
+    "vitepress": "^1.6.4",
     "vue-tsc": "^3.1.4"
   }
 }

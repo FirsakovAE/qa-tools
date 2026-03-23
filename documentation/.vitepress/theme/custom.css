@@ -1,0 +1,8 @@
+/**
+ * Align docs accent with standalone landing (zinc + violet).
+ */
+:root {
+  --vp-c-brand-1: #8b5cf6;
+  --vp-c-brand-2: #7c3aed;
+  --vp-c-brand-3: #6d28d9;
+}
