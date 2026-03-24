@@ -1,4 +1,4 @@
-import type { NetworkEntry, FormDataEntry, HeaderEntry, UrlParam } from '@/types/network'
+import type { NetworkEntry } from '@/types/network'
 
 /**
  * Generate cURL command from network entry

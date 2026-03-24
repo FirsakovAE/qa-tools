@@ -6,21 +6,7 @@ import type { RuntimeHandler } from '../types'
 import { requestWindow } from '../ipc'
 import { featureFlags, detectionCompleted } from '../state'
 import { collectVueComponentsFromDOM } from '../utils'
-
-// Inline check - content script cannot use ES modules (no import from shared chunks)
-function isExpectedExtensionError(e: unknown): boolean {
-  const msg = String((e as Error)?.message ?? '')
-  return (
-    msg.includes('Receiving end does not exist') ||
-    msg.includes('Could not establish connection') ||
-    msg.includes('Extension context invalidated') ||
-    msg.includes('disconnected port') ||
-    msg.includes('Attempting to use a disconnected port') ||
-    msg.includes('Port disconnected') ||
-    msg === 'Timeout' ||
-    msg.includes('Message timeout')
-  )
-}
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 /**
  * PING handler - responds with ready status

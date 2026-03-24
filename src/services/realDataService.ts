@@ -21,8 +21,6 @@ interface CollectComponentsResponse {
 }
 
 export class RealDataService {
-    private vueInstances: any[] = []
-
     async getTreeData(
         search?: TreeSearchOptions,
         forceRefresh = false,

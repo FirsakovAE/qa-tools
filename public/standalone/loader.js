@@ -18,15 +18,6 @@
   window.__VUE_INSPECTOR_STANDALONE__ = true;
   window.__VUE_INSPECTOR_BASE_URL__ = baseURL;
   
-  function detectVue() {
-    return !!(
-      window.__VUE__ ||
-      window.__VUE_DEVTOOLS_GLOBAL_HOOK__ ||
-      document.querySelector('[data-v-app]') ||
-      document.querySelector('[__vue_app__]')
-    );
-  }
-  
   function injectScript() {
     if (document.getElementById('vue-inspector-injected-script')) {
       return Promise.resolve();
@@ -84,6 +75,8 @@
     var animateNext = false;
 
     function clamp(lo, hi, v) { return Math.min(hi, Math.max(lo, v)); }
+    function floatingPanelLeft() { return Math.round(floatingX - (floatingWidth - 72) / 2); }
+    function floatingPanelTop() { return floatingY + TITLEBAR_H + PILL_GAP; }
 
     // ── Dock state persistence (central-store via hidden storage iframe) ──
     var DOCK_STATE_SETTINGS_KEY = 'dock-state';
@@ -246,16 +239,17 @@
         el.setPointerCapture(e.pointerId);
         var sx = e.clientX, sy = e.clientY;
         var sfx = floatingX, sfy = floatingY, sfw = floatingWidth, sfh = floatingHeight;
-        var mw = MIN_WIDTH, mh = MIN_HEIGHT + TITLEBAR_H;
+        var mw = MIN_WIDTH, mh = MIN_HEIGHT;
         function onMove(ev) {
           var dx = ev.clientX - sx, dy = ev.clientY - sy;
-          var nx = sfx, ny = sfy, nw = sfw, nh = sfh;
+          var nw = sfw, nh = sfh, npx = sfx, npy = sfy;
           if (dir.indexOf('e') !== -1) nw = Math.max(mw, sfw + dx);
-          if (dir.indexOf('w') !== -1) { nw = Math.max(mw, sfw - dx); nx = sfx + sfw - nw; }
+          if (dir.indexOf('w') !== -1) nw = Math.max(mw, sfw - dx);
           if (dir.indexOf('s') !== -1) nh = Math.max(mh, sfh + dy);
-          if (dir.indexOf('n') !== -1) { nh = Math.max(mh, sfh - dy); ny = sfy + sfh - nh; }
-          floatingX = nx; floatingY = ny; floatingWidth = nw; floatingHeight = nh;
-          root.style.left = nx + 'px'; root.style.top = ny + 'px';
+          if (dir.indexOf('n') !== -1) { nh = Math.max(mh, sfh - dy); npy = sfy + (sfh - nh); }
+          if (dir.indexOf('w') !== -1 || dir.indexOf('e') !== -1) npx = sfx + (sfw - nw) / 2;
+          floatingX = npx; floatingY = npy; floatingWidth = nw; floatingHeight = nh;
+          root.style.left = floatingPanelLeft() + 'px'; root.style.top = floatingPanelTop() + 'px';
           root.style.width = nw + 'px'; root.style.height = nh + 'px';
         }
         function onUp(ev) {
@@ -296,7 +290,7 @@
       if (isFloating && isCollapsed) {
         root.style.cssText = rootTr + 'position:fixed;left:' + floatingX + 'px;top:' + floatingY + 'px;z-index:1000000;pointer-events:auto;user-select:none;-webkit-user-select:none;';
       } else if (isFloating) {
-        root.style.cssText = rootTr + 'position:fixed;left:' + floatingX + 'px;top:' + floatingY + 'px;width:' + floatingWidth + 'px;height:' + floatingHeight + 'px;z-index:1000000;pointer-events:auto;border-radius:14px;overflow:hidden;background:#0f0f0f;box-shadow:0 8px 32px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.08);user-select:none;-webkit-user-select:none;';
+        root.style.cssText = rootTr + 'position:fixed;left:' + floatingPanelLeft() + 'px;top:' + floatingPanelTop() + 'px;width:' + floatingWidth + 'px;height:' + floatingHeight + 'px;z-index:1000000;pointer-events:auto;border-radius:14px;background:#0f0f0f;box-shadow:0 8px 32px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.08);user-select:none;-webkit-user-select:none;';
       } else if (dockPosition === 'bottom') {
         root.style.cssText = rootTr + 'position:fixed;left:0;bottom:0;width:100vw;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
       } else if (dockPosition === 'top') {
@@ -309,7 +303,7 @@
 
       // host
       if (isFloating) {
-        host.style.cssText = hostTr + 'position:relative;width:100%;height:' + (isCollapsed ? '0px' : 'calc(100% - ' + TITLEBAR_H + 'px)') + ';overflow:hidden;pointer-events:auto;overscroll-behavior:contain;';
+        host.style.cssText = hostTr + 'position:relative;width:100%;height:' + (isCollapsed ? '0px' : '100%') + ';overflow:hidden;border-radius:14px;pointer-events:auto;overscroll-behavior:contain;';
       } else if (isVert) {
         var pw = isCollapsed ? 0 : dockWidth;
         host.style.cssText = hostTr + 'position:relative;height:100%;width:' + pw + 'px;overflow:hidden;pointer-events:' + (isCollapsed ? 'none' : 'auto') + ';overscroll-behavior:contain;';
@@ -326,7 +320,7 @@
       if (isFloating && isCollapsed) {
         toggle.style.cssText = togTr + 'width:72px;height:' + TITLEBAR_H + 'px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
       } else if (isFloating) {
-        toggle.style.cssText = togTr + 'position:relative;width:100%;height:' + TITLEBAR_H + 'px;background:rgba(15,15,15,0.95);color:rgba(255,255,255,0.95);border:none;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;padding:0 4px;gap:2px;pointer-events:auto;cursor:grab;';
+        toggle.style.cssText = togTr + 'position:absolute;top:' + (-(TITLEBAR_H + PILL_GAP)) + 'px;left:50%;transform:translateX(-50%);width:72px;height:' + TITLEBAR_H + 'px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;cursor:grab;';
       } else if (dockPosition === 'bottom') {
         var bh = (isCollapsed ? 0 : height) + PILL_GAP;
         toggle.style.cssText = togTr + 'position:absolute;bottom:' + bh + 'px;left:50%;transform:translateX(-50%);width:72px;height:28px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
@@ -343,7 +337,6 @@
 
       toggle.setAttribute('data-dock', dockPosition);
       chevron.style.transform = getChevronRotation();
-      chevronBtn.style.marginLeft = (isFloating && !isCollapsed) ? 'auto' : '';
 
       // resize handle
       if (isFloating || isCollapsed) {
@@ -473,14 +466,11 @@
               floatingWidth = clamp(400, 800, Math.round(window.innerWidth * 0.5));
               floatingHeight = isVert
                 ? clamp(300, 600, Math.round(window.innerHeight * 0.5))
-                : Math.max(height + TITLEBAR_H, MIN_HEIGHT + TITLEBAR_H);
-              var visualH = isCollapsed ? TITLEBAR_H : floatingHeight;
-              var visualW = isCollapsed ? 72 : floatingWidth;
-              floatingX = clamp(0, window.innerWidth - visualW, event.clientX - visualW / 2);
-              floatingY = clamp(0, window.innerHeight - visualH, event.clientY - 18);
+                : Math.max(height, MIN_HEIGHT);
+              floatingX = clamp(0, window.innerWidth - 72, event.clientX - 36);
+              floatingY = clamp(0, window.innerHeight - TITLEBAR_H, event.clientY - 14);
               dockPosition = 'floating';
               applyLayout();
-              iframe.style.pointerEvents = 'none';
             }
             toggle.style.cursor = 'grabbing';
             dragHandle.style.cursor = 'grabbing';
@@ -488,11 +478,15 @@
           move: function(event) {
             floatingX += event.dx;
             floatingY += event.dy;
-            var vw = isCollapsed ? 72 : floatingWidth;
-            floatingX = clamp(0, window.innerWidth - vw, floatingX);
+            floatingX = clamp(0, window.innerWidth - 72, floatingX);
             floatingY = clamp(0, window.innerHeight - 40, floatingY);
-            root.style.left = floatingX + 'px';
-            root.style.top = floatingY + 'px';
+            if (isCollapsed) {
+              root.style.left = floatingX + 'px';
+              root.style.top = floatingY + 'px';
+            } else {
+              root.style.left = floatingPanelLeft() + 'px';
+              root.style.top = floatingPanelTop() + 'px';
+            }
             var zone = detectSnapZone(event.client.x, event.client.y);
             zone ? showSnapHighlight(zone) : hideSnapHighlight();
           },
@@ -516,13 +510,15 @@
     // Keep floating window in bounds on viewport resize
     window.addEventListener('resize', function() {
       if (dockPosition === 'floating') {
-        var vw = isCollapsed ? 72 : floatingWidth;
-        floatingX = clamp(0, window.innerWidth - vw, floatingX);
+        floatingX = clamp(0, window.innerWidth - 72, floatingX);
         floatingY = clamp(0, window.innerHeight - 40, floatingY);
-        root.style.left = floatingX + 'px';
-        root.style.top = floatingY + 'px';
-        if (!isCollapsed) {
+        if (isCollapsed) {
+          root.style.left = floatingX + 'px';
+          root.style.top = floatingY + 'px';
+        } else {
           floatingWidth = Math.min(floatingWidth, window.innerWidth);
+          root.style.left = floatingPanelLeft() + 'px';
+          root.style.top = floatingPanelTop() + 'px';
           root.style.width = floatingWidth + 'px';
         }
       }
@@ -704,14 +700,6 @@
     window.addEventListener('message', function(event) {
       var data = event.data;
       if (!data || typeof data !== 'object') return;
-      
-      if (data.__VUE_INSPECTOR__) {
-        // Message logging removed
-      }
-
-      if (event.source === iframe.contentWindow) {
-        // Raw message logging removed
-      }
       
       if (event.source === iframe.contentWindow && data.__VUE_INSPECTOR__) {
         var requestId = data.requestId;
@@ -898,7 +886,7 @@
       .then(function() {
         injectUI();
       })
-      .catch(function(err) {
+      .catch(function() {
         // Fallback: try without interact.js
         injectUI();
       });

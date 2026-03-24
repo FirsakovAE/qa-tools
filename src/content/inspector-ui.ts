@@ -187,17 +187,18 @@ export function injectInspectorUI(): void {
       h.setPointerCapture(e.pointerId)
       const sx = e.clientX, sy = e.clientY
       const sfx = floatingX, sfy = floatingY, sfw = floatingWidth, sfh = floatingHeight
-      const mw = MIN_WIDTH, mh = MIN_HEIGHT + TITLEBAR_H
+      const mw = MIN_WIDTH, mh = MIN_HEIGHT
 
       const onMove = (ev: PointerEvent) => {
         const dx = ev.clientX - sx, dy = ev.clientY - sy
-        let nx = sfx, ny = sfy, nw = sfw, nh = sfh
+        let nw = sfw, nh = sfh, npx = sfx, npy = sfy
         if (dir.includes('e')) nw = Math.max(mw, sfw + dx)
-        if (dir.includes('w')) { nw = Math.max(mw, sfw - dx); nx = sfx + sfw - nw }
+        if (dir.includes('w')) nw = Math.max(mw, sfw - dx)
         if (dir.includes('s')) nh = Math.max(mh, sfh + dy)
-        if (dir.includes('n')) { nh = Math.max(mh, sfh - dy); ny = sfy + sfh - nh }
-        floatingX = nx; floatingY = ny; floatingWidth = nw; floatingHeight = nh
-        root.style.left = nx + 'px'; root.style.top = ny + 'px'
+        if (dir.includes('n')) { nh = Math.max(mh, sfh - dy); npy = sfy + (sfh - nh) }
+        if (dir.includes('w') || dir.includes('e')) npx = sfx + (sfw - nw) / 2
+        floatingX = npx; floatingY = npy; floatingWidth = nw; floatingHeight = nh
+        root.style.left = floatingPanelLeft() + 'px'; root.style.top = floatingPanelTop() + 'px'
         root.style.width = nw + 'px'; root.style.height = nh + 'px'
       }
       const onUp = (ev: PointerEvent) => {
@@ -227,6 +228,13 @@ export function injectInspectorUI(): void {
     return isCollapsed ? `rotate(${base[dockPosition]}deg)` : `rotate(${base[dockPosition] + 180}deg)`
   }
 
+  function floatingPanelLeft(): number {
+    return Math.round(floatingX - (floatingWidth - 72) / 2)
+  }
+  function floatingPanelTop(): number {
+    return floatingY + TITLEBAR_H + PILL_GAP
+  }
+
   // ───────────────────── layout engine ──────────────────────
   function applyLayout() {
     const isFloating = dockPosition === 'floating'
@@ -249,10 +257,10 @@ export function injectInspectorUI(): void {
     } else if (isFloating) {
       root.style.cssText = `
         ${rootTr}
-        position: fixed; left: ${floatingX}px; top: ${floatingY}px;
+        position: fixed; left: ${floatingPanelLeft()}px; top: ${floatingPanelTop()}px;
         width: ${floatingWidth}px; height: ${floatingHeight}px;
         z-index: 2147483647; pointer-events: auto;
-        border-radius: 14px; overflow: hidden;
+        border-radius: 14px;
         background: #0f0f0f;
         box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08);
         user-select: none; -webkit-user-select: none;
@@ -288,8 +296,9 @@ export function injectInspectorUI(): void {
       host.style.cssText = `
         ${hostTr}
         position: relative; width: 100%;
-        height: ${isCollapsed ? '0px' : `calc(100% - ${TITLEBAR_H}px)`};
-        overflow: hidden; pointer-events: auto; overscroll-behavior: contain;
+        height: ${isCollapsed ? '0px' : '100%'};
+        overflow: hidden; border-radius: 14px;
+        pointer-events: auto; overscroll-behavior: contain;
       `
     } else if (isVert) {
       const w = isCollapsed ? 0 : dockWidth
@@ -332,11 +341,13 @@ export function injectInspectorUI(): void {
     } else if (isFloating) {
       toggle.style.cssText = `
         ${togTr}
-        position: relative; width: 100%; height: ${TITLEBAR_H}px;
-        background: rgba(15,15,15,0.95); color: rgba(255,255,255,0.95);
-        border: none; border-bottom: 1px solid rgba(255,255,255,0.1);
-        display: flex; align-items: center; padding: 0 4px; gap: 2px;
-        pointer-events: auto; cursor: grab;
+        position: absolute; top: ${-(TITLEBAR_H + PILL_GAP)}px;
+        left: 50%; transform: translateX(-50%);
+        width: 72px; height: ${TITLEBAR_H}px; border-radius: 14px;
+        ${pill}
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.06) inset;
+        cursor: grab;
       `
     } else if (dockPosition === 'bottom') {
       const ph = (isCollapsed ? 0 : height) + PILL_GAP
@@ -386,7 +397,6 @@ export function injectInspectorUI(): void {
 
     // --- chevron ---
     chevron.style.transform = getChevronRotation()
-    chevronBtn.style.marginLeft = (isFloating && !isCollapsed) ? 'auto' : ''
 
     // --- dock resize handle (single edge, hidden in floating) ---
     if (isFloating || isCollapsed) {
@@ -600,20 +610,15 @@ export function injectInspectorUI(): void {
         iframe.style.pointerEvents = 'none'
 
         if (dockPosition !== 'floating') {
-          const wasCollapsed = isCollapsed
           const isVert = dockPosition === 'left' || dockPosition === 'right'
           floatingWidth = clamp(400, 800, Math.round(window.innerWidth * 0.5))
           floatingHeight = isVert
             ? clamp(300, 600, Math.round(window.innerHeight * 0.5))
-            : Math.max(height + TITLEBAR_H, MIN_HEIGHT + TITLEBAR_H)
-          const visualH = isCollapsed ? TITLEBAR_H : floatingHeight
-          const visualW = isCollapsed ? 72 : floatingWidth
-          floatingX = clamp(0, window.innerWidth - visualW, event.clientX - visualW / 2)
-          floatingY = clamp(0, window.innerHeight - visualH, event.clientY - 18)
+            : Math.max(height, MIN_HEIGHT)
+          floatingX = clamp(0, window.innerWidth - 72, event.clientX - 36)
+          floatingY = clamp(0, window.innerHeight - TITLEBAR_H, event.clientY - 14)
           dockPosition = 'floating'
-          // Keep the collapsed state as-is; don't auto-expand
           applyLayout()
-          iframe.style.pointerEvents = 'none'
         }
         toggle.style.cursor = 'grabbing'
         dragHandle.style.cursor = 'grabbing'
@@ -621,11 +626,15 @@ export function injectInspectorUI(): void {
       move(event: any) {
         floatingX += event.dx
         floatingY += event.dy
-        const vw = isCollapsed ? 72 : floatingWidth
-        floatingX = clamp(0, window.innerWidth - vw, floatingX)
+        floatingX = clamp(0, window.innerWidth - 72, floatingX)
         floatingY = clamp(0, window.innerHeight - 40, floatingY)
-        root.style.left = floatingX + 'px'
-        root.style.top = floatingY + 'px'
+        if (isCollapsed) {
+          root.style.left = floatingX + 'px'
+          root.style.top = floatingY + 'px'
+        } else {
+          root.style.left = floatingPanelLeft() + 'px'
+          root.style.top = floatingPanelTop() + 'px'
+        }
 
         const zone = detectSnapZone(event.client.x, event.client.y)
         zone ? showSnapHighlight(zone) : hideSnapHighlight()
@@ -647,16 +656,17 @@ export function injectInspectorUI(): void {
     }
   })
 
-  // Keep floating window in bounds on viewport resize
   window.addEventListener('resize', () => {
     if (dockPosition === 'floating') {
-      const vw = isCollapsed ? 72 : floatingWidth
-      floatingX = clamp(0, window.innerWidth - vw, floatingX)
+      floatingX = clamp(0, window.innerWidth - 72, floatingX)
       floatingY = clamp(0, window.innerHeight - 40, floatingY)
-      root.style.left = floatingX + 'px'
-      root.style.top = floatingY + 'px'
-      if (!isCollapsed) {
+      if (isCollapsed) {
+        root.style.left = floatingX + 'px'
+        root.style.top = floatingY + 'px'
+      } else {
         floatingWidth = Math.min(floatingWidth, window.innerWidth)
+        root.style.left = floatingPanelLeft() + 'px'
+        root.style.top = floatingPanelTop() + 'px'
         root.style.width = floatingWidth + 'px'
       }
     }

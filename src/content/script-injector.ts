@@ -2,7 +2,7 @@
  * Script injection logic for the Vue Inspector injected script
  */
 
-import { injectedScriptLoaded, setInjectedScriptLoaded } from './state'
+import { setInjectedScriptLoaded } from './state'
 
 /**
  * Injects the Vue Inspector script into the page context
@@ -42,9 +42,3 @@ export function injectScript(): void {
   ;(document.head || document.documentElement).appendChild(script)
 }
 
-/**
- * Check if the injected script is ready
- */
-export function isInjectedScriptReady(): boolean {
-  return injectedScriptLoaded || !!(window as any).__VUE_INSPECTOR_INJECTED__
-}
