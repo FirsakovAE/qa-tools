@@ -236,6 +236,8 @@
         e.preventDefault(); e.stopPropagation();
         iframe.style.pointerEvents = 'none';
         document.body.style.userSelect = 'none';
+        root.style.transition = '';
+        host.style.transition = '';
         el.setPointerCapture(e.pointerId);
         var sx = e.clientX, sy = e.clientY;
         var sfx = floatingX, sfy = floatingY, sfw = floatingWidth, sfh = floatingHeight;
@@ -247,7 +249,8 @@
           if (dir.indexOf('w') !== -1) nw = Math.max(mw, sfw - dx);
           if (dir.indexOf('s') !== -1) nh = Math.max(mh, sfh + dy);
           if (dir.indexOf('n') !== -1) { nh = Math.max(mh, sfh - dy); npy = sfy + (sfh - nh); }
-          if (dir.indexOf('w') !== -1 || dir.indexOf('e') !== -1) npx = sfx + (sfw - nw) / 2;
+          if (dir.indexOf('e') !== -1) npx = sfx + (nw - sfw) / 2;
+          else if (dir.indexOf('w') !== -1) npx = sfx - (nw - sfw) / 2;
           floatingX = npx; floatingY = npy; floatingWidth = nw; floatingHeight = nh;
           root.style.left = floatingPanelLeft() + 'px'; root.style.top = floatingPanelTop() + 'px';
           root.style.width = nw + 'px'; root.style.height = nh + 'px';

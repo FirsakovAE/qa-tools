@@ -184,6 +184,8 @@ export function injectInspectorUI(): void {
       e.stopPropagation()
       iframe.style.pointerEvents = 'none'
       document.body.style.userSelect = 'none'
+      root.style.transition = ''
+      host.style.transition = ''
       h.setPointerCapture(e.pointerId)
       const sx = e.clientX, sy = e.clientY
       const sfx = floatingX, sfy = floatingY, sfw = floatingWidth, sfh = floatingHeight
@@ -196,7 +198,8 @@ export function injectInspectorUI(): void {
         if (dir.includes('w')) nw = Math.max(mw, sfw - dx)
         if (dir.includes('s')) nh = Math.max(mh, sfh + dy)
         if (dir.includes('n')) { nh = Math.max(mh, sfh - dy); npy = sfy + (sfh - nh) }
-        if (dir.includes('w') || dir.includes('e')) npx = sfx + (sfw - nw) / 2
+        if (dir.includes('e')) npx = sfx + (nw - sfw) / 2
+        else if (dir.includes('w')) npx = sfx - (nw - sfw) / 2
         floatingX = npx; floatingY = npy; floatingWidth = nw; floatingHeight = nh
         root.style.left = floatingPanelLeft() + 'px'; root.style.top = floatingPanelTop() + 'px'
         root.style.width = nw + 'px'; root.style.height = nh + 'px'
