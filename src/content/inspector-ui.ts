@@ -48,6 +48,7 @@ export function injectInspectorUI(): void {
   const MIN_WIDTH = 200
   const MAX_OFFSET = 80
   const TITLEBAR_H = 28
+  const PILL_GAP = 6
   let iframeLoaded = false
   const pendingNetworkMessages: any[] = []
 
@@ -57,6 +58,7 @@ export function injectInspectorUI(): void {
   let floatingWidth = 600
   let floatingHeight = 400
   const SNAP_THRESHOLD = 60
+  let animateNext = false
 
   // ═══════════════════════════════════════════════════════════
   // DOM — root / host / iframe
@@ -220,7 +222,7 @@ export function injectInspectorUI(): void {
 
   function getChevronRotation(): string {
     const base: Record<DockPosition, number> = {
-      bottom: 0, top: 180, left: -90, right: 90, floating: 0
+      bottom: 0, top: 180, left: 90, right: -90, floating: 0
     }
     return isCollapsed ? `rotate(${base[dockPosition]}deg)` : `rotate(${base[dockPosition] + 180}deg)`
   }
@@ -229,20 +231,28 @@ export function injectInspectorUI(): void {
   function applyLayout() {
     const isFloating = dockPosition === 'floating'
     const isVert = dockPosition === 'left' || dockPosition === 'right'
+    const anim = animateNext
+    animateNext = false
+    const E = '0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+    const rootTr = anim ? `transition: width ${E}, height ${E};` : ''
+    const hostTr = anim ? `transition: width ${E}, height ${E};` : ''
+    const togTr = anim ? `transition: bottom ${E}, top ${E}, left ${E}, right ${E};` : ''
 
     // --- root ---
     if (isFloating && isCollapsed) {
       root.style.cssText = `
+        ${rootTr}
         position: fixed; left: ${floatingX}px; top: ${floatingY}px;
         z-index: 2147483647; pointer-events: auto;
         user-select: none; -webkit-user-select: none;
       `
     } else if (isFloating) {
       root.style.cssText = `
+        ${rootTr}
         position: fixed; left: ${floatingX}px; top: ${floatingY}px;
         width: ${floatingWidth}px; height: ${floatingHeight}px;
         z-index: 2147483647; pointer-events: auto;
-        border-radius: 8px; overflow: hidden;
+        border-radius: 14px; overflow: hidden;
         background: #0f0f0f;
         box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08);
         user-select: none; -webkit-user-select: none;
@@ -276,6 +286,7 @@ export function injectInspectorUI(): void {
     // --- host ---
     if (isFloating) {
       host.style.cssText = `
+        ${hostTr}
         position: relative; width: 100%;
         height: ${isCollapsed ? '0px' : `calc(100% - ${TITLEBAR_H}px)`};
         overflow: hidden; pointer-events: auto; overscroll-behavior: contain;
@@ -283,6 +294,7 @@ export function injectInspectorUI(): void {
     } else if (isVert) {
       const w = isCollapsed ? 0 : dockWidth
       host.style.cssText = `
+        ${hostTr}
         position: relative; height: 100%; width: ${w}px;
         overflow: hidden; pointer-events: ${isCollapsed ? 'none' : 'auto'};
         overscroll-behavior: contain;
@@ -290,6 +302,7 @@ export function injectInspectorUI(): void {
     } else {
       const h = isCollapsed ? 0 : height
       host.style.cssText = `
+        ${hostTr}
         position: relative; width: 100%; height: ${h}px;
         overflow: hidden; pointer-events: ${isCollapsed ? 'none' : 'auto'};
         overscroll-behavior: contain;
@@ -310,6 +323,7 @@ export function injectInspectorUI(): void {
 
     if (isFloating && isCollapsed) {
       toggle.style.cssText = `
+        ${togTr}
         width: 72px; height: ${TITLEBAR_H}px; border-radius: 14px;
         ${pill}
         border: 1px solid rgba(255,255,255,0.12);
@@ -317,49 +331,54 @@ export function injectInspectorUI(): void {
       `
     } else if (isFloating) {
       toggle.style.cssText = `
+        ${togTr}
         position: relative; width: 100%; height: ${TITLEBAR_H}px;
         background: rgba(15,15,15,0.95); color: rgba(255,255,255,0.95);
         border: none; border-bottom: 1px solid rgba(255,255,255,0.1);
         display: flex; align-items: center; padding: 0 4px; gap: 2px;
-        pointer-events: auto; cursor: default;
+        pointer-events: auto; cursor: grab;
       `
     } else if (dockPosition === 'bottom') {
-      const ph = isCollapsed ? 0 : height
+      const ph = (isCollapsed ? 0 : height) + PILL_GAP
       toggle.style.cssText = `
+        ${togTr}
         position: absolute; bottom: ${ph}px; left: 50%; transform: translateX(-50%);
-        width: 72px; height: 28px; border-radius: 14px 14px 0 0;
+        width: 72px; height: 28px; border-radius: 14px;
         ${pill}
-        border: 1px solid rgba(255,255,255,0.12); border-bottom: none;
-        box-shadow: 0 -2px 12px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.06) inset;
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.06) inset;
       `
     } else if (dockPosition === 'top') {
-      const ph = isCollapsed ? 0 : height
+      const ph = (isCollapsed ? 0 : height) + PILL_GAP
       toggle.style.cssText = `
+        ${togTr}
         position: absolute; top: ${ph}px; left: 50%; transform: translateX(-50%);
-        width: 72px; height: 28px; border-radius: 0 0 14px 14px;
+        width: 72px; height: 28px; border-radius: 14px;
         ${pill}
-        border: 1px solid rgba(255,255,255,0.12); border-top: none;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 -1px 0 rgba(255,255,255,0.06) inset;
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.06) inset;
       `
     } else if (dockPosition === 'left') {
-      const pw = isCollapsed ? 0 : dockWidth
+      const pw = (isCollapsed ? 0 : dockWidth) + PILL_GAP
       toggle.style.cssText = `
+        ${togTr}
         position: absolute; left: ${pw}px; top: 50%; transform: translateY(-50%);
-        width: 28px; height: 72px; border-radius: 0 14px 14px 0;
+        width: 28px; height: 72px; border-radius: 14px;
         ${pill}
         flex-direction: column;
-        border: 1px solid rgba(255,255,255,0.12); border-left: none;
-        box-shadow: 2px 0 12px rgba(0,0,0,0.25), -1px 0 0 rgba(255,255,255,0.06) inset;
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.06) inset;
       `
     } else if (dockPosition === 'right') {
-      const pw = isCollapsed ? 0 : dockWidth
+      const pw = (isCollapsed ? 0 : dockWidth) + PILL_GAP
       toggle.style.cssText = `
+        ${togTr}
         position: absolute; right: ${pw}px; top: 50%; transform: translateY(-50%);
-        width: 28px; height: 72px; border-radius: 14px 0 0 14px;
+        width: 28px; height: 72px; border-radius: 14px;
         ${pill}
         flex-direction: column;
-        border: 1px solid rgba(255,255,255,0.12); border-right: none;
-        box-shadow: -2px 0 12px rgba(0,0,0,0.25), 1px 0 0 rgba(255,255,255,0.06) inset;
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.06) inset;
       `
     }
 
@@ -367,6 +386,7 @@ export function injectInspectorUI(): void {
 
     // --- chevron ---
     chevron.style.transform = getChevronRotation()
+    chevronBtn.style.marginLeft = (isFloating && !isCollapsed) ? 'auto' : ''
 
     // --- dock resize handle (single edge, hidden in floating) ---
     if (isFloating || isCollapsed) {
@@ -465,6 +485,7 @@ export function injectInspectorUI(): void {
   const applyCollapsed = (nextCollapsed: boolean) => {
     if (isCollapsed === nextCollapsed) return
     isCollapsed = nextCollapsed
+    animateNext = true
 
     if (!isCollapsed) {
       loadResourcesIfNeeded()
@@ -568,8 +589,12 @@ export function injectInspectorUI(): void {
   // ═══════════════════════════════════════════════════════════
   // interact.js — drag-to-float & snap-to-dock
   // ═══════════════════════════════════════════════════════════
-  interact(dragHandle).draggable({
-    inertia: false,
+  interact(toggle).draggable({
+    inertia: {
+      resistance: 16,
+      minSpeed: 50,
+      endSpeed: 10
+    },
     listeners: {
       start(event: any) {
         iframe.style.pointerEvents = 'none'
@@ -590,6 +615,7 @@ export function injectInspectorUI(): void {
           applyLayout()
           iframe.style.pointerEvents = 'none'
         }
+        toggle.style.cursor = 'grabbing'
         dragHandle.style.cursor = 'grabbing'
       },
       move(event: any) {
@@ -607,13 +633,14 @@ export function injectInspectorUI(): void {
       end(event: any) {
         iframe.style.pointerEvents = 'auto'
         dragHandle.style.cursor = 'grab'
+        toggle.style.cursor = ''
         hideSnapHighlight()
 
         const zone = detectSnapZone(event.client.x, event.client.y)
         if (zone) {
           dockPosition = zone
-          if (isCollapsed) applyCollapsed(false)
-          else applyLayout()
+          animateNext = true
+          applyLayout()
         }
         persistDockState()
       }

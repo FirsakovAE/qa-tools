@@ -71,6 +71,7 @@
     var MIN_WIDTH = 200;
     var MAX_OFFSET = 80;
     var TITLEBAR_H = 28;
+    var PILL_GAP = 6;
     var iframeLoaded = false;
     var hasVue = false;
 
@@ -80,6 +81,7 @@
     var floatingWidth = 600;
     var floatingHeight = 400;
     var SNAP_THRESHOLD = 60;
+    var animateNext = false;
 
     function clamp(lo, hi, v) { return Math.min(hi, Math.max(lo, v)); }
 
@@ -272,7 +274,7 @@
 
     // ── Chevron rotation helper ──
     function getChevronRotation() {
-      var base = { bottom: 0, top: 180, left: -90, right: 90, floating: 0 };
+      var base = { bottom: 0, top: 180, left: 90, right: -90, floating: 0 };
       var b = base[dockPosition] || 0;
       return isCollapsed ? 'rotate(' + b + 'deg)' : 'rotate(' + (b + 180) + 'deg)';
     }
@@ -283,31 +285,37 @@
     function applyLayout() {
       var isFloating = dockPosition === 'floating';
       var isVert = dockPosition === 'left' || dockPosition === 'right';
+      var anim = animateNext;
+      animateNext = false;
+      var E = '0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+      var rootTr = anim ? 'transition:width ' + E + ',height ' + E + ';' : '';
+      var hostTr = anim ? 'transition:width ' + E + ',height ' + E + ';' : '';
+      var togTr = anim ? 'transition:bottom ' + E + ',top ' + E + ',left ' + E + ',right ' + E + ';' : '';
 
       // root
       if (isFloating && isCollapsed) {
-        root.style.cssText = 'position:fixed;left:' + floatingX + 'px;top:' + floatingY + 'px;z-index:1000000;pointer-events:auto;user-select:none;-webkit-user-select:none;';
+        root.style.cssText = rootTr + 'position:fixed;left:' + floatingX + 'px;top:' + floatingY + 'px;z-index:1000000;pointer-events:auto;user-select:none;-webkit-user-select:none;';
       } else if (isFloating) {
-        root.style.cssText = 'position:fixed;left:' + floatingX + 'px;top:' + floatingY + 'px;width:' + floatingWidth + 'px;height:' + floatingHeight + 'px;z-index:1000000;pointer-events:auto;border-radius:8px;overflow:hidden;background:#0f0f0f;box-shadow:0 8px 32px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.08);user-select:none;-webkit-user-select:none;';
+        root.style.cssText = rootTr + 'position:fixed;left:' + floatingX + 'px;top:' + floatingY + 'px;width:' + floatingWidth + 'px;height:' + floatingHeight + 'px;z-index:1000000;pointer-events:auto;border-radius:14px;overflow:hidden;background:#0f0f0f;box-shadow:0 8px 32px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.08);user-select:none;-webkit-user-select:none;';
       } else if (dockPosition === 'bottom') {
-        root.style.cssText = 'position:fixed;left:0;bottom:0;width:100vw;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
+        root.style.cssText = rootTr + 'position:fixed;left:0;bottom:0;width:100vw;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
       } else if (dockPosition === 'top') {
-        root.style.cssText = 'position:fixed;left:0;top:0;width:100vw;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
+        root.style.cssText = rootTr + 'position:fixed;left:0;top:0;width:100vw;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
       } else if (dockPosition === 'left') {
-        root.style.cssText = 'position:fixed;left:0;top:0;height:100vh;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
+        root.style.cssText = rootTr + 'position:fixed;left:0;top:0;height:100vh;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
       } else {
-        root.style.cssText = 'position:fixed;right:0;top:0;height:100vh;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
+        root.style.cssText = rootTr + 'position:fixed;right:0;top:0;height:100vh;z-index:1000000;pointer-events:none;user-select:none;-webkit-user-select:none;';
       }
 
       // host
       if (isFloating) {
-        host.style.cssText = 'position:relative;width:100%;height:' + (isCollapsed ? '0px' : 'calc(100% - ' + TITLEBAR_H + 'px)') + ';overflow:hidden;pointer-events:auto;overscroll-behavior:contain;';
+        host.style.cssText = hostTr + 'position:relative;width:100%;height:' + (isCollapsed ? '0px' : 'calc(100% - ' + TITLEBAR_H + 'px)') + ';overflow:hidden;pointer-events:auto;overscroll-behavior:contain;';
       } else if (isVert) {
         var pw = isCollapsed ? 0 : dockWidth;
-        host.style.cssText = 'position:relative;height:100%;width:' + pw + 'px;overflow:hidden;pointer-events:' + (isCollapsed ? 'none' : 'auto') + ';overscroll-behavior:contain;';
+        host.style.cssText = hostTr + 'position:relative;height:100%;width:' + pw + 'px;overflow:hidden;pointer-events:' + (isCollapsed ? 'none' : 'auto') + ';overscroll-behavior:contain;';
       } else {
         var ph = isCollapsed ? 0 : height;
-        host.style.cssText = 'position:relative;width:100%;height:' + ph + 'px;overflow:hidden;pointer-events:' + (isCollapsed ? 'none' : 'auto') + ';overscroll-behavior:contain;';
+        host.style.cssText = hostTr + 'position:relative;width:100%;height:' + ph + 'px;overflow:hidden;pointer-events:' + (isCollapsed ? 'none' : 'auto') + ';overscroll-behavior:contain;';
       }
 
       // iframe
@@ -316,25 +324,26 @@
       // toggle
       var pill = 'background:rgba(15,15,15,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:rgba(255,255,255,0.95);pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:2px;';
       if (isFloating && isCollapsed) {
-        toggle.style.cssText = 'width:72px;height:' + TITLEBAR_H + 'px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
+        toggle.style.cssText = togTr + 'width:72px;height:' + TITLEBAR_H + 'px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
       } else if (isFloating) {
-        toggle.style.cssText = 'position:relative;width:100%;height:' + TITLEBAR_H + 'px;background:rgba(15,15,15,0.95);color:rgba(255,255,255,0.95);border:none;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;padding:0 4px;gap:2px;pointer-events:auto;cursor:default;';
+        toggle.style.cssText = togTr + 'position:relative;width:100%;height:' + TITLEBAR_H + 'px;background:rgba(15,15,15,0.95);color:rgba(255,255,255,0.95);border:none;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;padding:0 4px;gap:2px;pointer-events:auto;cursor:grab;';
       } else if (dockPosition === 'bottom') {
-        var bh = isCollapsed ? 0 : height;
-        toggle.style.cssText = 'position:absolute;bottom:' + bh + 'px;left:50%;transform:translateX(-50%);width:72px;height:28px;border-radius:14px 14px 0 0;' + pill + 'border:1px solid rgba(255,255,255,0.12);border-bottom:none;box-shadow:0 -2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
+        var bh = (isCollapsed ? 0 : height) + PILL_GAP;
+        toggle.style.cssText = togTr + 'position:absolute;bottom:' + bh + 'px;left:50%;transform:translateX(-50%);width:72px;height:28px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
       } else if (dockPosition === 'top') {
-        var th = isCollapsed ? 0 : height;
-        toggle.style.cssText = 'position:absolute;top:' + th + 'px;left:50%;transform:translateX(-50%);width:72px;height:28px;border-radius:0 0 14px 14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);border-top:none;box-shadow:0 2px 12px rgba(0,0,0,0.25),0 -1px 0 rgba(255,255,255,0.06) inset;';
+        var th = (isCollapsed ? 0 : height) + PILL_GAP;
+        toggle.style.cssText = togTr + 'position:absolute;top:' + th + 'px;left:50%;transform:translateX(-50%);width:72px;height:28px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
       } else if (dockPosition === 'left') {
-        var lw = isCollapsed ? 0 : dockWidth;
-        toggle.style.cssText = 'position:absolute;left:' + lw + 'px;top:50%;transform:translateY(-50%);width:28px;height:72px;border-radius:0 14px 14px 0;' + pill + 'flex-direction:column;border:1px solid rgba(255,255,255,0.12);border-left:none;box-shadow:2px 0 12px rgba(0,0,0,0.25),-1px 0 0 rgba(255,255,255,0.06) inset;';
+        var lw = (isCollapsed ? 0 : dockWidth) + PILL_GAP;
+        toggle.style.cssText = togTr + 'position:absolute;left:' + lw + 'px;top:50%;transform:translateY(-50%);width:28px;height:72px;border-radius:14px;' + pill + 'flex-direction:column;border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
       } else if (dockPosition === 'right') {
-        var rw = isCollapsed ? 0 : dockWidth;
-        toggle.style.cssText = 'position:absolute;right:' + rw + 'px;top:50%;transform:translateY(-50%);width:28px;height:72px;border-radius:14px 0 0 14px;' + pill + 'flex-direction:column;border:1px solid rgba(255,255,255,0.12);border-right:none;box-shadow:-2px 0 12px rgba(0,0,0,0.25),1px 0 0 rgba(255,255,255,0.06) inset;';
+        var rw = (isCollapsed ? 0 : dockWidth) + PILL_GAP;
+        toggle.style.cssText = togTr + 'position:absolute;right:' + rw + 'px;top:50%;transform:translateY(-50%);width:28px;height:72px;border-radius:14px;' + pill + 'flex-direction:column;border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
       }
 
       toggle.setAttribute('data-dock', dockPosition);
       chevron.style.transform = getChevronRotation();
+      chevronBtn.style.marginLeft = (isFloating && !isCollapsed) ? 'auto' : '';
 
       // resize handle
       if (isFloating || isCollapsed) {
@@ -387,6 +396,7 @@
     function applyCollapsed(next) {
       if (isCollapsed === next) return;
       isCollapsed = next;
+      animateNext = true;
 
       if (!isCollapsed && !iframeLoaded) {
         iframeLoaded = true;
@@ -453,8 +463,8 @@
 
     // ── interact.js drag setup ──
     if (window.interact) {
-      window.interact(dragHandle).draggable({
-        inertia: false,
+      window.interact(toggle).draggable({
+        inertia: { resistance: 16, minSpeed: 50, endSpeed: 10 },
         listeners: {
           start: function(event) {
             iframe.style.pointerEvents = 'none';
@@ -472,6 +482,7 @@
               applyLayout();
               iframe.style.pointerEvents = 'none';
             }
+            toggle.style.cursor = 'grabbing';
             dragHandle.style.cursor = 'grabbing';
           },
           move: function(event) {
@@ -488,12 +499,13 @@
           end: function(event) {
             iframe.style.pointerEvents = 'auto';
             dragHandle.style.cursor = 'grab';
+            toggle.style.cursor = '';
             hideSnapHighlight();
             var zone = detectSnapZone(event.client.x, event.client.y);
             if (zone) {
               dockPosition = zone;
-              if (isCollapsed) applyCollapsed(false);
-              else applyLayout();
+              animateNext = true;
+              applyLayout();
             }
             saveDockState();
           }
