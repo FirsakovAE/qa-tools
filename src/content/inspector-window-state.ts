@@ -1,49 +1,45 @@
 /**
- * Inspector window state persistence (Standalone)
- * Saves position, size, collapsed to sessionStorage for last-state restore.
+ * Lightweight dock-state persistence via chrome.storage.local.
+ * Runs independently of the main extension storage / iframe — available
+ * immediately in the content script so the panel can restore its last
+ * position before the app is loaded.
  */
 
-export interface InspectorWindowState {
-  x: number
-  y: number
-  width: number
+export type DockPosition = 'bottom' | 'top' | 'left' | 'right' | 'floating'
+
+export interface DockState {
+  dockPosition: DockPosition
   height: number
-  collapsed: boolean
+  dockWidth: number
+  floatingX: number
+  floatingY: number
+  floatingWidth: number
+  floatingHeight: number
 }
 
-const STORAGE_KEY = 'vue-inspector-window-state'
+const STORAGE_KEY = 'vue-inspector-dock-state'
+const VALID_DOCKS: DockPosition[] = ['bottom', 'top', 'left', 'right', 'floating']
 
-const DEFAULTS: InspectorWindowState = {
-  x: 20,
-  y: 20,
-  width: 420,
-  height: 360,
-  collapsed: true
-}
-
-export function loadWindowState(): InspectorWindowState {
+export async function loadDockState(): Promise<DockState | null> {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...DEFAULTS }
-    const parsed = JSON.parse(raw) as Partial<InspectorWindowState>
+    const result = await chrome.storage.local.get(STORAGE_KEY)
+    const s = result[STORAGE_KEY] as Record<string, unknown> | undefined
+    if (!s || typeof s !== 'object') return null
+    if (!VALID_DOCKS.includes(s.dockPosition as DockPosition)) return null
     return {
-      x: typeof parsed.x === 'number' ? parsed.x : DEFAULTS.x,
-      y: typeof parsed.y === 'number' ? parsed.y : DEFAULTS.y,
-      width: typeof parsed.width === 'number' ? Math.max(280, parsed.width) : DEFAULTS.width,
-      height: typeof parsed.height === 'number' ? Math.max(120, parsed.height) : DEFAULTS.height,
-      collapsed: typeof parsed.collapsed === 'boolean' ? parsed.collapsed : DEFAULTS.collapsed
+      dockPosition: s.dockPosition as DockPosition,
+      height: typeof s.height === 'number' ? Math.max(120, s.height) : 360,
+      dockWidth: typeof s.dockWidth === 'number' ? Math.max(200, s.dockWidth) : 360,
+      floatingX: typeof s.floatingX === 'number' ? s.floatingX : 0,
+      floatingY: typeof s.floatingY === 'number' ? s.floatingY : 0,
+      floatingWidth: typeof s.floatingWidth === 'number' ? Math.max(200, s.floatingWidth) : 600,
+      floatingHeight: typeof s.floatingHeight === 'number' ? Math.max(156, s.floatingHeight) : 400,
     }
   } catch {
-    return { ...DEFAULTS }
+    return null
   }
 }
 
-export function saveWindowState(state: Partial<InspectorWindowState>): void {
-  try {
-    const current = loadWindowState()
-    const merged = { ...current, ...state }
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
-  } catch (e) {
-    console.error('[inspector-window-state] save failed:', e)
-  }
+export function saveDockState(state: DockState): void {
+  chrome.storage.local.set({ [STORAGE_KEY]: state }).catch(() => {})
 }

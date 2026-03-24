@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync } from 'fs'
-import { join } from 'path'
+import { join, dirname, normalize, posix } from 'path'
 import { execSync } from 'node:child_process'
 
 export default defineConfig({
@@ -216,7 +216,64 @@ export default defineConfig({
         manualChunks: undefined
       },
       // Prevent code splitting that would break injected scripts
-      preserveEntrySignatures: 'strict'
+      preserveEntrySignatures: 'strict',
+      plugins: [{
+        name: 'inline-shared-chunks-for-scripts',
+        generateBundle(_, bundle) {
+          // Extension content/background scripts can't use ES `import` statements.
+          // If Rollup splits a shared helper into a separate chunk, inline it back.
+          const scriptEntries = ['js/content.js', 'js/background.js', 'js/injected.js', 'js/devtools.js']
+
+          for (const entryName of scriptEntries) {
+            const entry = bundle[entryName]
+            if (!entry || entry.type !== 'chunk') continue
+
+            entry.code = entry.code.replace(
+              /import\s*\{([^}]*)\}\s*from\s*"([^"]+)"\s*;?\n?/g,
+              (fullMatch: string, namedImportsStr: string, relPath: string) => {
+                const entryDir = entryName.substring(0, entryName.lastIndexOf('/'))
+                const resolved = posix.normalize(posix.join(entryDir, relPath))
+                const chunk = bundle[resolved]
+                if (!chunk || chunk.type !== 'chunk') return fullMatch
+
+                // Parse the chunk's export statement to build exportedName→localName map
+                // e.g. "export{o as c, l as g}" → { c: 'o', g: 'l' }
+                const exportMap: Record<string, string> = {}
+                const exportMatch = chunk.code.match(/\bexport\s*\{([^}]*)\}\s*;?\s*$/)
+                if (exportMatch) {
+                  exportMatch[1].split(',').forEach((spec: string) => {
+                    const parts = spec.trim().split(/\s+as\s+/)
+                    if (parts.length === 2) {
+                      exportMap[parts[1]] = parts[0]
+                    } else {
+                      exportMap[parts[0]] = parts[0]
+                    }
+                  })
+                }
+
+                let code = chunk.code.replace(/\bexport\s*\{[^}]*\}\s*;?\s*$/, '')
+
+                // Compose import aliases through the export map:
+                // import { g as Jo } + export { l as g } → var Jo = l;
+                const aliases = namedImportsStr.split(',').map((s: string) => {
+                  const m = s.trim().match(/^(\S+)\s+as\s+(\S+)$/)
+                  const exportedName = m ? m[1] : s.trim()
+                  const localAlias = m ? m[2] : s.trim()
+                  const chunkLocal = exportMap[exportedName] || exportedName
+                  return { chunkLocal, localAlias }
+                })
+
+                const aliasCode = aliases
+                  .filter(a => a.chunkLocal !== a.localAlias)
+                  .map(a => `var ${a.localAlias}=${a.chunkLocal};`)
+                  .join('')
+
+                return code + aliasCode
+              }
+            )
+          }
+        }
+      }]
     },
     chunkSizeWarningLimit: 1500
   },
