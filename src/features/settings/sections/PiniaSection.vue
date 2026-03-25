@@ -73,7 +73,7 @@ function removeFromFavorites(id: string) {
 function getPiniaFavoriteActions(fav: PiniaFavoriteItem): MenuAction[] {
   return [
     { label: 'Edit', icon: Pencil, onClick: () => emit('edit', { type: 'pinia-favorite', id: fav.id }) },
-    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructive: true },
+    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructiveText: true },
   ]
 }
 </script>

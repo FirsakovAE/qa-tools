@@ -77,12 +77,13 @@ const sections = [
 ]
 
 // -------------------- SELECTED ITEM --------------------
-type SelectedItemType = 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file'
+type SelectedItemType = 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'
 const selectedItem = ref<{ type: SelectedItemType; id: string } | null>(null)
 
 watch(activeSection, () => {
   selectedItem.value = null
   piniaFavoriteEditMode.value = false
+  siteListEditMode.value = false
   if (activeSection.value !== 'about') {
     releaseInfo.value = null
   }
@@ -90,6 +91,8 @@ watch(activeSection, () => {
 
 function onSelectItem(item: { type: SelectedItemType; id: string }) {
   selectedItem.value = item
+  piniaFavoriteEditMode.value = false
+  siteListEditMode.value = false
 }
 
 // -------------------- EDIT MODE --------------------
@@ -161,11 +164,19 @@ function handleEditMock(id: string) {
 function handleEditFromDetails() {
   if (!selectedItem.value) return
   if (selectedItem.value.type === 'breakpoint') {
+    piniaFavoriteEditMode.value = false
+    siteListEditMode.value = false
     handleEditBreakpoint(selectedItem.value.id)
   } else if (selectedItem.value.type === 'mock') {
+    piniaFavoriteEditMode.value = false
+    siteListEditMode.value = false
     handleEditMock(selectedItem.value.id)
   } else if (selectedItem.value.type === 'pinia-favorite') {
+    siteListEditMode.value = false
     piniaFavoriteEditMode.value = true
+  } else if (selectedItem.value.type === 'site-blacklist' || selectedItem.value.type === 'site-whitelist') {
+    piniaFavoriteEditMode.value = false
+    siteListEditMode.value = true
   }
 }
 
@@ -175,13 +186,22 @@ function handleEditFormBack() {
   editExistingBreakpoint.value = null
   editExistingMock.value = null
   piniaFavoriteEditMode.value = false
+  siteListEditMode.value = false
 }
 
 const piniaFavoriteEditMode = ref(false)
+const siteListEditMode = ref(false)
 
 function handleEditPiniaFavorite(item: { type: 'pinia-favorite'; id: string }) {
   selectedItem.value = item
+  siteListEditMode.value = false
   piniaFavoriteEditMode.value = true
+}
+
+function handleEditSiteList(item: { type: 'site-blacklist' | 'site-whitelist'; id: string }) {
+  selectedItem.value = item
+  piniaFavoriteEditMode.value = false
+  siteListEditMode.value = true
 }
 
 function handlePiniaFavoriteEditDone(newId?: string) {
@@ -189,6 +209,10 @@ function handlePiniaFavoriteEditDone(newId?: string) {
   if (newId && selectedItem.value?.type === 'pinia-favorite') {
     selectedItem.value = { type: 'pinia-favorite', id: newId }
   }
+}
+
+function handleSiteListEditDone() {
+  siteListEditMode.value = false
 }
 
 function handleBreakpointEditConfirm(breakpoint: BreakpointItem) {
@@ -542,10 +566,18 @@ onMounted(async () => {
               v-if="activeSection === 'general'"
               :settings="settings"
               :selected-item-id="selectedItem?.type === 'saved-file' ? selectedItem.id : null"
+              :selected-site-list="
+                selectedItem?.type === 'site-blacklist'
+                  ? { kind: 'blacklist', id: selectedItem.id }
+                  : selectedItem?.type === 'site-whitelist'
+                    ? { kind: 'whitelist', id: selectedItem.id }
+                    : null
+              "
               @import="handleImport"
               @export="handleExport"
               @reset="handleReset"
               @select="onSelectItem"
+              @edit="handleEditSiteList"
             />
             <NetworkSection
               v-else-if="activeSection === 'network'"
@@ -605,12 +637,14 @@ onMounted(async () => {
           :selected-item="selectedItem"
           :release-info="activeSection === 'about' ? releaseInfo : null"
           :pinia-favorite-edit-mode="piniaFavoriteEditMode"
-          @close="selectedItem = null; piniaFavoriteEditMode = false"
+          :site-list-edit-mode="siteListEditMode"
+          @close="selectedItem = null; piniaFavoriteEditMode = false; siteListEditMode = false"
           @close-release="handleCloseRelease"
           @ignore-version="handleIgnoreVersion"
           @download-update="handleDownloadUpdate"
           @edit="handleEditFromDetails"
           @pinia-favorite-edit-done="handlePiniaFavoriteEditDone"
+          @site-list-edit-done="handleSiteListEditDone"
         />
       </div>
     </div>

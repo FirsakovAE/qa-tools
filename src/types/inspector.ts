@@ -223,7 +223,10 @@ export interface SavedFile {
 /** Entry in the site whitelist / blacklist for Auto Run */
 export interface SiteListEntry {
     id: string
-    /** URL pattern (supports * wildcard, e.g. *github.com*) */
+    /**
+     * Matched against location.origin (scheme + host, incl. www + port). Path in the pattern is ignored.
+     * Use a full URL (e.g. https://app.example/) or wildcards (e.g. *localhost*, http://localhost*).
+     */
     pattern: string
     /** ISO timestamp when added */
     addedAt: string

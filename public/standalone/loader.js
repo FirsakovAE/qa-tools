@@ -102,38 +102,6 @@
     });
   }
 
-  /**
-   * Convert a wildcard pattern (e.g. *host*) to a RegExp.
-   */
-  function wildcardToRegex(pattern) {
-    var escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-    return new RegExp('^' + escaped + '$', 'i');
-  }
-
-  /**
-   * Check if the current page URL is allowed by autoRun whitelist/blacklist.
-   */
-  function isAutoRunAllowed(autoRun) {
-    if (!autoRun) return true;
-    var url = location.href;
-
-    var whitelist = autoRun.advancedMode ? (autoRun.siteWhitelist || []) : [];
-    if (whitelist.length > 0) {
-      var whitelisted = false;
-      for (var i = 0; i < whitelist.length; i++) {
-        if (wildcardToRegex(whitelist[i].pattern).test(url)) { whitelisted = true; break; }
-      }
-      if (!whitelisted) return false;
-    }
-
-    var blacklist = autoRun.siteBlacklist || [];
-    for (var j = 0; j < blacklist.length; j++) {
-      if (wildcardToRegex(blacklist[j].pattern).test(url)) return false;
-    }
-
-    return true;
-  }
-
   // ═══════════════════════════════════════════════════════════
   // Инжектируем UI
   // ═══════════════════════════════════════════════════════════
@@ -356,7 +324,7 @@
       if (isFloating && isCollapsed) {
         toggle.style.cssText = togTr + 'width:72px;height:' + TITLEBAR_H + 'px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
       } else if (isFloating) {
-        toggle.style.cssText = togTr + 'position:absolute;top:' + (-(TITLEBAR_H + PILL_GAP)) + 'px;left:50%;transform:translateX(-50%);width:72px;height:' + TITLEBAR_H + 'px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;cursor:grab;';
+        toggle.style.cssText = togTr + 'position:absolute;top:' + (-(TITLEBAR_H + PILL_GAP)) + 'px;left:50%;transform:translateX(-50%);width:72px;height:' + TITLEBAR_H + 'px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
       } else if (dockPosition === 'bottom') {
         var bh = (isCollapsed ? 0 : height) + PILL_GAP;
         toggle.style.cssText = togTr + 'position:absolute;bottom:' + bh + 'px;left:50%;transform:translateX(-50%);width:72px;height:28px;border-radius:14px;' + pill + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 12px rgba(0,0,0,0.25),0 1px 0 rgba(255,255,255,0.06) inset;';
@@ -493,6 +461,7 @@
     // ── interact.js drag setup ──
     if (window.interact) {
       window.interact(toggle).draggable({
+        allowFrom: dragHandle,
         inertia: { resistance: 16, minSpeed: 50, endSpeed: 10 },
         listeners: {
           start: function(event) {
@@ -508,7 +477,6 @@
               dockPosition = 'floating';
               applyLayout();
             }
-            toggle.style.cursor = 'grabbing';
             dragHandle.style.cursor = 'grabbing';
           },
           move: function(event) {
@@ -529,7 +497,6 @@
           end: function(event) {
             iframe.style.pointerEvents = 'auto';
             dragHandle.style.cursor = 'grab';
-            toggle.style.cursor = '';
             hideSnapHighlight();
             var zone = detectSnapZone(event.client.x, event.client.y);
             if (zone) {
@@ -924,12 +891,8 @@
   function init() {
     Promise.all([
       injectScript(),
-      loadInteractJS().catch(function() {}),
-      _storSend('getSettings', { key: 'inspector-settings' }).catch(function() { return null; })
-    ]).then(function(results) {
-      var settings = results[2];
-      var autoRun = settings && settings.autoRun ? settings.autoRun : null;
-      if (!isAutoRunAllowed(autoRun)) return;
+      loadInteractJS().catch(function() {})
+    ]).then(function() {
       injectUI();
     }).catch(function() {
       injectUI();

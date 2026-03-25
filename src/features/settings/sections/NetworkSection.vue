@@ -79,7 +79,7 @@ function getBreakpointActions(row: BreakpointRow): MenuAction[] {
   return [
     { label: 'Edit', icon: Pencil, onClick: () => emit('edit-breakpoint', row.id) },
     { label: row.active ? 'Disable' : 'Enable', icon: Power, onClick: () => toggleBreakpoint(row.id, row.active) },
-    { label: 'Delete', icon: Trash, onClick: () => removeBreakpoint(row.id), destructive: true },
+    { label: 'Delete', icon: Trash, onClick: () => removeBreakpoint(row.id), destructiveText: true },
   ]
 }
 
@@ -131,7 +131,7 @@ function getMockActions(row: MockRow): MenuAction[] {
   return [
     { label: 'Edit', icon: Pencil, onClick: () => emit('edit-mock', row.id) },
     { label: row.active ? 'Disable' : 'Enable', icon: Power, onClick: () => toggleMock(row.id, row.active) },
-    { label: 'Delete', icon: Trash, onClick: () => removeMock(row.id), destructive: true },
+    { label: 'Delete', icon: Trash, onClick: () => removeMock(row.id), destructiveText: true },
   ]
 }
 </script>

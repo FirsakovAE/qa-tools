@@ -350,7 +350,6 @@ export function injectInspectorUI(): void {
         ${pill}
         border: 1px solid rgba(255,255,255,0.12);
         box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.06) inset;
-        cursor: grab;
       `
     } else if (dockPosition === 'bottom') {
       const ph = (isCollapsed ? 0 : height) + PILL_GAP
@@ -603,6 +602,7 @@ export function injectInspectorUI(): void {
   // interact.js — drag-to-float & snap-to-dock
   // ═══════════════════════════════════════════════════════════
   interact(toggle).draggable({
+    allowFrom: dragHandle,
     inertia: {
       resistance: 16,
       minSpeed: 50,
@@ -623,7 +623,6 @@ export function injectInspectorUI(): void {
           dockPosition = 'floating'
           applyLayout()
         }
-        toggle.style.cursor = 'grabbing'
         dragHandle.style.cursor = 'grabbing'
       },
       move(event: any) {
@@ -645,7 +644,6 @@ export function injectInspectorUI(): void {
       end(event: any) {
         iframe.style.pointerEvents = 'auto'
         dragHandle.style.cursor = 'grab'
-        toggle.style.cursor = ''
         hideSnapHighlight()
 
         const zone = detectSnapZone(event.client.x, event.client.y)

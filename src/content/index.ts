@@ -97,22 +97,41 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
     }
 
     /**
-     * Check if the current page URL is allowed by the autoRun whitelist/blacklist.
+     * Match autoRun pattern against {@link Location.origin} (scheme + host + non-default port).
+     * Absolute URL patterns without `*` are normalized with the URL API (path/query/hash ignored; ports normalized).
+     * Patterns with `*` use shell-style wildcards against the same origin string.
+     */
+    function originMatchesPattern(pattern: string, origin: string): boolean {
+      const p = pattern.trim()
+      if (!p) return false
+      if (p.includes('*')) return wildcardToRegex(p).test(origin)
+      if (/^https?:\/\//i.test(p)) {
+        try {
+          return new URL(p).origin.toLowerCase() === origin.toLowerCase()
+        } catch {
+          return false
+        }
+      }
+      return wildcardToRegex(p).test(origin)
+    }
+
+    /**
+     * Check if the current page origin is allowed by the autoRun whitelist/blacklist.
      * Returns false if the pill should NOT be shown.
      */
     function isAutoRunAllowed(autoRun: { advancedMode?: boolean; siteBlacklist?: { pattern: string }[]; siteWhitelist?: { pattern: string }[] } | null | undefined): boolean {
       if (!autoRun) return true
-      const url = location.href
+      const origin = location.origin
 
       const whitelist = autoRun.advancedMode ? (autoRun.siteWhitelist ?? []) : []
       if (whitelist.length > 0) {
-        const whitelisted = whitelist.some(e => wildcardToRegex(e.pattern).test(url))
+        const whitelisted = whitelist.some(e => originMatchesPattern(e.pattern, origin))
         if (!whitelisted) return false
       }
 
       const blacklist = autoRun.siteBlacklist ?? []
       if (blacklist.length > 0) {
-        const blacklisted = blacklist.some(e => wildcardToRegex(e.pattern).test(url))
+        const blacklisted = blacklist.some(e => originMatchesPattern(e.pattern, origin))
         if (blacklisted) return false
       }
 

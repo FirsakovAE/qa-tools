@@ -51,13 +51,16 @@ import { wallpapers, defaultWallpaperName } from '@/assets/wallpapers'
 const props = defineProps<{
   settings: InspectorSettings
   selectedItemId?: string | null
+  /** Selected Auto Run site list row (extension only) */
+  selectedSiteList?: { kind: 'blacklist' | 'whitelist'; id: string } | null
 }>()
 
 const emit = defineEmits<{
   (e: 'import'): void
   (e: 'export'): void
   (e: 'reset'): void
-  (e: 'select', item: { type: 'saved-file'; id: string }): void
+  (e: 'select', item: { type: 'saved-file' | 'site-blacklist' | 'site-whitelist'; id: string }): void
+  (e: 'edit', item: { type: 'site-blacklist' | 'site-whitelist'; id: string }): void
 }>()
 
 const runtime = getRuntimeAdapter()
@@ -431,7 +434,7 @@ type SavedFileRow = { id: string; name: string; size: number; mimeType: string; 
 function getSavedFileActions(file: SavedFileRow): MenuAction[] {
   return [
     { label: 'Edit', icon: Pencil, slot: 'edit' },
-    { label: 'Delete', icon: Trash, onClick: () => removeSavedFile(file.id, file._isWallpaper), destructive: true },
+    { label: 'Delete', icon: Trash, onClick: () => removeSavedFile(file.id, file._isWallpaper), destructiveText: true },
   ]
 }
 
@@ -489,15 +492,25 @@ function formatDate(iso: string): string {
   }
 }
 
+function isBlacklistRowSelected(entry: SiteListEntry): boolean {
+  return props.selectedSiteList?.kind === 'blacklist' && props.selectedSiteList.id === entry.id
+}
+
+function isWhitelistRowSelected(entry: SiteListEntry): boolean {
+  return props.selectedSiteList?.kind === 'whitelist' && props.selectedSiteList.id === entry.id
+}
+
 function getSiteBlacklistActions(entry: SiteListEntry): MenuAction[] {
   return [
-    { label: 'Delete', icon: Trash, onClick: () => removeFromBlacklist(entry.id), destructive: true },
+    { label: 'Edit', icon: Pencil, onClick: () => emit('edit', { type: 'site-blacklist', id: entry.id }) },
+    { label: 'Delete', icon: Trash, onClick: () => removeFromBlacklist(entry.id), destructiveText: true },
   ]
 }
 
 function getSiteWhitelistActions(entry: SiteListEntry): MenuAction[] {
   return [
-    { label: 'Delete', icon: Trash, onClick: () => removeFromWhitelist(entry.id), destructive: true },
+    { label: 'Edit', icon: Pencil, onClick: () => emit('edit', { type: 'site-whitelist', id: entry.id }) },
+    { label: 'Delete', icon: Trash, onClick: () => removeFromWhitelist(entry.id), destructiveText: true },
   ]
 }
 
@@ -725,7 +738,7 @@ const siteWhitelistTableHeight = computed(() =>
             :model-value="autoRun.advancedMode"
             @update:model-value="autoRun.advancedMode = $event as boolean"
           />
-          <Label for="auto-run-advanced" class="text-sm">Advanced mode</Label>
+          <Label for="auto-run-advanced" class="text-sm">Enable whitelist mode</Label>
         </div>
       </div>
 
@@ -735,7 +748,7 @@ const siteWhitelistTableHeight = computed(() =>
         <div class="flex gap-2">
           <Input
             v-model="blacklistUrl"
-            placeholder="Site URL pattern (e.g. *example.com*)"
+            placeholder="e.g. https://app.example/ or *localhost*"
             class="flex-1 h-8"
             @keydown.enter="addToBlacklist"
           />
@@ -762,7 +775,11 @@ const siteWhitelistTableHeight = computed(() =>
                 <TableBody>
                   <ContextMenu v-for="entry in autoRun.siteBlacklist" :key="entry.id">
                     <ContextMenuTrigger as-child>
-                      <TableRow class="h-[41px]">
+                      <TableRow
+                        class="h-[41px] cursor-pointer transition-colors"
+                        :class="isBlacklistRowSelected(entry) ? 'bg-accent' : ''"
+                        @click="emit('select', { type: 'site-blacklist', id: entry.id })"
+                      >
                         <TableCell class="overflow-hidden !py-2">
                           <div class="text-sm truncate" :title="entry.pattern">{{ entry.pattern }}</div>
                         </TableCell>
@@ -798,7 +815,11 @@ const siteWhitelistTableHeight = computed(() =>
               <TableBody>
                 <ContextMenu v-for="entry in autoRun.siteBlacklist" :key="entry.id">
                   <ContextMenuTrigger as-child>
-                    <TableRow class="h-[41px]">
+                    <TableRow
+                      class="h-[41px] cursor-pointer transition-colors"
+                      :class="isBlacklistRowSelected(entry) ? 'bg-accent' : ''"
+                      @click="emit('select', { type: 'site-blacklist', id: entry.id })"
+                    >
                       <TableCell class="overflow-hidden !py-2">
                         <div class="text-sm truncate" :title="entry.pattern">{{ entry.pattern }}</div>
                       </TableCell>
@@ -838,19 +859,19 @@ const siteWhitelistTableHeight = computed(() =>
         </div>
       </div>
 
-      <!-- SITE WHITELIST (Advanced mode only) -->
+      <!-- SITE WHITELIST (whitelist mode only) -->
       <div v-if="autoRun.advancedMode" class="space-y-2">
         <h4 class="text-sm font-semibold">Site Whitelist</h4>
 
         <div class="flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400">
           <AlertTriangle class="h-4 w-4 shrink-0 mt-0.5" />
-          <p>When the whitelist is not empty, the application will only run on sites matching the specified patterns.</p>
+          <p>When the whitelist is not empty, the application will only run when the page origin (scheme, host including www, port) matches a pattern.</p>
         </div>
 
         <div class="flex gap-2">
           <Input
             v-model="whitelistUrl"
-            placeholder="Site URL pattern (e.g. *example.com*)"
+            placeholder="e.g. https://app.example/ or *localhost*"
             class="flex-1 h-8"
             @keydown.enter="addToWhitelist"
           />
@@ -877,7 +898,11 @@ const siteWhitelistTableHeight = computed(() =>
                 <TableBody>
                   <ContextMenu v-for="entry in autoRun.siteWhitelist" :key="entry.id">
                     <ContextMenuTrigger as-child>
-                      <TableRow class="h-[41px]">
+                      <TableRow
+                        class="h-[41px] cursor-pointer transition-colors"
+                        :class="isWhitelistRowSelected(entry) ? 'bg-accent' : ''"
+                        @click="emit('select', { type: 'site-whitelist', id: entry.id })"
+                      >
                         <TableCell class="overflow-hidden !py-2">
                           <div class="text-sm truncate" :title="entry.pattern">{{ entry.pattern }}</div>
                         </TableCell>
@@ -913,7 +938,11 @@ const siteWhitelistTableHeight = computed(() =>
               <TableBody>
                 <ContextMenu v-for="entry in autoRun.siteWhitelist" :key="entry.id">
                   <ContextMenuTrigger as-child>
-                    <TableRow class="h-[41px]">
+                    <TableRow
+                      class="h-[41px] cursor-pointer transition-colors"
+                      :class="isWhitelistRowSelected(entry) ? 'bg-accent' : ''"
+                      @click="emit('select', { type: 'site-whitelist', id: entry.id })"
+                    >
                       <TableCell class="overflow-hidden !py-2">
                         <div class="text-sm truncate" :title="entry.pattern">{{ entry.pattern }}</div>
                       </TableCell>

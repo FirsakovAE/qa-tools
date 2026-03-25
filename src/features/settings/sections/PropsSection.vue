@@ -85,7 +85,7 @@ function removeFromBlacklist(name: string) {
 function getBlacklistActions(row: BlacklistRow): MenuAction[] {
   return [
     { label: row.active ? 'Allow' : 'Block', icon: Power, onClick: () => toggleBlacklist(row.name, row.active) },
-    { label: 'Delete', icon: Trash, onClick: () => removeFromBlacklist(row.name), destructive: true },
+    { label: 'Delete', icon: Trash, onClick: () => removeFromBlacklist(row.name), destructiveText: true },
   ]
 }
 
@@ -103,7 +103,7 @@ function removeFromFavorites(id: string) {
 
 function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
   return [
-    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructive: true },
+    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructiveText: true },
   ]
 }
 </script>
