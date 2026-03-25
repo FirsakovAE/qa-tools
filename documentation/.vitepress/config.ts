@@ -48,28 +48,56 @@ export default defineConfig({
         text: 'Приступая к изучению',
         items: [
           { text: 'Введение', link: '/guide/introduction' },
-          { text: 'Быстрый старт', link: '/guide/quick-start' },
+          { text: 'Установка', link: '/guide/install' }
+        ],
+      },
+      {
+        text: 'Install',
+        items: [{ text: 'Расширение браузера', link: '/install/extension' },
+          { text: 'Автономное приложение', link: '/install/standalone' }
+        ],
+      },
+      {
+        text: 'Network',
+        items: [{ text: 'Работа с запросами', link: '/network/general' },
+          { text: 'Подмена трафика', link: '/network/traffic' },
+          { text: 'Экспорт коллекций', link: '/network/export' }
         ],
       },
       {
         text: 'Props',
-        items: [{ text: 'Основы', link: '/props/basics' }],
+        items: [{ text: 'Основные возможности', link: '/props/general' },
+          { text: 'Инспектор', link: '/props/inspect' },
+          { text: 'Избранное', link: '/props/favorite' },
+          { text: 'Черный список', link: '/props/blacklist' }
+        ],
       },
       {
         text: 'Store',
-        items: [{ text: 'Основы', link: '/store/basics' }],
-      },
-      {
-        text: 'Network',
-        items: [{ text: 'Основы', link: '/network/basics' }],
+        items: [{ text: 'Основные возможности', link: '/store/general' },
+          { text: 'Работа со State', link: '/store/state' },
+          { text: 'Работа с Getters', link: '/store/getters' },
+          { text: 'Избранное', link: '/store/favorite' }
+        ],
       },
       {
         text: 'Options',
-        items: [{ text: 'Основы', link: '/options/basics' }],
+          items: [{ text: 'Режимы отображения', link: '/options/display_mode' },
+          { text: 'Персонализация', link: '/options/customize' },
+          { text: 'Параметры обновления', link: '/options/update_settings' },
+          { text: 'Автозапуск', link: '/options/auto_run' },
+          { text: 'Менеджер настроек', link: '/options/settings_management' }
+        ],
       },
       {
         text: 'Релизы',
-        items: [{ text: '2.0.0', link: '/releases/2.0.0' }],
+        items: [
+          { text: '2.0.0', link: '/releases/2.0.0' },
+          { text: '2.1.0', link: '/releases/2.1.0' },
+          { text: '2.2.0', link: '/releases/2.2.0' },
+          { text: '2.3.0', link: '/releases/2.3.0' },
+          { text: '2.4.0', link: '/releases/2.4.0' }
+        ],
       },
     ],
     socialLinks: [{ icon: 'github', link: 'https://github.com/FirsakovAE/qa-tools' }],
