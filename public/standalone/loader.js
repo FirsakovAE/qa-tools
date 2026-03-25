@@ -47,6 +47,94 @@
   }
   
   // ═══════════════════════════════════════════════════════════
+  // Shared storage bridge (created once, before injectUI)
+  // ═══════════════════════════════════════════════════════════
+  var STOR_PREFIX = '__VUE_INSPECTOR_STORAGE__';
+  var STOR_RESP_PREFIX = '__VUE_INSPECTOR_STORAGE_RESP__';
+  var _storIframe = null;
+  var _storReady = false;
+  var _storReadyCbs = [];
+  var _storPending = {};
+  var _storCounter = 0;
+
+  function _initStorage() {
+    var sf = document.createElement('iframe');
+    sf.style.display = 'none';
+    sf.src = baseURL + '/storage/';
+    document.documentElement.appendChild(sf);
+    _storIframe = sf;
+
+    window.addEventListener('message', function(event) {
+      var d = event.data;
+      if (!d || typeof d !== 'object') return;
+      if (d[STOR_PREFIX] && d.action === 'ready') {
+        _storReady = true;
+        var cbs = _storReadyCbs.splice(0);
+        for (var i = 0; i < cbs.length; i++) cbs[i]();
+        return;
+      }
+      if (d[STOR_RESP_PREFIX] && d.requestId && _storPending[d.requestId]) {
+        var entry = _storPending[d.requestId];
+        delete _storPending[d.requestId];
+        clearTimeout(entry.timer);
+        if (d.error) entry.reject(new Error(d.error));
+        else entry.resolve(d.result);
+      }
+    });
+  }
+
+  function _storSend(action, payload) {
+    return new Promise(function(resolve, reject) {
+      function go() {
+        var requestId = 'dock_' + (++_storCounter) + '_' + Date.now();
+        var timer = setTimeout(function() {
+          delete _storPending[requestId];
+          reject(new Error('Storage timeout: ' + action));
+        }, 5000);
+        _storPending[requestId] = { resolve: resolve, reject: reject, timer: timer };
+        var msg = { requestId: requestId, action: action };
+        msg[STOR_PREFIX] = true;
+        if (payload) { for (var k in payload) { if (payload.hasOwnProperty(k)) msg[k] = payload[k]; } }
+        _storIframe.contentWindow.postMessage(msg, '*');
+      }
+      if (_storReady) go();
+      else _storReadyCbs.push(go);
+    });
+  }
+
+  /**
+   * Convert a wildcard pattern (e.g. *host*) to a RegExp.
+   */
+  function wildcardToRegex(pattern) {
+    var escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+    return new RegExp('^' + escaped + '$', 'i');
+  }
+
+  /**
+   * Check if the current page URL is allowed by autoRun whitelist/blacklist.
+   */
+  function isAutoRunAllowed(autoRun) {
+    if (!autoRun) return true;
+    var url = location.href;
+
+    var whitelist = autoRun.advancedMode ? (autoRun.siteWhitelist || []) : [];
+    if (whitelist.length > 0) {
+      var whitelisted = false;
+      for (var i = 0; i < whitelist.length; i++) {
+        if (wildcardToRegex(whitelist[i].pattern).test(url)) { whitelisted = true; break; }
+      }
+      if (!whitelisted) return false;
+    }
+
+    var blacklist = autoRun.siteBlacklist || [];
+    for (var j = 0; j < blacklist.length; j++) {
+      if (wildcardToRegex(blacklist[j].pattern).test(url)) return false;
+    }
+
+    return true;
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // Инжектируем UI
   // ═══════════════════════════════════════════════════════════
   function injectUI() {
@@ -78,61 +166,9 @@
     function floatingPanelLeft() { return Math.round(floatingX - (floatingWidth - 72) / 2); }
     function floatingPanelTop() { return floatingY + TITLEBAR_H + PILL_GAP; }
 
-    // ── Dock state persistence (central-store via hidden storage iframe) ──
+    // ── Dock state persistence ──
     var DOCK_STATE_SETTINGS_KEY = 'dock-state';
     var VALID_DOCKS = ['bottom', 'top', 'left', 'right', 'floating'];
-    var STOR_PREFIX = '__VUE_INSPECTOR_STORAGE__';
-    var STOR_RESP_PREFIX = '__VUE_INSPECTOR_STORAGE_RESP__';
-    var _storIframe = null;
-    var _storReady = false;
-    var _storReadyCbs = [];
-    var _storPending = {};
-    var _storCounter = 0;
-
-    function _initDockStorage() {
-      var sf = document.createElement('iframe');
-      sf.style.display = 'none';
-      sf.src = baseURL + '/storage/';
-      document.documentElement.appendChild(sf);
-      _storIframe = sf;
-
-      window.addEventListener('message', function(event) {
-        var d = event.data;
-        if (!d || typeof d !== 'object') return;
-        if (d[STOR_PREFIX] && d.action === 'ready') {
-          _storReady = true;
-          var cbs = _storReadyCbs.splice(0);
-          for (var i = 0; i < cbs.length; i++) cbs[i]();
-          return;
-        }
-        if (d[STOR_RESP_PREFIX] && d.requestId && _storPending[d.requestId]) {
-          var entry = _storPending[d.requestId];
-          delete _storPending[d.requestId];
-          clearTimeout(entry.timer);
-          if (d.error) entry.reject(new Error(d.error));
-          else entry.resolve(d.result);
-        }
-      });
-    }
-
-    function _storSend(action, payload) {
-      return new Promise(function(resolve, reject) {
-        function go() {
-          var requestId = 'dock_' + (++_storCounter) + '_' + Date.now();
-          var timer = setTimeout(function() {
-            delete _storPending[requestId];
-            reject(new Error('Storage timeout: ' + action));
-          }, 5000);
-          _storPending[requestId] = { resolve: resolve, reject: reject, timer: timer };
-          var msg = { requestId: requestId, action: action };
-          msg[STOR_PREFIX] = true;
-          if (payload) { for (var k in payload) { if (payload.hasOwnProperty(k)) msg[k] = payload[k]; } }
-          _storIframe.contentWindow.postMessage(msg, '*');
-        }
-        if (_storReady) go();
-        else _storReadyCbs.push(go);
-      });
-    }
 
     function saveDockState() {
       _storSend('setSettings', {
@@ -144,9 +180,6 @@
         }
       }).catch(function() {});
     }
-
-    // Create storage iframe immediately so it starts loading
-    _initDockStorage();
 
     // Async restore — apply saved state as soon as storage is ready
     _storSend('getSettings', { key: DOCK_STATE_SETTINGS_KEY }).then(function(saved) {
@@ -884,15 +917,23 @@
   // ═══════════════════════════════════════════════════════════
   // Init
   // ═══════════════════════════════════════════════════════════
+
+  // Start storage iframe early so it is ready by the time scripts load
+  _initStorage();
+
   function init() {
-    Promise.all([injectScript(), loadInteractJS()])
-      .then(function() {
-        injectUI();
-      })
-      .catch(function() {
-        // Fallback: try without interact.js
-        injectUI();
-      });
+    Promise.all([
+      injectScript(),
+      loadInteractJS().catch(function() {}),
+      _storSend('getSettings', { key: 'inspector-settings' }).catch(function() { return null; })
+    ]).then(function(results) {
+      var settings = results[2];
+      var autoRun = settings && settings.autoRun ? settings.autoRun : null;
+      if (!isAutoRunAllowed(autoRun)) return;
+      injectUI();
+    }).catch(function() {
+      injectUI();
+    });
   }
   
   if (document.readyState === 'loading') {

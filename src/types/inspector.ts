@@ -220,6 +220,22 @@ export interface SavedFile {
     dataUri?: string
 }
 
+/** Entry in the site whitelist / blacklist for Auto Run */
+export interface SiteListEntry {
+    id: string
+    /** URL pattern (supports * wildcard, e.g. *github.com*) */
+    pattern: string
+    /** ISO timestamp when added */
+    addedAt: string
+}
+
+/** Auto Run settings — gate overlay pill display per-site */
+export interface AutoRunSettings {
+    advancedMode: boolean
+    siteBlacklist: SiteListEntry[]
+    siteWhitelist: SiteListEntry[]
+}
+
 export interface BaseInspectorSettings {
     theme: ThemeMode
     displayMode: DisplayMode
@@ -259,4 +275,6 @@ export interface BaseInspectorSettings {
     savedFiles: SavedFile[]
     autoSaveFiles: boolean
     customize: CustomizeSettings
+    /** Auto Run: site whitelist/blacklist to control overlay pill visibility */
+    autoRun?: AutoRunSettings
 }

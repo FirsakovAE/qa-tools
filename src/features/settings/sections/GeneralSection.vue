@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
-import type { InspectorSettings, DisplayMode, ThemeMode } from '@/settings/inspectorSettings'
+import type { InspectorSettings, DisplayMode, ThemeMode, SiteListEntry } from '@/settings/inspectorSettings'
 import { addMedia, removeMedia, putWallpaperBlob, removeWallpaperBlob, initWallpapersStore } from '@/settings/mediaStore'
 import { getStorageClient } from '@/storage/storage-client'
 import { MEDIA_LIMIT_BYTES } from '@/storage/storage-protocol'
@@ -42,7 +42,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
 import { OptionsItemActionsMenuContent, type MenuAction } from '@/components/OptionsItemActionsMenu'
-import { Info, Download, Upload, RotateCcw, Plus, MoreHorizontal, Pencil, Trash, Moon, Sun } from 'lucide-vue-next'
+import { Info, Download, Upload, RotateCcw, Plus, MoreHorizontal, Pencil, Trash, Moon, Sun, AlertTriangle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { getRuntimeAdapter } from '@/runtime'
 import ImagePickerDrawer from '@/features/settings/components/ImagePickerDrawer.vue'
@@ -434,6 +434,81 @@ function getSavedFileActions(file: SavedFileRow): MenuAction[] {
     { label: 'Delete', icon: Trash, onClick: () => removeSavedFile(file.id, file._isWallpaper), destructive: true },
   ]
 }
+
+// -------------------- AUTO RUN --------------------
+
+function ensureAutoRun() {
+  if (!props.settings.autoRun) {
+    props.settings.autoRun = { advancedMode: false, siteBlacklist: [], siteWhitelist: [] }
+  }
+  return props.settings.autoRun
+}
+
+const autoRun = computed(() => ensureAutoRun())
+
+const blacklistUrl = ref('')
+const whitelistUrl = ref('')
+
+function addToBlacklist() {
+  const pattern = blacklistUrl.value.trim()
+  if (!pattern) return
+  const ar = ensureAutoRun()
+  if (ar.siteBlacklist.some(e => e.pattern === pattern)) return
+  ar.siteBlacklist.push({ id: generateId(), pattern, addedAt: new Date().toISOString() })
+  blacklistUrl.value = ''
+}
+
+function removeFromBlacklist(id: string) {
+  const ar = ensureAutoRun()
+  ar.siteBlacklist = ar.siteBlacklist.filter(e => e.id !== id)
+}
+
+function addToWhitelist() {
+  const pattern = whitelistUrl.value.trim()
+  if (!pattern) return
+  const ar = ensureAutoRun()
+  if (ar.siteWhitelist.some(e => e.pattern === pattern)) return
+  ar.siteWhitelist.push({ id: generateId(), pattern, addedAt: new Date().toISOString() })
+  whitelistUrl.value = ''
+}
+
+function removeFromWhitelist(id: string) {
+  const ar = ensureAutoRun()
+  ar.siteWhitelist = ar.siteWhitelist.filter(e => e.id !== id)
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    })
+  } catch {
+    return iso
+  }
+}
+
+function getSiteBlacklistActions(entry: SiteListEntry): MenuAction[] {
+  return [
+    { label: 'Delete', icon: Trash, onClick: () => removeFromBlacklist(entry.id), destructive: true },
+  ]
+}
+
+function getSiteWhitelistActions(entry: SiteListEntry): MenuAction[] {
+  return [
+    { label: 'Delete', icon: Trash, onClick: () => removeFromWhitelist(entry.id), destructive: true },
+  ]
+}
+
+const siteBlacklistNeedsScroll = computed(() => autoRun.value.siteBlacklist.length > 4)
+const siteBlacklistTableHeight = computed(() =>
+  Math.min(Math.max(autoRun.value.siteBlacklist.length, 1) * 41, 205),
+)
+const siteWhitelistNeedsScroll = computed(() => autoRun.value.siteWhitelist.length > 4)
+const siteWhitelistTableHeight = computed(() =>
+  Math.min(Math.max(autoRun.value.siteWhitelist.length, 1) * 41, 205),
+)
 </script>
 
 <template>
@@ -632,6 +707,250 @@ function getSavedFileActions(file: SavedFileRow): MenuAction[] {
             </SelectItem>
           </SelectContent>
         </Select>
+      </div>
+    </div>
+
+    <!-- AUTO RUN (extension only) — intro spacing matches Saved Files (title / description / checkbox) -->
+    <div v-if="!isStandalone" class="space-y-4 border-t pt-4">
+      <div class="space-y-2">
+        <h4 class="text-sm font-semibold">Auto Run</h4>
+        <p class="text-xs text-muted-foreground">
+          Enable auto run application
+        </p>
+
+        <!-- Advanced mode -->
+        <div class="flex items-center space-x-3">
+          <Checkbox
+            id="auto-run-advanced"
+            :model-value="autoRun.advancedMode"
+            @update:model-value="autoRun.advancedMode = $event as boolean"
+          />
+          <Label for="auto-run-advanced" class="text-sm">Advanced mode</Label>
+        </div>
+      </div>
+
+      <!-- SITE BLACKLIST -->
+      <div class="space-y-2">
+        <h4 class="text-sm font-semibold">Site Blacklist</h4>
+        <div class="flex gap-2">
+          <Input
+            v-model="blacklistUrl"
+            placeholder="Site URL pattern (e.g. *example.com*)"
+            class="flex-1 h-8"
+            @keydown.enter="addToBlacklist"
+          />
+          <Button size="sm" class="h-8" @click="addToBlacklist">
+            Add
+          </Button>
+        </div>
+
+        <div class="flex flex-col border rounded-lg overflow-hidden">
+          <div class="shrink-0 border-b bg-muted/30">
+            <Table class="table-fixed">
+              <TableHeader class="[&_th]:h-10">
+                <TableRow class="hover:bg-transparent">
+                  <TableHead class="text-xs font-semibold">Name</TableHead>
+                  <TableHead class="text-xs font-semibold w-[100px] text-center">Added</TableHead>
+                  <TableHead class="w-[48px] text-center p-0" />
+                </TableRow>
+              </TableHeader>
+            </Table>
+          </div>
+          <div class="min-h-0 max-h-[205px] overflow-hidden">
+            <ScrollArea v-if="siteBlacklistNeedsScroll" :style="{ height: `${siteBlacklistTableHeight}px` }">
+              <Table class="table-fixed">
+                <TableBody>
+                  <ContextMenu v-for="entry in autoRun.siteBlacklist" :key="entry.id">
+                    <ContextMenuTrigger as-child>
+                      <TableRow class="h-[41px]">
+                        <TableCell class="overflow-hidden !py-2">
+                          <div class="text-sm truncate" :title="entry.pattern">{{ entry.pattern }}</div>
+                        </TableCell>
+                        <TableCell class="w-[100px] text-center !py-2">
+                          <div class="text-xs text-muted-foreground">{{ formatDate(entry.addedAt) }}</div>
+                        </TableCell>
+                        <TableCell class="w-[48px] text-center p-0">
+                          <div class="flex justify-center items-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                                  <MoreHorizontal class="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <OptionsItemActionsMenuContent
+                                variant="dropdown"
+                                :actions="getSiteBlacklistActions(entry)"
+                              />
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </ContextMenuTrigger>
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getSiteBlacklistActions(entry)"
+                    />
+                  </ContextMenu>
+                </TableBody>
+              </Table>
+            </ScrollArea>
+            <Table v-else class="table-fixed">
+              <TableBody>
+                <ContextMenu v-for="entry in autoRun.siteBlacklist" :key="entry.id">
+                  <ContextMenuTrigger as-child>
+                    <TableRow class="h-[41px]">
+                      <TableCell class="overflow-hidden !py-2">
+                        <div class="text-sm truncate" :title="entry.pattern">{{ entry.pattern }}</div>
+                      </TableCell>
+                      <TableCell class="w-[100px] text-center !py-2">
+                        <div class="text-xs text-muted-foreground">{{ formatDate(entry.addedAt) }}</div>
+                      </TableCell>
+                      <TableCell class="w-[48px] text-center p-0">
+                        <div class="flex justify-center items-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                                <MoreHorizontal class="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <OptionsItemActionsMenuContent
+                              variant="dropdown"
+                              :actions="getSiteBlacklistActions(entry)"
+                            />
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </ContextMenuTrigger>
+                  <OptionsItemActionsMenuContent
+                    variant="context"
+                    :actions="getSiteBlacklistActions(entry)"
+                  />
+                </ContextMenu>
+                <TableRow v-if="!autoRun.siteBlacklist.length">
+                  <TableCell colspan="3" class="text-center text-muted-foreground py-8">
+                    No site in blacklist
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SITE WHITELIST (Advanced mode only) -->
+      <div v-if="autoRun.advancedMode" class="space-y-2">
+        <h4 class="text-sm font-semibold">Site Whitelist</h4>
+
+        <div class="flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400">
+          <AlertTriangle class="h-4 w-4 shrink-0 mt-0.5" />
+          <p>When the whitelist is not empty, the application will only run on sites matching the specified patterns.</p>
+        </div>
+
+        <div class="flex gap-2">
+          <Input
+            v-model="whitelistUrl"
+            placeholder="Site URL pattern (e.g. *example.com*)"
+            class="flex-1 h-8"
+            @keydown.enter="addToWhitelist"
+          />
+          <Button size="sm" class="h-8" @click="addToWhitelist">
+            Add
+          </Button>
+        </div>
+
+        <div class="flex flex-col border rounded-lg overflow-hidden">
+          <div class="shrink-0 border-b bg-muted/30">
+            <Table class="table-fixed">
+              <TableHeader class="[&_th]:h-10">
+                <TableRow class="hover:bg-transparent">
+                  <TableHead class="text-xs font-semibold">Name</TableHead>
+                  <TableHead class="text-xs font-semibold w-[100px] text-center">Added</TableHead>
+                  <TableHead class="w-[48px] text-center p-0" />
+                </TableRow>
+              </TableHeader>
+            </Table>
+          </div>
+          <div class="min-h-0 max-h-[205px] overflow-hidden">
+            <ScrollArea v-if="siteWhitelistNeedsScroll" :style="{ height: `${siteWhitelistTableHeight}px` }">
+              <Table class="table-fixed">
+                <TableBody>
+                  <ContextMenu v-for="entry in autoRun.siteWhitelist" :key="entry.id">
+                    <ContextMenuTrigger as-child>
+                      <TableRow class="h-[41px]">
+                        <TableCell class="overflow-hidden !py-2">
+                          <div class="text-sm truncate" :title="entry.pattern">{{ entry.pattern }}</div>
+                        </TableCell>
+                        <TableCell class="w-[100px] text-center !py-2">
+                          <div class="text-xs text-muted-foreground">{{ formatDate(entry.addedAt) }}</div>
+                        </TableCell>
+                        <TableCell class="w-[48px] text-center p-0">
+                          <div class="flex justify-center items-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                                  <MoreHorizontal class="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <OptionsItemActionsMenuContent
+                                variant="dropdown"
+                                :actions="getSiteWhitelistActions(entry)"
+                              />
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </ContextMenuTrigger>
+                    <OptionsItemActionsMenuContent
+                      variant="context"
+                      :actions="getSiteWhitelistActions(entry)"
+                    />
+                  </ContextMenu>
+                </TableBody>
+              </Table>
+            </ScrollArea>
+            <Table v-else class="table-fixed">
+              <TableBody>
+                <ContextMenu v-for="entry in autoRun.siteWhitelist" :key="entry.id">
+                  <ContextMenuTrigger as-child>
+                    <TableRow class="h-[41px]">
+                      <TableCell class="overflow-hidden !py-2">
+                        <div class="text-sm truncate" :title="entry.pattern">{{ entry.pattern }}</div>
+                      </TableCell>
+                      <TableCell class="w-[100px] text-center !py-2">
+                        <div class="text-xs text-muted-foreground">{{ formatDate(entry.addedAt) }}</div>
+                      </TableCell>
+                      <TableCell class="w-[48px] text-center p-0">
+                        <div class="flex justify-center items-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                                <MoreHorizontal class="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <OptionsItemActionsMenuContent
+                              variant="dropdown"
+                              :actions="getSiteWhitelistActions(entry)"
+                            />
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </ContextMenuTrigger>
+                  <OptionsItemActionsMenuContent
+                    variant="context"
+                    :actions="getSiteWhitelistActions(entry)"
+                  />
+                </ContextMenu>
+                <TableRow v-if="!autoRun.siteWhitelist.length">
+                  <TableCell colspan="3" class="text-center text-muted-foreground py-8">
+                    No site in whitelist
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       </div>
     </div>
 

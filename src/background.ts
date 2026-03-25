@@ -330,11 +330,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'GET_DISPLAY_MODE':
             loadSettingsWithFallback()
                 .then(settings => {
-                    sendResponse({ displayMode: settings?.displayMode || 'overlay' })
+                    sendResponse({
+                        displayMode: settings?.displayMode || 'overlay',
+                        autoRun: settings?.autoRun || null,
+                    })
                 })
                 .catch((e) => {
                     console.error('[background] GET_DISPLAY_MODE loadSettings failed:', e)
-                    sendResponse({ displayMode: 'overlay' })
+                    sendResponse({ displayMode: 'overlay', autoRun: null })
                 })
             return true
 

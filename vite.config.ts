@@ -55,6 +55,19 @@ export default defineConfig({
             .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
           writeFileSync(storageDestHtml, content, 'utf-8')
         }
+
+        // popup: dist/src/popup/popup.html → dist/popup/popup.html
+        const popupSrcHtml = join(distPath, 'src', 'popup', 'popup.html')
+        const popupDestDir = join(distPath, 'popup')
+        const popupDestHtml = join(popupDestDir, 'popup.html')
+        if (existsSync(popupSrcHtml)) {
+          if (!existsSync(popupDestDir)) mkdirSync(popupDestDir, { recursive: true })
+          let content = readFileSync(popupSrcHtml, 'utf-8')
+          content = content
+            .replace(/src="\.\.\/\.\.\/popup\/popup\.js"/g, 'src="./popup.js"')
+            .replace(/<link rel="modulepreload"[^>]*>/g, '')
+          writeFileSync(popupDestHtml, content, 'utf-8')
+        }
       }
     },
     {
@@ -192,6 +205,7 @@ export default defineConfig({
       input: {
         injected_ui_html: 'src/injected-ui/index.html',
         storage_html: 'src/storage/index.html',
+        popup_html: 'src/popup/popup.html',
         content: 'src/content/index.ts',
         background: 'src/background.ts',
         injected: 'src/injected/main.ts',
@@ -207,6 +221,9 @@ export default defineConfig({
           }
           if (chunkInfo.name === 'storage_html') {
             return 'storage/index.js'
+          }
+          if (chunkInfo.name === 'popup_html') {
+            return 'popup/popup.js'
           }
           return 'assets/[name]-[hash].js'
         },
