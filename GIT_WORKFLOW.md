@@ -8,8 +8,10 @@
 ## Основные команды
 
 ```bash
-npm run build                         # Собрать билд (dist/ + docs/)
-npm run serve:standalone              # локальный тест корп. версии
+npm run build #Сборка приложения (Vue + vue-tsc, вывод в обычный каталог Vite)	
+npm run build:extension #То же для расширения (отдельного скрипта по смыслу)
+npm run docs:build #Сборка документации (VitePress из папки documentation)
+npm run build:standalone #Приложение и пометка standalone (по факту запускает build)
 git add .                             # Добавить все изменения
 git commit -m "chore: update preview build"
 git push origin master

@@ -52,12 +52,6 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Install',
-        items: [{ text: 'Расширение браузера', link: '/install/extension' },
-          { text: 'Автономное приложение', link: '/install/standalone' }
-        ],
-      },
-      {
         text: 'Network',
         items: [{ text: 'Работа с запросами', link: '/network/general' },
           { text: 'Подмена трафика', link: '/network/traffic' },
