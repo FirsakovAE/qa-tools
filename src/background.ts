@@ -144,7 +144,12 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== SEARCH_PORT_NAME) return
   devtoolsSearchPort = port
   port.onDisconnect.addListener(() => {
-    devtoolsSearchPort = null
+    // Only clear if this is still the active port. Otherwise a stale disconnect
+    // (Chrome can deliver disconnect after a newer port connected) would wipe
+    // the new connection and break Ctrl+F search until DevTools is reopened.
+    if (devtoolsSearchPort === port) {
+      devtoolsSearchPort = null
+    }
   })
 })
 

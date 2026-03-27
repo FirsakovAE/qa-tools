@@ -98,5 +98,33 @@ export default defineConfig({
     footer: {
       message: 'Лицензия GPL-3.0.',
     },
+    /** Локальный индекс при сборке; в UI — кнопка «Поиск» и Ctrl+K / Cmd+K (как на vuejs.org). */
+    search: {
+      provider: 'local',
+      options: {
+        detailedView: true,
+        translations: {
+          button: {
+            buttonText: 'Поиск',
+            buttonAriaLabel: 'Поиск по документации (Ctrl+K)',
+          },
+          modal: {
+            displayDetails: 'Показать контекст',
+            resetButtonTitle: 'Очистить запрос',
+            backButtonTitle: 'Назад',
+            noResultsText: 'Ничего не найдено',
+            footer: {
+              selectText: 'открыть',
+              selectKeyAriaLabel: 'Enter — открыть выбранный результат',
+              navigateText: 'навигация',
+              navigateUpKeyAriaLabel: 'Стрелка вверх',
+              navigateDownKeyAriaLabel: 'Стрелка вниз',
+              closeText: 'закрыть',
+              closeKeyAriaLabel: 'Escape — закрыть',
+            },
+          },
+        },
+      },
+    },
   },
 })
