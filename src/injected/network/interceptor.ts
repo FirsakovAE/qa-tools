@@ -571,7 +571,7 @@ function interceptFetch(): void {
     
     const method = init?.method || (input instanceof Request ? input.method : 'GET')
     
-    // Check exclusions (but NOT isPaused - that only affects logging, not breakpoints)
+    // Check exclusions
     if (shouldExcludeUrl(url) || shouldExcludeMethod(method)) {
       return originalFetch.call(window, input, init)
     }
@@ -1725,6 +1725,29 @@ function interceptXHR(): void {
   }
 }
 
+/**
+ * Restore native fetch / XMLHttpRequest so DevTools attribute network calls to app code,
+ * not this script. Used when Network is paused and on full cleanup.
+ */
+function restoreNativeNetworkAPIs(): void {
+  window.fetch = originalFetch
+  XMLHttpRequest.prototype.open = originalXHROpen
+  XMLHttpRequest.prototype.send = originalXHRSend
+  XMLHttpRequest.prototype.setRequestHeader = originalXHRSetRequestHeader
+
+  if (originalXHRResponseTypeDescriptor) {
+    Object.defineProperty(XMLHttpRequest.prototype, 'responseType', originalXHRResponseTypeDescriptor)
+  }
+}
+
+/**
+ * Install fetch + XHR patches (idempotent if called after restoreNativeNetworkAPIs).
+ */
+function installNetworkPatches(): void {
+  interceptFetch()
+  interceptXHR()
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -1739,15 +1762,15 @@ export function initNetworkInterceptor(cbs: InterceptorCallbacks, maxSize?: numb
     maxBodySize = maxSize
   }
   
-  interceptFetch()
-  interceptXHR()
+  installNetworkPatches()
 }
 
 /**
- * Pause interception (new requests won't be captured)
+ * Pause: restore native fetch/XHR so DevTools initiator points at app code, not this script.
  */
 export function pauseInterception(): void {
   isPaused = true
+  restoreNativeNetworkAPIs()
 }
 
 /**
@@ -1755,6 +1778,7 @@ export function pauseInterception(): void {
  */
 export function resumeInterception(): void {
   isPaused = false
+  installNetworkPatches()
 }
 
 /**
@@ -1768,15 +1792,7 @@ export function isInterceptionPaused(): boolean {
  * Restore original implementations (cleanup)
  */
 export function cleanupNetworkInterceptor(): void {
-  window.fetch = originalFetch
-  XMLHttpRequest.prototype.open = originalXHROpen
-  XMLHttpRequest.prototype.send = originalXHRSend
-  XMLHttpRequest.prototype.setRequestHeader = originalXHRSetRequestHeader
-  
-  // Restore responseType descriptor
-  if (originalXHRResponseTypeDescriptor) {
-    Object.defineProperty(XMLHttpRequest.prototype, 'responseType', originalXHRResponseTypeDescriptor)
-  }
+  restoreNativeNetworkAPIs()
   
   callbacks = null
   
