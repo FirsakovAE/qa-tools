@@ -2,12 +2,14 @@
 import { ref, computed } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import { Button } from '@/components/ui/button'
-import { ExternalLink, Github, FileText, RefreshCw, Loader2 } from 'lucide-vue-next'
+import { ExternalLink, Github, BookOpen, FileText, RefreshCw, Loader2 } from 'lucide-vue-next'
 import { useRuntime } from '@/runtime'
 import {
   fetchReleaseByTag,
   fetchLatestRelease,
   compareVersions,
+  getGithubRepoUrl,
+  getPublishedDocsIntroductionUrl,
   type ReleaseDisplayInfo,
 } from '@/services/githubReleaseService'
 
@@ -33,6 +35,9 @@ const appVersion = computed(() => {
 
 const loadingReleaseNotes = ref(false)
 const loadingCheckUpdates = ref(false)
+
+const githubRepoUrl = getGithubRepoUrl()
+const docsIntroductionUrl = getPublishedDocsIntroductionUrl()
 
 async function handleReleaseNotes() {
   loadingReleaseNotes.value = true
@@ -178,19 +183,32 @@ async function handleCheckUpdates() {
     <!-- 3. Links -->
     <div class="border-t border-border pt-4 space-y-3">
       <h4 class="text-sm font-semibold">Links</h4>
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <Button
           variant="outline"
           size="sm"
-          class="justify-start h-8 gap-2"
+          class="h-8 justify-start gap-2"
           as="a"
-          href="https://github.com/FirsakovAE/qa-tools"
+          :href="githubRepoUrl"
           target="_blank"
           rel="noopener noreferrer"
         >
-          <Github class="w-3.5 h-3.5" />
+          <Github class="w-3.5 h-3.5 shrink-0" />
           GitHub
-          <ExternalLink class="w-3 h-3 ml-auto opacity-50" />
+          <ExternalLink class="w-3 h-3 ml-1 shrink-0 opacity-50" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          class="h-8 justify-start gap-2"
+          as="a"
+          :href="docsIntroductionUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <BookOpen class="w-3.5 h-3.5 shrink-0" />
+          Docs
+          <ExternalLink class="w-3 h-3 ml-1 shrink-0 opacity-50" />
         </Button>
       </div>
     </div>

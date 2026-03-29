@@ -66,9 +66,10 @@ const {
   settings,
   searchKey: 'networkSearch',
   typeMap: {
-    'Path': 'byPath',
-    'Method': 'byMethod',
     'Status code': 'byStatus',
+    'Method': 'byMethod',
+    'Path': 'byPath',
+    'Name': 'byName',
     'Key': 'byKey',
     'Value': 'byValue',
   }

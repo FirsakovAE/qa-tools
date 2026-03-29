@@ -54,4 +54,4 @@ After switching to **DevTools tab**, **reload** and open DevTools — you should
 
 * [Auto run](/options/auto_run) — when the overlay pill auto-shows
 * [Customize](/options/customize) — theme and panel background
-* [Browser extension](/guide/extension)
+* [Browser extension](/extension)

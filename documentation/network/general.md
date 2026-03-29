@@ -12,13 +12,15 @@ The **Network** tab shows network activity of the application at runtime.
 
 The search box supports multiple modes. The active criteria are chosen in **Search by** next to the input. The same options exist under **Options** for that tab so you can preset search types.
 
-| Mode | Description |
-| ---- | ----------- |
-| **Key** | Search keys in **JSON** request/response bodies |
-| **Value** | Search values in **JSON** bodies |
-| **Path** | Search URL or part of the path |
-| **Method** | Search HTTP method |
-| **Status code** | Search response status code |
+| Mode            | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| **Status code** | Search by response status code                       |
+| **Method**      | Search by HTTP method                                |
+| **Path**        | Search by URL or part of the path                    |
+| **Name**        | Search by request name                               |
+| **Key**         | Search by keys in **JSON** request/response bodies   |
+| **Value**       | Search by values in **JSON** request/response bodies |
+
 
 There is a minimum query length (default **2** characters; configurable in inspector search settings).
 

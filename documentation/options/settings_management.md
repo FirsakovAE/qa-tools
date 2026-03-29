@@ -8,7 +8,7 @@ title: Settings management
 
 Everyday edits **autosave** (debounced) — there is no separate Save button for normal fields.
 
-A short comparison of where bytes go: [Installation → Where settings are stored](/guide/install#storage).
+A short comparison of where bytes go: [Installation → Where settings are stored](/install#storage).
 
 ---
 
@@ -72,6 +72,6 @@ Partial Auto Run reset (without full wipe) exists via the extension **popup** �
 
 ## See also
 
-* [Installation — storage](/guide/install#storage)
+* [Installation — storage](/install#storage)
 * [Customize](/options/customize)
 * [Auto run](/options/auto_run)

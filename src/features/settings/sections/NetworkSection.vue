@@ -21,12 +21,13 @@ const emit = defineEmits<{
 }>()
 
 // -------------------- SEARCH SETTINGS --------------------
-type SearchKey = 'byPath' | 'byMethod' | 'byStatus' | 'byKey' | 'byValue'
+type SearchKey = 'byName' | 'byPath' | 'byMethod' | 'byStatus' | 'byKey' | 'byValue'
 
 const searchItems: Array<{ key: SearchKey; label: string }> = [
-  { key: 'byPath', label: 'Search by path' },
-  { key: 'byMethod', label: 'Search by method' },
   { key: 'byStatus', label: 'Search by status code' },
+  { key: 'byMethod', label: 'Search by method' },
+  { key: 'byPath', label: 'Search by path' },
+  { key: 'byName', label: 'Search by name' },
   { key: 'byKey', label: 'Search by key' },
   { key: 'byValue', label: 'Search by value' },
 ]

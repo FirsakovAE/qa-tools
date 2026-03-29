@@ -147,6 +147,8 @@ export interface PiniaTableColumnsSettings {
 
 /** Network tab search settings */
 export interface NetworkSearchSettings {
+    /** Search in list column "Name" (short label from URL). Default off. */
+    byName: boolean
     byPath: boolean
     byMethod: boolean
     byStatus: boolean

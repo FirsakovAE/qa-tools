@@ -36,8 +36,8 @@ const sidebarEn = [
   {
     text: 'Getting started',
     items: [
-      { text: 'Introduction', link: '/guide/introduction' },
-      { text: 'Installation', link: '/guide/install' },
+      { text: 'Introduction', link: '/' },
+      { text: 'Installation', link: '/install' },
     ],
   },
   {
@@ -88,10 +88,59 @@ const sidebarEn = [
   },
 ]
 
+/** Absolute-from-host paths (include VitePress `base`) — plain `/icons/...` in `head` is not prefixed by VitePress. */
+function faviconHead(): [string, Record<string, string>][] {
+  const prefix = base.replace(/\/$/, '')
+  return [
+    ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${prefix}/icons/icon32.png` }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${prefix}/icons/icon16.png` }],
+    ['link', { rel: 'apple-touch-icon', href: `${prefix}/icons/icon48.png` }],
+  ]
+}
+
 export default defineConfig({
   base,
   outDir: resolve(__dirname, '../../docs/docs'),
+  head: faviconHead(),
   ignoreDeadLinks: [/^\.\/?(\.\.\/)+index(\.html)?$/],
+  /**
+   * Local search must live here, not under `locales[*].themeConfig.search`,
+   * or the search box / Ctrl+K won’t render (vitepress#3141).
+   * Per-locale UI strings: `options.locales`.
+   */
+  themeConfig: {
+    search: {
+      provider: 'local',
+      options: {
+        detailedView: true,
+        locales: {
+          ru: {
+            translations: {
+              button: {
+                buttonText: 'Поиск',
+                buttonAriaLabel: 'Поиск по документации (Ctrl+K)',
+              },
+              modal: {
+                displayDetails: 'Показать контекст',
+                resetButtonTitle: 'Очистить запрос',
+                backButtonTitle: 'Назад',
+                noResultsText: 'Ничего не найдено',
+                footer: {
+                  selectText: 'открыть',
+                  selectKeyAriaLabel: 'Enter — открыть выбранный результат',
+                  navigateText: 'навигация',
+                  navigateUpKeyAriaLabel: 'Стрелка вверх',
+                  navigateDownKeyAriaLabel: 'Стрелка вниз',
+                  closeText: 'закрыть',
+                  closeKeyAriaLabel: 'Escape — закрыть',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   locales: {
     root: {
       label: 'English',
@@ -106,7 +155,6 @@ export default defineConfig({
         ],
         sidebar: sidebarEn,
         footer: { message: 'GPL-3.0 licensed.' },
-        search: { provider: 'local', options: { detailedView: true } },
       },
     },
     ru: {
@@ -126,8 +174,8 @@ export default defineConfig({
           {
             text: 'Приступая к изучению',
             items: [
-              { text: 'Введение', link: '/ru/guide/introduction' },
-              { text: 'Установка', link: '/ru/guide/install' },
+              { text: 'Введение', link: '/ru/' },
+              { text: 'Установка', link: '/ru/install' },
             ],
           },
           {
@@ -178,33 +226,6 @@ export default defineConfig({
           },
         ],
         footer: { message: 'Лицензия GPL-3.0.' },
-        search: {
-          provider: 'local',
-          options: {
-            detailedView: true,
-            translations: {
-              button: {
-                buttonText: 'Поиск',
-                buttonAriaLabel: 'Поиск по документации (Ctrl+K)',
-              },
-              modal: {
-                displayDetails: 'Показать контекст',
-                resetButtonTitle: 'Очистить запрос',
-                backButtonTitle: 'Назад',
-                noResultsText: 'Ничего не найдено',
-                footer: {
-                  selectText: 'открыть',
-                  selectKeyAriaLabel: 'Enter — открыть выбранный результат',
-                  navigateText: 'навигация',
-                  navigateUpKeyAriaLabel: 'Стрелка вверх',
-                  navigateDownKeyAriaLabel: 'Стрелка вниз',
-                  closeText: 'закрыть',
-                  closeKeyAriaLabel: 'Escape — закрыть',
-                },
-              },
-            },
-          },
-        },
       },
     },
   },

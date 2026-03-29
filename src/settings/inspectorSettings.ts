@@ -30,6 +30,7 @@ const defaultPiniaTableColumns: PiniaTableColumnsSettings = {
 
 /** Default Network search settings */
 const defaultNetworkSearchSettings: NetworkSearchSettings = {
+    byName: false,
     byPath: true,
     byMethod: true,
     byStatus: false,

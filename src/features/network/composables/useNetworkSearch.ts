@@ -9,8 +9,10 @@
 import { ref, computed, watch, type Ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import type { NetworkEntry } from '@/types/network'
+import { parseSearchTerm } from '@/utils/searchUtils'
 
 export interface SearchSettings {
+  byName: boolean
   byPath: boolean
   byMethod: boolean
   byStatus: boolean
@@ -22,7 +24,10 @@ export interface SearchSettings {
 
 interface SearchIndexEntry {
   entryId: string
-  name: string
+  /** Lowercased `NetworkEntry.path` */
+  pathLower: string
+  /** Lowercased `NetworkEntry.name` (Name column) */
+  displayName: string
   method: string
   status: string
   requestBodyKeys: string[]
@@ -106,7 +111,8 @@ function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
   
   return {
     entryId: entry.id,
-    name: entry.path.toLowerCase(),
+    pathLower: entry.path.toLowerCase(),
+    displayName: entry.name.toLowerCase(),
     method: entry.method.toLowerCase(),
     status: String(entry.status),
     requestBodyKeys,
@@ -130,7 +136,9 @@ export function useNetworkSearch(
   
   watch(searchTerm, (term) => {
     const settings = getSettings()
-    if (term.length >= settings.minLength || term.length === 0) {
+    const { query } = parseSearchTerm(term)
+    const effectiveLen = query.trim().length
+    if (effectiveLen >= settings.minLength || term.length === 0) {
       updateDebouncedSearch(term)
     }
   })
@@ -161,7 +169,14 @@ export function useNetworkSearch(
     for (const entry of currentEntries) {
       currentIds.add(entry.id)
       const existing = searchIndexMap.get(entry.id)
-      if (!existing || existing.status !== String(entry.status)) {
+      const pathLower = entry.path.toLowerCase()
+      const displayName = entry.name.toLowerCase()
+      if (
+        !existing ||
+        existing.status !== String(entry.status) ||
+        existing.pathLower !== pathLower ||
+        existing.displayName !== displayName
+      ) {
         searchIndexMap.set(entry.id, buildIndexEntry(entry))
       }
     }
@@ -180,56 +195,66 @@ export function useNetworkSearch(
     void indexVersion.value
     if (entriesVersion) void entriesVersion.value
 
-    const q = debouncedSearchTerm.value.toLowerCase().trim()
+    const { query, exactMatch } = parseSearchTerm(debouncedSearchTerm.value)
+    const q = query.toLowerCase().trim()
     const allEntries = entries()
     if (!q) return allEntries
-    
+
+    const matchField = (field: string, needle: string) =>
+      exactMatch ? field === needle : field.includes(needle)
+
     const settings = getSettings()
     const matchedIds = new Set<string>()
-    
+    const statusNorm = (s: string) => s.toLowerCase()
+
     for (const idx of searchIndexMap.values()) {
       let matched = false
-      
-      if (settings.byPath && idx.name.includes(q)) {
-        matched = true
-      }
-      
-      if (!matched && settings.byMethod && idx.method.includes(q)) {
+
+      if (settings.byName && matchField(idx.displayName, q)) {
         matched = true
       }
 
-      if (!matched && settings.byStatus && idx.status.includes(q)) {
+      if (!matched && settings.byPath && matchField(idx.pathLower, q)) {
         matched = true
       }
-      
+
+      if (!matched && settings.byMethod && matchField(idx.method, q)) {
+        matched = true
+      }
+
+      if (!matched && settings.byStatus && matchField(statusNorm(idx.status), q)) {
+        matched = true
+      }
+
       if (!matched && settings.byKey) {
-        if (idx.requestBodyKeys.some(k => k.includes(q)) ||
-            idx.responseBodyKeys.some(k => k.includes(q))) {
+        const keyMatch = (k: string) => matchField(k, q)
+        if (idx.requestBodyKeys.some(keyMatch) || idx.responseBodyKeys.some(keyMatch)) {
           matched = true
         }
       }
-      
+
       if (!matched && settings.byValue) {
-        if (idx.requestBodyValues.some(v => v.includes(q)) ||
-            idx.responseBodyValues.some(v => v.includes(q))) {
+        const valMatch = (v: string) => matchField(v, q)
+        if (idx.requestBodyValues.some(valMatch) || idx.responseBodyValues.some(valMatch)) {
           matched = true
         }
       }
-      
+
       if (matched) {
         matchedIds.add(idx.entryId)
       }
     }
-    
+
     return allEntries.filter(e => matchedIds.has(e.id))
   })
   
   const activeSearchTypes = computed(() => {
     const settings = getSettings()
     const types: string[] = []
-    if (settings.byPath) types.push('Path')
-    if (settings.byMethod) types.push('Method')
     if (settings.byStatus) types.push('Status')
+    if (settings.byMethod) types.push('Method')
+    if (settings.byPath) types.push('Path')
+    if (settings.byName) types.push('Name')
     if (settings.byKey) types.push('Key')
     if (settings.byValue) types.push('Value')
     return types

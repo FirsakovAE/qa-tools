@@ -55,5 +55,5 @@ If you rely on a strict whitelist, keep at least one URL you use to open **Optio
 
 ## See also
 
-* [Installation → Where settings are stored](/guide/install#storage)
-* [Browser extension](/guide/extension)
+* [Installation → Where settings are stored](/install#storage)
+* [Browser extension](/extension)

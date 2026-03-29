@@ -222,6 +222,10 @@ function migrateSearchSettings(saved: any): void {
         if (saved.networkSearch.byStatus === undefined) {
             saved.networkSearch.byStatus = false
         }
+        // New: Name column search (legacy byName was remapped to byPath above, then deleted)
+        if (saved.networkSearch.byName === undefined) {
+            saved.networkSearch.byName = false
+        }
     }
 
     // Миграция: добавляем networkTableColumns если отсутствует
