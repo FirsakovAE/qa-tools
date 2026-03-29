@@ -1,44 +1,44 @@
 ---
-title: Расширение браузера
+title: Browser extension
 ---
 
-### Расширение для Chrome / Edge
+### Chrome / Edge extension
 
-> Основной способ запуска Vue Inspector с поддержкой автоматического запуска, оконного режима, popup-меню и интеграции в браузер.
+> Primary way to run Vue Inspector with automatic launch, windowed mode, the popup menu, and browser integration.
 
-## Хранение данных
+## Data storage
 
-Настройки и сохранённые медиафайлы живут в **хранилищах профиля браузера** (отдельно от сайтов, которые вы инспектируете): один раз сохранили в Options — те же данные на всех вкладках. Сравнение со standalone и детали по типам данных — на странице [Установка → Где хранятся настройки](./install#storage).
-
----
-
-## Установка
-
-1. Перейдите в <a href="../../../index.html#installation" target="_self" rel="noopener">раздел установки</a> на главной странице сайта.
-2. Скачайте последнюю версию расширения;
-3. Распакуйте архив в удобную папку;
-4. Откройте страницу `chrome://extensions/`;
-5. Включите **Режим разработчика** в правом верхнем углу;
-6. Нажмите **Загрузить распакованное расширение**;
-7. Выберите папку с расширением.
+Settings and saved media live in **browser profile storages** (separate from sites you inspect): save once in Options — the same data is available on every tab. Compare with standalone and data-type details on [Installation → Where settings are stored](./install#storage).
 
 ---
 
-## Использование
+## Install
 
-После установки расширение будет доступно в браузере и может запускаться в соответствии с текущими пользовательскими настройками.
-
-При необходимости запуск доступен через popup-меню расширения.
+1. Open the <a href="../../index.html#installation" target="_self" rel="noopener">installation section</a> on the project landing page.
+2. Download the latest extension archive;
+3. Unpack it to a folder of your choice;
+4. Open `chrome://extensions/`;
+5. Enable **Developer mode** in the upper right;
+6. Click **Load unpacked**;
+7. Select the extension folder.
 
 ---
 
-## Режим инкогнито
+## Usage
 
-Если требуется работа в режиме инкогнито:
+After installation the extension is available in the browser and launches according to your settings.
 
-1. Откройте страницу `chrome://extensions/`;
-2. Найдите **Vue Inspector** в списке установленных расширений;
-3. Откройте параметры расширения (Details);
-4. Включите опцию **Разрешить использование в режиме инкогнито**.
+You can also launch it from the extension popup when needed.
 
-После этого расширение будет доступно и в приватных окнах браузера.
+---
+
+## Incognito
+
+To use incognito windows:
+
+1. Open `chrome://extensions/`;
+2. Find **Vue Inspector** in the list;
+3. Open extension details;
+4. Enable **Allow in incognito**.
+
+The extension will then be available in private windows as well.

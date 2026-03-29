@@ -1,77 +1,77 @@
 ---
-title: Менеджер настроек
+title: Settings management
 ---
 
-# Сохранение, импорт и экспорт
+# Save, import, and export
 
-В разделе **Options → General** внизу доступны три действия: **Import**, **Export** и **Reset**. Они работают и в **расширении**, и в **автономном (standalone)** режиме, но **физическое место записи** и **состав экспортируемого файла** зависят от варианта запуска.
+**Options → General** ends with **Import**, **Export**, and **Reset**. They work in **extension** and **standalone**, but **storage backends** and **export payload shape** differ.
 
-Повседневное изменение любых полей в Options **автоматически сохраняется** с небольшой задержкой (чтобы не писать на диск на каждый символ). Отдельной кнопки «Сохранить» для обычных правок нет.
+Everyday edits **autosave** (debounced) — there is no separate Save button for normal fields.
 
-Краткая сводка «куда что ложится» по режимам — на странице [Установка → Где хранятся настройки](/guide/install#storage).
-
----
-
-## Куда записываются данные при обычном сохранении
-
-### Расширение (Chrome / Edge)
-
-При автосохранении и после импорта фоновый процесс расширения:
-
-1. Сохраняет **объект настроек** (опции, списки, таблицы Network/Props и т.д.) в **IndexedDB**, заведённый для профиля расширения — это основной, более устойчивый слой.
-2. **Дублирует** ту же структуру в **`chrome.storage.local`** под ключом вроде **`vue-inspector-settings`**, чтобы другие части расширения (в т.ч. совместимость со старыми путями и простой доступ) читали те же данные.
-
-В сам JSON настроек **не встраиваются** двоичные тела сохранённых файлов (фоны и др.): в объект уходят **идентификаторы и метаданные**, а сами байты лежат в **отдельном хранилище IndexedDB** (`vue-inspector-media` и связанные записи). Так уменьшается размер «шапки» настроек и ускоряется загрузка.
-
-### Автономный режим (standalone)
-
-Настройки записываются через **адаптер локального хранилища** приложения в **центральное хранилище** (ключ вроде **`inspector-settings`** в KV-слое IndexedDB, доступ через встроенный **storage iframe**). Это **не** `chrome.storage` расширения: расширения в режиме закладки нет.
-
-Медиафайлы для оформления и связанные блобы учитываются **отдельно** в том же контуре хранилища, с **лимитом суммарного объёма** (см. [Персонализация](/options/customize)).
-
-Дополнительно для ускорения после перезагрузки страницы может использоваться **кэш в sessionStorage** — он не заменяет постоянное хранилище, а лишь убирает «пустой первый кадр» интерфейса.
+A short comparison of where bytes go: [Installation → Where settings are stored](/guide/install#storage).
 
 ---
 
-## Export (экспорт)
+## Normal persistence paths
 
-По кнопке **Export** скачивается **текстовый файл** с именем вида `vue-inspector-settings-ГГГГ-ММ-ДД.txt`, внутри — **форматированный JSON** текущего состояния настроек из памяти приложения.
+### Extension (Chrome / Edge)
 
-- **Standalone:** для записей **сохранённых файлов** (`savedFiles`), у которых в хранилище есть блоб, экспорт при необходимости **вкладывает содержимое в виде data URI** в JSON — файл резервной копии получается более **самодостаточным** для переноса на другой браузер или ПК.
-- **Расширение:** при формировании файла вложенные **data URI** для таких файлов **убираются** из JSON; в экспорт попадают в основном **параметры и структура**, а тяжёлые медиа по-прежнему живут **только локально** до тех пор, пока вы не перенесёте тот же профиль или не добавите файлы заново после импорта «сухого» набора.
+On autosave / import the background worker:
 
-Экспорт удобен для **резервной копии**, **переноса между машинами** (особенно в standalone) и **версионирования** своих пресетов в системе контроля версий как обычного текстового файла.
+1. Writes the **settings object** (options, tables, Network/Props rules, …) to **IndexedDB** for the extension — primary durable store.
+2. **Mirrors** the structure to **`chrome.storage.local`** under a key like **`vue-inspector-settings`** for compatibility and quick access.
 
----
+Binary Customize files are **not** inlined in JSON — the object stores **ids/metadata** while blobs sit in **`vue-inspector-media`** IndexedDB. Keeps the settings blob small/fast to load.
 
-## Import (импорт)
+### Standalone
 
-**Import** открывает выбор файла; ожидается **JSON** того же вида, что и при экспорте (в интерфейсе фильтр обычно **`*.txt`**).
+Settings go through the local storage adapter into a **central KV** store (e.g. **`inspector-settings`** in IndexedDB via the **storage iframe**). **Not** `chrome.storage` — there is no installed extension.
 
-1. Файл **разбирается** и **сливается с заводским шаблоном**: неизвестные поля отбрасываются или приводятся к актуальной схеме, устаревшие структуры **мигрируют** по возможности автоматически.
-2. Результат попадает в **ту же модель настроек**, что используется при редактировании в Options, затем **один раз записывается** в постоянное хранилище вашего режима (расширение или standalone).
-3. Интерфейс Options **обновляет** связанные списки (например breakpoints и mocks) из импортированных данных.
+Decorative media uses the same storage perimeter with a **total size budget** (see [Customize](/options/customize)).
 
-При **сохранении в постоянное хранилище** тяжёлые вложения в JSON **не дублируются**: в текст настроек попадают в основном идентификаторы и параметры, а блобы остаются в **медиа-слое**. Импорт **полного** файла из **standalone**-экспорта (где в JSON вшиты data URI) поднимает эти записи в рабочее состояние; импорт «облегчённого» файла из **расширения** переносит прежде всего опции и списки — сами картинки/видео для фона на новом месте может понадобиться **выбрать заново** в Customize.
-
-При ошибке формата импорт **не применяется**; текст ошибки показывается в форме.
-
-Импорт **перезаписывает текущее состояние** согласно файлу (в разрезе ключей, которые удалось корректно разобрать). Перед проверкой чужого пресета сделайте **Export** текущего профиля, чтобы можно было вернуться назад.
+**sessionStorage** may cache for first paint after reload — not a substitute for durable storage.
 
 ---
 
-## Reset (сброс)
+## Export
 
-**Reset** возвращает настройки к **заводским значениям** и очищает связанные **медиа-хранилища** (блобы фонов и сохранённых файлов). Для расширения дополнительно вызывается сценарий полного сброса в фоне (очистка IndexedDB настроек и ключей `vue-inspector-settings` в `chrome.storage.local`). В standalone сброс записывается в локальное хранилище приложения тем же каналом, что и обычное сохранение.
+**Export** downloads text named like `vue-inspector-settings-YYYY-MM-DD.txt` containing pretty-printed JSON of in-memory settings.
 
-Операция **необратима** без заранее сохранённого файла экспорта.
+* **Standalone:** for `savedFiles` rows backed by blobs, export may inline **data URIs** so the backup is **portable** across browsers/machines.
+* **Extension:** data URI payloads for heavy files are usually **stripped** — you get structure/options; re-copy media locally or re-import a **rich** standalone export if you need bytes.
 
-Тонкий сброс только Auto Run без полного Reset доступен через **всплывающее окно** расширения (см. [Автозапуск](/options/auto_run)); кнопка **Reset** в Options затрагивает **весь** профиль целиком.
+Use Export for **backups**, **migration** (especially standalone), and **versioning** presets as plain text.
 
 ---
 
-## См. также
+## Import
 
-- [Установка — хранение](/guide/install#storage)
-- [Персонализация](/options/customize)
-- [Автозапуск](/options/auto_run)
+**Import** picks a file; expected **JSON** matches export (filter often `*.txt`).
+
+1. Parse and **merge with defaults**: unknown keys drop; legacy shapes **migrate** when possible.
+2. Result loads into the same options model, then **writes once** to durable storage (extension or standalone).
+3. UI refreshes dependent lists (breakpoints, mocks, …).
+
+Blobs are **not duplicated** on write — JSON mostly carries ids; importing a **standalone** export with embedded data URIs hydrates attachments; importing a **trimmed** extension export moves options/lists — you may **re-pick** backgrounds in Customize afterward.
+
+Bad format **aborts** with an error in the form.
+
+Import **overwrites** current keys present in the file. **Export** first if you need rollback.
+
+---
+
+## Reset
+
+**Reset** restores factory defaults and clears related **media** stores. Extension path also clears IndexedDB settings keys and `chrome.storage.local` inspector keys. Standalone writes the reset through the same adapter as normal saves.
+
+**Irreversible** without a prior export.
+
+Partial Auto Run reset (without full wipe) exists via the extension **popup** — see [Auto run](/options/auto_run). **Reset** here clears the **entire** profile.
+
+---
+
+## See also
+
+* [Installation — storage](/guide/install#storage)
+* [Customize](/options/customize)
+* [Auto run](/options/auto_run)

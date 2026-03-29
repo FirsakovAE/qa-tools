@@ -1,59 +1,59 @@
 ---
-title: Персонализация
+title: Customize
 ---
 
-# Персонализация (Customize)
+# Customize
 
-В **Options → General → Customize** собраны настройки внешнего вида основного окна инспектора: тема, фоновое медиа и параметры его отображения. Оформляется панель инструмента, а не открытый сайт.
-
----
-
-## Расширение и Standalone: что отличается в Customize
-
-Набор полей (**тема**, **файл / ссылка**, прозрачность, размытие, шум, позиция, масштаб) **одинаковый**. Отличается то, **куда складываются локальные копии файлов** и **есть ли учёт общего лимита по размеру**.
-
-| | **Расширение (Chrome / Edge)** | **Автономный режим (Standalone)** |
-|---|--------------------------------|-------------------------------------|
-| **Где хранятся выбранные файлы** | Копии медиа пишутся в **IndexedDB** контекста расширения (отдельные хранилища под обои и прочие сохранённые файлы). | Медиа для оформления уходит в **единое локальное хранилище** приложения (центральное хранилище с лимитом). |
-| **Лимит по объёму** | Отдельного лимита «N МБ на медиа» в приложении **нет**; реальное ограничение — **квота IndexedDB / хранилища** в рамках профиля браузера для расширения. | **Жёсткий лимит 30 МБ** на **суммарный** размер медиа в хранилище standalone: при добавлении проверяется новый суммарный объём; при превышении сохранение **блокируется** (ошибка вида «Media limit exceeded»). |
-| **Индикатор заполнения** | Счётчик «X МБ / 30 МБ» в Customize **не показывается**. | В Customize отображается **прогресс использования** медиа-хранилища (занято **МБ** из **30 МБ**), чтобы было видно, сколько места осталось под новые фоны и файлы. |
-
-Фон по **URL** в обоих режимах не «весит» в локальном медиа-квотинге инспектора так же, как загруженный файл — но для офлайн и предсказуемости обычно удобнее сохранять файл локально в пределах квоты (в Standalone — с учётом **30 МБ** суммарно).
+**Options → General → Customize** controls the main inspector look: theme, background media, and how it is displayed. You style the **tool**, not the site content.
 
 ---
 
-## Тема
+## Extension vs standalone
 
-**Dark / Light** — переключение светлой и тёмной цветовой схемы интерфейса инспектора.
+Fields (**theme**, **file / URL**, opacity, blur, noise, position, scale) match. What differs is **where file bytes go** and **whether a total quota applies**.
 
----
+| | **Extension (Chrome / Edge)** | **Standalone** |
+|---|------------------------------|----------------|
+| **Where uploads live** | Media copies in extension **IndexedDB** (separate stores for wallpaper and saved files). | Media goes into the app’s **unified local store** (central quota). |
+| **Size limit** | No app-enforced “N MB for media”; real cap is **IndexedDB / storage quota** for the extension profile. | **Hard 30 MB** total for decorative media in standalone storage — saves are blocked if the new total would exceed (error like “Media limit exceeded”). |
+| **Usage meter** | The **X MB / 30 MB** counter **does not** show in Customize. | Customize shows **usage** of the media store (**MB of 30 MB**) so you see remaining headroom. |
 
-## Фон (Image)
-
-Блок **Image** задаёт фон панели. Доступны два источника — **File** и **Link**:
-
-- **Файл** — локальный ресурс. Можно выбрать через **Browse** или из списка ранее сохранённых копий (расширение: IndexedDB; standalone: единое хранилище с лимитом **30 МБ** — см. таблицу выше). Про наборы настроек — [Менеджер настроек](/options/settings_management).
-- **Ссылка** — указать URL медиа по ссылке.
-
-Поддерживаются **статичные изображения**, анимированные **`GIF`** и фоновое видео **`MP4`**.
+**URL backgrounds** do not count like uploaded files in local quota, but for offline predictability local files within quota are often simpler (in standalone respect **30 MB** total).
 
 ---
 
-## Параметры отображения фона
+## Theme
 
-| Параметр | Назначение |
-|----------|------------|
-| **Image Opacity** | Прозрачность фонового слоя относительно интерфейса. |
-| **Blur** | Размытие фона. |
-| **Noise Intensity / Opacity** | Наложение и сила шумового слоя поверх фона (для текстуры/«зернистости»). |
-| **Position (X / Y)** | Смещение изображения по горизонтали и вертикали. |
-| **Scale** | Масштаб фона в процентах; допустимый диапазон **100–200%**. |
-
-Комбинация прозрачности, размытия и шума позволяет сделать фон заметным или почти нейтральным, не мешая чтению данных во вкладках.
+**Dark / Light** toggles inspector color scheme.
 
 ---
 
-## См. также
+## Background (Image)
 
-- [Режимы отображения](/options/display_mode)
-- [Менеджер настроек](/options/settings_management)
+**Image** sets the panel background. Sources — **File** and **Link**:
+
+* **File** — local asset via **Browse** or previously saved copies (extension: IndexedDB; standalone: unified 30 MB store — table above). Presets: [Settings management](/options/settings_management).
+* **Link** — URL to media.
+
+Supported: **still images**, animated **GIF**, **MP4** video backgrounds.
+
+---
+
+## Background rendering
+
+| Control | Role |
+| ------- | ---- |
+| **Image Opacity** | Background layer transparency vs UI chrome. |
+| **Blur** | Blur strength. |
+| **Noise Intensity / Opacity** | Grain overlay strength/visibility. |
+| **Position (X / Y)** | Pan the image. |
+| **Scale** | Zoom **100–200%**. |
+
+Combined, you can keep background subtle or decorative without hurting readability.
+
+---
+
+## See also
+
+* [Display modes](/options/display_mode)
+* [Settings management](/options/settings_management)

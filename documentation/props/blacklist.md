@@ -1,94 +1,90 @@
 ---
-title: Чёрный список
+title: Blacklist
 ---
 
-# Чёрный список компонентов (Props)
+# Component blacklist (Props)
 
-**Чёрный список** во вкладке **Props** — это набор **имён Vue-компонентов**, которые исключаются из дерева инспектора и не отображаются в таблице. Фильтрация применяется **до построения списка props**, поэтому скрытые компоненты не участвуют в обычном обходе дерева.
+The **Props** **blacklist** is a set of **Vue component names** excluded from the inspector tree and table. Filtering runs **before** props collection, so hidden components are skipped during traversal.
 
-Общее описание вкладки Props: [Основные возможности](/props/general).
+Props overview: [Overview](/props/general).
 
-Не путайте этот список с **чёрным списком сайтов** для **автозапуска** оверлея (настройки **General / Auto Run**): здесь фильтрация относится только к **именам компонентов**.
-
----
-
-## Где добавить и убрать
-
-Добавить компонент в чёрный список можно двумя способами.
-
-* **Через контекстное меню строки в таблице Props** — команда добавляет имя текущего компонента в активный список блокировки.
-* **В Options** — секция **Component Blacklist** в блоке **Props** позволяет просматривать правила, добавлять новые строки, переключать состояние записи и удалять ненужные элементы.
-
-Если имя уже присутствует в списке, повторное добавление обычно не создаёт дубликат.
+Do not confuse this with the **site blacklist** for overlay **auto run** (**General / Auto Run**): here only **component names** are filtered.
 
 ---
 
-## Активные и неактивные правила
+## Add and remove
 
-Список правил делится на два состояния.
+* **Row context menu** on **Props** — adds the current component name to the active block list.
+* **Options → Props → Component Blacklist** — view rules, add lines, toggle state, delete.
 
-* **Активные** (**Blocked**) — правило применяется, и совпавшие компоненты скрываются из дерева.
-* **Неактивные** (**Off**) — запись сохраняется, но временно не участвует в фильтрации.
-
-Переключение состояния позволяет быстро отключать и повторно включать правило без повторного ввода имени.
-
-Удаление строки полностью убирает правило из списка.
-
-Если активных правил нет, фильтрация по чёрному списку фактически не применяется.
+Duplicate names are usually not created.
 
 ---
 
-## Как сопоставляется имя
+## Active vs inactive
 
-Сравнение выполняется по **имени компонента**, которое отображается в инспекторе.
+Rules have two states:
 
-* Если правило **не содержит** символов **`*`** или **`%`**, используется **точное совпадение** без учёта регистра.
-* Символы **`*`** и **`%`** работают как шаблон подстановки произвольного фрагмента имени.
+* **Blocked** — applied; matching components are hidden.
+* **Off** — stored but not filtering.
 
-Например:
+Toggle without retyping. Deleting a row removes the rule entirely.
 
-* `MyButton` — скрывает только компонент с точным именем **MyButton**;
-* `Base*` — скрывает все компоненты, имя которых начинается с **Base**;
-* `*Modal*` — скрывает все имена, содержащие **Modal**.
-
-Для безымянных компонентов может использоваться внутреннее обозначение вроде **Anonymous**, если оно присутствует в дереве.
+With no active rules, blacklist filtering is effectively off.
 
 ---
 
-## Исключения и пересечения
+## Name matching
 
-Если компонент подходит сразу под несколько правил, учитывается текущее состояние каждого правила.
+Comparison uses the **displayed component name**.
 
-Неактивная запись сама по себе не действует как исключение, а просто временно исключается из фильтрации.
+* Without **`*`** or **`%`** — **case-insensitive exact** match.
+* **`*`** and **`%`** act as wildcards for name fragments.
 
-Если используется широкая маска, удобнее временно отключить её и проверить результат, чем создавать несколько похожих правил.
+Examples:
 
----
+* `MyButton` — only **MyButton**;
+* `Base*` — names starting with **Base**;
+* `*Modal*` — names containing **Modal**.
 
-## Когда применяется
-
-Актуальный список правил используется при каждом обновлении дерева:
-
-* при ручном **Refresh**;
-* при автоматическом обновлении списка;
-* при повторном открытии вкладки.
-
-После изменения правил в **Options** дерево обычно обновляется, чтобы таблица сразу отразила новый набор компонентов.
-
-Пока правило активно, скрытые компоненты недоступны для выбора в таблице и карточке.
+Nameless components may show as **Anonymous** when that is what the tree uses.
 
 ---
 
-## Практические советы
+## Intersections
 
-* Начинать удобнее с **точного имени** через контекстное меню строки.
-* **Широкие маски** подходят для повторяющихся служебных компонентов, но требуют аккуратности.
-* Чёрный список влияет только на **отображение в инспекторе** и не изменяет работу Vue-приложения.
+If several rules match, each rule’s **active** state applies.
+
+Inactive rules do not act as exceptions — they are simply ignored until re-enabled.
+
+Prefer toggling a broad pattern off temporarily instead of stacking near-duplicates.
 
 ---
 
-## См. также
+## When it applies
 
-* [Основные возможности Props](/props/general)
-* [Инспектор (выбор на странице)](/props/inspect)
-* [Персонализация / настройки](/options/customize)
+Rules run on every tree rebuild:
+
+* manual **Refresh**;
+* automatic refresh;
+* reopening the tab.
+
+After **Options** edits the tree usually refreshes so the table reflects changes immediately.
+
+While a rule is active, hidden components are not selectable in the table or card.
+
+---
+
+## Tips
+
+* Start from **exact names** via the row context menu.
+* **Wide patterns** help repeated noise components but need care.
+* **Blacklist affects inspector display only** — it does not change your Vue app.
+
+---
+
+## See also
+
+* [Props overview](/props/general)
+* [Inspect](/props/inspect)
+* [Customize](/options/customize)

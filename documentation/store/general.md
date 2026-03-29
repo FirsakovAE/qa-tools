@@ -1,119 +1,115 @@
 ---
-title: Работа с Pinia Store
+title: Pinia stores
 ---
 
-# Работа с Pinia Store
+# Working with Pinia stores
 
-Раздел **Stores** предназначен для просмотра зарегистрированных в приложении **Pinia**‑сторов: имя (идентификатор), число полей **state** и **getters**, а после выбора строки — снимок **state** и **getters** с возможностью правок и записи обратно в приложение (в поддерживаемых случаях).
+The **Stores** tab lists **Pinia** stores registered in the app: id, **state** / **getter** counts, and after row selection a snapshot of **state** and **getters** with editing and write-back where supported.
 
-Подробнее про редактирование **state** и **getters**, а также про **избранное** по сторам:
+More on editing **state** / **getters** and **favorites**:
 
-- [Работа со State](/store/state)
-- [Работа с Getters](/store/getters)
-- [Избранное](/store/favorite)
+* [State](/store/state)
+* [Getters](/store/getters)
+* [Favorites](/store/favorite)
 
-## Верхняя панель управления
+## Top toolbar
 
-### Поиск по сторам
+### Store search
 
-Поле поиска и переключатель **Search by** работают так. Типы поиска также можно задать заранее в **Options** для вкладки **Stores**.
+Search and **Search by** mirror **Options** presets for this tab.
 
-| Режим | Назначение |
-| ----- | ---------- |
-| **Name** | фильтр по имени стора (локально в панели) |
-| **Key** | совпадение по **именам** полей в **state** и **getters** (запрос уходит на страницу) |
-| **Value** | совпадение по **значениям** в **state** и **getters** (так же на странице) |
+| Mode | Purpose |
+| ---- | ------- |
+| **Name** | filter by store name (local to the panel) |
+| **Key** | match **names** of fields in **state** and **getters** (query sent to the page) |
+| **Value** | match **values** in **state** and **getters** (also on the page) |
 
-Для **Key** и **Value** действует минимальная длина запроса (по умолчанию **2** символа; настраивается в параметрах поиска инспектора).
+**Key** / **Value** use the global minimum length (default **2**).
 
-**Частичное и точное совпадение.** Если запрос **не** обёрнут в кавычки, используется **подстрока** (без учёта регистра). **Точное** совпадение — если **весь** запрос обёрнут в **двойные кавычки** `"..."`.
+**Partial vs exact:** substring without quotes; **exact** when the whole query is in **double quotes** `"..."`.
 
-На стороне поиска по содержимому сторов действует **лимит числа результатов** (порядка сотни совпадений), чтобы не перегружать страницу при широком запросе.
+Content search is capped (on the order of **~100** hits) to avoid overloading the page.
 
-### Индикаторы состояния
+### Status chips
 
-Справа на панели **Stores** отображаются:
+| Item | Purpose |
+| ---- | ------- |
+| **N** or **N/M** | Stores after filter; with search, **M** is total stores in the last summary. |
+| **Favorites** ★ | Matches with favorite stores. Click opens **Options** (Pinia favorites). |
+| **Refresh** | **Refresh**, loading state, last successful summary time (or “Loading…”). |
 
-| Элемент | Назначение |
-| ------- | ---------- |
-| **N** или **N/M** | Число сторов после фильтра; при непустом поиске через дробь — общее число сторов в последней сводке. |
-| **Избранное** ★ | Совпадения с избранными сторами. Клик открывает **Options** (раздел избранного Pinia). |
-| **Обновление** | Кнопка **Refresh**, индикатор загрузки и время последней успешной сводки (или текст вида «Loading...»). |
+The panel checks the page bridge before requesting summaries.
 
-Перед запросом сводки панель проверяет доступность канала связи со страницей; если контекст недоступен, данные не запрашиваются.
+## Work area
 
-## Рабочая область
+### Store list
 
-### Список сторов
+Left: store table. Columns (visibility in settings):
 
-Слева — таблица сторов. Колонки (видимость задаётся в настройках таблицы):
+* **Name** — **baseId**;
+* **State** — state key count (dash if none);
+* **Getters** — getter count (dash if none).
 
-- **Name** — отображаемое имя стора (**baseId**);
-- **State** — число ключей в state (если нет — прочерк);
-- **Getters** — число getters (если нет — прочерк).
+Rows expose a **favorite** star and context menu; favorites live in inspector settings — [Favorites](/store/favorite).
 
-У строки доступны **звезда избранного** и контекстное меню. Избранное хранится в настройках инспектора; см. [Избранное](/store/favorite).
+### Store details
 
-### Детализация стора
+Selecting a row opens **State** / **Getters** tabs (when non-empty in the summary), JSON editor (text/tree per settings), **edit/save**, and navigation back. Editing constraints: [State](/store/state), [Getters](/store/getters).
 
-После выбора строки справа открывается панель с вкладками **State** и **Getters** (если соответствующие секции непусты в сводке), редактором JSON (текст или дерево — по настройкам инспектора), кнопками **редактирования / сохранения** и возвратом к списку. Детали правок и ограничений — на страницах [State](/store/state) и [Getters](/store/getters).
+Card data is a **point-in-time snapshot** — refresh (**Refresh** on the toolbar or in the card) after external app changes.
 
-Данные в карточке — **снимок на момент запроса**: изменения в приложении извне не подсвечиваются автоматически, пока вы не обновите данные (**Refresh** на панели или **Refresh data** в карточке).
+## Display limits
 
-## Ограничения отображения
+### Reading
 
-### Ограничения чтения данных
+1. **Summary** — lightweight: ids, **baseId**, state/getter **counts**, timestamp — **no** full value dump.
+2. **Single-store card** — serialized **state** and **getters** for display/edit.
 
-1. **Сводка по всем сторам** — лёгкий ответ: для каждого стора передаются `id`, **baseId**, счётчики ключей **state** / **getters** и метка времени снимка, **без** полной сериализации всех значений.
-2. **Карточка выбранного стора** — отдельный запрос с сериализованными **state** и **getters** для отображения и редактирования.
+Serialization respects depth/size guards; cycles, functions, exotic objects may truncate or stringify differently than raw runtime.
 
-Сериализация **state** / **getters** для JSON ограничена здравыми пределами глубины и размера: циклические структуры, функции, специальные объекты могут быть усечены или представлены иначе, чем в «сыром» runtime.
+**Key** / **Value** hit lists are intentionally limited.
 
-Результаты поиска по **Key** / **Value** на странице намеренно ограничены по количеству (см. выше).
+### Capacity
 
-### Ограничение объёма хранения
+No fixed max store count like **500** **Network** rows; typical Pinia registration lists render fully.
 
-Фиксированного лимита числа сторов в таблице (в духе **500** записей в **Network**) нет: отображаются все сторы, возвращённые сводкой **Pinia** в типичном сценарии.
+Unusual setups may be incomplete; save errors surface in UI or console depending on store shape.
 
-Нестандартные регистрации или крайние конфигурации могут отображаться неполно; права на запись (**replace state**, **patch getters**) зависят от объявления стора — при ошибке сохранения смотрите сообщение в интерфейсе или консоль.
+## How it works
 
-## Принципы работы
+### When collection starts
 
-### Когда начинается сбор данных
+Pinia support activates **after Pinia is detected** (similar to **Props**: Vue + inspector must be present). If Pinia is missing or not ready, the list is empty or shows an error.
 
-Модуль Pinia во внедрённом сценарии подключается **после обнаружения Pinia** на странице (логика сходна с вкладкой **Props**: сначала должны быть Vue и активный инспектор). Если Pinia не установлена или ещё не инициализирована при открытии вкладки **Stores**, список будет пустым или появится сообщение об ошибке загрузки.
+### What is monitored
 
-### Что попадает в мониторинг
+1. **Summary** — ids, names, counts for the table.
+2. **One store** — full serialized **state** / **getters** on demand.
 
-1. **Сводка** — только идентификаторы, имена и счётчики полей для таблицы.
-2. **Детали одного стора** — полный сериализованный **state** и **getters** по выбору пользователя.
+This splits a **fast list** from **heavy reads** for one store.
 
-Так отделяется **быстрый список** от **тяжёлого чтения** одного стора.
+### Messaging
 
-### Как устроен обмен
+The panel talks to the page; injected code reads `pinia._s` and store instances.
 
-Панель не читает Pinia напрямую из памяти процесса расширения: она шлёт сообщение в контекст страницы, где есть доступ к `pinia._s` и инстансам сторов.
-
-Упрощённо загрузка списка выглядит так:
+Illustration:
 
 ```js
-// Иллюстрация: запрос сводки — только id стора, имя и счётчики ключей, без полного state
+// Summary — ids, names, key counts, no full state dump
 const response = await bridge.send({ type: 'PINIA_GET_STORES_SUMMARY' })
-// response.summary — объект «storeId → { id, baseId, stateKeys, getterKeys, … }»
 
-// Полный снимок одного стора — отдельным сообщением:
 const detail = await bridge.send({
   type: 'PINIA_GET_STORE_STATE',
   storeId: 'my-store-id',
 })
-// detail.state, detail.getters — для отображения и операций PATCH / REPLACE (при поддержке стором)
+// detail.state, detail.getters — for UI and PATCH / REPLACE when supported
 ```
 
-Поиск по ключам и значениям (`PINIA_SEARCH`) выполняется на странице и возвращает только список идентификаторов подходящих сторов.
+`PINIA_SEARCH` runs on the page and returns matching store ids.
 
-## См. также
+## See also
 
-- [Работа со State](/store/state)
-- [Работа с Getters](/store/getters)
-- [Избранное](/store/favorite)
-- [Параметры обновления и автообновление](/options/update_settings)
+* [State](/store/state)
+* [Getters](/store/getters)
+* [Favorites](/store/favorite)
+* [Update settings](/options/update_settings)

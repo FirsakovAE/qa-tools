@@ -1,37 +1,37 @@
 ---
-title: Работа с Getters
+title: Getters
 ---
 
-# Работа с Getters (Pinia)
+# Getters (Pinia)
 
-Во вкладке **Stores** после выбора стора секция **Getters** показывает **текущие значения** вычисляемых computed‑полей и иных свойств, которые Pinia выставляет на инстансе стора рядом с **state**. Значения берутся с живой страницы, сериализуются для JSON‑редактора и при сохранении снова пробрасываются в приложение через логику **патча**.
+In **Stores**, **Getters** shows **current values** of computed fields and other properties Pinia exposes on the store instance beside **state**. Values are read from the live page, serialized for the JSON editor, and on save are applied via **patch** logic back into the app.
 
-Общий контекст: [Основные возможности](/store/general). Работа с **state**: [Работа со State](/store/state).
+Context: [Store overview](/store/general). **State** editing: [State](/store/state).
 
 ---
 
-## Какие поля считаются getters
+## Which fields count as getters
 
-Список ключей собирает `getGetterKeys` в `src/injected/pinia/store-meta.ts`: **computed** на setup‑сторе, ключи на `store`, которых нет в `$state`, и свойства с **getter** на прототипе (options‑store).
+`getGetterKeys` in `src/injected/pinia/store-meta.ts` collects **computed** on setup stores, keys present on `store` but missing from `$state`, and prototype properties with **get** (options stores).
 
 ```ts
 function getGetterKeys(store) {
   const getters = []
   const stateKeys = new Set(Object.keys(store.$state || {}))
-  // 1) поля store, распознанные как computed ref
-  // 2) ключ есть на store, но не в $state
-  // 3) get без set на прототипе
+  // 1) store fields detected as computed refs
+  // 2) key on store but not in $state
+  // 3) getter without setter on prototype
   return getters
 }
 ```
 
-В сводке таблицы (**Getters: N**) отображается число таких ключей.
+The summary column (**Getters: N**) shows that count.
 
 ---
 
-## Чтение значений для UI
+## Reading for the UI
 
-`getStoreGetters` в `src/injected/pinia/getters.ts` для каждого ключа из `getGetterKeys` кладёт в результат `unwrapValue(store[key])`; ошибки дают `[Non-serializable]`.
+`getStoreGetters` in `src/injected/pinia/getters.ts` stores `unwrapValue(store[key])` per getter key; errors become `[Non-serializable]`.
 
 ```ts
 function getStoreGetters(storeId) {
@@ -49,13 +49,13 @@ function getStoreGetters(storeId) {
 }
 ```
 
-При открытии карточки панель запрашивает `PINIA_GET_STORE_STATE`; в ответе приходят **state** и **getters** — последние показываются во вкладке **Getters** (текстовой или древовидный JSON по настройкам).
+Opening the card requests `PINIA_GET_STORE_STATE`; **getters** render in the **Getters** tab (text or tree JSON).
 
 ---
 
-## Редактирование и сохранение
+## Edit and save
 
-В `PiniaDetails.vue` при сохранении секции Getters уходит `PINIA_PATCH_GETTERS` с объектом новых значений (результат `JSON.parse` редактора).
+Saving **Getters** sends `PINIA_PATCH_GETTERS` with parsed JSON from the editor (`PiniaDetails.vue`).
 
 ```ts
 async function saveGettersChanges() {
@@ -72,7 +72,7 @@ async function saveGettersChanges() {
 }
 ```
 
-На странице `patchGetters` (`src/injected/pinia/state-writer.ts`) **не присваивает значения чистому readonly computed**: внутри `store.$patch` для каждого ключа пытаются обновить **базу** — запись в `$state`, в записываемый ref, слияние в реактивный объект/массив; иначе ключ пропускается.
+`patchGetters` in `src/injected/pinia/state-writer.ts` **does not assign to pure readonly computed**; inside `store.$patch` it tries **backing** fields — writes to `$state`, writable refs, reactive merge; otherwise skips.
 
 ```ts
 function patchGetters(storeId, newGetters) {
@@ -90,27 +90,27 @@ function patchGetters(storeId, newGetters) {
         mergeReactive(store[key], newValue)
         updated.push(key)
       }
-      // чистый computed — пропуск
+      // pure computed — skip
     }
   })
   return { success: true, updated }
 }
 ```
 
-Ответ — `PINIA_PATCH_GETTERS_RESULT` (`success`, список `updated`). После успеха можно перечитать стор (**Refresh**), чтобы убедиться, что отображаемые getters совпали с приложением.
+Response: `PINIA_PATCH_GETTERS_RESULT` (`success`, `updated`). **Refresh** afterward to confirm displayed getters match the app.
 
 ---
 
-## На что обратить внимание
+## Notes
 
-- Если имя совпадает с полем **state**, патч попадёт в **`$state[key]`** — вы меняете источник правды.
-- Только читаемые computed без обходного пути к state/ref **не изменятся**; смотрите **state** или **actions**.
-- Несериализуемые значения при чтении — заглушка в JSON; правьте осознанно или через **state** / **actions**.
+* If a name matches **state**, the patch hits **`$state[key]`** — you change the source of truth.
+* Pure read-only computed with no writable backing **won’t** change; use **state** or **actions**.
+* Non-serializable reads show placeholders; edit carefully or via **state** / **actions**.
 
 ---
 
-## См. также
+## See also
 
-- [Работа со State](/store/state)
-- [Основные возможности Store](/store/general)
-- [Избранное](/store/favorite)
+* [State](/store/state)
+* [Store overview](/store/general)
+* [Favorites](/store/favorite)

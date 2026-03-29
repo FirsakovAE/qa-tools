@@ -1,97 +1,96 @@
 ---
-title: Избранное
+title: Favorites
 ---
 
-# Избранное (Pinia Store)
+# Favorites (Pinia stores)
 
-**Избранные сторы** — это сохраняемый список **Pinia store**, который помогает быстрее ориентироваться во вкладке **Stores**: отмеченные строки поднимаются **в начало списка**, рядом отображается **звезда**, а в шапке доступен счётчик найденных избранных среди текущих результатов.
+**Favorite stores** are a persisted list of **Pinia stores** for faster navigation on **Stores**: starred rows move **to the top**, show a **star**, and a header badge counts how many favorites match the current results.
 
-Общее описание вкладки Store: [Основные возможности](/store/general).
-Избранное **компонентов Vue** (вкладка Props) — отдельный механизм: [Избранное (Props)](/props/favorite).
+Store overview: [Overview](/store/general).
 
----
-
-## Где добавить и убрать
-
-Добавить store в избранное можно несколькими способами.
-
-* **В карточке store** — в заголовке доступна кнопка **звезды**, которая включает или снимает признак избранного для текущего store.
-* **Через контекстное меню строки в таблице Stores** — команда добавления или удаления доступна среди действий над выбранной строкой.
-* **В таблице Stores** — быстрый клик по области **звезды** у строки также переключает избранное, даже если иконка ещё не отображается постоянно.
-* **В Options** — секция **Favorite Stores** в блоке настроек **Pinia** позволяет просматривать записи, вводить имя вручную, удалять элементы и открывать выбранную запись для редактирования.
-
-Настройки сохраняются в общем хранилище инспектора вместе с остальными параметрами.
+**Vue component** favorites (**Props** tab) are separate: [Favorites (Props)](/props/favorite).
 
 ---
 
-## Точное имя и маски
+## Add and remove
 
-Каждая запись в списке избранного задаёт **шаблон имени store**.
+* **In the store card** — header **star** toggles favorite.
+* **Row context menu** on **Stores** — add/remove favorite.
+* **Stores table** — click the **star** area on a row.
+* **Options → Pinia → Favorite Stores** — browse, type names, delete, open for editing.
 
-* Если запись **не содержит** символ **`*`**, используется **точное совпадение**: звезда отображается только у store с таким же именем.
-* Символ **`*`** работает как **маска произвольного фрагмента имени**. Например, шаблон **use*Store** может совпасть с **useUserStore**, **useAuthStore** и другими именами, подходящими под выражение.
-
-При снятии избранного со строки таблицы удаляются все записи, которые считаются совпадающими для этого store: как точные, так и подходящие по маске.
-
-В форме ручного ввода в **Options** поддержка wildcard сохраняется в том же формате.
+Settings persist in the inspector profile with other options.
 
 ---
 
-## Что именно сохраняется
+## Exact names and wildcards
 
-Для каждой записи инспектор хранит:
+Each entry defines a **store name pattern**.
 
-* **отображаемое имя store**;
-* **шаблон совпадения** (если используется маска);
-* при наличии — **внутренний идентификатор текущей сессии**, связанный с найденным экземпляром;
-* **время добавления** для отображения в настройках.
+* Without **`*`**, matching is **exact**: the star appears only for that store name.
+* **`*`** matches any substring in the name. Example: **`use*Store`** can match **useUserStore**, **useAuthStore**, etc.
 
-Это позволяет повторно применять список после обновления дерева store.
+Removing favorite from a row clears **all** rules that match that store (exact and wildcard).
 
----
-
-## Как выполняется сопоставление
-
-При загрузке списка store инспектор последовательно сравнивает имена текущих записей с сохранёнными шаблонами.
-
-* Сначала проверяется **точное совпадение имени**.
-* Затем — совпадение по **маске**, если запись содержит символ **`*`**.
-* Если доступны дополнительные данные текущей сессии, они используются для уточнения связи с уже найденной строкой.
-
-Если несколько store подходят под одну маску, звезда отображается у всех совпавших строк.
+Manual entry in **Options** uses the same wildcard rules.
 
 ---
 
-## Сортировка и счётчик
+## What is stored
 
-После обновления списка таблица **Stores** размещает избранные строки **выше остальных**.
+Per entry the inspector keeps:
 
-Рядом с полем поиска отображается бейдж вида **«найдено / всего»**: сколько избранных store сейчас видно с учётом поиска и сколько записей сохранено в списке избранного.
+* **display name** of the store;
+* **match pattern** (when using a mask);
+* optional **session id** for the matched instance;
+* **time added** for display.
 
-Клик по бейджу может использоваться как быстрый переход в **Options** к секции избранных store.
-
----
-
-## Редактирование в Options
-
-Выбранную запись можно открыть в панели деталей и изменить имя шаблона.
-
-После сохранения обновляется связанное имя записи; если используется маска, новое значение сразу участвует в последующем сопоставлении.
-
-Пустое имя лучше не оставлять: такая запись не даст полезного совпадения.
+That lets favorites apply again after the store list rebuilds.
 
 ---
 
-## Практические советы
+## Matching
 
-* Удобно добавлять в избранное **основные store проекта**: пользователь, настройки, состояние интерфейса.
-* **Маски** полезны в проектах с однотипным именованием, но слишком широкий шаблон может выделить лишние строки.
-* Избранное **не влияет** на выполнение Pinia в приложении и хранится локально в настройках инспектора.
+When stores load, names are compared to saved patterns:
+
+1. **exact** name match;
+2. **wildcard** match if the entry contains **`*`**;
+3. session hints may refine the mapping when available.
+
+If multiple stores match one mask, all matching rows can show stars.
 
 ---
 
-## См. также
+## Sorting and badge
 
-* [Основные возможности Store](/store/general)
-* [Избранное (Props)](/props/favorite)
-* [Персонализация / настройки](/options/customize)
+After refresh, **Stores** floats favorite rows **up**.
+
+The header badge shows **visible favorites / total saved** for the current search.
+
+Clicking the badge can open **Options** for Pinia favorites.
+
+---
+
+## Editing in Options
+
+Open an entry to change its pattern name.
+
+Saving updates the rule; new masks take effect on the next match.
+
+Avoid empty names — they never usefully match.
+
+---
+
+## Tips
+
+* Favorite **core** stores: user, settings, UI shell.
+* **Patterns** help uniform naming schemes; overly broad masks may over-select.
+* Favorites **do not** change Pinia runtime; they are local inspector metadata.
+
+---
+
+## See also
+
+* [Store overview](/store/general)
+* [Favorites (Props)](/props/favorite)
+* [Customize](/options/customize)

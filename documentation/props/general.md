@@ -1,126 +1,126 @@
 ---
-title: Работа с компонентами и props
+title: Components and props
 ---
 
-# Работа с компонентами и props
+# Components and props
 
-Раздел **Props** показывает **дерево экземпляров Vue** на открытой странице: имена компонентов, связь с корневым DOM-элементом и сводку по props. Детальные значения подгружаются при выборе строки; при необходимости их можно изменять и отправлять обратно в приложение (в рамках поддерживаемых сценариев).
+The **Props** tab shows the **Vue instance tree** on the page: component names, link to the root DOM node, and props summaries. Full values load when you select a row; you can edit and write back where supported.
 
-Режим **инспектора по клику**, **избранное** и **чёрный список** описаны на отдельных страницах: [Инспектор](/props/inspect), [Избранное](/props/favorite), [Чёрный список](/props/blacklist).
+**Inspect mode**, **favorites**, and the **component blacklist** have dedicated pages: [Inspect](/props/inspect), [Favorites](/props/favorite), [Blacklist](/props/blacklist).
 
-## Верхняя панель управления
+## Top toolbar
 
-### Поиск по компонентам
+### Component search
 
-Поле поиска поддерживает несколько режимов. Активные критерии задаются фильтром **Search by** рядом с полем ввода. Те же параметры можно заранее настроить в **Options** соответствующей вкладки.
+The search box supports several modes. Active criteria come from **Search by** next to the input. You can preset the same types under **Options** for this tab.
 
-| Режим | Назначение |
-| ----- | ---------- |
-| **Name** | по имени компонента |
-| **Label** | по строке `label` / подходящим метаданным инстанса |
-| **Root** | по сведениям о корневом элементе |
-| **Key** | по именам props (в т.ч. вложенным), с углублённым поиском на стороне страницы |
-| **Value** | по значениям props (в т.ч. вложенным), также через запрос к странице |
+| Mode | Purpose |
+| ---- | ------- |
+| **Name** | component name |
+| **Label** | `label` string / suitable instance metadata |
+| **Root** | root element hints |
+| **Key** | prop names (including nested), deep search runs in the page |
+| **Value** | prop values (including nested), queried on the page |
 
-Для режимов **Key** и **Value** действует минимальная длина запроса (по умолчанию **2** символа; порог настраивается в параметрах поиска инспектора).
+**Key** and **Value** enforce a minimum length (default **2** characters; configurable).
 
-**Частичное и точное совпадение.** Если запрос **не** обёрнут в кавычки, по включённым текстовым режимам используется **подстрока** (без учёта регистра). **Точное** совпадение со всей строкой включается, если **весь** текст в поле поиска обёрнут в **двойные кавычки** `"..."`.
+**Partial vs exact.** Without quotes, text modes use **substring** (case-insensitive). **Exact** whole-string match requires **double quotes** `"..."` around the full query.
 
-Рядом с поиском доступна кнопка **Inspect** — выбор узла на странице для фильтрации списка; см. [Инспектор](/props/inspect).
+**Inspect** next to search picks a node on the page to filter the list; see [Inspect](/props/inspect).
 
-### Индикаторы состояния
+### Status chips
 
-Справа на панели **Props** отображаются вспомогательные элементы:
+Right side of **Props**:
 
-| Элемент | Назначение |
-| ------- | ---------- |
-| **Filtered** (янтарный бейдж) | Активен фильтр по элементу с страницы (**Inspect**). Клик сбрасывает фильтр и возвращает полный список. |
-| **N** или **N/M** | Число видимых строк после фильтра; при непустом поиске через дробь — общее число компонентов в текущем снимке. |
-| **Избранное** ★ | Число совпавших с текущим деревом записей избранного. Клик открывает раздел **Options** с избранным. |
-| **Обновление** | Кнопка **Refresh** и время последнего обновления снимка (`lastUpdated`). |
+| Item | Purpose |
+| ---- | ------- |
+| **Filtered** (amber) | Filtering by a page element (**Inspect**). Click clears the filter and reloads the full list. |
+| **N** or **N/M** | Visible rows after filtering; with search, **M** is total components in the snapshot. |
+| **Favorites** ★ | Matches between the current tree and saved favorites. Click opens **Options** favorites. |
+| **Refresh** | **Refresh** button and last snapshot time (`lastUpdated`). |
 
-## Рабочая область
+## Work area
 
-### Список компонентов
+### Component list
 
-Слева отображается таблица компонентов. Основные колонки (набор можно включать и выключать в настройках таблицы):
+Left: the component table. Main columns (toggles in table settings):
 
-- **Name** — имя компонента;
-- **Root Element** — информация о корневом DOM-элементе инстанса (тег, классы, id и т.д., если доступны);
-- **Received** — число фактически переданных props;
-- **Declared** — число объявленных в компоненте props.
+* **Name** — component name;
+* **Root Element** — root DOM info (tag, classes, id when available);
+* **Passed** — received props count;
+* **Declared** — declared props count.
 
-При наведении на строку в страницу отправляется подсветка соответствующего узла (чтобы визуально сопоставить строку таблицы с элементом в DOM).
+Hovering a row highlights the matching node in the page.
 
-Через контекстное меню и звезду доступны действия, связанные с [избранным](/props/favorite) и [чёрным списком](/props/blacklist).
+The row context menu and star tie into [favorites](/props/favorite) and [blacklist](/props/blacklist).
 
-### Детализация компонента
+### Component details
 
-При выборе строки справа открывается панель с:
+Selecting a row opens a panel with:
 
-- сводной информацией об инстансе;
-- представлением **props** (текстовый или древовидный JSON в соответствии с настройками редактора);
-- действиями **обновить данные** и (где поддерживается) **редактирование** с сохранением в приложение.
+* instance summary;
+* **props** (text or tree JSON per editor settings);
+* **refresh** and (where supported) **edit/save** back to the app.
 
-Звезда **избранного** в этой панели и в таблице описана на странице [Избранное](/props/favorite).
+The **favorite** star here is described on [Favorites](/props/favorite).
 
-## Ограничения отображения
+## Display limits
 
-### Ограничения чтения данных
+### Reading limits
 
-**Props по запросу:** при открытии карточки компонента значения читаются и сериализуются для панели деталей; для тяжёлых объектов действуют ограничения сериализатора (см. ниже).
+**Props on demand:** opening a card reads and serializes values; heavy objects hit serializer limits (below).
 
-В лёгком списке таблицы передаются метаданные и счётчики без полной сериализации каждого значения на каждом обновлении.
+The light table lists metadata and counts without full serialization every frame.
 
-### Ограничение объёма хранения
+### Storage
 
-Явного лимита «N записей как в Network» у вкладки **Props** нет: размер данных определяется числом компонентов на странице и политикой кэшей на стороне внедрённого сценария (очистка снимков для экономии памяти применяется там, где узел не раскрыт и не нужен).
+There is no fixed “**N rows like Network**” cap: size depends on component count and injected-side caches (pruned when nodes are not expanded/needed).
 
-Чтобы не блокировать основной поток страницы, при разборе props действуют ограничения, среди прочего:
+To protect the main thread, serialization applies limits such as:
 
-- бюджет времени на один проход сериализации;
-- максимальная глубина вложенности и размер массивов/объектов;
-- усечение длинных строк и общий лимит числа узлов в одном ответе.
+* time budget per pass;
+* max depth and array/object size;
+* long string truncation and max node count per response.
 
-Очень большие или циклические структуры могут отображаться не полностью или с пометкой об усечении — это ожидаемое поведение защиты.
+Huge or cyclic structures may appear truncated — expected protection behavior.
 
-## Принципы работы
+## How it works
 
-### Когда начинается сбор данных
+### When collection starts
 
-Модуль Props подключается **после обнаружения Vue** на странице (в отличие от **Network**, который стартует вместе с общим сценарием инспектора). Пока приложение не инициализировало Vue или сценарий инспектора не внедрён в вкладку, список компонентов будет пустым.
+The Props module attaches **after Vue is detected** (unlike **Network**, which starts with the general inspector script). If Vue is not ready or the inspector is not injected, the list stays empty.
 
-После первой успешной загрузки дерево можно обновлять вручную (**Refresh**) или по расписанию (**автообновление** в **Options**).
+After first success you can refresh manually (**Refresh**) or on a timer (**auto refresh** in **Options**).
 
-### Что попадает в мониторинг
+### What is monitored
 
-1. **Структура** — обход инстансов Vue даёт плоский список компонентов с метаданными (имя, метка при наличии, привязка к элементу, счётчики переданных и объявленных props без полной сериализации каждого значения на каждом кадре).
-2. **Props по выбору** — полные значения запрашиваются при открытии карточки (ленивая загрузка).
+1. **Structure** — traversing instances yields a flat list with metadata (name, label, element binding, passed/declared counts without full values each frame).
+2. **Props on selection** — full values load lazily for the open card.
 
-Через тот же канал панель запрашивает обновлённый список после **Refresh**, с учётом активного **чёрного списка** (фильтрация имён выполняется на стороне сбора данных — подробнее на странице [Чёрный список](/props/blacklist)).
+The same channel refreshes after **Refresh**, honoring the active **blacklist** (names filtered during collection — see [Blacklist](/props/blacklist)).
 
-### Как устроен обмен
+### Messaging model
 
-Панель не обращается напрямую к памяти Vue: она отправляет сообщение в контекст страницы, а инъецированный код обходит инстансы и отдаёт сериализованный результат.
+The panel does not read Vue memory directly: it posts to the page; injected code walks instances and returns serialized data.
 
-Упрощённо цикл выглядит так:
+Simplified loop:
 
 ```js
-// Иллюстрация: UI запрашивает список компонентов; на странице сканер собирает структуру.
+// Illustration: UI asks for components; the page scanner builds structure.
 const response = await bridge.send({
   type: 'COLLECT_VUE_COMPONENTS',
   forceRefresh: true,
   blacklist: { active: ['SomeNoise'], inactive: [] },
 })
-// response.components — имена, uid, счётчики props, строки для Root Element…
-// Полные значения props запрашиваются отдельно при открытии карточки (ленивая загрузка).
+// response.components — names, uid, prop counts, Root Element strings…
+// Full prop payloads load separately when a card opens (lazy).
 ```
 
-Так отделяется **лёгкий список** для таблицы от **тяжёлого чтения props** только для выбранного узла.
+This separates the **light table** from **heavy prop reads** for one node.
 
-## См. также
+## See also
 
-- [Инспектор — выбор компонента с страницы](/props/inspect)
-- [Избранное](/props/favorite)
-- [Чёрный список](/props/blacklist)
-- [Параметры обновления и автообновление](/options/update_settings) (раздел **Options**)
+* [Inspect](/props/inspect)
+* [Favorites](/props/favorite)
+* [Blacklist](/props/blacklist)
+* [Update settings & auto refresh](/options/update_settings) (**Options**)

@@ -1,56 +1,56 @@
 ---
-title: Параметры обновления
+title: Update settings
 ---
 
-# Параметры обновления
+# Update settings
 
-В **Options → General** ниже блока визуальных настроек **Customize** расположены два связанных с данными блока: **Search Parameters** (параметры поиска) и **Auto Refresh** (автообновление дерева и сторов). Они сохраняются в общем профиле настроек вместе с остальными опциями (см. [Менеджер настроек](/options/settings_management)).
+Below **Customize** in **Options → General** you will find **Search Parameters** and **Auto Refresh**. They persist with the rest of the profile (see [Settings management](/options/settings_management)).
 
 ---
 
 ## Search Parameters
 
-Здесь задаются **глобальные** правила для **текстового поиска и фильтрации** во вкладках, где используется единый набор параметров (в первую очередь **Props**, **Network**, **Pinia** — поля поиска и фасетные фильтры опираются на те же `debounce` и `minLength`).
+Global rules for **text search** across tabs that share the same parameters (**Props**, **Network**, **Pinia** — field debounce/min length).
 
 ### Search Debounce (ms)
 
-**Задержка перед применением строки поиска** после того, как вы перестали печатать. Пока таймер не истёк, запрос к фильтру не «дребезжит» на каждый символ: снижается нагрузка и лишнее мерцание списков.
+**Delay after typing stops** before the query applies. Avoids firing on every keystroke.
 
-В интерфейсе допустимы значения примерно **от 100 до 1000** миллисекунд (типичное по умолчанию — около **300**). Меньше задержка — быстрее реакция, но больше пересчётов; больше — спокойнее для тяжёлых таблиц.
+Typical allowed range **100–1000** ms (default near **300**). Lower = snappier but more churn; higher = calmer on heavy tables.
 
 ### Minimum Search Length
 
-**Минимальная длина строки**, с которой поиск начинает **фильтровать** данные. Если в поле меньше символов, чем это число, фильтр ведёт себя как «пустой запрос» (обычно показывается полный список, пока вы не наберёте достаточно букв).
+**Minimum characters** before filtering runs. Shorter input behaves like an empty query (usually full list).
 
-Допустимый диапазон в форме — **от 1 до 10** символов (частое значение по умолчанию — **2**). Значение **1** позволяет реагировать уже на один символ; **больше** — удобно, когда короткие префиксы дают слишком широкий и шумный результат.
+Allowed **1–10** (often **2**). **1** reacts on first char; higher reduces noisy short prefixes.
 
-Эти два параметра **общие для всех модулей**, которые их читают: не нужно отдельно настраивать Debounce в Network и в Props — меняется одна пара полей в Options.
+These fields are **shared** — one place updates **Props**, **Network**, and **Pinia** consumers.
 
 ---
 
 ## Auto Refresh
 
-Переключатель **Enable auto refresh** включает **периодическое обновление данных** в части вкладок инспектора, где отображается **дерево компонентов** и связанные с ним списки, а также **таблица Pinia Store**. Интервал задаётся полем **Refresh Interval** (в секундах: **1, 2, 5, 10, 30**).
+**Enable auto refresh** polls **component tree** views and the **Pinia Stores** table on an interval (**Refresh Interval**: **1, 2, 5, 10, 30** seconds).
 
-Пока автообновление включено, инспектор **повторно запрашивает** актуальное состояние с страницы через выбранный интервал, **если в этот момент не идёт другая загрузка** (очередные тики не наслаиваются друг на друга).
+Ticks **do not stack** if a refresh is already running.
 
-### Видимость панели
+### Panel visibility
 
-**Автообновление** опрашивает страницу по интервалу **только пока панель инспектора видна** (сценарий внедрённого UI считается активным). При **скрытии** панели (свёрнутая или неотображаемая область DevTools / оверлея) **интервалы останавливаются**; после **возврата** панели на экран опрос **возобновляется** — если переключатель **Enable auto refresh** по-прежнему включён.
+Polling runs **only while the inspector panel is visible** (embedded UI considered active). **Hiding** the panel **stops** timers; showing it again **resumes** if **Enable auto refresh** stays on.
 
-Это относится к вкладкам, которые используют этот механизм: в первую очередь **Props** и **Stores**.
+Primarily affects **Props** and **Stores**.
 
-### Защита от «шторма» обновлений (Props)
+### Props storm protection
 
-На вкладке **Props**, помимо интервала из **Refresh Interval**, данные дерева компонентов могут приходить с страницы **очень часто** (динамическое приложение, каскад перерисовок). Если за короткий промежуток времени приходит слишком много подряд снимков дерева, срабатывает **встроенная защита от перегрузки**: на ограниченное время **приостанавливается применение** очередных снимков к таблице, чтобы не перегружать интерфейс. Отдельной настройки этого поведения в форме **Options** нет — это защитный слой канала дерева.
+On **Props**, besides the configured interval, very frequent tree snapshots from the page can trigger **throttling**: temporarily **pauses applying** bursts so the UI stays responsive. There is **no** user toggle — it is a protective layer.
 
-**Вкладка Network** в список автообновляемых по **Auto Refresh** **не входит**: перехват и таблица запросов живут по своей логике потока событий страницы.
+**Network** is **not** on this auto-refresh schedule — it follows page network events.
 
-Используйте Auto Refresh, если приложение **часто меняет** дерево компонентов или состав сторов без перезагрузки страницы, и вы хотите видеть картину **без ручного нажатия Refresh** на каждом изменении. На очень коротком интервале при большом дереве возможна заметная нагрузка — при необходимости увеличьте шаг до **10–30** секунд.
+Use Auto Refresh when the app mutates the tree or stores often and you want updates without hammering **Refresh** manually. Very short intervals on huge trees can cost CPU — try **10–30** s if needed.
 
 ---
 
-## См. также
+## See also
 
-- [Менеджер настроек](/options/settings_management)
-- [Режимы отображения](/options/display_mode)
+* [Settings management](/options/settings_management)
+* [Display modes](/options/display_mode)

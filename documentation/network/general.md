@@ -1,164 +1,158 @@
 ---
-title: Работа с запросами
+title: Working with requests
 ---
 
-# Работа с запросами
+# Working with requests
 
-Раздел **Network** предназначен для просмотра сетевой активности приложения в runtime.
+The **Network** tab shows network activity of the application at runtime.
 
-## Верхняя панель управления
+## Top toolbar
 
-### Поиск по запросам
+### Search
 
-Поле поиска поддерживает несколько режимов. Активный критерий выбирается в панели **Search by** рядом с полем ввода. Те же параметры доступны в разделе **Options** соответствующей вкладки, где можно заранее настроить используемые типы поиска.
+The search box supports multiple modes. The active criteria are chosen in **Search by** next to the input. The same options exist under **Options** for that tab so you can preset search types.
 
-| Режим            | Описание |
-| ---------------- | ------------------------------------------------ |
-| **Key**          | Поиск по ключам в **JSON** тел запроса/ответа    |
-| **Value**        | Поиск по значениям в **JSON** тел запроса/ответа |
-| **Path**         | Поиск по URL или части пути                      |
-| **Method**       | Поиск по HTTP-методу                             |
-| **Status code**  | Поиск по коду ответа                             |
+| Mode | Description |
+| ---- | ----------- |
+| **Key** | Search keys in **JSON** request/response bodies |
+| **Value** | Search values in **JSON** bodies |
+| **Path** | Search URL or part of the path |
+| **Method** | Search HTTP method |
+| **Status code** | Search response status code |
 
-Для режима поиска действует минимальная длина запроса (по умолчанию **2** символа; порог настраивается в параметрах поиска инспектора).
+There is a minimum query length (default **2** characters; configurable in inspector search settings).
 
-**Частичное и точное совпадение.** Если запрос **не** обёрнут в кавычки, по всем включённым режимам используется **подстрока** (без учёта регистра для текстовых полей) — по смыслу близко к **`LIKE '%текст%'`**. **Точное** совпадение со всей строкой целиком включается только когда **весь** текст в поле поиска обёрнут в **двойные кавычки** `"..."`.
+**Partial vs exact match.** If the query is **not** wrapped in quotes, **substring** matching is used across enabled modes (case-insensitive for text) — similar to **`LIKE '%text%'`**. **Exact** whole-string matching applies only when the **entire** query is wrapped in **double quotes** `"..."`.
 
-Для режимов поиска по ключам и значениям тело должно успешно распознаваться как JSON; иначе индекс для поиска по полям может быть пустым.
+For key/value modes the body must parse as JSON; otherwise the search index may be empty.
 
-### Индикаторы состояния
+### Status indicators
 
-Справа в панели **Network** выводятся индикаторы состояния. Часть из них **кликабельна** и ведёт либо в соответствующий раздел **Options**, либо к нужной записи в журнале.
+The right side of the **Network** toolbar shows status chips. Some are **clickable** and jump to the related **Options** section or to a specific log entry.
 
-| Элемент                        | Назначение                                                                                                |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| **N** или **N/M**              | Число записей после фильтра; при активном поиске через дробь показывается общее число запросов в журнале. |
-| **pending**                    | Количество запросов в состоянии ожидания (обмен ещё не завершён).                 |
-| **bp** (подсвеченный, «пульс») | Есть breakpoint-запросы, ожидающие действия в UI. Клик выделяет первую такую запись в списке.             |
-| **bp** (обычный янтарный)      | Число активных breakpoint-правил. Клик открывает **Options** со списком всех breakpoints.                 |
-| **mock**                       | Число активных правил mock response. Клик открывает **Options → Network → Mock Responses**.               |
-| **Paused**                     | Остановка записи трафика в журнал.                                                                      |
+| Item | Purpose |
+| ---- | ------- |
+| **N** or **N/M** | Row count after filters; with active search, **M** is the total requests in the buffer. |
+| **pending** | Requests still in flight. |
+| **bp** (highlighted, pulse) | Breakpoints waiting for UI action. Click selects the first such row. |
+| **bp** (solid amber) | Count of active breakpoint rules. Click opens **Options** with all breakpoints. |
+| **mock** | Active mock response rules. Click opens **Options → Network → Mock Responses**. |
+| **Paused** | Traffic logging to the list is paused. |
 
-## Управление журналом
+## Log controls
 
 ### Pause
 
-Для временной остановки записи в список используется кнопка **Pause** (в интерфейсе может подписываться как приостановка записи).
+**Pause** temporarily stops recording into the **Network** list.
 
-В режиме паузы:
+While paused:
 
-- новые запросы **не попадают** в список Vue Inspector **Network** до нажатия возобновления;
-- перехватчик **снимается**: страница снова вызывает **родные** `fetch` и `XMLHttpRequest`, без подмены из сценария инспектора.
+* new requests **do not appear** in Vue Inspector **Network** until you resume;
+* the interceptor **is removed**: the page uses native `fetch` and `XMLHttpRequest` again (no inspector substitution).
 
-Из этого следует:
+Implications:
 
-- во **встроенной вкладке Network** инструментов разработчика браузера те же запросы отображаются с **оригинальным инициатором** (цепочка вызовов из кода приложения), а не из файла внедрённого сценария (`injected.js` и т.п.);
-- пока пауза включена, **не действуют** механизмы, завязанные на перехват: **Mock response** и **Breakpoint** (см. [подмену трафика](./traffic.md)). После **Resume** перехват и эти правила снова включаются.
+* in the **built-in Network** tab of DevTools the same requests show the **original initiator** (your app code), not the injected script (`injected.js`, etc.);
+* while paused, interception features **do not apply**: **Mock response** and **Breakpoint** (see [traffic interception](./traffic.md)). After **Resume**, interception and rules are active again.
 
 ### Clear
 
-Для удаления накопленных данных используется кнопка очистки рядом с **Pause**.
-
-После очистки список запросов полностью сбрасывается.
+Clears accumulated rows next to **Pause**.
 
 ### Export Collection
 
-**Export Collection** экспортирует текущий **отфильтрованный** список запросов. (см. [Экспорт коллекций](./export.md))
+**Export Collection** saves the current **filtered** request list (see [Export collections](./export.md)).
 
-## Рабочая область
+## Work area
 
-### Список запросов
+### Request list
 
-В левой части интерфейса отображается список полученных запросов.
+The left side lists captured requests.
 
-Для каждого запроса доступны основные параметры:
+Per request you typically see:
 
-- **Name / Path** — имя или путь запроса;
-- **Status** — HTTP-статус ответа;
-- **Time** — время выполнения;
-- **Size** — размер получённых данных;
+* **Name / Path** — short name or path;
+* **Status** — HTTP status;
+* **Time** — duration;
+* **Size** — payload size;
 
-Набор отображаемых колонок можно изменять.
+Column visibility is configurable.
 
-При необходимости отдельные столбцы можно скрыть или вернуть обратно через настройки таблицы.
+### Request details
 
-### Детализация запроса
+Opening a row shows exchange details:
 
-Каждый запрос в списке можно открыть для просмотра подробной информации.
+* **Headers** — request and response headers;
+* **Params** — query string pairs;
+* **Request** — request body;
+* **Response** — response body;
 
-В детализации доступны основные данные обмена:
+The **`X-Request-Id`** header (and similar) may be visually emphasized when present.
 
-- **Headers** — заголовки запроса и ответа;
-- **Params** — параметры строки запроса (**query**), разобранные по парам ключ/значение;
-- **Request** — тело запроса (payload);
-- **Response** — полученный ответ;
+## Display limits
 
-Заголовок **`X-Request-Id`** (и ряд других «служебных») в интерфейсе выделяется, если он присутствует в переданных с страницы данных.
+### Reading limits
 
-## Ограничения отображения
+Vue Inspector only shows headers and bodies **visible to page JavaScript** after the request completes.
 
-### Ограничения чтения данных
-
-Vue Inspector показывает только те заголовки и полезную нагрузку, которые **доступны JavaScript-коду страницы** после выполнения запроса.
-
-Для **cross-origin** ответов браузер по правилам **CORS** отдаёт скрипту не все заголовки: часть видна только если сервер перечислил их в **`Access-Control-Expose-Headers`**.  
-Например, если ответ содержит `X-Request-Id`, но без строки вида:
+For **cross-origin** responses browsers apply **CORS**: not every response header is exposed unless listed in **`Access-Control-Expose-Headers`**.  
+For example, if `X-Request-Id` is missing from:
 
 ```http
 Access-Control-Expose-Headers: X-Request-Id
 ```
 
-(или без общего списка, куда этот заголовок входит), то в `response.headers` для страницы его не будет — и в Network он тоже не отобразится, хотя в «родной» вкладке Network браузера заголовок виден.
+(or a list that includes it), the page may not see it in `response.headers` — and Network will not show it, even if the browser’s native Network tab does.
 
-На **same-origin** запросах такие заголовки обычно доступны, если их не скрывает другая политика.
+On **same-origin** requests headers are usually available unless another policy hides them.
 
-Тела ответов **большого размера** могут обрезаться (в коде лимит порядка **20 МБ** на захваченный текст); для ряда бинарных типов содержимое намеренно не сериализуется в текст для таба.
+Very large bodies may be truncated (roughly **20 MB** captured text in code); some binary payloads are not serialized as text for the tab.
 
-### Ограничение объёма хранения
+### Storage cap
 
-Максимальное количество одновременно хранимых запросов — **500**.
+At most **500** requests are kept.
 
-После достижения лимита новые записи начинают заменять самые старые, сохраняя наиболее актуальную сетевую активность.
+When the cap is reached, oldest entries are dropped so recent activity remains visible.
 
-## Принципы работы
+## How it works
 
-### Когда начинается перехват
+### When interception starts
 
-Сетевой модуль входит в тот же сценарий, что и остальной Vue Inspector, и внедряется в **контекст вкладки** вместе с ним — при открытии оверлея инспектора на странице или при подключении панели через Chrome DevTools. Пока этот сценарий не загружен, перехват `fetch` / `XMLHttpRequest` не выполняется.
+The network module loads with the rest of Vue Inspector in the **tab context** when you open the inspector overlay or attach the DevTools panel. Until that script runs, `fetch` / `XMLHttpRequest` are not patched.
 
-Буфер запросов хранится в контексте страницы после загрузки сценария; вкладка **Network** отображает эти данные, когда панель инспектора подключена. Пока страница не перезагружалась, накопленная история доступна и при позднем открытии Network (с учётом лимита **500** записей см. выше).
+The buffer lives in the page after load; **Network** reads it whenever the panel is open. Without reload, history remains available when you open **Network** later (subject to the **500** entry cap).
 
-### Что попадает в мониторинг
+### What is monitored
 
-Инструмент перехватывает вызовы, идущие через стандартные браузерные API:
+Calls through:
 
-- **`fetch`**
-- **`XMLHttpRequest` (XHR)**
+* **`fetch`**
+* **`XMLHttpRequest` (XHR)**
 
-В список **не** попадают, среди прочего:
+Not captured, among others:
 
-- запросы другого типа (`navigator.sendBeacon`, `EventSource`, **WebSocket**, загрузка ресурсов через `<img>` / `<script>` без XHR);
-- префлайт **OPTIONS** (они намеренно отфильтрованы);
-- обращения к URL расширений (`chrome-extension://`, `moz-extension://` и аналоги).
+* other APIs (`navigator.sendBeacon`, `EventSource`, **WebSocket**, `<img>` / `<script>` loads without XHR);
+* **OPTIONS** preflights (filtered out);
+* extension URLs (`chrome-extension://`, `moz-extension://`, …).
 
-Для каждой записи в данных указывается инициатор: **fetch** или **xhr**.
+Each row records the initiator type: **fetch** or **xhr**.
 
-### Как устроен перехват
+### Interception model
 
-Поведение отличается от вкладки **Network** в инструментах разработчика браузера: там виден полный обмен на уровне движка, а Vue Inspector работает **внутри страницы** — подменяет глобальные `fetch` и методы XHR, вызывает «настоящий» сетевой запрос, затем читает то, что странице позволено увидеть через объект ответа (заголовки, тело, статус, длительность).
+Unlike the browser **Network** DevTools tab (engine-level), Vue Inspector runs **in the page**: it wraps global `fetch` and XHR methods, performs the real network call, then reads whatever the response object exposes to the page (headers, body, status, timing).
 
-Упрощённо идея для `fetch` такая:
+Simplified `fetch` idea:
 
 ```js
-// Иллюстрация: после реального запроса заголовки читаются из response.headers.
-// Набор имён здесь ограничен политикой браузера (в т.ч. CORS), а не «всеми» заголовками ответа.
+// Illustration: after the real request, headers come from response.headers.
+// Names are limited by the browser (including CORS), not “all” wire headers.
 window.fetch = async function patchedFetch(input, init) {
   const response = await originalFetch.call(window, input, init)
   const headersForUi = []
   response.headers.forEach((value, name) => {
     headersForUi.push({ name, value })
   })
-  // … передача метаданных и тела в интерфейс инспектора …
+  // …send metadata and body to the inspector UI…
   return response
 }
 ```

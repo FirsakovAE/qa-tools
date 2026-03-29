@@ -1,153 +1,149 @@
 ---
-title: Подмена трафика
+title: Traffic interception
 ---
 
-# Breakpoints и Mock response
+# Breakpoints and mock responses
 
-Во вкладке **Network** и в разделе **Options → Network** доступны два механизма перехвата запросов:
+The **Network** tab and **Options → Network** provide two interception mechanisms:
 
-- **Breakpoint** — остановка запроса **до отправки в сеть** с возможностью изменить его параметры и затем продолжить выполнение;
-- **Mock response** — возврат подготовленного ответа **без обращения к серверу**.
+* **Breakpoint** — pause an outgoing request **before it hits the network**, edit parameters, then continue;
+* **Mock response** — return a crafted response **without calling the server**.
 
-Оба механизма работают только для запросов, проходящих через **`fetch`** и **`XMLHttpRequest`** внутри текущей страницы.
+Both apply only to **`fetch`** and **`XMLHttpRequest`** on the current page.
 
-Базовые ограничения перехвата (контекст страницы, CORS, scope перехвата и т.д.) описаны в [Работа с запросами](/network/general).
+General interception limits (page context, CORS, scope) are described in [Working with requests](/network/general).
 
 ---
 
 ## Breakpoints
 
-### Назначение
+### Purpose
 
-Breakpoint позволяет остановить исходящий запрос **до его отправки**.
+A breakpoint pauses an outbound request **before it is sent**.
 
-Когда URL и метод совпадают с правилом:
+When URL and method match the rule:
 
-- выполнение запроса приостанавливается;
-- в панели становится доступно редактирование параметров;
-- после подтверждения запрос отправляется уже с изменениями;
-- либо выполнение можно отменить.
+* the request is held;
+* the UI lets you edit parameters;
+* after confirmation the request continues with your changes;
+* or you can cancel.
 
-Фактически перехват происходит после того, как приложение сформировало запрос, но до вызова нативной отправки.
+Interception happens after the app built the request but before native send.
 
-### Что можно изменить
+### What you can change
 
-До продолжения доступны для редактирования:
+Before continuing you can edit:
 
-- HTTP-метод;
-- URL (схема, хост, путь, query);
-- заголовки;
-- тело запроса.
+* HTTP method;
+* URL (scheme, host, path, query);
+* headers;
+* body.
 
-После **Apply** запрос отправляется в сеть уже в изменённом виде.
+After **Apply** the request goes out in the modified form.
 
-### Где настраивать
+### Where to configure
 
-- **Network** — создание и изменение breakpoint на основе конкретного запроса.
-- **Options → Network → Breakpoints** — изменение существующего списка правил;
+* **Network** — create or adjust a breakpoint from a captured request.
+* **Options → Network → Breakpoints** — manage the rule list.
 
+### Behavior
 
-### Особенности работы
+When a request hits an active breakpoint rule the UI focuses editing:
 
-При совпадении запроса с активным правилом breakpoint интерфейс автоматически переводится в режим редактирования:
+* the breakpoint card opens;
+* the view may switch to **Network**;
+* a collapsed inspector iframe expands automatically.
 
-- открывается карточка сработавшего breakpoint;
-- при необходимости выполняется переход во вкладку **Network**;
-- свернутый iframe инспектора автоматически разворачивается.
+Until you confirm or cancel, the request stays paused.
 
-До подтверждения или отмены выполнение запроса остаётся приостановленным.
+## Mock responses
 
-## Mock response
+### Purpose
 
-### Назначение
+Mock fully replaces a network call with a local response.
 
-Mock response полностью заменяет сетевой запрос локальным ответом.
+When a rule matches:
 
-При совпадении правила:
+* no server round-trip;
+* a synthetic response is built;
+* the page receives it like a normal HTTP response.
 
-- запрос в сеть не отправляется;
-- создаётся синтетический ответ;
-- страница получает его как обычный HTTP ответ.
+### What a mock can set
 
-### Что задаётся в mock
+* **status** and **statusText**;
+* **headers**;
+* **body**;
+* **delay** before resolving.
 
-Правило может содержать:
+### Where to configure
 
-- **status** и **statusText**;
-- **headers**;
-- **body**;
-- **delay** перед возвратом ответа.
+* **Network** — create or adjust from a request row.
+* **Options → Network → Mock Responses** — manage rules.
 
-### Где настраивать
+### Behavior
 
-- **Network** — создание и изменение mock на основе конкретного запроса.
-- **Options → Network → Breakpoints** — изменение существующего списка правил;
+If mock matches:
 
+* the real request is not sent;
+* breakpoint does not apply for that call.
 
-### Особенности работы
+Order of evaluation:
 
-Если сработал mock:
+1. mock first;
+2. if no mock — breakpoint;
+3. otherwise normal network.
 
-- реальный запрос на сервер не выполняется;
-- breakpoint для этого вызова уже не применяется.
-
-Порядок проверки:
-
-1. сначала mock;
-2. если mock не подошёл — breakpoint;
-3. затем обычный сетевой запрос.
-
-То есть mock имеет приоритет над breakpoint.
+Mock wins over breakpoint.
 
 ---
 
-## Сравнение breakpoint и mock
+## Breakpoint vs mock
 
-| Механизм | Отправка в сеть | Можно изменить запрос | Можно изменить ответ |
-|----------|------------------|------------------------|------------------------|
-| Breakpoint | Да | Да | Нет |
-| Mock response | Нет | Нет | Да |
-
----
-
-## Ограничения
-
-Оба механизма работают только для запросов, выполненных через:
-
-- **fetch**
-- **XMLHttpRequest**
-
-Не перехватываются:
-
-- загрузка ресурсов через `<img>`, `<script>`, `<link>`;
-- Service Worker вне текущего interception layer;
-- нативные сетевые вызовы браузера вне JS-контекста страницы.
-
-Запросы **OPTIONS (preflight)** также не участвуют в перехвате.
+| Mechanism | Network round-trip | Can change request | Can change response |
+|-----------|-------------------|--------------------|---------------------|
+| Breakpoint | Yes | Yes | No |
+| Mock response | No | No | Yes |
 
 ---
 
-## Сравнение с Charles Proxy
+## Limits
 
-**Charles** (и аналогичные **системные / внешние прокси**: Fiddler, mitmproxy и др.) встаёт **между клиентом и сервером** на уровне ОС или отдельного приложения:
+Both work only for:
 
-- видит трафик **не только из браузера**, но и из мобильных приложений, CLI, других программ (если направить их через прокси);
-- для **HTTPS** обычно нужна установка доверенного сертификата и **SSL Proxying** — расшифровка TLS на прокси;
-- **Breakpoint** и **Map Local / Remote** применяются ко **всем** подходящим запросам в этом канале.
+* **fetch**
+* **XMLHttpRequest**
 
-**Vue Inspector** работает **внутри вкладки браузера**: подменяются глобальные **`fetch`** и **`XMLHttpRequest`**.
+Not intercepted:
 
-| Аспект | Charles (типично) | Vue Inspector |
-| ------ | ----------------- | --------------- |
-| Уровень | Прокси / вне процесса браузера | JavaScript на странице |
-| Охват | Много клиентов, весь HTTP(S) через прокси | Только этот документ: вызовы **fetch** и **XHR** |
-| HTTPS | Свой корень доверия, разбор TLS | Без отдельного «взлома» TLS — приложение и так отдаёт ответы в свой JS |
-| Service Worker, нативные запросы | Можно перехватывать на пути | Не перехватываются этим механизмом |
-| Удобство для SPA в браузере | Нужна настройка прокси и сертификатов | Включил правила в инспекторе — работает на текущем сайте |
+* `<img>`, `<script>`, `<link>` loads;
+* service workers outside this layer;
+* native browser calls outside page JS.
 
-Итог: по **смыслу** Breakpoint и Mock в Inspector близки к Charles (**остановить / подменить ответ**), но по **месту действия** это не сетевой прокси, а **инструмент разработчика веб-страницы** на том же origin-жизненном цикле, что и ваше Vue‑приложение.
+**OPTIONS (preflight)** requests are not part of interception.
 
-## См. также
+---
 
-- [Работа с запросами](/network/general)
-- [Экспорт коллекций](/network/export)
+## Compared to Charles Proxy
+
+**Charles** (and similar **system / external proxies**: Fiddler, mitmproxy, …) sits **between client and server** at the OS or app level:
+
+* sees traffic **beyond the browser** (mobile apps, CLI, other tools if proxied);
+* **HTTPS** typically needs a trusted root and **SSL Proxying** (TLS termination);
+* **Breakpoints** and **Map Local / Remote** apply to **all** matching connections **on that channel**.
+
+**Vue Inspector** runs **inside the browser tab**: it patches **`fetch`** and **`XMLHttpRequest`**.
+
+| Aspect | Charles (typical) | Vue Inspector |
+| ------ | ----------------- | ------------- |
+| Level | Proxy / out-of-process | JS in the page |
+| Scope | Many clients, HTTP(S) through proxy | This document only: **fetch** and **XHR** |
+| HTTPS | Custom trust, TLS break | No extra TLS break — the app already sees responses in JS |
+| SW / native requests | Often visible on the path | Not covered here |
+| SPA convenience | Proxy + certs setup | Enable rules in the inspector for the current site |
+
+In **intent**, Inspector breakpoints/mocks resemble Charles (**pause / fake a response**); in **placement** it is a **page-level devtool**, not a network proxy.
+
+## See also
+
+* [Working with requests](/network/general)
+* [Export collections](/network/export)

@@ -1,26 +1,26 @@
 ---
-title: Автономное приложение
+title: Standalone
 ---
 
-# Автономное приложение
+# Standalone
 
-> Если браузер без поддерживаемого расширения или политика запрещает установку из магазина / `chrome://extensions`, инструмент можно подключать **закладкой** к открытой странице — без установки расширения.
+> When the browser has no supported extension or policy blocks installs and `chrome://extensions`, you can attach the tool with a **bookmarklet** on the open page — without installing the extension.
 
-## Хранение данных
+## Data storage
 
-Standalone использует **своё локальное хранилище**: настройки и медиа не теряются между запусками и **не привязаны к одному сайту**. Как и у расширения, вы получаете **один профиль на все домены**, где нажимаете закладку. Подробная таблица сравнения с расширением — [Установка → Где хранятся настройки](./install#storage); лимиты на фоновые файлы — [Персонализация](/options/customize).
-
----
-
-## Установка
-
-1. Перейдите в <a href="../../../index.html#installation" target="_self" rel="noopener">раздел установки</a> на главной странице сайта.
-2. В блоке **Bookmarklet Mode** перетащите кнопку **Vue Inspector** в панель закладок браузера.
+Standalone uses **its own local storage**: settings and media persist between runs and are **not tied to a single site**. Like the extension, you get **one profile for all domains** where you click the bookmark. Details in [Installation → Where settings are stored](./install#storage); media limits in [Customize](/options/customize).
 
 ---
 
-## Использование
+## Install
 
-1. Откройте страницу с Vue-приложением;
-2. Нажмите на сохранённую закладку **Vue Inspector**;
-3. Панель инспектора будет запущена в нижней части страницы.
+1. Open the <a href="../../index.html#installation" target="_self" rel="noopener">installation section</a> on the landing page.
+2. Under **Bookmarklet Mode**, drag the **Vue Inspector** button to the bookmarks bar.
+
+---
+
+## Usage
+
+1. Open a page with a Vue app;
+2. Click the saved **Vue Inspector** bookmark;
+3. The inspector panel opens at the bottom of the page.

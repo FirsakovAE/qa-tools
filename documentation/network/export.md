@@ -1,58 +1,58 @@
 ---
-title: Экспорт коллекций
+title: Export collections
 ---
 
-# Экспорт коллекции (Export Collection)
+# Export Collection
 
-На вкладке **Network** можно сохранить набор перехваченных запросов как **файл коллекции Postman** (формат описания API, совместимый с Postman и многими другими клиентами). Это удобно для повторного воспроизведения сценариев, обмена с коллегами или импорта в отдельный инструмент тестирования.
+On the **Network** tab you can save the captured requests as a **Postman collection** file (API description format compatible with Postman and many other clients). Useful to replay flows, share with teammates, or import into another testing tool.
 
-Общие сведения о том, какие запросы попадают в список и какие у них могут быть ограничения по данным, см. в разделе [Работа с запросами](/network/general).
-
----
-
-## Где находится команда
-
-Кнопка **Export Collection** расположена на панели инструментов вкладки **Network** (рядом с поиском и фильтрами). На узкой панели та же команда может отображаться в другом блоке шапки, но смысл не меняется.
-
-Подсказка к кнопке поясняет: экспортируется **текущий отфильтрованный** набор запросов.
-
-Кнопка **неактивна**, пока в списке после фильтрации нет ни одной записи.
+What enters the list and data visibility limits are covered in [Working with requests](/network/general).
 
 ---
 
-## Что именно экспортируется
+## Where the command lives
 
-В файл попадают **только те строки**, которые видны в таблице с учётом поля **Search** и выбранных режимов поиска (путь, метод, код ответа, ключи и значения в телах и т.д.). Это не обязательно все запросы из буфера истории: если включён отбор, в коллекцию войдут **только совпадения**.
+**Export Collection** sits on the **Network** toolbar (near search and filters — on narrow layouts it may move but the action is the same).
 
-Для каждой такой записи в коллекции создаётся отдельный запрос с:
+The tooltip notes that the **currently filtered** set is exported.
 
-- **методом** и **URL** (включая разбор на компоненты адреса и строку запроса, если она была в исходном URL);
-- **заголовками запроса**, которые были сохранены в инспекторе (служебные псевдозаголовки вроде тех, что начинаются с двоеточия, в экспорт не включаются; для тел типа **multipart** заголовок типа содержимого может быть опущен намеренно, чтобы не конфликтовать с режимом **form-data** в Postman);
-- **телом запроса**, если оно было захвачено: либо **сырой текст** (в том числе с подсказкой языка для JSON), либо набор полей **form-data**, включая пометки файловых частей (сами бинарные файлы с диска не прикрепляются — указываются только имена или заглушки, как это принято при экспорте без реальных файлов).
-
-**Ответы сервера** в коллекцию **не вкладываются** — экспортируется именно описание **исходящего** запроса, пригодное для повторной отправки из клиента.
-
-Имя элемента в коллекции берётся из краткого имени запроса, как оно показывается в списке Network.
+The button is **disabled** while the filtered list is empty.
 
 ---
 
-## Файл на диске
+## What gets exported
 
-После нажатия **Export Collection** браузер предлагает сохранить **JSON-файл** с расширением и именем в стиле Postman (по умолчанию в названии коллекции участвует общее имя вроде «Exported Collection», пробелы в имени файла заменяются на подчёркивания).
+The file includes **only rows visible** in the table with **Search** and active modes applied (path, method, status, keys/values in bodies, etc.). It is not necessarily the full history buffer: filters narrow the export.
 
-Открыть файл можно в **Postman** через импорт коллекции или в любом редакторе, если нужно только просмотреть структуру.
+For each included row the collection defines a request with:
+
+* **method** and **URL** (address components and query when present);
+* **request headers** stored by the inspector (pseudo headers starting with `:` are omitted; for **multipart** bodies the content-type line may be skipped on purpose to avoid clashing with Postman **form-data** mode);
+* **request body** when captured: raw text (with JSON language hint where applicable) or **form-data** fields, including file-part markers (binary files are not embedded — names or placeholders only, as usual for export without real attachments).
+
+**Server responses** are **not** embedded — export describes **outgoing** requests you can replay from a client.
+
+Item names follow the short label shown in the Network list.
 
 ---
 
-## На что обратить внимание
+## File on disk
 
-- В коллекцию попадают **только те заголовки и тела**, которые инспектор смог прочитать у страницы. Если чего-то не было в журнале (ограничения CORS, обрезанное тело, двоичный контент без текстовой формы), этого не будет и в экспорте.
-- Записи с **ошибкой сети** или неполными данными всё равно могут попасть в выгрузку, если они отображаются в отфильтрованном списке — проверяйте пригодность запроса перед использованием в другой среде.
-- **Повторная отправка** из Postman может отличаться от поведения в приложении из-за cookies, токенов, окружения и заголовков, которые браузер подставляет сам — при необходимости дополните коллекцию вручную после импорта.
+After **Export Collection** the browser offers a **JSON** download with a Postman-style name (spaces in the default title often become underscores).
+
+Open it in **Postman** via collection import or in an editor to inspect structure.
 
 ---
 
-## См. также
+## Caveats
 
-- [Работа с запросами](/network/general)
-- [Подмена трафика](/network/traffic)
+* Only **headers and bodies the inspector could read** appear in the export (CORS, truncated bodies, opaque binary).
+* Rows with **network errors** or partial data can still export if they remain in the filtered list — validate before reuse.
+* **Replaying** from Postman may differ from the browser because of cookies, tokens, ambient headers, and environment — adjust after import if needed.
+
+---
+
+## See also
+
+* [Working with requests](/network/general)
+* [Traffic interception](/network/traffic)

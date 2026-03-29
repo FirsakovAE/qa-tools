@@ -1,57 +1,57 @@
 ---
-title: Режимы отображения
+title: Display modes
 ---
 
-# Режимы отображения (Display Mode)
+# Display modes
 
-В **Options → General → Display Mode** выбирается, **где** живёт интерфейс Vue Inspector относительно страницы. Доступны варианты **Overlay** (оверлей на странице) и **DevTools tab** (вкладка в инструментах разработчика браузера).
+**Options → General → Display Mode** chooses **where** the Vue Inspector UI lives relative to the page: **Overlay** on the page or **DevTools tab** inside the browser’s developer tools.
 
-> **Режим DevTools доступен только в установленном расширении** (Chrome / Edge). В **автономном (standalone)** запуске переключатель отключён: инспектор работает как оверлей на странице, отдельной вкладки в DevTools нет.
+> **DevTools mode requires the installed extension** (Chrome / Edge). **Standalone** disables that toggle: the inspector only runs as an overlay; there is no DevTools panel.
 
-После смены режима расширение подсказывает **перезагрузить страницу**, чтобы применить выбор.
-
----
-
-## Overlay — оконный режим, пилюля и размер
-
-В режиме **Overlay** панель встраивается поверх сайта в собственном «окне» внутри вкладки.
-
-**Пилюля** (компактная кнопка с ручкой перетаскивания и стрелкой‑шевроном) — главная точка управления:
-
-- **Шеврон** раскрывает или сворачивает панель с интерфейсом инспектора.
-- За **ручку с точками** можно **перетаскивать** блок: при отпускании около края окна он **примагничивается** к верхнему, нижнему, левому или правому краю; если оставить посередине — включается **плавающее окно** с рамкой и тенью.
-
-**Поведение по умолчанию** при первом открытии: пристыковка к **нижнему краю** вкладки. В этом состоянии полоса панели тянется **на всю ширину окна**: сайт остаётся виден сверху, инспектор занимает полоску снизу (высоту можно менять). Это и есть типичный «нижний док» с горизонтальным растяжением.
-
-**Изменение размера:**
-
-- В пристыкованном режиме на **внешнем** краю панели есть **зацеп для растягивания** (у нижнего дока это **верхняя** граница полосы): так меняется **высота** нижней и верхней пристыковки или **ширина** левой и правой.
-- В **плавающем** режиме доступны **углы и стороны** рамки для произвольного изменения ширины и высоты.
-
-Размеры, положение дока и координаты плавающего окна **запоминаются** между визитами на сайт (в пределах возможностей браузера и профиля расширения).
-
-Показ самой пилюли на сайте в оверлее может дополнительно ограничиваться правилами **Auto Run** (чёрный и белый списки сайтов) — см. [Автозапуск](/options/auto_run).
+After changing mode the extension suggests **reloading the page**.
 
 ---
 
-## DevTools tab — вкладка в инструментах разработчика
+## Overlay — dock, pill, and size
 
-> **Только расширение.** В этом режиме интерфейс инспектора открывается как **отдельная вкладка** внутри штатных **DevTools** браузера (окно по **F12** или «Просмотреть код»), а не как плавающая панель над страницей.
+**Overlay** embeds the panel above the site in its own “window” in the tab.
 
-Удобно, если вы привыкли держать всё рядом с консолью и сетью, или не хотите перекрывать вёрстку сайта оверлеем. Перетаскивание пилюли и докинг к краям страницы **относятся к режиму Overlay**; в DevTools‑вкладке используется раскладка панели инструментов браузера.
+The **pill** (compact handle with drag affordance and chevron) is the main control:
 
-После переключения на **DevTools tab** **перезагрузите страницу** и откройте DevTools — в списке вкладок панели появится **Vue Inspector** (или аналогичное имя панели расширения).
+* **Chevron** expands/collapses inspector chrome.
+* **Drag handle** moves the block: near window edges it **snaps** top/bottom/left/right; centered becomes a **floating** framed window.
 
-**Обновление страницы (F5):** вкладка с инспектором **заново подключается** к контексту этой же вкладки сайта. Ничего дополнительно «включать» после перезагрузки не требуется.
+**Default** first open: docked to the **bottom** — full-width strip with the site visible above (resize height). Classic bottom dock.
 
-**В отличие от Overlay:** пока оверлей **свёрнут** (видна только пилюля), часть сценариев на стороне страницы может не получать полноценного канала к развёрнутой панели — тогда для срабатывания тех же **Breakpoint** или **Mock** иногда нужно **сначала развернуть** панель. В режиме **DevTools** вкладка инспектора для браузера уже **активный элемент интерфейса** инструментов разработчика: перехват и подмена по правилам **Network** работают **сразу**, без лишнего шага «открыть панель».
+**Resizing:**
 
-**Network после F5:** список запросов **очищается и заполняется заново** по мере новой загрузки страницы, но сам функционал вкладки **Network** (перехват, точки останова, mock и т.д.) **готов к работе с первого момента** после перезагрузки — не нужно дополнительно кликать по инспектору, чтобы «пробудить» сеть.
+* Docked: grab the **outer** edge (for bottom dock, the **top** border) to change height (bottom/top dock) or width (left/right).
+* Floating: corners and edges resize freely.
+
+Position, dock side, and floating geometry **persist** between visits (within browser/extension limits).
+
+Whether the pill shows on a site can also depend on **Auto Run** lists — see [Auto run](/options/auto_run).
 
 ---
 
-## См. также
+## DevTools tab
 
-- [Автозапуск](/options/auto_run) — когда пилюля оверлея показывается автоматически
-- [Персонализация](/options/customize) — тема и фон панели
-- [Расширение браузера](/guide/extension)
+> **Extension only.** The inspector opens as a **separate tab** inside native **DevTools** (F12 / Inspect), not as a floating overlay.
+
+Useful if you keep tools next to Console/Network or prefer not to cover the page. Pill dragging applies to **Overlay** only; DevTools layout follows the browser panel.
+
+After switching to **DevTools tab**, **reload** and open DevTools — you should see **Vue Inspector** among panel tabs.
+
+**Reload (F5):** the inspector tab reconnects to **this** tab’s page context. No extra enable step.
+
+**Versus Overlay:** while overlay is **collapsed**, some page-side flows may not get a full channel to the expanded panel — **Breakpoint** / **Mock** may need you to **expand** first. In **DevTools** mode the inspector is already an **active DevTools surface**, so **Network** interception works **immediately** after reload.
+
+**Network after F5:** the request list **clears and refills** as the page reloads, but **Network** features (intercept, breakpoints, mocks) are **ready from the start** — no extra click to “wake” networking.
+
+---
+
+## See also
+
+* [Auto run](/options/auto_run) — when the overlay pill auto-shows
+* [Customize](/options/customize) — theme and panel background
+* [Browser extension](/guide/extension)

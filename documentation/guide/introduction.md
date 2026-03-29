@@ -1,58 +1,58 @@
 ---
-title: Введение
----
 
-# Введение
+## title: Introduction
 
-## Что такое Vue Inspector?
+# Introduction
 
-**Vue Inspector** — это инструмент для анализа Vue-приложений в runtime без необходимости доступа к исходному коду, локальной сборке или dev-окружению.
+## What is Vue Inspector?
 
-Расширение позволяет исследовать структуру приложения непосредственно на открытой странице: получать данные о Props, Store, сетевых запросах и внутреннем состоянии компонентов в том виде, в котором они существуют в момент работы приложения.
+**Vue Inspector** is a tool for analyzing Vue applications at runtime without requiring access to source code, a local build, or a dedicated development environment.
 
-Инструмент ориентирован на задачи, где требуется быстро понять текущее состояние frontend-части без подключения дополнительных средств разработки.
+The extension allows you to explore the application structure directly on the loaded page: inspect props, store data, network requests, and internal component state exactly as they exist while the application is running.
 
----
-
-## Для чего использовать Vue Inspector?
-
-Vue Inspector помогает упростить исследование поведения Vue-приложений в ситуациях, когда стандартных браузерных инструментов недостаточно или требуется более быстрый доступ к runtime-данным.
-
-Основные возможности:
-
-* Просмотр Props компонентов в реальном времени;
-* Анализ полученных и объявленных Props;
-* Работа со Store без необходимости ручного поиска в runtime;
-* Просмотр сетевых запросов в структурированном виде;
-* Быстрый переход к связанным данным внутри приложения;
-* Выбор компонентов непосредственно на странице через режим Inspect;
-* Фильтрация и локализация нужных данных без ручного обхода DOM-структуры;
+It is designed for scenarios where you need to quickly understand the current frontend state without relying on additional development tools.
 
 ---
 
-## Чем Vue Inspector отличается от стандартных DevTools?
+## Why use Vue Inspector?
 
-В отличие от Vue Devtools, Vue Inspector ориентирован не только на локальную разработку, но и на работу с уже запущенными приложениями, где:
+Vue Inspector helps simplify application analysis when standard browser tools are not sufficient or when faster access to runtime data is required.
 
-* отсутствует доступ к исходному коду;
-* недоступна локальная сборка проекта;
-* требуется быстро исследовать production или test environment;
-* важна работа с runtime-данными без подготовки dev-среды;
+Main capabilities:
 
----
-
-## Когда инструмент особенно полезен?
-
-Vue Inspector может быть полезен в сценариях:
-
-* тестирование frontend-приложений;
-* анализ сложных интеграций;
-* исследование поведения компонентов;
-* локализация проблем в передаче данных;
-* проверка реактивного состояния приложения;
+* View component props in real time;
+* Inspect received and declared props;
+* Access store data without manually searching runtime structures;
+* Browse network requests in a structured format;
+* Jump quickly to related data inside the application;
+* Select components directly on the page using Inspect mode;
+* Filter and locate required data without manually traversing the DOM structure;
 
 ---
 
-## Дополнительно
+## How is Vue Inspector different from standard DevTools?
 
-Проект продолжает развиваться и постепенно расширяет поддержку runtime-анализа для различных frontend-сценариев.
+Unlike Vue Devtools, Vue Inspector is designed not only for local development but also for working with already running applications where:
+
+* source code is unavailable;
+* no local project build is accessible;
+* production or test environments need to be explored quickly;
+* runtime data must be inspected without preparing a development environment;
+
+---
+
+## When is it especially useful?
+
+Vue Inspector is particularly useful for:
+
+* frontend application testing;
+* analyzing complex integrations;
+* investigating component behavior;
+* locating data transfer issues;
+* verifying reactive application state;
+
+---
+
+## Additional Notes
+
+The project continues to evolve and gradually expands runtime analysis support for various frontend scenarios.

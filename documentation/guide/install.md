@@ -1,12 +1,12 @@
 ---
-title: Установка
+title: Installation
 ---
 
-# Установка
+# Installation
 
-Vue Inspector доступен в нескольких вариантах запуска, чтобы инструмент можно было использовать в разных рабочих средах и браузерах.
+Vue Inspector is available in more than one launch mode so you can use it across environments and browsers.
 
-Выбор варианта зависит от ограничений среды, требований безопасности и предпочтительного способа работы.
+The right mode depends on environment constraints, security policy, and how you prefer to work.
 
 <div class="install-options">
   <a class="install-option-card" href="./extension">
@@ -14,8 +14,8 @@ Vue Inspector доступен в нескольких вариантах зап
       <img src="/install/chrome-logo.svg" alt="" width="32" height="32" loading="lazy" decoding="async" />
     </span>
     <span class="install-option-body">
-      <span class="install-option-title">Расширение для браузера</span>
-      <span class="install-option-desc">Полный контроль над приложением.</span>
+      <span class="install-option-title">Browser extension</span>
+      <span class="install-option-desc">Full control inside the browser.</span>
     </span>
   </a>
   <a class="install-option-card" href="./standalone">
@@ -23,32 +23,31 @@ Vue Inspector доступен в нескольких вариантах зап
       <img src="/install/electron-logo.svg" alt="" width="32" height="32" loading="lazy" decoding="async" />
     </span>
     <span class="install-option-body">
-      <span class="install-option-title">Автономное приложение</span>
-      <span class="install-option-desc">Для корпоративных политик и любых браузеров.</span>
+      <span class="install-option-title">Standalone app</span>
+      <span class="install-option-desc">For strict policies and any browser.</span>
     </span>
   </a>
 </div>
 
-## Что выбрать?
+## Which one should I pick?
 
-* **Расширение для Chrome** — если нужен постоянный доступ и полный набор возможностей: автозапуск, интеграция с `DevTools` и расширенные сценарии запуска внутри браузера.
-* **Автономное приложение** — если установка расширений недоступна, действуют корпоративные ограничения или требуется независимый запуск.
+* **Chrome extension** — when you want persistent access and the full feature set: auto run, DevTools integration, and advanced in-browser workflows.
+* **Standalone** — when extensions are blocked, enterprise policy applies, or you need a bookmarklet-style launch without installing the extension.
 
 ---
 
-## Где хранятся настройки {#storage}
+## Where settings are stored {#storage}
 
-И **расширение**, и **standalone** держат **один общий профиль** настроек для браузера: после сохранения в Options те же значения подхватываются на **любом сайте**, где вы открыли инспектор. Настраивать заново под каждый домен не требуется.
+Both the **extension** and **standalone** share **one settings profile** for the browser: after you save options, the same values apply on **every site** where you open the inspector. You do not configure per domain separately.
 
-Отличается только **механизм** хранения: у расширения это штатные хранилища Chrome для установленного компонента, у standalone — **отдельное локальное хранилище** приложения (без установки в `chrome://extensions`), специально заведённое под этот режим.
+Only the **storage mechanism** differs: the extension uses Chrome’s storages for the installed component; standalone uses a **separate local store** for the app (no `chrome://extensions` install), dedicated to that mode.
 
-| | **Расширение** | **Standalone (закладка)** |
+| | **Extension** | **Standalone (bookmark)** |
 |---|----------------|---------------------------|
-| **Настройки** (опции, избранное, списки сайтов и т.п.) | Локальное хранилище **расширения** в профиле браузера: данные привязаны к установленной копии Vue Inspector, а не к конкретной вкладке. | **Собственное** локальное хранилище standalone: то же по смыслу — одна база на все сайты, куда вы запускаете инструмент закладкой. |
-| **Файлы оформления** (фоны, сохранённые медиа из Customize и связанных мест) | Хранятся отдельно в **браузерном хранилище** в контексте расширения (копии файлов на диске профиля, не «на сайте»). | Попадают в **то же единое** хранилище standalone вместе с учётом его лимитов (см. [Персонализация](/options/customize)). |
-| **Между сайтами** | Один набор настроек на все домены в этом профиле браузера. | Один набор настроек на все домены: хранилище **не привязано** к origin страницы, поэтому переиспользование между сайтами такое же, как у расширения. |
+| **Settings** (options, favorites, site lists, etc.) | The extension’s **local storage** in the browser profile: data is tied to the installed Vue Inspector build, not a specific tab. | **Dedicated** standalone local storage — same idea, one database for all sites you launch via the bookmark. |
+| **Customize assets** (backgrounds, saved media from Customize and related UI) | Stored in **browser storage** under the extension context (files live in the profile, not “on the site”). | Goes into the **same unified** standalone store, subject to its limits (see [Customize](/options/customize)). |
+| **Across sites** | One settings set for all origins in this browser profile. | One settings set for all origins: storage is **not** bound to the page origin, so reuse matches the extension. |
 
-Подробнее про лимиты медиа в Customize — в [Персонализация](/options/customize).
+For media limits in Customize see [Customize](/options/customize).
 
-**Сохранение и перенос:** обычные правки в Options **пишутся автоматически** (с небольшой задержкой). **Расширение** дублирует набор настроек в **IndexedDB** и в **`chrome.storage.local`**; **standalone** хранит снимок в **своём центральном KV-хранилище** (IndexedDB), медиа — отдельно с лимитом объёма. Кнопки **Export / Import / Reset** в General дают файл JSON и полный сброс; чем отличается состав экспорта и импорт между режимами — в [Менеджер настроек](/options/settings_management).
-
+**Saving and migration:** normal edits in Options **autosave** (with a small debounce). The **extension** mirrors settings in **IndexedDB** and **`chrome.storage.local`**; **standalone** keeps a snapshot in its **central KV store** (IndexedDB), with media stored separately under a size cap. **Export / Import / Reset** in General produce a JSON file and a full reset; what differs between modes in export/import is covered in [Settings management](/options/settings_management).

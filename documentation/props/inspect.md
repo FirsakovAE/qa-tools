@@ -1,78 +1,78 @@
 ---
-title: Инспектор
+title: Inspect
 ---
 
-# Режим Inspect (выбор компонента на странице)
+# Inspect mode (pick a component on the page)
 
-Режим **Inspect** на вкладке **Props** позволяет выбрать интересующий фрагмент интерфейса **непосредственно на странице** и после клика сузить список компонентов до поддерева, связанного с выбранным узлом. По смыслу это близко к выбору элемента в инструментах разработчика браузера, однако результатом здесь становится **фильтрация таблицы Props**, а не переход к DOM-структуре.
+**Inspect** on the **Props** tab lets you pick UI on the **page** and, after click, narrow the component list to the subtree tied to that node — similar to picking an element in browser DevTools, but the result is **filtering the Props table**, not opening the DOM tree.
 
-Общее описание вкладки Props см. в разделе [Основные возможности](/props/general).
-
----
-
-## Запуск и остановка
-
-Кнопка **Inspect** находится на панели инструментов вкладки **Props** (иконка указателя) и включает режим выбора элемента на странице для фильтрации списка компонентов.
-
-Перед активацией режима список компонентов автоматически **обновляется**, чтобы структура дерева и данные соответствовали текущему состоянию страницы.
-
-По умолчанию при включении **Inspect Mode** интерфейс инспектора в режиме **overlay** временно скрывается, чтобы не перекрывать элементы страницы. Это поведение можно изменить в настройках **Options → Inspect Mode → Hide overlay while inspecting**.
-
-Повторное нажатие **Inspect** отключает режим выбора, не сбрасывая уже применённый фильтр.
-
-Клавиша **Escape** отменяет текущий режим инспекции без выбора элемента.
-
-При переключении вкладки инспектора или закрытии панели режим выбора автоматически сбрасывается.
+Overview: [Props overview](/props/general).
 
 ---
 
-## Поведение на странице
+## Start and stop
 
-После включения Inspect поверх страницы активируется режим **захвата указателя**: движение мыши и выбор элемента обрабатываются независимо от обычного поведения страницы, включая элементы, которые в обычном режиме не принимают пользовательские клики.
+The **Inspect** control (pointer icon) lives on the **Props** toolbar and enables picking an element to filter components.
 
-Выбор привязывается не к произвольному DOM-узлу, а к ближайшему элементу, связанному с **инстансом Vue**.
+Before activation the component list **refreshes** so the tree matches the page.
 
-Пока курсор находится над страницей, элемент под ним **подсвечивается**, рядом может отображаться **всплывающая подсказка** с краткой информацией:
+By default **Inspect** temporarily **hides** the inspector overlay so it does not cover the page. Change this under **Options → Inspect Mode → Hide overlay while inspecting**.
 
-- имя компонента;
-- описание корневого DOM-элемента (тег, часть класса или `id`);
-- количество props;
-- число дочерних связанных элементов.
+Clicking **Inspect** again stops picking **without** clearing an applied filter.
 
-Тема подсказки (светлая или тёмная) соответствует текущим настройкам инспектора.
+**Escape** cancels picking without selecting.
 
-Элементы интерфейса **Vue Inspector** (overlay, шеврон, вспомогательные панели режима Inspect) исключаются из области выбора и не участвуют в определении компонента.
-
-Если в настройках включено скрытие overlay во время инспекции, после завершения выбора или отмены режима интерфейс возвращается в исходное состояние.
+Switching tabs or closing the panel resets pick mode.
 
 ---
 
-## Результат выбора
+## On-page behavior
 
-После выбора элемента на странице:
+With Inspect, pointer moves and clicks are handled **above** normal page behavior, including elements that usually ignore clicks.
 
-- режим Inspect завершается;
-- в таблице Props остаются компоненты, относящиеся к выбранному **корню**;
-- в верхней панели появляется индикатор **Filtered**, показывающий, что список ограничен выбранным поддеревом.
+Selection binds to the nearest DOM node linked to a **Vue instance**.
 
-Нажатие на **Filtered** снимает ограничение и возвращает полный список компонентов после обновления данных.
+While moving the pointer, the element under it **highlights** and a **tooltip** may show:
 
-Повторный запуск Inspect при уже активном фильтре позволяет выбрать другой корневой элемент и заменить текущую область фильтрации.
+* component name;
+* root element summary (tag, class fragment or `id`);
+* props count;
+* nested component count.
 
----
+Tooltip light/dark follows inspector theme.
 
-## Ограничения и типичные ситуации
+**Vue Inspector** UI (overlay, chevron, Inspect helpers) is excluded from picking.
 
-- Если под курсором отсутствует связанный Vue-элемент, выбор не приведёт к фильтрации списка.
-- При сложной вложенности DOM результат может соответствовать ближайшему связанному компоненту, а не визуально ожидаемому уровню.
-- Режим Inspect влияет только на состав списка компонентов; **избранное**, **чёрный список** и **поиск** продолжают применяться поверх текущего фильтра.
-
-Подробности см. в разделах [Избранное](/props/favorite) и [Чёрный список](/props/blacklist).
+If **Hide overlay while inspecting** is on, the UI returns after pick or cancel.
 
 ---
 
-## См. также
+## After you pick
 
-- [Основные возможности Props](/props/general)
-- [Избранное](/props/favorite)
-- [Чёрный список](/props/blacklist)
+When a page element is chosen:
+
+* Inspect mode ends;
+* the **Props** table keeps components for that **root** subtree;
+* a **Filtered** chip shows the list is scoped.
+
+Click **Filtered** to clear the filter and reload the full list.
+
+Starting Inspect again with a filter active lets you pick another root and replace the scope.
+
+---
+
+## Limits and notes
+
+* If there is no Vue-related node under the cursor, selection may not filter.
+* Deep DOM may resolve to the nearest component, not the visually expected level.
+* Inspect only affects the component list; **favorites**, **blacklist**, and **search** still apply on top.
+
+More: [Favorites](/props/favorite), [Blacklist](/props/blacklist).
+
+---
+
+## See also
+
+* [Props overview](/props/general)
+* [Favorites](/props/favorite)
+* [Blacklist](/props/blacklist)

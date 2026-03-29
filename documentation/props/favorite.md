@@ -1,75 +1,73 @@
 ---
-title: Избранное
+title: Favorites
 ---
 
-# Избранное (Props)
+# Favorites (Props)
 
-**Избранное** в разделе **Props** — это сохраняемый список **компонентов**, к которым можно быстро возвращаться между сессиями работы с инспектором. Отмеченные строки поднимаются **в начало** таблицы, рядом с именем отображается **звезда**, а в шапке доступен счётчик найденных избранных на текущем экране.
+**Favorites** under **Props** are persisted **components** you can return to across sessions. Starred rows float **to the top**, show a **star** beside the name, and a header badge counts favorites visible on the current screen.
 
-Общее описание вкладки Props: [Основные возможности](/props/general).
+Props overview: [Overview](/props/general).
 
-**Избранное для Pinia** — отдельный список на вкладке **Stores** и в настройках **Options → Pinia**; здесь описаны только **компоненты Vue**.
-
----
-
-## Где добавить и убрать
-
-Добавить компонент в избранное можно несколькими способами.
-
-* **В карточке компонента** (детальный просмотр) — в заголовке доступна кнопка **звезды**, которая включает или снимает признак избранного для текущего компонента.
-* **Через контекстное меню строки в таблице Props** — команда добавления или удаления из избранного доступна среди действий над выбранным компонентом.
-* **В таблице Props** — быстрый клик по области **звезды** у строки также переключает избранное, даже если иконка ещё не отображается постоянно.
-* **В Options** — секция **Favorites** в блоке настроек **Props** позволяет просматривать сохранённые записи, удалять их из списка и переходить к выбранному компоненту для просмотра деталей.
-
-После изменения списка таблица обычно **пересортировывается**: отмеченные компоненты перемещаются выше остальных (если это не противоречит текущим фильтрам поиска).
+**Pinia favorites** are separate (**Stores** tab and **Options → Pinia**); this page covers **Vue components** only.
 
 ---
 
-## Что именно сохраняется
+## Add and remove
 
-Для каждой записи хранится, среди прочего:
+* **In the component card** — header **star** toggles favorite for that component.
+* **Row context menu** on **Props** — add/remove favorite.
+* **Props table** — click the **star** area on a row to toggle even if the icon is not always visible.
+* **Options → Props → Favorites** — browse saved entries, delete, or jump to a component for details.
 
-* **имя компонента**;
-* **идентификатор** для сопоставления со строкой в дереве (в том числе форма с привязкой к корневому DOM-элементу: тег и классы);
-* при необходимости **внутренний идентификатор узла** текущей сессии (**nodeId**) — чтобы различать экземпляры с одинаковым именем и похожей разметкой;
-* **время добавления** (для отображения в списке настроек).
-
-Это позволяет списку сохраняться после **перезагрузки страницы**: при следующем построении дерева инспектор повторно ищет компонент по сохранённым признакам.
+After changes the table **re-sorts** so favorites rise (unless search filters conflict).
 
 ---
 
-## Как выполняется сопоставление
+## What is stored
 
-При открытии дерева и обновлении состояния избранного используется **устойчивое сравнение идентификаторов**.
+Each entry keeps, among other fields:
 
-* Если сохранён идентификатор в форме **числового uid текущей сессии**, совпадение возможно **только в пределах текущего жизненного цикла дерева** (после полного пересоздания uid изменится).
-* Для записей с **именем компонента и сигнатурой корневого элемента** (тег, классы и т.д.) сопоставление опирается на эти **стабильные признаки**, а не на внутренний путь в дереве Vue.
+* **component name**;
+* **identity** for matching in the tree (including root DOM signature: tag and classes);
+* optional **nodeId** for the current session;
+* **time added** (shown in Options).
 
-Для старых записей, где сохранён только **uid сессии**, инспектор дополнительно может использовать **метаданные компонента** (имя, тег, класс), чтобы восстановить соответствие после перезагрузки.
-
-Если на странице появляется **несколько похожих кандидатов**, сопоставление может выбрать другой экземпляр; в таком случае рекомендуется снять признак избранного и добавить компонент заново уже с актуального узла.
-
----
-
-## Счётчик в шапке
-
-Рядом с полем поиска отображается бейдж вида **«найдено / всего»**: сколько избранных компонентов сейчас видно с учётом активного фильтра и сколько записей всего сохранено в списке.
-
-Клик по бейджу может использоваться как быстрый переход в **Options** к секции избранного.
+That lets favorites survive **reloads**: on rebuild the inspector matches saved signatures.
 
 ---
 
-## Практические советы
+## Matching
 
-* Используйте избранное для **опорных компонентов**: шапки приложения, часто проверяемых виджетов, проблемных зон интерфейса.
-* После **изменений в структуре DOM** полезно проверить, что избранное всё ещё связано с нужным экземпляром.
-* Избранное **не влияет** на выполнение приложения и не связано с **чёрным списком** компонентов — это независимые механизмы.
+Matching uses **stable identifiers** when refreshing the tree.
+
+* If a numeric **session uid** is stored, it only matches **within the current tree lifecycle** (full rebuild changes uids).
+* Entries with **name + root element signature** match on **stable cues**, not internal tree path.
+
+Legacy entries with only **session uid** may also use **metadata** (name, tag, class) to reconnect after reload.
+
+If several candidates look alike, the wrong instance may star — remove and re-add from the correct row.
 
 ---
 
-## См. также
+## Header badge
 
-* [Основные возможности Props](/props/general)
-* [Чёрный список](/props/blacklist)
-* [Персонализация / настройки](/options/customize)
-* [Основные возможности Store (Pinia)](/store/general) — избранное для store настраивается отдельно
+A **found / total** style badge shows how many favorite components are visible under current filters vs how many favorites are saved.
+
+Clicking the badge can jump to **Options** favorites.
+
+---
+
+## Tips
+
+* Use favorites for **anchor components**: headers, widgets you check often, problem areas.
+* After **DOM structure changes**, verify stars still point to the right instance.
+* Favorites **do not** affect runtime behavior and are unrelated to the component **blacklist**.
+
+---
+
+## See also
+
+* [Props overview](/props/general)
+* [Blacklist](/props/blacklist)
+* [Customize](/options/customize)
+* [Store overview](/store/general) — separate Pinia favorites

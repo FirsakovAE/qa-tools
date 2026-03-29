@@ -1,59 +1,59 @@
 ---
-title: Автозапуск
+title: Auto run
 ---
 
-# Автозапуск (Auto Run)
+# Auto run
 
-> **Только режим расширения (Chrome / Edge).** Блок **Auto Run** в **Options → General** не показывается в **автономном (standalone)** запуске: у закладки нет фонового процесса расширения, который решал бы, на каких вкладках автоматически показывать панель.
+> **Extension only (Chrome / Edge).** The **Auto Run** block in **Options → General** is **hidden** in **standalone**: a bookmark has no background extension process to decide when to show the panel.
 
-**Auto Run** задаёт, при каких сайтах в режиме **оверлея** на странице **сама появляется** компактная точка входа (pill) в инспектор. Это не то же самое, что чёрный список **компонентов** во вкладке Props — здесь речь только о **адресах сайтов** (origin: схема, хост, порт).
-
----
-
-## Общая логика
-
-Правила смотрят на **origin** открытой страницы (как в адресной строке, без пути). Можно указать полный URL вида `https://app.example/` или шаблон со звёздочками, например `*localhost*` — звёздочка означает «любой фрагмент». Пустые списки не ограничивают показ панели: ограничения включаются, когда в таблице есть записи (или включён режим белого списка, см. ниже).
-
-Панель оверлея по-прежнему не появится на страницах, которые расширение считает **статическими** без Vue (отдельная проверка). От этого ограничения списки сайтов не освобождают — см. **всплывающее окно** расширения ниже.
+**Auto Run** controls **when** the overlay **pill** appears on sites in **overlay** mode. This is **not** the component **blacklist** on **Props** — here we only filter **site origins** (scheme, host, port).
 
 ---
 
-## Site Blacklist (чёрный список сайтов)
+## Basics
 
-Таблица **Site Blacklist** — адреса и шаблоны, на которых **автоматически не показывать** точку входа в инспектор.
+Rules inspect the page **origin** (address bar host, no path). You can enter a full URL such as `https://app.example/` or a pattern like `*localhost*` where `*` matches any substring. Empty lists impose no restriction until you add rows (or enable whitelist mode, below).
 
-- Добавление: поле ввода и кнопка **Add** (или Enter).
-- В таблице видны **шаблон** и **дата добавления**; строку можно выбрать и отредактировать в боковой панели деталей.
-- Если текущий сайт **совпал** с любой записью из чёрного списка, автозапуск оверлея для этой вкладки отключается.
-
-Чёрный список **можно комбинировать** с белым: сначала проверяется белый список (если он активен и не пуст), затем чёрный.
+The overlay still **won’t** inject on pages the extension treats as **static without Vue** (separate heuristic). Lists don’t bypass that — see the extension **popup** section.
 
 ---
 
-## Site Whitelist и «whitelist mode»
+## Site Blacklist
 
-Переключатель **Enable whitelist mode** включает использование таблицы **Site Whitelist**.
+**Site Blacklist** — origins/patterns where the pill **must not** auto-show.
 
-- Пока **белый список пуст**, режим по сути никого не ограничивает: работают только правила **чёрного** списка (если он заполнен).
-- Как только в белом списке есть **хотя бы одна** запись, автоматический показ оверлея разрешён **только** на тех origins, которые **совпали** с одной из записей белого списка. Все остальные сайты для автозапуска считаются запрещёнными — до тех проверок, пока не сработает чёрный список поверх уже разрешённых.
+* Add via input + **Add** (or Enter).
+* Table shows **pattern** and **added** date; select a row to edit in the side panel.
+* If the current origin **matches any** blacklist row, auto-run overlay is off for that tab.
 
-Иными словами: **непустой белый список** сужает круг «где можно», **чёрный список** вычитает из него отдельные адреса.
-
----
-
-## Всплывающее окно расширения (popup): «запасной выход»
-
-У иконки Vue Inspector в панели браузера есть **маленькое окно** с двумя действиями (на английском в интерфейсе: **Forced Launch** и **Reset Settings**).
-
-**Forced Launch** — принудительно вставляет панель инспектора на **текущей активной вкладке**, **игнорируя** правила Auto Run (чёрный/белый список) и эвристику «статический сайт». Нужна, если вы сами настроили списки так, что pill больше нигде не появляется, а открыть **Options** неоткуда.
-
-**Reset Settings** — **полный сброс** сохранённых пользовательских настроек расширения (включая Auto Run, оформление, избранное и прочее). Это крайняя мера, если вы «перекрыли» себе доступ настройками: после сброса списки и режимы возвращаются к состоянию по умолчанию, и панель снова можно открыть обычным способом. Используйте осознанно: восстановить прежний профиль без резервной копии нельзя.
-
-Совет: если пользуетесь жёстким белым списком, держите в нём хотя бы адрес страницы, с которой вы обычно заходите в Options, либо помните про **Forced Launch** и **Reset Settings** в popup.
+Blacklist can combine with whitelist: whitelist is evaluated first when active and non-empty.
 
 ---
 
-## См. также
+## Site Whitelist and “whitelist mode”
 
-- [Установка → Где хранятся настройки](/guide/install#storage)
-- [Расширение браузера](/guide/extension)
+**Enable whitelist mode** activates **Site Whitelist**.
+
+* While the whitelist is **empty**, mode is effectively open — only blacklist (if any) applies.
+* Once the whitelist has **at least one** row, auto overlay is **only** allowed on matching origins; everything else is denied **before** blacklist trims further.
+
+So a **non-empty whitelist** defines “where yes”, **blacklist** subtracts exceptions.
+
+---
+
+## Extension popup — escape hatch
+
+The extension icon **popup** exposes two actions (UI labels in English: **Forced Launch**, **Reset Settings**).
+
+**Forced Launch** injects the inspector on the **active tab**, **ignoring** Auto Run lists and the static-site heuristic. Use when lists block all sites or **Options** is unreachable.
+
+**Reset Settings** performs a **full wipe** of saved inspector settings (Auto Run, theming, favorites, etc.). Last resort if configuration locks you out — there is **no** undo without a backup export.
+
+If you rely on a strict whitelist, keep at least one URL you use to open **Options**, or remember **Forced Launch** / **Reset Settings**.
+
+---
+
+## See also
+
+* [Installation → Where settings are stored](/guide/install#storage)
+* [Browser extension](/guide/extension)
