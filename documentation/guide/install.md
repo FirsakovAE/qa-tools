@@ -29,25 +29,25 @@ The right mode depends on environment constraints, security policy, and how you 
   </a>
 </div>
 
-## Which one should I pick?
+## Which option should I choose?
 
-* **Chrome extension** — when you want persistent access and the full feature set: auto run, DevTools integration, and advanced in-browser workflows.
-* **Standalone** — when extensions are blocked, enterprise policy applies, or you need a bookmarklet-style launch without installing the extension.
+* **Chrome extension** — when you need persistent access and the full feature set: auto-run, DevTools integration, and advanced in-browser workflows.
+* **Standalone application** — when extensions cannot be installed, enterprise restrictions apply, or independent launch is required.
 
 ---
 
-## Where settings are stored {#storage}
+## Where are settings stored? {#storage}
 
-Both the **extension** and **standalone** share **one settings profile** for the browser: after you save options, the same values apply on **every site** where you open the inspector. You do not configure per domain separately.
+Both the **extension** and **standalone** use **a single shared settings profile** for the browser: once saved in Options, the same values apply on **every site** where you open the inspector. No separate per-domain configuration is required.
 
-Only the **storage mechanism** differs: the extension uses Chrome’s storages for the installed component; standalone uses a **separate local store** for the app (no `chrome://extensions` install), dedicated to that mode.
+Only the **storage mechanism** differs: the extension uses Chrome’s built-in storage for installed components, while standalone uses a **dedicated local storage layer** for the application (without installation in `chrome://extensions`), created specifically for this mode.
 
-| | **Extension** | **Standalone (bookmark)** |
-|---|----------------|---------------------------|
-| **Settings** (options, favorites, site lists, etc.) | The extension’s **local storage** in the browser profile: data is tied to the installed Vue Inspector build, not a specific tab. | **Dedicated** standalone local storage — same idea, one database for all sites you launch via the bookmark. |
-| **Customize assets** (backgrounds, saved media from Customize and related UI) | Stored in **browser storage** under the extension context (files live in the profile, not “on the site”). | Goes into the **same unified** standalone store, subject to its limits (see [Customize](/options/customize)). |
-| **Across sites** | One settings set for all origins in this browser profile. | One settings set for all origins: storage is **not** bound to the page origin, so reuse matches the extension. |
+|                                                                               | **Extension**                                                                                                                                         | **Standalone (bookmark)**                                                                                                                 |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Settings** (options, favorites, site lists, etc.)                           | The extension’s **internal browser storage** within the browser profile: data is tied to the installed Vue Inspector instance, not to a specific tab. | **Dedicated** standalone local storage — same concept: one shared database for all sites launched through the bookmark.                   |
+| **Customize assets** (backgrounds, saved media from Customize and related UI) | Stored separately in **browser storage** under the extension context (files remain in the browser profile, not “on the site”).                        | Stored in the **same unified** standalone storage, subject to its limits (see [Customize](/options/customize)).                           |
+| **Across sites**                                                              | One shared settings profile across all domains in the current browser profile.                                                                        | One shared settings profile across all domains: storage is **not bound** to page origin, so reuse works the same way as in the extension. |
 
-For media limits in Customize see [Customize](/options/customize).
+For media limits in Customize, see [Customize](/options/customize).
 
-**Saving and migration:** normal edits in Options **autosave** (with a small debounce). The **extension** mirrors settings in **IndexedDB** and **`chrome.storage.local`**; **standalone** keeps a snapshot in its **central KV store** (IndexedDB), with media stored separately under a size cap. **Export / Import / Reset** in General produce a JSON file and a full reset; what differs between modes in export/import is covered in [Settings management](/options/settings_management).
+**Saving and transfer:** regular changes in Options **autosave** (with a small debounce). The **extension** stores settings in **IndexedDB** and **`chrome.storage.local`**; **standalone** keeps a snapshot in its **central KV store** (IndexedDB), while media is stored separately with a size limit. **Export / Import / Reset** in General provide JSON export and full reset; differences between modes during export and import are described in [Settings management](/options/settings_management).

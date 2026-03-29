@@ -44,7 +44,7 @@ After **Apply** the request goes out in the modified form.
 ### Where to configure
 
 * **Network** — create or adjust a breakpoint from a captured request.
-* **Options → Network → Breakpoints** — manage the rule list.
+* **Options → Network → Breakpoints Requests** — manage the rule list.
 
 ### Behavior
 

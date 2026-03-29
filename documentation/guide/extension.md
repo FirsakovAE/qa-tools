@@ -4,21 +4,21 @@ title: Browser extension
 
 ### Chrome / Edge extension
 
-> Primary way to run Vue Inspector with automatic launch, windowed mode, the popup menu, and browser integration.
+> Primary launch mode for Vue Inspector with automatic launch, separate window mode, popup menu access, and browser integration.
 
 ## Data storage
 
-Settings and saved media live in **browser profile storages** (separate from sites you inspect): save once in Options — the same data is available on every tab. Compare with standalone and data-type details on [Installation → Where settings are stored](./install#storage).
+Settings and saved media are stored in **browser profile storage** (separate from the sites being inspected): once saved in Options, the same data becomes available across all tabs. Comparison with standalone mode and storage details by data type are described in [Installation → Where settings are stored](./install#storage).
 
 ---
 
-## Install
+## Installation
 
-1. Open the <a href="../../index.html#installation" target="_self" rel="noopener">installation section</a> on the project landing page.
+1. Open the <a href="../../index.html#installation" target="_self" rel="noopener">installation section</a> on the main project page.
 2. Download the latest extension archive;
-3. Unpack it to a folder of your choice;
+3. Extract it to a convenient folder;
 4. Open `chrome://extensions/`;
-5. Enable **Developer mode** in the upper right;
+5. Enable **Developer mode** in the upper-right corner;
 6. Click **Load unpacked**;
 7. Select the extension folder.
 
@@ -26,19 +26,19 @@ Settings and saved media live in **browser profile storages** (separate from sit
 
 ## Usage
 
-After installation the extension is available in the browser and launches according to your settings.
+After installation, the extension becomes available in the browser and can launch according to your current settings.
 
-You can also launch it from the extension popup when needed.
+It can also be launched manually from the extension popup when needed.
 
 ---
 
-## Incognito
+## Incognito mode
 
-To use incognito windows:
+To use the extension in incognito mode:
 
 1. Open `chrome://extensions/`;
-2. Find **Vue Inspector** in the list;
-3. Open extension details;
+2. Find **Vue Inspector** in the installed extensions list;
+3. Open **Details**;
 4. Enable **Allow in incognito**.
 
-The extension will then be available in private windows as well.
+The extension will then also be available in private browser windows.

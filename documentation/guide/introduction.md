@@ -1,6 +1,6 @@
 ---
-
-## title: Introduction
+title: Introduction
+---
 
 # Introduction
 
