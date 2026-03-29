@@ -15,7 +15,7 @@ Vue Inspector доступен в нескольких вариантах зап
     </span>
     <span class="install-option-body">
       <span class="install-option-title">Расширение для браузера</span>
-      <span class="install-option-desc">Запуск на странице, автозапуск, оконный режим, popup и DevTools.</span>
+      <span class="install-option-desc">Полный контроль над приложением.</span>
     </span>
   </a>
   <a class="install-option-card" href="./standalone">
