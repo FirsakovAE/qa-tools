@@ -15,6 +15,7 @@ import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
 import type { BaseInspectorSettings, PiniaFavoriteItem } from '@/types/inspector'
 import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavoritesMatcher'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
@@ -181,7 +182,9 @@ async function loadStoreData() {
     const now = new Date()
     lastFetched.value = now.toISOString().replace('T', ' ').slice(0, 19)
   } catch (err) {
-    console.error('[stores/PiniaDetails] loadStoreData failed:', err)
+    if (!isExpectedExtensionError(err)) {
+      console.error('[stores/PiniaDetails] loadStoreData failed:', err)
+    }
     // Set empty objects to show "empty" state instead of loading
     stateData.value = {}
     gettersData.value = {}
@@ -268,7 +271,9 @@ async function saveStateChanges() {
       console.error('[stores/PiniaDetails] Failed to save state:', response?.error)
     }
   } catch (err) {
-    console.error('[stores/PiniaDetails] saveStateChanges failed:', err)
+    if (!isExpectedExtensionError(err)) {
+      console.error('[stores/PiniaDetails] saveStateChanges failed:', err)
+    }
   }
 }
 
@@ -290,10 +295,16 @@ async function saveGettersChanges() {
       gettersData.value = newGetters
       isEditingGetters.value = false
     } else {
-      console.error('[stores/PiniaDetails] Failed to save getters:', response?.error)
+      const detail =
+        typeof response?.error === 'string' && response.error.length > 0
+          ? response.error
+          : 'Save failed (no detail — check the page console and injected [injected/pinia/state-writer] logs)'
+      console.error('[stores/PiniaDetails] Failed to save getters:', detail)
     }
   } catch (err) {
-    console.error('[stores/PiniaDetails] saveGettersChanges failed:', err)
+    if (!isExpectedExtensionError(err)) {
+      console.error('[stores/PiniaDetails] saveGettersChanges failed:', err)
+    }
   }
 }
 

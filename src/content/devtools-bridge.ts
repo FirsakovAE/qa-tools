@@ -18,6 +18,7 @@ import {
 } from './state'
 import { injectScript } from './script-injector'
 import { addMessageListenerIfNeeded } from './detection'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 let devtoolsPort: chrome.runtime.Port | null = null
 const onDisconnectCleanups: Array<() => void> = []
@@ -38,7 +39,9 @@ export function sendBroadcastToPanel(msg: { type: string; [key: string]: unknown
     try {
       devtoolsPort.postMessage({ broadcast: true, message: msg })
     } catch (e) {
-      console.error('[content/devtools-bridge] sendBroadcastToPanel failed:', e)
+      if (!isExpectedExtensionError(e)) {
+        console.error('[content/devtools-bridge] sendBroadcastToPanel failed:', e)
+      }
     }
   }
 }
@@ -72,7 +75,9 @@ export function setupDevtoolsBridge(): void {
         try {
           port.postMessage({ responseId: requestId, response })
         } catch (error) {
-          console.error('[content/devtools-bridge] port.postMessage failed:', error)
+          if (!isExpectedExtensionError(error)) {
+            console.error('[content/devtools-bridge] port.postMessage failed:', error)
+          }
         }
       }
 
@@ -88,7 +93,9 @@ export function setupDevtoolsBridge(): void {
         try {
           port.postMessage(msg)
         } catch (error) {
-          console.error('[content/devtools-bridge] port.postMessage (broadcast) failed:', error)
+          if (!isExpectedExtensionError(error)) {
+            console.error('[content/devtools-bridge] port.postMessage (broadcast) failed:', error)
+          }
         }
       })
     }

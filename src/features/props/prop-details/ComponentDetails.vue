@@ -19,14 +19,20 @@ import { useRuntime } from '@/runtime'
 import { isInFavorites, matchFavoriteIds } from '@/utils/favoritesMatcher'
 import { useComponentsTab } from '@/hooks/useComponentsTab'
 import { ref as createRef } from 'vue'
-import { getElementInfo } from '../types'
+import { getPropsFavoriteNodeId, isPropsRowResolvedFavorite } from '../propsFavorites'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
 // --- Props и Emits ---
 const props = withDefaults(
-  defineProps<{ node: TreeNodeModel; refreshing?: boolean }>(),
-  { refreshing: false }
+  defineProps<{
+    node: TreeNodeModel
+    /** Full Props table rows; required for correct star when names/stable ids collide */
+    allRows?: TreeNodeModel[]
+    refreshing?: boolean
+  }>(),
+  { refreshing: false, allRows: () => [] }
 )
 const emit = defineEmits<{ (e: 'back'): void; (e: 'refresh'): void }>()
 
@@ -38,25 +44,20 @@ watch(settings, (s) => {
   if (s) jsonMode.value = s.json?.mode ?? 'text'
 }, { immediate: true })
 
-// --- Favorites ---
+// --- Favorites (same resolution as PropsTab.updateFavoriteFlags when allRows is provided) ---
 const isFavorite = computed(() => {
-  if (!settings.value?.favorites) return false
-  const elementId = getElementIdentifier(props.node)
-  return isInFavorites(elementId, settings.value.favorites)
-})
-
-function getElementIdentifier(node: TreeNodeModel): string {
-  if (node.componentUid) {
-    return node.componentUid
+  if (!settings.value?.favorites?.length) return false
+  const rows = props.allRows
+  if (rows.length > 0) {
+    return isPropsRowResolvedFavorite(props.node, settings.value.favorites, rows)
   }
-  const elementInfo = getElementInfo(node)
-  return `${node.name}::${elementInfo}`
-}
+  return isInFavorites(getPropsFavoriteNodeId(props.node), settings.value.favorites)
+})
 
 async function toggleFavorite() {
   if (!settings.value) return
 
-  const elementId = getElementIdentifier(props.node)
+  const elementId = getPropsFavoriteNodeId(props.node)
 
   if (isFavorite.value) {
     const stableMatches = settings.value.favorites.filter(f => matchFavoriteIds(elementId, f.id))
@@ -236,7 +237,9 @@ async function saveChanges() {
     
     isEditing.value = false
   } catch (err) {
-    console.error('[props/ComponentDetails] saveChanges failed:', err)
+    if (!isExpectedExtensionError(err)) {
+      console.error('[props/ComponentDetails] saveChanges failed:', err)
+    }
     // Keep editing on error
   }
 }

@@ -21,6 +21,7 @@ import { defaultInspectorSettings } from '@/settings/inspectorSettings'
 import type { PropsTableColumnsSettings } from '@/types/inspector'
 import type { PropsRow } from './types'
 import { useRuntime } from '@/runtime'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
@@ -109,7 +110,9 @@ async function sendHighlight(uid: number) {
       uid
     })
   } catch (error) {
-    console.error('[props/PropsTable] sendHighlight failed:', error)
+    if (!isExpectedExtensionError(error)) {
+      console.error('[props/PropsTable] sendHighlight failed:', error)
+    }
   }
 }
 
@@ -119,7 +122,9 @@ async function sendUnhighlight() {
       type: 'UNHIGHLIGHT_ELEMENT'
     })
   } catch (error) {
-    console.error('[props/PropsTable] sendUnhighlight failed:', error)
+    if (!isExpectedExtensionError(error)) {
+      console.error('[props/PropsTable] sendUnhighlight failed:', error)
+    }
   }
 }
 

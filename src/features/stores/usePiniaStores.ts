@@ -67,7 +67,9 @@ export function usePiniaStores() {
       }
     } catch (e) {
       if (!isExpectedExtensionError(e)) console.error('[stores/usePiniaStores] load failed:', e)
-      error.value = e instanceof Error ? e.message : 'Failed to load stores'
+      error.value = isExpectedExtensionError(e)
+        ? null
+        : (e instanceof Error ? e.message : 'Failed to load stores')
       loading.value = false
     }
   }

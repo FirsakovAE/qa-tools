@@ -27,9 +27,10 @@ import {
   type PropsRow, 
   createPropsRow, 
   updateRowsVisibility,
-  sortRowsByFavorite,
-  getElementInfo
+  sortRowsByFavorite
 } from './types'
+import { getPropsFavoriteNodeId } from './propsFavorites'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
@@ -98,9 +99,7 @@ function formatDateTime(date: Date): string {
 }
 
 function getNodeId(node: TreeNodeModel): string {
-  if (node.componentUid) return node.componentUid
-  if (node.id && node.id.includes('::')) return node.id
-  return `${node.name}::${getElementInfo(node)}`
+  return getPropsFavoriteNodeId(node)
 }
 
 function isFavoriteNode(node: TreeNodeModel): boolean {
@@ -128,7 +127,9 @@ async function applyFilters() {
       })
       matchedUids = new Set((res?.results ?? []).map(r => r.uid))
     } catch (e) {
-      console.error('[props/PropsTab] PROPS_SEARCH failed:', e)
+      if (!isExpectedExtensionError(e)) {
+        console.error('[props/PropsTab] PROPS_SEARCH failed:', e)
+      }
       matchedUids = new Set()
     }
   }
@@ -430,7 +431,9 @@ async function handleRefreshSelected() {
     }
     lastUpdated.value = formatDateTime(new Date())
   } catch (error) {
-    console.error('[props/PropsTab] handleRefreshSelected GET_COMPONENT_PROPS failed:', error)
+    if (!isExpectedExtensionError(error)) {
+      console.error('[props/PropsTab] handleRefreshSelected GET_COMPONENT_PROPS failed:', error)
+    }
     // Fallback: full refresh if single-component refresh fails
     await refresh()
     await nextTick()
@@ -591,7 +594,9 @@ async function unhighlightElements() {
       tabId: tabs[0].id
     })
   } catch (error) {
-    console.error('[props/PropsTab] unhighlightElements failed:', error)
+    if (!isExpectedExtensionError(error)) {
+      console.error('[props/PropsTab] unhighlightElements failed:', error)
+    }
   }
 }
 
@@ -774,6 +779,7 @@ onUnmounted(() => {
             v-if="selectedNode"
             :key="selectedNode.id || selectedNode.componentUid"
             :node="selectedNode"
+            :all-rows="rows"
             :refreshing="isLoading"
             @back="deselectEntry"
             @refresh="handleRefreshSelected"

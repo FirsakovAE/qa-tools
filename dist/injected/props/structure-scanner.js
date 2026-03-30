@@ -1,0 +1,432 @@
+// src/injected/props/structure-scanner.ts
+/**
+ * 📐 Structure Scanner - Auto-refresh component structure without reading props
+ *
+ * What it does:
+ * - Detects mount/unmount
+ * - Updates meta (name, label, root)
+ * - Updates structural indexes
+ * - Updates visibility
+ *
+ * ❗ Does NOT read props
+ */
+import { findVueRoots, extractRootVNode } from './vue-detect';
+import { getMetaStore } from './meta-store';
+import { TraversalState } from './cache';
+import { syncElementRegistry, unregisterElementFromContent } from './element-registry';
+const DEFAULT_CONFIG = {
+    maxDepth: 100,
+    maxComponents: 100000
+};
+// ============================================================================
+// State
+// ============================================================================
+let lastScanTime = 0;
+let lastSeenUids = new Set();
+let scanningPaused = false;
+let visibilityThrottleMultiplier = 1;
+const stats = {
+    totalScans: 0,
+    lastScanDuration: 0,
+    lastScanResult: null,
+    skippedDueToVisibility: 0
+};
+// ============================================================================
+// Visibility-Aware Throttling
+// ============================================================================
+/**
+ * Initialize visibility change listener
+ * When page is hidden, we significantly reduce scanning
+ */
+export function initVisibilityAwareness() {
+    if (typeof document === 'undefined')
+        return;
+    document.addEventListener('visibilitychange', () => {
+        try {
+            if (document.visibilityState === 'hidden') {
+                // Page is hidden - reduce scanning by 10x
+                visibilityThrottleMultiplier = 10;
+                console.debug('[VueInspector] Page hidden - reducing scan frequency');
+            }
+            else {
+                // Page is visible - normal scanning
+                visibilityThrottleMultiplier = 1;
+                console.debug('[VueInspector] Page visible - normal scan frequency');
+            }
+        }
+        catch (e) {
+            console.error('[injected/props/structure-scanner] visibilitychange failed:', e);
+        }
+    });
+}
+/**
+ * Pause scanning completely
+ */
+export function pauseScanning() {
+    scanningPaused = true;
+}
+/**
+ * Resume scanning
+ */
+export function resumeScanning() {
+    scanningPaused = false;
+}
+/**
+ * Check if scanning is currently paused
+ */
+export function isScanningPaused() {
+    return scanningPaused;
+}
+/**
+ * Get the current throttle multiplier based on visibility
+ */
+export function getThrottleMultiplier() {
+    return visibilityThrottleMultiplier;
+}
+/**
+ * Check if we should skip this scan based on visibility and throttle
+ */
+function shouldSkipScan(minIntervalMs) {
+    if (scanningPaused) {
+        stats.skippedDueToVisibility++;
+        return true;
+    }
+    const effectiveInterval = minIntervalMs * visibilityThrottleMultiplier;
+    const now = Date.now();
+    if (now - lastScanTime < effectiveInterval) {
+        return true;
+    }
+    return false;
+}
+// ============================================================================
+// Component Name/Label Extraction
+// ============================================================================
+function getComponentName(instance) {
+    if (!instance)
+        return 'Anonymous';
+    return (instance.type?.name ||
+        instance.type?.__name ||
+        instance.type?.displayName ||
+        instance.$options?.name ||
+        instance.$options?._componentTag ||
+        'Anonymous');
+}
+function getComponentLabel(instance, vnode) {
+    // Try to get a meaningful label from:
+    // 1. data-testid or data-test
+    // 2. Component's ref name
+    // 3. Key if it's a list item
+    const el = vnode?.el || vnode?.elm;
+    if (el instanceof HTMLElement) {
+        const testId = el.getAttribute('data-testid') || el.getAttribute('data-test');
+        if (testId)
+            return testId;
+    }
+    // Ref name
+    if (vnode?.ref) {
+        if (typeof vnode.ref === 'string')
+            return vnode.ref;
+        if (vnode.ref?.i)
+            return String(vnode.ref.i);
+    }
+    // Key
+    if (vnode?.key !== undefined && vnode?.key !== null) {
+        return `key:${vnode.key}`;
+    }
+    return undefined;
+}
+/**
+ * Find first HTMLElement in vnode tree (for fragments, multi-root, or delayed mount).
+ * Used when vnode.el/elm is null but component has DOM descendants (e.g. Logic only
+ * components that render div.agreement-cars where class matches component name).
+ */
+function findFirstElementInVNode(vnode, depth = 0) {
+    if (!vnode || depth > 20)
+        return undefined;
+    if (vnode.el instanceof HTMLElement)
+        return vnode.el;
+    if (vnode.elm instanceof HTMLElement)
+        return vnode.elm;
+    if (vnode.component?.subTree) {
+        const found = findFirstElementInVNode(vnode.component.subTree, depth + 1);
+        if (found)
+            return found;
+    }
+    const instance = vnode.componentInstance || vnode.context;
+    if (instance?.$vnode) {
+        const found = findFirstElementInVNode(instance.$vnode, depth + 1);
+        if (found)
+            return found;
+    }
+    const children = Array.isArray(vnode.children) ? vnode.children : (vnode.children ? [vnode.children] : []);
+    for (const child of children) {
+        if (child) {
+            const found = findFirstElementInVNode(child, depth + 1);
+            if (found)
+                return found;
+        }
+    }
+    return undefined;
+}
+function getComponentRootEl(instance, vnode) {
+    if (vnode?.el instanceof HTMLElement)
+        return vnode.el;
+    if (vnode?.elm instanceof HTMLElement)
+        return vnode.elm;
+    if (instance?.$el instanceof HTMLElement)
+        return instance.$el;
+    // Fallback: find first DOM element in subtree (Logic only / fragment / multi-root)
+    return findFirstElementInVNode(vnode);
+}
+// ============================================================================
+// VNode Traversal (Structure Only)
+// ============================================================================
+function processVue3Component(vnode, state, currentUids) {
+    let mounted = 0;
+    let updated = 0;
+    const instance = vnode.component;
+    if (!instance)
+        return { mounted, updated };
+    const store = getMetaStore();
+    const existingMeta = store.getByInstance(instance);
+    const name = getComponentName(instance);
+    const label = getComponentLabel(instance, vnode);
+    const rootEl = getComponentRootEl(instance, vnode);
+    if (existingMeta) {
+        // Update existing
+        const result = store.registerComponent(instance, {
+            uid: existingMeta.uid,
+            name,
+            label,
+            vnode,
+            rootEl
+        });
+        currentUids.add(result.uid);
+        updated++;
+    }
+    else {
+        // Register new
+        const meta = store.registerComponent(instance, {
+            name,
+            label,
+            vnode,
+            rootEl
+        });
+        currentUids.add(meta.uid);
+        mounted++;
+    }
+    // Process subtree
+    if (instance.subTree) {
+        const result = scanVNodeTree(instance.subTree, state, currentUids, 3);
+        mounted += result.mounted;
+        updated += result.updated;
+    }
+    return { mounted, updated };
+}
+function processVue2Component(vnode, state, currentUids) {
+    let mounted = 0;
+    let updated = 0;
+    const instance = vnode.componentInstance || vnode.context;
+    if (!instance)
+        return { mounted, updated };
+    const store = getMetaStore();
+    const existingMeta = store.getByInstance(instance);
+    const name = getComponentName(instance);
+    const label = getComponentLabel(instance, vnode);
+    const rootEl = getComponentRootEl(instance, vnode);
+    if (existingMeta) {
+        // Update existing
+        const result = store.registerComponent(instance, {
+            uid: existingMeta.uid,
+            name,
+            label,
+            vnode,
+            rootEl
+        });
+        currentUids.add(result.uid);
+        updated++;
+    }
+    else {
+        // Register new
+        const meta = store.registerComponent(instance, {
+            name,
+            label,
+            vnode,
+            rootEl
+        });
+        currentUids.add(meta.uid);
+        mounted++;
+    }
+    // Process children
+    if (instance.$children && Array.isArray(instance.$children)) {
+        for (const child of instance.$children) {
+            if (child.$vnode && state.visit(child.$vnode)) {
+                const result = scanVNodeTree(child.$vnode, state, currentUids, 2);
+                mounted += result.mounted;
+                updated += result.updated;
+            }
+        }
+    }
+    return { mounted, updated };
+}
+function scanVNodeTree(vnode, state, currentUids, vueVersion, depth = 0) {
+    let mounted = 0;
+    let updated = 0;
+    if (!vnode || depth > DEFAULT_CONFIG.maxDepth || state.isLimitReached()) {
+        return { mounted, updated };
+    }
+    // Process component
+    if (vueVersion === 3 && vnode.component) {
+        const result = processVue3Component(vnode, state, currentUids);
+        mounted += result.mounted;
+        updated += result.updated;
+    }
+    else if (vueVersion === 2 && (vnode.componentInstance || vnode.context)) {
+        const result = processVue2Component(vnode, state, currentUids);
+        mounted += result.mounted;
+        updated += result.updated;
+    }
+    // Process children
+    if (Array.isArray(vnode.children)) {
+        for (const child of vnode.children) {
+            if (child && state.visit(child)) {
+                const result = scanVNodeTree(child, state, currentUids, vueVersion, depth + 1);
+                mounted += result.mounted;
+                updated += result.updated;
+            }
+        }
+    }
+    else if (vnode.children && typeof vnode.children === 'object') {
+        if (state.visit(vnode.children)) {
+            const result = scanVNodeTree(vnode.children, state, currentUids, vueVersion, depth + 1);
+            mounted += result.mounted;
+            updated += result.updated;
+        }
+    }
+    return { mounted, updated };
+}
+// ============================================================================
+// Public API
+// ============================================================================
+/**
+ * Scan component structure (NO props reading).
+ * Used for auto-refresh to detect mount/unmount and update metadata.
+ *
+ * @param options.minIntervalMs - Minimum interval between scans (default: 100ms)
+ * @param options.force - Force scan even if paused or throttled
+ */
+export function scanStructure(options = {}) {
+    const { minIntervalMs = 100, force = false } = options;
+    // Check visibility-aware throttling (unless forced)
+    if (!force && shouldSkipScan(minIntervalMs)) {
+        return stats.lastScanResult ?? {
+            total: 0,
+            mounted: 0,
+            unmounted: 0,
+            updated: 0,
+            duration: 0
+        };
+    }
+    const startTime = performance.now();
+    let total = 0;
+    let mounted = 0;
+    let updated = 0;
+    const currentUids = new Set();
+    try {
+        const store = getMetaStore();
+        const vueRoots = findVueRoots();
+        if (vueRoots.length > 0) {
+            for (const root of vueRoots) {
+                const rootVNode = extractRootVNode(root);
+                if (!rootVNode)
+                    continue;
+                const isVue2 = root.__vue__ && !root.__vue_app__;
+                const vueVersion = isVue2 ? 2 : 3;
+                const state = new TraversalState(DEFAULT_CONFIG.maxComponents);
+                state.visit(rootVNode);
+                const result = scanVNodeTree(rootVNode, state, currentUids, vueVersion);
+                mounted += result.mounted;
+                updated += result.updated;
+            }
+        }
+        // Detect unmounted components
+        let unmounted = 0;
+        for (const uid of lastSeenUids) {
+            if (!currentUids.has(uid)) {
+                const meta = store.getByUid(uid);
+                if (meta) {
+                    store.unregisterComponent(meta.instance);
+                    // Unregister element from content script
+                    unregisterElementFromContent(uid);
+                    unmounted++;
+                }
+            }
+        }
+        // Update last seen
+        lastSeenUids = currentUids;
+        total = currentUids.size;
+        // Sync element registry with content script
+        // This ensures content script has latest uid → HTMLElement mappings
+        syncElementRegistry();
+        // Update stats
+        const duration = performance.now() - startTime;
+        stats.totalScans++;
+        stats.lastScanDuration = duration;
+        lastScanTime = Date.now();
+        const result = {
+            total,
+            mounted,
+            unmounted,
+            updated,
+            duration
+        };
+        stats.lastScanResult = result;
+        return result;
+    }
+    catch (e) {
+        console.error('[injected/props/structure-scanner] scanStructure failed:', e);
+        return stats.lastScanResult ?? {
+            total: 0,
+            mounted: 0,
+            unmounted: 0,
+            updated: 0,
+            duration: performance.now() - startTime
+        };
+    }
+}
+/**
+ * Get lightweight component list (structure only, no props).
+ * Use this for rendering the component tree.
+ */
+export function getComponentList() {
+    const store = getMetaStore();
+    return store.getAllComponents().map(meta => ({
+        uid: meta.uid,
+        name: meta.name ?? 'Anonymous',
+        label: meta.label,
+        hasRootEl: !!meta.rootEl,
+        isExpanded: meta.isExpanded
+    }));
+}
+/**
+ * Get scanner statistics
+ */
+export function getScannerStats() {
+    return {
+        ...stats,
+        lastScanTime,
+        isPaused: scanningPaused,
+        throttleMultiplier: visibilityThrottleMultiplier
+    };
+}
+/**
+ * Reset scanner state (for testing or refresh)
+ */
+export function resetScanner() {
+    lastSeenUids.clear();
+    lastScanTime = 0;
+    stats.totalScans = 0;
+    stats.lastScanDuration = 0;
+    stats.lastScanResult = null;
+}
+//# sourceMappingURL=structure-scanner.js.map

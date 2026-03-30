@@ -284,4 +284,6 @@ title: Release history
 ### Fixes
 
 * Blocked native right-click menu inside the application context menu.
+• Fixed incorrect favorite detection in Props details when names matched.
 * Improved search behavior in `DevTools mode`: fixed cases where search could stop working and added highlight reset when clearing the field or closing search.
+* Pinia store **Getters** save no longer wipes reactive state with bulk `delete` (incorrect for `ref`/nested objects); updates merge like Pinia’s `$patch`, with clearer errors when a key fails.

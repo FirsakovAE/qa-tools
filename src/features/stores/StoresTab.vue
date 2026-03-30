@@ -20,6 +20,7 @@ import { useRuntime } from '@/runtime'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import { parseSearchTerm } from '@/utils/searchUtils'
 import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavoritesMatcher'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
@@ -99,7 +100,9 @@ async function loadStoresSummary() {
         contentScriptReady = true
       }
     } catch (error) {
-      console.error('[stores/StoresTab] PING failed:', error)
+      if (!isExpectedExtensionError(error)) {
+        console.error('[stores/StoresTab] PING failed:', error)
+      }
       contentScriptReady = false
     }
 
@@ -138,12 +141,12 @@ async function loadStoresSummary() {
       }, 3000)
     }
 
-  } catch (err: any) {
-    console.error('[stores/StoresTab] loadStoresSummary failed:', err)
-    const errorMessage = err.message || 'Failed to load stores'
+  } catch (err: unknown) {
+    if (!isExpectedExtensionError(err)) {
+      console.error('[stores/StoresTab] loadStoresSummary failed:', err)
+    }
 
-    if (errorMessage.includes('Could not establish connection') ||
-        errorMessage.includes('Receiving end does not exist')) {
+    if (isExpectedExtensionError(err)) {
       error.value = null
     } else {
       error.value = 'Failed to load Pinia stores. Make sure Pinia is installed and initialized.'
@@ -248,7 +251,9 @@ async function applyFilters() {
       })
       matched = new Set((res?.results ?? []).map(r => r.storeId))
     } catch (e) {
-      console.error('[stores/StoresTab] PINIA_SEARCH failed:', e)
+      if (!isExpectedExtensionError(e)) {
+        console.error('[stores/StoresTab] PINIA_SEARCH failed:', e)
+      }
       matched = new Set()
     }
   }

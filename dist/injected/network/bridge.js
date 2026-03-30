@@ -1,0 +1,417 @@
+/**
+ * Network Bridge Module
+ * Handles communication between injected script and content script
+ *
+ * NOTE: This module must be completely self-contained (no external imports from @/types)
+ * to prevent Vite from code-splitting it into a separate chunk.
+ */
+import { initNetworkInterceptor, pauseInterception, resumeInterception, cleanupNetworkInterceptor, isInterceptionPaused, resumeBreakpoint, cancelBreakpoint, getActiveBreakpointIds } from './interceptor';
+import { looksLikeFormDataDraftJson } from '../../utils/jsonGuards';
+// ============================================================================
+// Inline Utility Functions
+// ============================================================================
+/**
+ * `fetch` / XHR may use protocol-relative (`//host/path`) or other relative URLs.
+ * `new URL(relative)` throws; resolve against the current document like the browser.
+ */
+function parseNetworkUrl(url) {
+    if (!url)
+        return null;
+    try {
+        return new URL(url);
+    }
+    catch {
+        try {
+            return new URL(url, typeof window !== 'undefined' ? window.location.href : 'http://localhost/');
+        }
+        catch {
+            return null;
+        }
+    }
+}
+function extractUrlName(url) {
+    const urlObj = parseNetworkUrl(url);
+    if (urlObj) {
+        const segments = urlObj.pathname.split('/').filter(Boolean);
+        return segments.length > 0 ? segments[segments.length - 1] : urlObj.host;
+    }
+    console.error('[injected/network] extractUrlName failed:', url);
+    return url.substring(0, 50);
+}
+function extractUrlPath(url) {
+    const urlObj = parseNetworkUrl(url);
+    if (urlObj)
+        return urlObj.pathname;
+    console.error('[injected/network] extractUrlPath failed:', url);
+    return url;
+}
+function parseUrlParams(url) {
+    const urlObj = parseNetworkUrl(url);
+    if (!urlObj) {
+        console.error('[injected/network] parseUrlParams failed:', url);
+        return [];
+    }
+    const params = [];
+    urlObj.searchParams.forEach((value, key) => params.push({ key, value }));
+    return params;
+}
+function extractAuthorization(headers) {
+    const authHeader = headers.find(h => h.name.toLowerCase() === 'authorization');
+    if (!authHeader) {
+        const apiKeyHeader = headers.find(h => h.name.toLowerCase().includes('api-key') || h.name.toLowerCase().includes('x-api-key'));
+        if (apiKeyHeader) {
+            return { type: 'ApiKey', token: apiKeyHeader.value, headerName: apiKeyHeader.name };
+        }
+        return { type: 'None' };
+    }
+    const value = authHeader.value;
+    if (value.startsWith('Bearer ')) {
+        return { type: 'Bearer', token: value.substring(7) };
+    }
+    if (value.startsWith('Basic ')) {
+        try {
+            const decoded = atob(value.substring(6));
+            const [username] = decoded.split(':');
+            return { type: 'Basic', token: value.substring(6), username };
+        }
+        catch (error) {
+            console.error('[injected/network] extractAuthorization Basic decode failed:', error);
+            return { type: 'Basic', token: value.substring(6) };
+        }
+    }
+    return { type: 'Custom', token: value };
+}
+function isBinaryContentType(contentType) {
+    const binaryTypes = ['image/', 'audio/', 'video/', 'application/octet-stream', 'application/pdf', 'application/zip', 'application/gzip', 'application/x-tar'];
+    return binaryTypes.some(type => contentType.toLowerCase().startsWith(type));
+}
+/** Serialized request bodies from interceptor (ArrayBuffer / Blob / non-JSON object) — not JSON; must not JSON.parse. */
+function isSerializedBodyPlaceholder(body) {
+    const t = body.trim();
+    if (t === '[Object]')
+        return true;
+    return /^\[(Binary|Blob):/i.test(t);
+}
+/**
+ * Convert wildcard pattern to regex
+ */
+function patternToRegex(pattern) {
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+    return new RegExp(`^${escaped}$`, 'i');
+}
+// ============================================================================
+// Module State
+// ============================================================================
+const pendingRequests = new Map();
+let entries = [];
+let config = {
+    maxEntries: 500,
+    maxBodySize: 20 * 1024 * 1024,
+    captureRequestBody: true,
+    captureResponseBody: true
+};
+let activeBreakpoints = [];
+let activeMocks = [];
+// ============================================================================
+// URL Matching (shared by breakpoints and mocks)
+// ============================================================================
+function matchUrl(url, pattern) {
+    try {
+        const urlObj = new URL(url);
+        if (pattern.scheme && urlObj.protocol.replace(':', '') !== pattern.scheme)
+            return false;
+        if (pattern.host && !patternToRegex(pattern.host).test(urlObj.hostname))
+            return false;
+        if (pattern.port) {
+            const urlPort = urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80');
+            if (urlPort !== pattern.port)
+                return false;
+        }
+        if (pattern.path) {
+            const pathRegex = new RegExp(`^${pattern.path.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}`, 'i');
+            if (!pathRegex.test(urlObj.pathname))
+                return false;
+        }
+        if (pattern.query) {
+            const queryRegex = new RegExp(pattern.query.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*'), 'i');
+            const search = urlObj.search ? urlObj.search.substring(1) : '';
+            if (!queryRegex.test(search))
+                return false;
+        }
+        return true;
+    }
+    catch (error) {
+        console.error('[injected/network] matchUrl failed:', url, error);
+        return false;
+    }
+}
+// ============================================================================
+// Breakpoint Logic
+// ============================================================================
+function checkBreakpoint(url, trigger, method) {
+    for (const bp of activeBreakpoints) {
+        if (!bp.enabled)
+            continue;
+        if (bp.trigger !== 'both' && bp.trigger !== trigger)
+            continue;
+        if (bp.method && method && bp.method.toUpperCase() !== method.toUpperCase())
+            continue;
+        if (matchUrl(url, bp)) {
+            return { breakpointId: bp.id, trigger };
+        }
+    }
+    return null;
+}
+function handleBreakpointHit(requestId, breakpointId, trigger) {
+    const entry = pendingRequests.get(requestId);
+    sendToContentScript('NETWORK_BREAKPOINT_HIT', { requestId, breakpointId, trigger, entry: entry || null });
+}
+// ============================================================================
+// Mock Logic
+// ============================================================================
+function checkMock(url, method) {
+    for (const mock of activeMocks) {
+        if (!mock.enabled)
+            continue;
+        if (mock.method && mock.method.toUpperCase() !== method.toUpperCase())
+            continue;
+        if (matchUrl(url, mock)) {
+            return { mockId: mock.id, mock };
+        }
+    }
+    return null;
+}
+function handleMockApplied(requestId, mockId) {
+    sendToContentScript('NETWORK_MOCK_APPLIED', { requestId, mockId });
+}
+// ============================================================================
+// IPC Communication
+// ============================================================================
+function sendToContentScript(type, data) {
+    window.postMessage({ type, __FROM_VUE_INSPECTOR__: true, __NETWORK__: true, ...data }, '*');
+}
+function createBodyContent(body, contentType, originalSize, truncated = false) {
+    if (body === null)
+        return null;
+    const isBinary = isBinaryContentType(contentType);
+    let formData;
+    if (!isBinary) {
+        const mayBeFormDataJson = !isSerializedBodyPlaceholder(body) && looksLikeFormDataDraftJson(body);
+        if (mayBeFormDataJson) {
+            try {
+                const parsed = JSON.parse(body);
+                if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
+                    formData = parsed.entries;
+                }
+            }
+            catch {
+                /* malformed draft or non-JSON — treat as raw body */
+            }
+        }
+    }
+    return {
+        text: isBinary ? '' : body,
+        truncated,
+        originalSize,
+        contentType: formData ? 'multipart/form-data' : contentType,
+        isBinary,
+        formData,
+    };
+}
+// ============================================================================
+// Request/Response Handlers
+// ============================================================================
+function handleRequest(request) {
+    const contentType = request.requestHeaders.find(h => h.name.toLowerCase() === 'content-type')?.value || '';
+    const entry = {
+        id: request.id,
+        version: 1,
+        timestamp: new Date().toISOString(),
+        method: request.method,
+        url: request.url,
+        path: extractUrlPath(request.url),
+        name: extractUrlName(request.url),
+        status: 0,
+        statusText: '',
+        duration: 0,
+        size: 0,
+        requestHeaders: request.requestHeaders,
+        responseHeaders: [],
+        params: parseUrlParams(request.url),
+        authorization: extractAuthorization(request.requestHeaders),
+        requestBody: config.captureRequestBody && request.requestBody
+            ? createBodyContent(request.requestBody, contentType, request.requestBody.length)
+            : null,
+        responseBody: null,
+        pending: true,
+        initiator: 'fetch'
+    };
+    pendingRequests.set(request.id, entry);
+    sendToContentScript('NETWORK_ENTRY_CAPTURED', { entry });
+}
+function handleResponse(id, response) {
+    const pendingEntry = pendingRequests.get(id);
+    if (!pendingEntry)
+        return;
+    const contentType = response.headers.find(h => h.name.toLowerCase() === 'content-type')?.value || '';
+    const completedEntry = {
+        ...pendingEntry,
+        id,
+        version: (pendingEntry.version || 1) + 1,
+        timestamp: pendingEntry.timestamp || new Date().toISOString(),
+        method: pendingEntry.method || 'GET',
+        url: pendingEntry.url || '',
+        path: pendingEntry.path || extractUrlPath(pendingEntry.url || ''),
+        name: pendingEntry.name || '',
+        status: response.status,
+        statusText: response.statusText,
+        duration: response.duration,
+        size: response.size,
+        requestHeaders: pendingEntry.requestHeaders || [],
+        responseHeaders: response.headers,
+        params: pendingEntry.params || [],
+        authorization: pendingEntry.authorization || { type: 'None' },
+        requestBody: pendingEntry.requestBody || null,
+        responseBody: config.captureResponseBody && response.body
+            ? createBodyContent(response.body, contentType, response.size, response.body.length < response.size)
+            : null,
+        pending: false,
+        initiator: pendingEntry.initiator || 'fetch'
+    };
+    pendingRequests.delete(id);
+    entries.push(completedEntry);
+    if (entries.length > config.maxEntries) {
+        entries = entries.slice(-config.maxEntries);
+    }
+    sendToContentScript('NETWORK_ENTRY_UPDATED', { entry: completedEntry });
+}
+function handleError(id, errorMessage) {
+    const pendingEntry = pendingRequests.get(id);
+    if (!pendingEntry)
+        return;
+    const errorEntry = {
+        ...pendingEntry,
+        id,
+        version: (pendingEntry.version || 1) + 1,
+        timestamp: pendingEntry.timestamp || new Date().toISOString(),
+        method: pendingEntry.method || 'GET',
+        url: pendingEntry.url || '',
+        path: pendingEntry.path || extractUrlPath(pendingEntry.url || ''),
+        name: pendingEntry.name || '',
+        status: 0,
+        statusText: 'Failed',
+        duration: performance.now() - pendingEntry.startTime || 0,
+        size: 0,
+        requestHeaders: pendingEntry.requestHeaders || [],
+        responseHeaders: [],
+        params: pendingEntry.params || [],
+        authorization: pendingEntry.authorization || { type: 'None' },
+        requestBody: pendingEntry.requestBody || null,
+        responseBody: null,
+        error: errorMessage,
+        pending: false,
+        initiator: pendingEntry.initiator || 'fetch'
+    };
+    pendingRequests.delete(id);
+    entries.push(errorEntry);
+    if (entries.length > config.maxEntries) {
+        entries = entries.slice(-config.maxEntries);
+    }
+    sendToContentScript('NETWORK_ENTRY_UPDATED', { entry: errorEntry });
+}
+// ============================================================================
+// Message Handler
+// ============================================================================
+function handleMessage(event) {
+    if (event.source !== window || !event.data)
+        return;
+    const { type, __VUE_INSPECTOR__, __NETWORK_CMD__ } = event.data;
+    if (!__VUE_INSPECTOR__ || !__NETWORK_CMD__)
+        return;
+    switch (type) {
+        case 'NETWORK_PAUSE':
+            pauseInterception();
+            sendToContentScript('NETWORK_PAUSED', { paused: true });
+            break;
+        case 'NETWORK_RESUME':
+            resumeInterception();
+            sendToContentScript('NETWORK_RESUMED', { paused: false });
+            break;
+        case 'NETWORK_CLEAR':
+            entries = [];
+            pendingRequests.clear();
+            sendToContentScript('NETWORK_CLEARED', {});
+            break;
+        case 'NETWORK_GET_ENTRIES':
+            sendToContentScript('NETWORK_ENTRIES_DATA', { entries });
+            break;
+        case 'NETWORK_GET_STATUS':
+            sendToContentScript('NETWORK_STATUS', {
+                paused: isInterceptionPaused(),
+                entriesCount: entries.length,
+                activeBreakpointIds: getActiveBreakpointIds()
+            });
+            break;
+        case 'NETWORK_CONFIG_UPDATE':
+            if (event.data.config) {
+                config = { ...config, ...event.data.config };
+            }
+            break;
+        case 'NETWORK_BREAKPOINTS_SYNC':
+            if (Array.isArray(event.data.breakpoints)) {
+                activeBreakpoints = event.data.breakpoints;
+                sendToContentScript('NETWORK_BREAKPOINTS_SYNCED', {
+                    count: activeBreakpoints.length,
+                    breakpoints: activeBreakpoints.map(bp => ({ id: bp.id, host: bp.host, path: bp.path }))
+                });
+            }
+            break;
+        case 'NETWORK_MOCKS_SYNC':
+            if (Array.isArray(event.data.mocks)) {
+                activeMocks = event.data.mocks;
+                sendToContentScript('NETWORK_MOCKS_SYNCED', {
+                    count: activeMocks.length,
+                    mocks: activeMocks.map(m => ({ id: m.id, host: m.host, path: m.path, status: m.status }))
+                });
+            }
+            break;
+        case 'NETWORK_BREAKPOINT_RESUME':
+            if (event.data.requestId) {
+                const success = resumeBreakpoint(event.data.requestId, event.data.modifications);
+                sendToContentScript('NETWORK_BREAKPOINT_RESUMED', { requestId: event.data.requestId, success });
+            }
+            break;
+        case 'NETWORK_BREAKPOINT_CANCEL':
+            if (event.data.requestId) {
+                const success = cancelBreakpoint(event.data.requestId);
+                sendToContentScript('NETWORK_BREAKPOINT_CANCELLED', { requestId: event.data.requestId, success });
+            }
+            break;
+    }
+}
+// ============================================================================
+// Module Lifecycle
+// ============================================================================
+export function initNetworkModule() {
+    window.addEventListener('message', handleMessage);
+    initNetworkInterceptor({
+        onRequest: handleRequest,
+        onResponse: handleResponse,
+        onError: handleError,
+        onBreakpointCheck: checkBreakpoint,
+        onBreakpointHit: handleBreakpointHit,
+        onMockCheck: checkMock,
+        onMockApplied: handleMockApplied
+    }, config.maxBodySize);
+    sendToContentScript('NETWORK_READY', { paused: isInterceptionPaused(), entriesCount: entries.length });
+    sendToContentScript('NETWORK_STATUS', { paused: isInterceptionPaused(), entriesCount: entries.length });
+}
+export function cleanupNetworkModule() {
+    window.removeEventListener('message', handleMessage);
+    cleanupNetworkInterceptor();
+    entries = [];
+    pendingRequests.clear();
+    activeBreakpoints = [];
+    activeMocks = [];
+}
+//# sourceMappingURL=bridge.js.map

@@ -9,6 +9,7 @@ import './assets/prism-json-theme.css'
 import App from './App.vue'
 import { Toaster } from '@/components/ui/Toaster'
 import { safeRuntime, safeTabs } from './utils/extensionBridge'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const app = createApp(App)
 app.component('Toaster', Toaster)
@@ -31,7 +32,9 @@ async function clearHighlightOnPopupClose() {
       tabId: tabs[0].id
     })
   } catch (error) {
-    console.error('[main] clearHighlightOnPopupClose failed:', error)
+    if (!isExpectedExtensionError(error)) {
+      console.error('[main] clearHighlightOnPopupClose failed:', error)
+    }
   }
 }
 

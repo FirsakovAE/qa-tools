@@ -1,0 +1,1 @@
+{"version":3,"file":"index.js","sourceRoot":"","sources":["../../../src/features/props/index.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,EAAE,OAAO,IAAI,QAAQ,EAAE,MAAM,gBAAgB,CAAA;AACpD,OAAO,EAAE,OAAO,IAAI,UAAU,EAAE,MAAM,kBAAkB,CAAA;AACxD,OAAO,EAAE,OAAO,IAAI,gBAAgB,EAAE,MAAM,qCAAqC,CAAA;AAEjF,4CAA4C;AAC5C,OAAO,EAAE,aAAa,EAAE,eAAe,EAAE,cAAc,EAAE,MAAM,SAAS,CAAA"}
