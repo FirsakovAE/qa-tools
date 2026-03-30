@@ -53,6 +53,51 @@ Combined, you can keep background subtle or decorative without hurting readabili
 
 ---
 
+## Saved files
+
+The **Saved Files** section on the **General** page keeps local media copies for reuse.
+
+They are used in several places:
+
+* picking a background file in **Customize**;
+* **File** fields in **Form-data** at a **Network** breakpoint;
+* anywhere else the inspector needs to re-select a file you already saved.
+
+**Extension** vs **standalone** storage rules match the table above: same idea, different backing store and total capacity.
+
+### File list
+
+The main control is a table of saved files.
+
+Through it you can:
+
+* browse saved entries;
+* delete files;
+* reuse them in supported editors.
+
+The same table lists **Saved Files** entries and **Customize** background media (**wallpapers**) together — one shared inspector media store (where it lives and any size cap still follow the **Extension vs standalone** table above).
+
+### Auto-saving new files
+
+**Auto-save new files selected via Browse** controls whether new files are added to the list automatically.
+
+When the option is on, a file is written to **Saved Files** when:
+
+* it was chosen via **Browse**;
+* there is not already an entry with the same **name + size** pair.
+
+This applies, for example, when editing **Form-data** at a **Network** breakpoint.
+
+### Use in Form-data
+
+When you pick a file from the list in the **Form-data** editor, the draft stores a service reference of the form **`__fileId:`…**.
+
+When changes are applied, the injected script uses that id to attach the real file bytes to the request.
+
+Details: [Traffic interception](/network/traffic).
+
+---
+
 ## See also
 
 * [Display modes](/options/display_mode)

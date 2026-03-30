@@ -1,12 +1,12 @@
 ---
-## title: Export Collection
+title: Export Collection
 ---
 
 # Export Collection
 
 On the **Network** tab, captured requests can be saved as a **Postman collection** file (an API description format compatible with Postman and many other clients). This is useful for replaying flows, sharing them with teammates, or importing them into a separate testing tool.
 
-What appears in the list and possible data visibility limitations are described in [Working with requests](/network/general).
+What appears in the list and possible data visibility limitations are described in [Working with requests](/network/general). In the inspector, **multipart** bodies are already shown as structured form fields; the export maps that shape into Postman-style **form-data** rather than a single opaque blob.
 
 ---
 

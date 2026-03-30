@@ -89,6 +89,8 @@ Opening a row shows exchange details:
 * **Request** — request body;
 * **Response** — response body;
 
+For **`multipart/form-data`** bodies captured as structured data, **Request** is shown as a **read-only table**: field key, **Text** or **File**, cell value (text fields as-is; file fields show name and size, or **`(binary)`** when the original bytes are not kept as displayable text). **Copy** copies the visible text or the file name, depending on the row.
+
 The **`X-Request-Id`** header (and similar) may be visually emphasized when present.
 
 ## Display limits

@@ -41,6 +41,63 @@ Before continuing you can edit:
 
 After **Apply** the request goes out in the modified form.
 
+### Request body: raw and form-data (breakpoint)
+
+For the paused request, the body editor can use **Raw** (single text area) or **Form-data** (rows analogous to the read-only **Network** details table).
+
+### Form-data mode
+
+In **Form-data** mode, each row contains:
+
+* a **key**;
+* a value type (**Text** or **File**);
+* the value.
+
+For **File** rows, **Browse** lets you pick a file from disk. The chosen file is added to the draft, typically as a **`data:`** URI.
+
+### File sources for File fields
+
+For **File** rows, the dropdown lists:
+
+* **Original** — restore the file that was already part of this request (equivalent to the original **`(binary)`** for as long as the current pause still has the original `FormData`);
+* **Saved Files** entries under **Options → General**;
+* **wallpapers** (background media) from **Customize** — same shared media store as panel styling.
+
+### Auto-saving files selected via Browse
+
+**Auto-save new files selected via Browse** (**Options → General → Saved Files**) controls whether files picked in this editor are auto-saved.
+
+When the option is on:
+
+* the file is copied to **Saved Files**;
+* that happens only if there is not already an entry with the same **name + size** pair.
+
+Storage limits follow [Customize](/options/customize):
+
+* the **extension** uses **IndexedDB**;
+* **standalone** enforces a **30 MB** cap.
+
+### How data is applied after you continue
+
+After you continue, the injected script builds a new **`FormData`** object:
+
+* text values are appended as normal fields;
+* **`data:`** values are turned into file parts;
+* **`(binary)`** restores the original **File** from the captured request for as long as that source data is still available.
+
+### File restoration limits
+
+If the value is still:
+
+* a **`blob:`** URL;
+* or a **`__fileId:`…** reference,
+
+the page cannot recover the file contents on its own.
+
+In that case an **empty** placeholder is sent for that part and the console emits a **warning**.
+
+To avoid that, pick the file again with **Browse** or select a saved file from the list.
+
 ### Where to configure
 
 * **Network** — create or adjust a breakpoint from a captured request.
