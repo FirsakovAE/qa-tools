@@ -17,6 +17,7 @@ import {
   cancelBreakpoint,
   getActiveBreakpointIds
 } from './interceptor'
+import { looksLikeFormDataDraftJson } from '../../utils/jsonGuards'
 
 // ============================================================================
 // Inline Types (to avoid cross-bundle imports)
@@ -91,36 +92,49 @@ interface NetworkConfig {
 // Inline Utility Functions
 // ============================================================================
 
-function extractUrlName(url: string): string {
+/**
+ * `fetch` / XHR may use protocol-relative (`//host/path`) or other relative URLs.
+ * `new URL(relative)` throws; resolve against the current document like the browser.
+ */
+function parseNetworkUrl(url: string): URL | null {
+  if (!url) return null
   try {
-    const urlObj = new URL(url)
+    return new URL(url)
+  } catch {
+    try {
+      return new URL(url, typeof window !== 'undefined' ? window.location.href : 'http://localhost/')
+    } catch {
+      return null
+    }
+  }
+}
+
+function extractUrlName(url: string): string {
+  const urlObj = parseNetworkUrl(url)
+  if (urlObj) {
     const segments = urlObj.pathname.split('/').filter(Boolean)
     return segments.length > 0 ? segments[segments.length - 1] : urlObj.host
-  } catch (error) {
-    console.error('[injected/network] extractUrlName failed:', url, error)
-    return url.substring(0, 50)
   }
+  console.error('[injected/network] extractUrlName failed:', url)
+  return url.substring(0, 50)
 }
 
 function extractUrlPath(url: string): string {
-  try {
-    return new URL(url).pathname
-  } catch (error) {
-    console.error('[injected/network] extractUrlPath failed:', url, error)
-    return url
-  }
+  const urlObj = parseNetworkUrl(url)
+  if (urlObj) return urlObj.pathname
+  console.error('[injected/network] extractUrlPath failed:', url)
+  return url
 }
 
 function parseUrlParams(url: string): UrlParam[] {
-  try {
-    const urlObj = new URL(url)
-    const params: UrlParam[] = []
-    urlObj.searchParams.forEach((value, key) => params.push({ key, value }))
-    return params
-  } catch (error) {
-    console.error('[injected/network] parseUrlParams failed:', url, error)
+  const urlObj = parseNetworkUrl(url)
+  if (!urlObj) {
+    console.error('[injected/network] parseUrlParams failed:', url)
     return []
   }
+  const params: UrlParam[] = []
+  urlObj.searchParams.forEach((value, key) => params.push({ key, value }))
+  return params
 }
 
 function extractAuthorization(headers: HeaderEntry[]): AuthorizationInfo {
@@ -159,6 +173,13 @@ function extractAuthorization(headers: HeaderEntry[]): AuthorizationInfo {
 function isBinaryContentType(contentType: string): boolean {
   const binaryTypes = ['image/', 'audio/', 'video/', 'application/octet-stream', 'application/pdf', 'application/zip', 'application/gzip', 'application/x-tar']
   return binaryTypes.some(type => contentType.toLowerCase().startsWith(type))
+}
+
+/** Serialized request bodies from interceptor (ArrayBuffer / Blob / non-JSON object) — not JSON; must not JSON.parse. */
+function isSerializedBodyPlaceholder(body: string): boolean {
+  const t = body.trim()
+  if (t === '[Object]') return true
+  return /^\[(Binary|Blob):/i.test(t)
 }
 
 /**
@@ -270,15 +291,16 @@ function createBodyContent(body: string | null, contentType: string, originalSiz
 
   let formData: FormDataEntry[] | undefined
   if (!isBinary) {
-    const trimmed = body.trim()
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    const mayBeFormDataJson =
+      !isSerializedBodyPlaceholder(body) && looksLikeFormDataDraftJson(body)
+    if (mayBeFormDataJson) {
       try {
         const parsed = JSON.parse(body)
         if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
           formData = parsed.entries as FormDataEntry[]
         }
-      } catch (error) {
-        console.error('[injected/network] createBodyContent parse failed:', error)
+      } catch {
+        /* malformed draft or non-JSON — treat as raw body */
       }
     }
   }

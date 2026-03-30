@@ -13,6 +13,7 @@ import type { BreakpointItem } from '@/types/inspector'
 import { getMediaBlob, getWallpaperBlob } from '@/settings/mediaStore'
 import { matchesBreakpoint, getMatchingEntryIds } from './useBreakpointMatching'
 import { parseUrl, deepClone } from '../utils'
+import { looksLikeFormDataDraftJson } from '@/utils/jsonGuards'
 
 const FILE_ID_PREFIX = '__fileId:'
 
@@ -26,6 +27,8 @@ function blobToDataUri(blob: Blob): Promise<string> {
 }
 
 async function resolveFileIdsInRequestBody(body: string): Promise<string> {
+  if (!body.trim() || !looksLikeFormDataDraftJson(body)) return body
+
   try {
     const parsed = JSON.parse(body)
     if (!parsed?.__formData || !Array.isArray(parsed.entries)) return body
@@ -45,8 +48,7 @@ async function resolveFileIdsInRequestBody(body: string): Promise<string> {
       }
     }
     return changed ? JSON.stringify(parsed) : body
-  } catch (error) {
-    console.error('[network/useBreakpointState] resolveFileIdsInRequestBody failed:', error)
+  } catch {
     return body
   }
 }

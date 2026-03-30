@@ -77,36 +77,47 @@ function extractJsonValues(obj: any): string[] {
   return values
 }
 
+/** Matches injected serializer placeholders — not JSON (see interceptor serializeRequestBody). */
+function isBodyPlaceholderForSearch(text: string): boolean {
+  const t = text.trim()
+  if (t === '[Object]') return true
+  return /^\[(Binary|Blob):/i.test(t)
+}
+
+/**
+ * Parse body for Key/Value search only when it is valid JSON. No console noise on binary placeholders or arbitrary text.
+ */
+function tryParseBodyForSearchIndex(text: string): any | null {
+  const t = text.trim()
+  if (!t || isBodyPlaceholderForSearch(text)) return null
+  if (!t.startsWith('{') && !t.startsWith('[')) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
 function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
   let requestBodyKeys: string[] = []
   let requestBodyValues: string[] = []
   let responseBodyKeys: string[] = []
   let responseBodyValues: string[] = []
-  
-  try {
-    if (entry.requestBody?.text) {
-      const t = entry.requestBody.text.trim()
-      if (t.startsWith('{') || t.startsWith('[')) {
-        const parsed = JSON.parse(entry.requestBody.text)
-        requestBodyKeys = extractJsonKeys(parsed)
-        requestBodyValues = extractJsonValues(parsed)
-      }
+
+  if (entry.requestBody?.text) {
+    const parsed = tryParseBodyForSearchIndex(entry.requestBody.text)
+    if (parsed && typeof parsed === 'object') {
+      requestBodyKeys = extractJsonKeys(parsed)
+      requestBodyValues = extractJsonValues(parsed)
     }
-  } catch (error) {
-    console.error('[network/useNetworkSearch] buildIndexEntry requestBody parse failed:', entry.id, error)
   }
-  
-  try {
-    if (entry.responseBody?.text) {
-      const t = entry.responseBody.text.trim()
-      if (t.startsWith('{') || t.startsWith('[')) {
-        const parsed = JSON.parse(entry.responseBody.text)
-        responseBodyKeys = extractJsonKeys(parsed)
-        responseBodyValues = extractJsonValues(parsed)
-      }
+
+  if (entry.responseBody?.text) {
+    const parsed = tryParseBodyForSearchIndex(entry.responseBody.text)
+    if (parsed && typeof parsed === 'object') {
+      responseBodyKeys = extractJsonKeys(parsed)
+      responseBodyValues = extractJsonValues(parsed)
     }
-  } catch (error) {
-    console.error('[network/useNetworkSearch] buildIndexEntry responseBody parse failed:', entry.id, error)
   }
   
   return {

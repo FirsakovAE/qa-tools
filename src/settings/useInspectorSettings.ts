@@ -454,12 +454,7 @@ export async function exportSettings(): Promise<string> {
 }
 
 export async function importSettings(json: string): Promise<void> {
-    try {
-        const imported = JSON.parse(json)
-        Object.assign(state, mergeSettings(defaultInspectorSettings, imported))
-        await saveToStorage()
-    } catch (error: any) {
-        console.error('[settings/useInspectorSettings] importSettings failed:', error)
-        throw error
-    }
+    const imported = JSON.parse(json)
+    Object.assign(state, mergeSettings(defaultInspectorSettings, imported))
+    await saveToStorage()
 }

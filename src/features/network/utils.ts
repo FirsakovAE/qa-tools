@@ -4,6 +4,7 @@
  */
 
 import { getStatusCategory } from '@/types/network'
+import { looksLikeJsonValue } from '@/utils/jsonGuards'
 
 // ============================================================================
 // URL Parsing
@@ -92,7 +93,8 @@ export function getStatusClass(status: number, pending: boolean = false): string
  * Format JSON string for display/editing
  */
 export function formatJson(text: string | undefined | null): string {
-  if (!text) return ''
+  if (!text?.trim()) return ''
+  if (!looksLikeJsonValue(text)) return text
   try {
     const parsed = JSON.parse(text)
     if (typeof parsed === 'string') {
@@ -108,8 +110,7 @@ export function formatJson(text: string | undefined | null): string {
       return JSON.stringify(parsed, null, 2)
     }
     return text
-  } catch (error) {
-    console.error('[network/utils] formatJson failed:', error)
+  } catch {
     return text
   }
 }
@@ -119,11 +120,15 @@ export function formatJson(text: string | undefined | null): string {
  * Handles JSON (pretty-print), double-wrapped JSON strings, and non-JSON content.
  */
 export function formatBodyForDisplay(text: string | undefined | null, contentType?: string): string {
-  if (!text) return ''
+  if (!text?.trim()) return ''
 
-  const isJsonContent = !contentType || contentType.includes('json')
+  const ct = (contentType ?? '').toLowerCase()
+  const declaresJson = ct.includes('json')
+  // Without Content-Type, only pretty-print when the payload looks like JSON (avoid HTML/XML as JSON attempts).
+  const shouldTryJson =
+    declaresJson || ((contentType == null || contentType === '') && looksLikeJsonValue(text))
 
-  if (isJsonContent) {
+  if (shouldTryJson) {
     try {
       const parsed = JSON.parse(text)
       if (typeof parsed === 'string') {
@@ -139,8 +144,7 @@ export function formatBodyForDisplay(text: string | undefined | null, contentTyp
         return JSON.stringify(parsed, null, 2)
       }
       return text
-    } catch (error) {
-      console.error('[network/utils] formatBodyForDisplay failed:', error)
+    } catch {
       return text
     }
   }

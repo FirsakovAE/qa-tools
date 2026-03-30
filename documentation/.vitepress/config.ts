@@ -79,13 +79,7 @@ const sidebarEn = [
   },
   {
     text: 'Releases',
-    items: [
-      { text: '2.0.0', link: '/releases/2.0.0' },
-      { text: '2.1.0', link: '/releases/2.1.0' },
-      { text: '2.2.0', link: '/releases/2.2.0' },
-      { text: '2.3.0', link: '/releases/2.3.0' },
-      { text: '2.4.0', link: '/releases/2.4.0' },
-    ],
+    items: [{ text: 'Release notes', link: '/releases/history' }],
   },
 ]
 
@@ -218,13 +212,7 @@ export default defineConfig({
           },
           {
             text: 'Релизы',
-            items: [
-              { text: '2.0.0', link: '/ru/releases/2.0.0' },
-              { text: '2.1.0', link: '/ru/releases/2.1.0' },
-              { text: '2.2.0', link: '/ru/releases/2.2.0' },
-              { text: '2.3.0', link: '/ru/releases/2.3.0' },
-              { text: '2.4.0', link: '/ru/releases/2.4.0' },
-            ],
+            items: [{ text: 'История релизов', link: '/ru/releases/history' }],
           },
         ],
         footer: { message: 'Лицензия GPL-3.0.' },

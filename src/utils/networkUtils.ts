@@ -1,4 +1,5 @@
 import type { NetworkEntry } from '@/types/network'
+import { looksLikeJsonValue } from '@/utils/jsonGuards'
 
 /**
  * Generate cURL command from network entry
@@ -44,11 +45,17 @@ export function buildCurlCommand(entry: NetworkEntry): string {
     }
   } else if (entry.requestBody?.text) {
     let formattedBody = entry.requestBody.text
-    try {
-      const parsed = JSON.parse(entry.requestBody.text)
-      formattedBody = JSON.stringify(parsed, null, 4)
-    } catch (e) {
-      console.error('[utils/networkUtils] buildCurlCommand JSON.parse failed:', e)
+    const ct = entry.requestBody.contentType?.toLowerCase() ?? ''
+    const tryPrettify =
+      entry.requestBody.text.trim().length > 0 &&
+      (ct.includes('json') || looksLikeJsonValue(entry.requestBody.text))
+    if (tryPrettify) {
+      try {
+        const parsed = JSON.parse(entry.requestBody.text)
+        formattedBody = JSON.stringify(parsed, null, 4)
+      } catch {
+        /* plain text or invalid JSON — use raw body */
+      }
     }
     const escapedBody = formattedBody.replace(/'/g, "'\\''")
     parts.push(`--data '${escapedBody}'`)
@@ -178,11 +185,11 @@ function entryToPostmanItem(entry: NetworkEntry): PostmanItem {
   } else if (entry.requestBody?.text) {
     const isJson = entry.requestBody.contentType?.toLowerCase().includes('json')
     let raw = entry.requestBody.text
-    if (isJson) {
+    if (isJson && raw.trim()) {
       try {
         raw = JSON.stringify(JSON.parse(raw), null, 4).replace(/\n/g, '\r\n')
-      } catch (e) {
-        console.error('[utils/networkUtils] entryToPostmanItem JSON.parse failed:', e)
+      } catch {
+        /* declared JSON but malformed — keep raw string */
       }
     }
     request.body = {

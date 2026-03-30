@@ -20,6 +20,7 @@ import type {
   MockConfig,
   MockMatch
 } from './types'
+import { looksLikeFormDataDraftJson } from '../../utils/jsonGuards'
 
 // Store original implementations
 const originalFetch = window.fetch
@@ -199,8 +200,11 @@ function getContentLength(headers: Array<{ name: string; value: string }>): numb
   return contentLength ? parseInt(contentLength.value, 10) || 0 : 0
 }
 
+/** Max time to read `response.clone().text()` — avoids hanging the Network row if the stream never completes. */
+const READ_RESPONSE_BODY_TIMEOUT_MS = 45_000
+
 /**
- * Read response body safely
+ * Read response body safely (bounded time so inspector rows still finalize).
  */
 async function readResponseBody(response: Response, clone: Response): Promise<string | null> {
   const contentType = response.headers.get('content-type') || ''
@@ -212,9 +216,19 @@ async function readResponseBody(response: Response, clone: Response): Promise<st
   }
   
   try {
-    return await clone.text()
+    const deadline = new Promise<never>((_, reject) => {
+      setTimeout(
+        () => reject(new Error('READ_RESPONSE_BODY_TIMEOUT')),
+        READ_RESPONSE_BODY_TIMEOUT_MS
+      )
+    })
+    return await Promise.race([clone.text(), deadline])
   } catch (error) {
-    console.error('[injected/network] readResponseBody failed:', error)
+    if (error instanceof Error && error.message === 'READ_RESPONSE_BODY_TIMEOUT') {
+      console.warn('[injected/network] readResponseBody timed out after', READ_RESPONSE_BODY_TIMEOUT_MS, 'ms', contentType)
+    } else {
+      console.error('[injected/network] readResponseBody failed:', error)
+    }
     return null
   }
 }
@@ -433,6 +447,7 @@ async function deserializeBodyForRequest(
   originalFD?: FormData | null
 ): Promise<BodyInit | null> {
   if (!body) return body
+  if (!looksLikeFormDataDraftJson(body)) return body
   try {
     const parsed = JSON.parse(body)
     if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
@@ -508,9 +523,8 @@ async function deserializeBodyForRequest(
       }
       return fd
     }
-  } catch (error) {
-    console.error('[injected/network] deserializeBodyForRequest parse failed:', error)
-    /* not JSON — send as raw string */
+  } catch {
+    /* not our FormData draft — send as raw string */
   }
   return body
 }
@@ -611,10 +625,8 @@ function interceptFetch(): void {
           
           if (contentType.includes('json') && mockBody) {
             try {
-              // Validate it's parseable JSON
               JSON.parse(mockBody)
             } catch {
-              console.warn('[VueInspector Interceptor] Mock body is not valid JSON, wrapping as string')
               mockBody = JSON.stringify(mockBody)
             }
           }
@@ -682,7 +694,7 @@ function interceptFetch(): void {
             })
           }
           
-          // Log the mocked response
+          // Log the mocked response (skip if paused — onRequest was skipped too, no pending row to finalize)
           const endTime = performance.now()
           if (callbacks?.onResponse && !isPaused) {
             callbacks.onResponse(requestId, {
@@ -903,7 +915,7 @@ function interceptFetch(): void {
       }
 
       // No response breakpoint - read body normally from the existing clone
-      responseBody = await readResponseBody(clone, clone)
+      responseBody = await readResponseBody(response, clone)
       const trunc = truncateBody(responseBody)
       let bodyText = trunc.text
       let truncated = trunc.truncated
@@ -913,9 +925,8 @@ function interceptFetch(): void {
       const contentLength = getContentLength(responseHeaders)
       const size = contentLength || originalSize
 
-      // Notify about response (normal flow, no response breakpoint)
-      // Only log if not paused
-      if (callbacks?.onResponse && !isPaused) {
+      // Notify about response (normal flow). Always emit so rows never stay pending if interception pauses mid-flight.
+      if (callbacks?.onResponse) {
         callbacks.onResponse(requestId, {
           status: response.status,
           statusText: response.statusText,
@@ -971,6 +982,8 @@ interface XHRData {
     statusText: string
     responseHeaders: Array<{ name: string; value: string }>
   } | null
+  /** One XHR send() can only complete once; prevents duplicate logging when `load` never fires but DONE does, or when listeners stack on XHR reuse. */
+  xhrResponseHandled?: boolean
 }
 
 /**
@@ -979,7 +992,7 @@ interface XHRData {
  * Response breakpoint strategy for XHR:
  * 1. Intercept addEventListener and onload/onreadystatechange setters
  * 2. Store all handlers instead of attaching them directly
- * 3. When load event fires, check for breakpoint
+ * 3. When readyState reaches DONE (4), check for breakpoint — not only `load` (e.g. `timeout` skips `load`, DevTools still shows completion)
  * 4. If breakpoint, wait for resume, apply modifications
  * 5. Override response properties with (possibly modified) values
  * 6. THEN call stored handlers - they see modified data
@@ -1170,7 +1183,6 @@ function interceptXHR(): void {
           try {
             JSON.parse(mockBody)
           } catch {
-            console.warn('[VueInspector Interceptor] XHR Mock body is not valid JSON, wrapping')
             mockBody = JSON.stringify(mockBody)
           }
         }
@@ -1284,7 +1296,7 @@ function interceptXHR(): void {
             xhr.dispatchEvent(new ProgressEvent('load', progressEventInit))
             xhr.dispatchEvent(new ProgressEvent('loadend', progressEventInit))
                         
-            // Log the mocked response
+            // Log the mocked response (skip if paused — no pending row)
             if (callbacks?.onResponse && !isPaused) {
               callbacks.onResponse(data.id, {
                 status: mockStatus,
@@ -1463,9 +1475,12 @@ function interceptXHR(): void {
     xhr: XMLHttpRequest,
     data: XHRData
   ): void {
-    // Use native addEventListener to attach our internal handler
-    // This handler fires BEFORE we call app handlers
-    originalXHRAddEventListener.call(xhr, 'load', async function(this: XMLHttpRequest) {
+    // Use readystatechange DONE, not `load`: `load` is omitted for some outcomes (notably `timeout`) while DONE still runs — otherwise the inspector never gets onResponse and rows stay "pending".
+    originalXHRAddEventListener.call(xhr, 'readystatechange', async function(this: XMLHttpRequest) {
+      if (this.readyState !== XMLHttpRequest.DONE) return
+      if (data.xhrResponseHandled) return
+      data.xhrResponseHandled = true
+
       const endTime = performance.now()
       const duration = endTime - data.startTime
       
@@ -1599,7 +1614,7 @@ function interceptXHR(): void {
           // Check for status 0 which indicates CORS or network error
           if (this.status === 0 && callbacks?.onError) {
             callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
-          } else if (callbacks?.onResponse && !isPaused) {
+          } else if (callbacks?.onResponse) {
             callbacks.onResponse(data.id, {
               status: this.status,
               statusText: this.statusText,
@@ -1617,7 +1632,7 @@ function interceptXHR(): void {
         // Check for status 0 which indicates CORS or network error
         if (this.status === 0 && callbacks?.onError) {
           callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
-        } else if (callbacks?.onResponse && !isPaused) {
+        } else if (callbacks?.onResponse) {
           callbacks.onResponse(data.id, {
             status: this.status,
             statusText: this.statusText,
