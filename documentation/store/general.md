@@ -1,11 +1,12 @@
 ---
-## title: Pinia stores
+title: Pinia stores
 ---
+
 # Pinia stores
 
-The **Stores** tab lists **Pinia** stores registered in the app: id, **state** / **getter** counts, and after row selection a snapshot of **state** and **getters** with editing and write-back where supported.
+The **Stores** tab is for inspecting **Pinia** stores registered in the app: name (id), **state** and **getter** field counts, and—after you select a row—a snapshot of **state** and **getters** that you can edit and write back where supported.
 
-More on editing **state** / **getters** and **favorites**:
+More on editing **state** and **getters**, and **favorites** for stores:
 
 * [State](/store/state)
 * [Getters](/store/getters)
@@ -15,94 +16,150 @@ More on editing **state** / **getters** and **favorites**:
 
 ### Store search
 
-Search and **Search by** follow the same logic as other tabs and can be preset in **Options** for **Stores**.
+The search field and **Search by** switch work like on other tabs. Search types can be preset in **Options** for **Stores**.
 
-| Mode      | Purpose                                                                     |
-| --------- | --------------------------------------------------------------------------- |
-| **Name**  | filter by store name (local to the panel)                                   |
-| **Key**   | match **field names** in **state** and **getters** (query sent to the page) |
-| **Value** | match **field values** in **state** and **getters** (also on the page)      |
+| Mode      | Purpose                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------ |
+| **Name**  | filter by store name (local to the panel)                                                |
+| **Key**   | match field names in **state** and **getters** (search runs in the page context)           |
+| **Value** | match field values in **state** and **getters** (also in the page context)                 |
 
-**Key** / **Value** use the global minimum length (default **2**).
+**Key** and **Value** use a minimum query length (default **2** characters; configurable in inspector search settings).
 
-**Partial vs exact.** Without quotes, matching uses substring search; exact matching applies when the full query is wrapped in **double quotes** `"..."`.
+**Partial vs exact.** If the query is **not** wrapped in quotes, **substring** matching is used (case-insensitive). **Exact** matching applies when the **entire** query is wrapped in **double quotes** `"..."`.
 
-Content search is capped (around **~100** hits) to avoid overloading the page.
+Content search limits how many results are returned so very broad queries do not overload the page.
 
 ### Status chips
 
-| Item             | Purpose                                                                         |
-| ---------------- | ------------------------------------------------------------------------------- |
-| **N** or **N/M** | Stores after filtering; with search, **M** is total stores in the last summary. |
-| **Favorites** ★  | Matches with favorite stores. Click opens **Options** (Pinia favorites).        |
-| **Refresh**      | **Refresh**, loading state, and last successful summary time (or “Loading…”).   |
+Right side of **Stores**:
 
-The panel checks the page bridge before requesting summaries.
+| Item              | Purpose                                                                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **N** or **N/M**  | Number of stores after filtering; with a non-empty search, **M** after the slash is the total stores in the last summary.              |
+| **Favorites** ★   | Overlap with favorited stores. Click opens **Options** (Pinia favorites).                                                              |
+| **Update**        | **Refresh** button, loading indicator, and time of the last successful summary (or text like `Loading...`).                             |
+
+Before requesting a summary, the panel checks that the bridge to the page is available; if the context is unavailable, data is not requested.
 
 ## Work area
 
 ### Store list
 
-Left: store table. Columns (visibility in settings):
+Left: the store table. Main columns (visibility in table settings):
 
-* **Name** — **baseId**;
-* **State** — state key count (dash if none);
-* **Getters** — getter count (dash if none).
+* **Name** — display name of the store (**baseId**);
+* **State** — number of keys in state (dash if none);
+* **Getters** — number of getters (dash if none).
 
-Rows expose a **favorite** star and context menu; favorites live in inspector settings — [Favorites](/store/favorite).
+Rows expose a **favorite** star and a context menu. Favorites are stored in inspector settings — see [Favorites](/store/favorite).
 
-### Store details
+## Store details
 
-Selecting a row opens **State** / **Getters** tabs (when non-empty in the summary), a JSON editor (text/tree per settings), **edit/save**, and navigation back.
+Selecting a store row opens a detail panel for that store.
 
-Editing constraints are described on [State](/store/state) and [Getters](/store/getters).
+### Summary header
 
-Card data is a **point-in-time snapshot** — refresh (**Refresh** on the toolbar or in the card) after external app changes.
+The top of the panel shows:
+
+* store name;
+* number of **State** keys;
+* number of **Getters** keys;
+* an **Updated:** line with the timestamp of the last card data refresh.
+
+### Store data
+
+Below that, tabs:
+
+| Tab         | Purpose                                                                                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **State**   | snapshot of reactive **state**; view and save changes                                                                         |
+| **Getters** | snapshot of current **getter** values in serialized form; view and limited editing depending on the scenario                |
+
+Only tabs that have data are shown.
+
+The active tab is shown as **JSON**—text or tree—according to inspector settings.
+
+### Navigation
+
+* **← Back** closes details and returns to the table;
+* **Esc** in edit mode discards edits;
+* **Esc** outside edit mode returns to the list.
+
+### Controls
+
+| Control     | Purpose                                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------------------- |
+| **Star**    | add or remove the store from favorites                                                                |
+| **Refresh** | re-fetch the selected store’s data from the page; available outside **Edit** mode                     |
+| **Edit**    | enter edit mode for the active tab (**State** or **Getters**)                                       |
+
+### Edit mode
+
+After **Edit**, **Refresh** and **Edit** are replaced by **Cancel** and **Save**.
+
+| Before editing | In edit mode                                                    |
+| -------------- | --------------------------------------------------------------- |
+| **Refresh**    | **Cancel** — discard changes and leave edit mode                |
+| **Edit**       | **Save** — apply changes to the app                            |
+
+Changes are applied only after **Save**.
+
+For **State**, the store’s current state is updated; for **Getters**, writing is only supported in valid scenarios, and limits depend on how the store is implemented.
+
+The **favorite** star in this panel and in the table is described on [Favorites](/store/favorite).
+
+Card data reflects a **snapshot from the last request**: changes in the app are not reflected automatically until you **Refresh** in the card or refresh the summary from the **Stores** top toolbar.
 
 ## Display limits
 
-### Reading
+### Reading limits
 
-1. **Summary** — lightweight: ids, **baseId**, state/getter counts, timestamp — **no** full value dump.
-2. **Single-store card** — serialized **state** and **getters** for display/edit.
+1. **All-stores summary** — lightweight: each store gets id, name, **state** / **getter** key counts, and a snapshot timestamp, **without** full value serialization.
+2. **Selected store card** — a separate request with serialized **state** and **getters** for display and editing.
 
-Serialization applies depth and size guards; cycles, functions, and exotic objects may truncate or stringify differently than raw runtime.
+**State** and **getter** serialization uses depth and size limits: cycles, functions, and special objects may be truncated or shown differently than in raw runtime.
 
-**Key** / **Value** hit lists are intentionally limited.
+**Key** / **Value** search hit lists are also capped.
 
 ### Capacity
 
-No fixed max store count like **500 Network rows**; typical Pinia registration lists render fully.
+There is no fixed cap on how many stores appear in the table: typical **Pinia** summary responses list them all.
 
-Unusual setups may be incomplete; save errors surface in UI or console depending on store shape.
+Unusual registration or extreme setups may be incomplete; whether writes succeed depends on the store—if save fails, use the UI message or the console.
 
 ## How it works
 
 ### When collection starts
 
-Pinia support activates **after Pinia is detected** (similar to **Props**: Vue + inspector must be present). If Pinia is missing or not ready, the list is empty or shows an error.
+The injected Pinia module hooks in after **Pinia** is detected on the page (same idea as **Props**: Vue and the inspector must be active).
+
+If Pinia is not installed or not initialized when you open **Stores**, the list stays empty or you may see a load error.
 
 ### What is monitored
 
-1. **Summary** — ids, names, counts for the table.
-2. **One store** — full serialized **state** / **getters** on demand.
+1. **Summary** — ids, names, and field counts for the table only.
+2. **Single store details** — full serialized **state** and **getters** when you drill in.
 
-This separates a **fast list** from **heavy reads** for one store.
+That keeps a **fast list** separate from **heavy reads** for one store.
 
 ### Messaging
 
-The panel sends a bridge request to the page, where injected code reads `pinia._s` and store instances.
+The panel does not read Pinia directly: it sends a message to the page context where registered stores are available.
 
 ```js
+// Illustration: summary request — store id, name, and key counts only
 const response = await bridge.send({ type: 'PINIA_GET_STORES_SUMMARY' })
+// response.summary — map storeId → { id, baseId, stateKeys, getterKeys, … }
 
 const detail = await bridge.send({
   type: 'PINIA_GET_STORE_STATE',
   storeId: 'my-store-id',
 })
+// detail.state, detail.getters — data for display and editing
 ```
 
-`PINIA_SEARCH` runs on the page and returns matching store ids.
+Key/value search (`PINIA_SEARCH`) runs in the page and returns only matching store ids.
 
 ## See also
 

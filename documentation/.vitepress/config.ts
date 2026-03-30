@@ -38,6 +38,7 @@ const sidebarEn = [
     items: [
       { text: 'Introduction', link: '/' },
       { text: 'Installation', link: '/install' },
+      { text: 'General UI principles', link: '/general_principles' },
     ],
   },
   {
@@ -176,6 +177,7 @@ export default defineConfig({
             items: [
               { text: 'Введение', link: '/ru/' },
               { text: 'Установка', link: '/ru/install' },
+              { text: 'Общие принципы интерфейса', link: '/ru/general_principles' },
             ],
           },
           {
