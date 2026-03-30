@@ -43,6 +43,8 @@ So a **non-empty whitelist** defines “where yes”, **blacklist** subtracts ex
 
 ## Extension popup — escape hatch
 
+![Всплывающее окно](/screenshots/popup.jpg)
+
 The extension icon **popup** exposes two actions (UI labels in English: **Forced Launch**, **Reset Settings**).
 
 **Forced Launch** injects the inspector on the **active tab**, **ignoring** Auto Run lists and the static-site heuristic. Use when lists block all sites or **Options** is unreachable.

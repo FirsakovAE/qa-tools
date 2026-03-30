@@ -17,6 +17,8 @@ General interception limits (page context, CORS, scope) are described in [Workin
 
 ## Breakpoints
 
+![Breakpoint](/screenshots/Breakpoint.jpg)
+
 ### Purpose
 
 A breakpoint pauses an outbound request **before it is sent**.
@@ -114,6 +116,8 @@ When a request hits an active breakpoint rule the UI focuses editing:
 Until you confirm or cancel, the request stays paused.
 
 ## Mock responses
+
+![Моки запросов](/screenshots/Mock.jpg)
 
 ### Purpose
 

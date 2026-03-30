@@ -6,6 +6,8 @@ title: General UI principles
 
 High-level patterns shared across Vue Inspector panels. For **where** the UI runs (overlay, DevTools tab, standalone window), see [Display modes](/options/display_mode) and [Installation](/install).
 
+![Props, полноэкранный режим](/screenshots/Props_full_screen.jpg)
+
 ## Navigation
 
 The UI is built around two main tabs: the primary data area and a secondary detail area. In narrow layouts the two can merge into a single working surface.
@@ -22,6 +24,8 @@ Both are equivalent and appear across the main areas of the app.
 ## Top toolbar
 
 Most panels share a common top toolbar with search and extra actions. What appears there depends on the current mode and the kind of data shown.
+
+![Props, область заголовка](/screenshots/Props_header.jpg)
 
 ## Search
 
@@ -43,6 +47,8 @@ Common shortcuts:
 ## Detail views
 
 Many entities open a **detail** view when selected. **Esc** or navigating back returns to the previous UI state.
+
+![Детализация props](/screenshots/Props_details.jpg)
 
 ## Display modes
 

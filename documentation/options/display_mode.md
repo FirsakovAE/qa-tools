@@ -14,6 +14,8 @@ After changing mode the extension suggests **reloading the page**.
 
 ## Overlay — dock, pill, and size
 
+![Окно приложения](/screenshots/Window.jpg)
+
 **Overlay** embeds the panel above the site in its own “window” in the tab.
 
 The **pill** (compact handle with drag affordance and chevron) is the main control:
@@ -35,6 +37,8 @@ Whether the pill shows on a site can also depend on **Auto Run** lists — see [
 ---
 
 ## DevTools tab
+
+![DevTools](/screenshots/Devtools.jpg)
 
 > **Extension only.** The inspector opens as a **separate tab** inside native **DevTools** (F12 / Inspect), not as a floating overlay.
 

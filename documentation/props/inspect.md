@@ -4,6 +4,8 @@ title: Inspect
 
 # Inspect mode (pick a component on the page)
 
+![Инспектор](/screenshots/Inspector.jpg)
+
 **Inspect** on the **Props** tab lets you pick UI on the **page** and, after click, narrow the component list to the subtree tied to that node — similar to picking an element in browser DevTools, but the result is **filtering the Props table**, not opening the DOM tree.
 
 Overview: [Props overview](/props/general).

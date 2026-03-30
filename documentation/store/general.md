@@ -14,6 +14,8 @@ More on editing **state** and **getters**, and **favorites** for stores:
 
 ## Top toolbar
 
+![Store, область заголовка](/screenshots/Store_header.jpg)
+
 ### Store search
 
 The search field and **Search by** switch work like on other tabs. Search types can be preset in **Options** for **Stores**.
@@ -43,6 +45,8 @@ Right side of **Stores**:
 Before requesting a summary, the panel checks that the bridge to the page is available; if the context is unavailable, data is not requested.
 
 ## Work area
+
+![Pinia, полноэкранный режим](/screenshots/Pinia_full_screen.jpg)
 
 ### Store list
 

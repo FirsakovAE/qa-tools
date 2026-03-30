@@ -4,6 +4,8 @@ title: Customize
 
 # Customize
 
+![Персонализация](/screenshots/Customize.jpg)
+
 **Options → General → Customize** controls the main inspector look: theme, background media, and how it is displayed. You style the **tool**, not the site content.
 
 ---
@@ -23,6 +25,8 @@ Fields (**theme**, **file / URL**, opacity, blur, noise, position, scale) match.
 ---
 
 ## Theme
+
+![Персонализация: селекторы](/screenshots/Customize_selectors.jpg)
 
 **Dark / Light** toggles inspector color scheme.
 
@@ -54,6 +58,8 @@ Combined, you can keep background subtle or decorative without hurting readabili
 ---
 
 ## Saved files
+
+![Предпросмотр файла](/screenshots/File_preview.jpg)
 
 The **Saved Files** section on the **General** page keeps local media copies for reuse.
 

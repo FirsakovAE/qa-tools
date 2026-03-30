@@ -8,6 +8,8 @@ The **Network** tab shows network activity of the application at runtime.
 
 ## Top toolbar
 
+![Network, область заголовка (JPG)](/screenshots/Network_header.jpg)
+
 ### Search
 
 The search box supports multiple modes. The active criteria are chosen in **Search by** next to the input. The same options exist under **Options** for that tab so you can preset search types.
@@ -66,6 +68,8 @@ Clears accumulated rows next to **Pause**.
 **Export Collection** saves the current **filtered** request list (see [Export collections](./export.md)).
 
 ## Work area
+
+![Network, полноэкранный режим](/screenshots/Network_full_screen.jpg)
 
 ### Request list
 

@@ -7,6 +7,17 @@
   --vp-c-brand-3: #6d28d9;
 }
 
+/* Основной текст статей — по ширине (заголовки и код не трогаем) */
+.vp-doc p,
+.vp-doc li,
+.vp-doc summary,
+.vp-doc blockquote,
+.vp-doc td {
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
 /* Карточки выбора способа установки (как на vuejs.org/devtools installation) */
 .install-options {
   display: flex;
@@ -65,6 +76,31 @@
   height: 2rem;
   object-fit: contain;
   display: block;
+}
+
+/* Изображения в статьях: по центру и со скруглением.
+   margin-inline: auto — из-за перевода строки в MD рядом с ![]
+   между <p> и <img> появляется текстовый узел, поэтому text-align + :only-child ненадёжны. */
+.vp-doc img {
+  display: block;
+  border-radius: 12px;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+.vp-doc .install-option-icon img {
+  border-radius: 0;
+  margin-inline: 0;
+}
+
+.vp-doc figure {
+  margin: 1.25rem auto;
+  text-align: center;
+}
+
+.vp-doc figure img {
+  margin-inline: auto;
 }
 
 .install-option-body {

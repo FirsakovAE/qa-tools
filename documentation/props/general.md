@@ -10,6 +10,8 @@ The **Props** tab shows the **Vue instance tree** on the page: component names, 
 
 ## Top toolbar
 
+![Props, область заголовка](/screenshots/Props_header.jpg)
+
 ### Component search
 
 The search field supports several modes. Active criteria come from **Search by** next to the input. The same options can be preset in **Options** for this tab.
@@ -40,6 +42,8 @@ Right side of **Props**:
 | **Update**                 | **Refresh** button and last snapshot time (`lastUpdated`).                                       |
 
 ## Work area
+
+![Props, полноэкранный режим](/screenshots/Props_full_screen.jpg)
 
 ### Component list
 
