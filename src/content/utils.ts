@@ -40,7 +40,8 @@ function findVueRoots(): VueHTMLElement[] {
  */
 function extractRootVNode(root: VueHTMLElement): any {
   if (root.__vue_app__) {
-    return root.__vue_app__._instance?.root ?? root.__vue_app__._container?._vnode ?? root._vnode
+    const app = root.__vue_app__ as any
+    return app._instance?.vnode ?? app._container?._vnode ?? root._vnode
   } else if (root.__vue__) {
     return root.__vue__.$root ?? root.__vue__
   }

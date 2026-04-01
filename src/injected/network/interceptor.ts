@@ -29,6 +29,20 @@ const originalXHRSend = XMLHttpRequest.prototype.send
 const originalXHRSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader
 const originalXHRResponseTypeDescriptor = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseType')
 
+/**
+ * `new Event()` / `new ProgressEvent()` instances have `target === null` until dispatched.
+ * We invoke stored listeners manually with `handler.call(xhr, event)`; code that uses
+ * `event.target.status` (Vite HMR client, axios, etc.) then throws "Cannot read properties of null (reading 'status')".
+ */
+function patchSyntheticEventTarget(event: Event, target: EventTarget): void {
+  try {
+    Object.defineProperty(event, 'target', { value: target, enumerable: true, configurable: true })
+    Object.defineProperty(event, 'currentTarget', { value: target, enumerable: true, configurable: true })
+  } catch {
+    // Host may refuse patching in edge environments
+  }
+}
+
 // Extension URL patterns to exclude
 const EXTENSION_PATTERNS = [
   'chrome-extension://',
@@ -1685,12 +1699,20 @@ function interceptXHR(): void {
    * This is called AFTER breakpoint is resolved and modifications are applied
    */
   function callStoredHandlers(xhr: XMLHttpRequest, data: XHRData): void {
-    // Create a synthetic load event
+    let loaded = 0
+    try {
+      const rt = xhr.responseText
+      loaded = typeof rt === 'string' ? rt.length : 0
+    } catch {
+      loaded = 0
+    }
+    // Create a synthetic load event (target patched — see patchSyntheticEventTarget)
     const loadEvent = new ProgressEvent('load', {
       lengthComputable: true,
-      loaded: xhr.response?.length || 0,
-      total: xhr.response?.length || 0
+      loaded,
+      total: loaded
     })
+    patchSyntheticEventTarget(loadEvent, xhr)
     
     // Call all stored load handlers
     for (const handler of data.loadHandlers) {
@@ -1707,6 +1729,7 @@ function interceptXHR(): void {
     
     // Call readystatechange handlers (readyState should be 4 = DONE)
     const readystateEvent = new Event('readystatechange')
+    patchSyntheticEventTarget(readystateEvent, xhr)
     for (const handler of data.readystatechangeHandlers) {
       try {
         if (typeof handler === 'function') {
@@ -1725,6 +1748,7 @@ function interceptXHR(): void {
    */
   function callStoredErrorHandlers(xhr: XMLHttpRequest, data: XHRData): void {
     const errorEvent = new ProgressEvent('error')
+    patchSyntheticEventTarget(errorEvent, xhr)
     
     for (const handler of data.errorHandlers) {
       try {

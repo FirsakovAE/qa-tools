@@ -699,6 +699,151 @@
       }
       requestTypeByResponse[respType].push(reqType);
     });
+
+    // Props Inspect (element picker) — в standalone нет content script расширения
+    var propsInspectActive = false;
+    var captureOverlayEl = null;
+    var propsInspectMoveRaf = null;
+    var lastHoveredUid = null;
+    var lastPickCoords = null;
+    var CAPTURE_OVERLAY_ID = 'vue-inspector-capture-overlay';
+
+    function getUidFromElement(el) {
+      if (!el) return null;
+      var marked = el.hasAttribute && el.hasAttribute(ELEMENT_UID_ATTR) ? el : (el.closest ? el.closest('[' + ELEMENT_UID_ATTR + ']') : null);
+      if (!marked) return null;
+      var uidStr = marked.getAttribute(ELEMENT_UID_ATTR);
+      if (!uidStr) return null;
+      var uid = parseInt(uidStr, 10);
+      return isNaN(uid) ? null : uid;
+    }
+
+    function getElementAtPoint(x, y) {
+      var cap = document.getElementById(CAPTURE_OVERLAY_ID);
+      var hi = document.getElementById('vue-inspector-highlight-overlay');
+      var overlays = [cap, hi].filter(Boolean);
+      overlays.forEach(function(el) { el.style.pointerEvents = 'none'; });
+      var target = document.elementFromPoint(x, y);
+      overlays.forEach(function(el) { el.style.pointerEvents = ''; });
+      return target;
+    }
+
+    function isPointOverPickModeChrome(x, y) {
+      var cap = document.getElementById(CAPTURE_OVERLAY_ID);
+      var hi = document.getElementById('vue-inspector-highlight-overlay');
+      var overlays = [cap, hi].filter(Boolean);
+      overlays.forEach(function(el) { el.style.pointerEvents = 'none'; });
+      var el = document.elementFromPoint(x, y);
+      overlays.forEach(function(el) { el.style.pointerEvents = ''; });
+      if (!el) return false;
+      return el.closest('#vue-inspector-root') != null;
+    }
+
+    function stopPropsInspectStandalone() {
+      if (!propsInspectActive) return;
+      propsInspectActive = false;
+      lastHoveredUid = null;
+      if (propsInspectMoveRaf) {
+        cancelAnimationFrame(propsInspectMoveRaf);
+        propsInspectMoveRaf = null;
+      }
+      document.body.classList.remove('vue-inspector-pick-mode');
+      hideOverlay();
+      if (captureOverlayEl && captureOverlayEl.parentNode) {
+        captureOverlayEl.parentNode.removeChild(captureOverlayEl);
+        captureOverlayEl = null;
+      }
+      window.removeEventListener('pointermove', onPickPointerMove, true);
+      window.removeEventListener('pointerdown', onPickPointerDown, true);
+      window.removeEventListener('keydown', onPickKeyDown, true);
+    }
+
+    function onPickPointerMove(e) {
+      if (!propsInspectActive) return;
+      var cx = e.clientX;
+      var cy = e.clientY;
+      if (isPointOverPickModeChrome(cx, cy)) {
+        if (lastHoveredUid !== null) {
+          lastHoveredUid = null;
+          hideOverlay();
+        }
+        return;
+      }
+      lastPickCoords = { x: cx, y: cy };
+      if (propsInspectMoveRaf) return;
+      propsInspectMoveRaf = requestAnimationFrame(function() {
+        propsInspectMoveRaf = null;
+        if (!propsInspectActive) return;
+        var coords = lastPickCoords;
+        if (!coords) return;
+        var el = getElementAtPoint(coords.x, coords.y);
+        var uid = getUidFromElement(el);
+        if (uid !== null) {
+          if (uid !== lastHoveredUid) {
+            lastHoveredUid = uid;
+            highlightByUid(uid);
+          }
+        } else {
+          lastHoveredUid = null;
+          hideOverlay();
+        }
+      });
+    }
+
+    function onPickPointerDown(e) {
+      if (!propsInspectActive) return;
+      var x = e.clientX;
+      var y = e.clientY;
+      if (isPointOverPickModeChrome(x, y)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var el = getElementAtPoint(x, y);
+      var uid = getUidFromElement(el);
+      if (uid !== null) {
+        stopPropsInspectStandalone();
+        if (iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            __VUE_INSPECTOR__: true,
+            broadcast: true,
+            message: { type: 'PROPS_INSPECTOR_ELEMENT_SELECTED', uid: uid }
+          }, '*');
+        }
+      }
+    }
+
+    function onPickKeyDown(e) {
+      if (!propsInspectActive) return;
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      stopPropsInspectStandalone();
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage({
+          __VUE_INSPECTOR__: true,
+          broadcast: true,
+          message: { type: 'PROPS_INSPECTOR_CANCELLED' }
+        }, '*');
+      }
+    }
+
+    function startPropsInspectStandalone() {
+      if (propsInspectActive) return;
+      propsInspectActive = true;
+      if (!document.getElementById('vue-inspector-pick-mode-styles')) {
+        var st = document.createElement('style');
+        st.id = 'vue-inspector-pick-mode-styles';
+        st.textContent = 'body.vue-inspector-pick-mode,body.vue-inspector-pick-mode *{cursor:crosshair!important}#vue-inspector-root,#vue-inspector-host,#vue-inspector-ui{cursor:auto!important}#vue-inspector-toggle{cursor:pointer!important}';
+        document.head.appendChild(st);
+      }
+      document.body.classList.add('vue-inspector-pick-mode');
+      captureOverlayEl = document.createElement('div');
+      captureOverlayEl.id = CAPTURE_OVERLAY_ID;
+      captureOverlayEl.style.cssText = 'position:fixed;inset:0;z-index:999999;pointer-events:auto;cursor:crosshair;';
+      document.documentElement.appendChild(captureOverlayEl);
+      window.addEventListener('pointermove', onPickPointerMove, { passive: true, capture: true });
+      window.addEventListener('pointerdown', onPickPointerDown, { capture: true });
+      window.addEventListener('keydown', onPickKeyDown, true);
+    }
     
     window.addEventListener('message', function(event) {
       var data = event.data;
@@ -734,6 +879,29 @@
         }
         if (message.type === 'UNHIGHLIGHT_ELEMENT') {
           hideOverlay();
+          if (requestId && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              __VUE_INSPECTOR__: true,
+              responseId: requestId,
+              response: { success: true }
+            }, '*');
+          }
+          return;
+        }
+
+        if (message.type === 'PROPS_INSPECTOR_START') {
+          startPropsInspectStandalone();
+          if (requestId && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              __VUE_INSPECTOR__: true,
+              responseId: requestId,
+              response: { success: true }
+            }, '*');
+          }
+          return;
+        }
+        if (message.type === 'PROPS_INSPECTOR_STOP') {
+          stopPropsInspectStandalone();
           if (requestId && iframe.contentWindow) {
             iframe.contentWindow.postMessage({
               __VUE_INSPECTOR__: true,
