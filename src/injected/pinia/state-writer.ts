@@ -1,7 +1,5 @@
-import { PiniaStore } from './types'
 import { getStore } from './state-reader'
-import { getStoreStateKeys, getGetterKeys, isComputedRef, isVueRef } from './store-meta'
-import { isVueReactive } from './unwrap'
+import { isComputedRef, isVueRef } from './store-meta'
 
 /**
  * Разбирает путь, поддерживая индексы массивов
@@ -39,30 +37,6 @@ export function writeRefValue(ref: any, value: any): boolean {
 }
 
 /**
- * Записывает значение в реактивный объект
- */
-export function writeReactiveObject(obj: any, value: any): boolean {
-  if (isVueReactive(obj)) {
-    if (Array.isArray(obj) && Array.isArray(value)) {
-      obj.length = 0
-      obj.push(...value)
-      return true
-    } else if (!Array.isArray(obj) && typeof value === 'object' && value !== null) {
-      const keysToPreserve = Object.keys(obj).filter(k => typeof obj[k] === 'function')
-      const preservedFunctions: Record<string, any> = {}
-      for (const k of keysToPreserve) {
-        preservedFunctions[k] = obj[k]
-      }
-      Object.keys(obj).forEach(k => delete obj[k])
-      Object.assign(obj, value)
-      Object.assign(obj, preservedFunctions)
-      return true
-    }
-  }
-  return false
-}
-
-/**
  * Записывает примитивное значение
  */
 export function writePrimitive(target: any, key: string, value: any): boolean {
@@ -71,6 +45,105 @@ export function writePrimitive(target: any, key: string, value: any): boolean {
     return true
  }
   return false
+}
+
+/**
+ * Deep-merge plain JSON into existing reactive/plain objects (Pinia's mergeReactiveObjects
+ * semantics). Never bulk-delete keys — that breaks Vue metadata and app invariants (e.g.
+ * effects reading nested fields ending up as undefined → '.needs' access errors).
+ */
+function mergeLikePiniaInPlace(target: any, patch: Record<string, any>): void {
+  for (const pKey of Object.keys(patch)) {
+    const subPatch = patch[pKey]
+    const targetSlot = target[pKey]
+
+    if (isVueRef(targetSlot) && !isComputedRef(targetSlot)) {
+      const inner = targetSlot.value
+      if (
+        subPatch &&
+        typeof subPatch === 'object' &&
+        !Array.isArray(subPatch) &&
+        inner &&
+        typeof inner === 'object' &&
+        !Array.isArray(inner) &&
+        !isVueRef(inner) &&
+        !isComputedRef(inner)
+      ) {
+        mergeLikePiniaInPlace(inner, subPatch)
+      } else {
+        targetSlot.value = subPatch
+      }
+      continue
+    }
+
+    if (
+      targetSlot &&
+      typeof targetSlot === 'object' &&
+      !Array.isArray(targetSlot) &&
+      !isVueRef(targetSlot) &&
+      !isComputedRef(targetSlot) &&
+      subPatch &&
+      typeof subPatch === 'object' &&
+      !Array.isArray(subPatch)
+    ) {
+      mergeLikePiniaInPlace(targetSlot, subPatch)
+      continue
+    }
+
+    target[pKey] = subPatch
+  }
+}
+
+/** Writable ref: merge JSON into ref.value object when both sides are plain object trees. */
+function assignRefValueFromJson(ref: any, newValue: any): void {
+  if (!isVueRef(ref) || isComputedRef(ref)) return
+  const inner = ref.value
+  if (
+    newValue &&
+    typeof newValue === 'object' &&
+    !Array.isArray(newValue) &&
+    inner &&
+    typeof inner === 'object' &&
+    !Array.isArray(inner) &&
+    !isVueRef(inner) &&
+    !isComputedRef(inner)
+  ) {
+    mergeLikePiniaInPlace(inner, newValue)
+  } else {
+    ref.value = newValue
+  }
+}
+
+/**
+ * Pinia passes `pinia.state.value[storeId]` into `$patch(fn)`. For setup stores each
+ * state slice is often a Ref — assigning `root[key] = jsonValue` drops the Ref and
+ * breaks reactivity (errors like reading props of undefined inside effects).
+ */
+function assignToPiniaPatchRoot(patchRoot: any, key: string, newValue: any): void {
+  const cell = patchRoot[key]
+  if (isVueRef(cell) && !isComputedRef(cell)) {
+    assignRefValueFromJson(cell, newValue)
+    return
+  }
+  if (
+    cell &&
+    typeof cell === 'object' &&
+    !Array.isArray(cell) &&
+    !isVueRef(cell) &&
+    !isComputedRef(cell) &&
+    typeof newValue === 'object' &&
+    newValue !== null &&
+    !Array.isArray(newValue)
+  ) {
+    mergeLikePiniaInPlace(cell, newValue)
+    return
+  }
+  if (Array.isArray(cell) && Array.isArray(newValue)) {
+    cell.length = 0
+    cell.push(...newValue)
+    return
+  }
+  patchRoot[key] = newValue
 }
 
 /**
@@ -127,6 +200,7 @@ export function patchState(storeId: string, path: string, value: any): boolean {
     
     return true
   } catch (e) {
+    console.error('[injected/pinia/state-writer] patchState failed:', storeId, path, e)
     return false
   }
 }
@@ -165,17 +239,23 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
           
           // Check if key is a ref
           if (isVueRef(store[key])) {
-            store[key].value = nextValue
+            assignRefValueFromJson(store[key], nextValue)
           } else if (store[key] && typeof store[key] === 'object' && !Array.isArray(store[key])) {
             const existingObj = store[key]
-            const keysToPreserve = Object.keys(existingObj).filter(k => typeof existingObj[k] === 'function')
-            const preservedFunctions: Record<string, any> = {}
-            for (const k of keysToPreserve) {
-              preservedFunctions[k] = existingObj[k]
+            if (
+              nextValue &&
+              typeof nextValue === 'object' &&
+              !Array.isArray(nextValue) &&
+              !isVueRef(nextValue)
+            ) {
+              mergeLikePiniaInPlace(existingObj, nextValue)
+            } else {
+              try {
+                store[key] = nextValue
+              } catch {
+                /* reactive proxy may block full replace on root */
+              }
             }
-            Object.keys(existingObj).forEach(k => delete existingObj[k])
-            Object.assign(existingObj, nextValue)
-            Object.assign(existingObj, preservedFunctions)
           } else {
             // For primitives - try $state first, then store directly
             if (store.$state && Object.prototype.hasOwnProperty.call(store.$state, key)) {
@@ -198,6 +278,7 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
     }
     return true
   } catch (e) {
+    console.error('[injected/pinia/state-writer] replaceState failed:', storeId, e)
     return false
   }
 }
@@ -209,65 +290,90 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
 export function patchGetters(storeId: string, newGetters: Record<string, any>): {
   success: boolean
   updated: string[]      // Real state updated
+  error?: string
 } {
   const store = getStore(storeId)
   if (!store) {
-    return { success: false, updated: [] }
+    return {
+      success: false,
+      updated: [],
+      error: `Store not found: ${storeId}`
+    }
   }
 
   const updated: string[] = []      // Keys where real state was updated
-  const stateKeys = new Set(Object.keys(store.$state || {}))
+  const keyFailures: string[] = []
+  const stateKeysGlobal = new Set(Object.keys(store.$state || {}))
+
+  const applyOneKey = (key: string, newValue: any, patchRoot: Record<string, any>) => {
+    // Strategy 1: If key exists in $state - update Pinia's internal state root
+    // (This handles cases where "getter" is actually state exposed on store)
+    if (stateKeysGlobal.has(key)) {
+      assignToPiniaPatchRoot(patchRoot, key, newValue)
+      updated.push(key)
+      return
+    }
+
+    // Strategy 2: Check if store[key] is a writable ref (not computed)
+    const storeValue = store[key]
+    if (isVueRef(storeValue) && !isComputedRef(storeValue)) {
+      assignRefValueFromJson(storeValue, newValue)
+      updated.push(key)
+      return
+    }
+
+    // Strategy 3: For objects/arrays on store that are reactive but not in $state
+    if (storeValue && typeof storeValue === 'object' && !isComputedRef(storeValue)) {
+      if (Array.isArray(storeValue) && Array.isArray(newValue)) {
+        storeValue.length = 0
+        storeValue.push(...newValue)
+        updated.push(key)
+        return
+      } else if (!Array.isArray(storeValue) && typeof newValue === 'object' && newValue !== null) {
+        mergeLikePiniaInPlace(storeValue, newValue)
+        updated.push(key)
+        return
+      }
+    }
+
+    // For computed getters - skip, cannot update
+  }
 
   try {
-    store.$patch(() => {
+    store.$patch((patchRoot: Record<string, any>) => {
       for (const key of Object.keys(newGetters)) {
-        const newValue = newGetters[key]
-
-        // Strategy 1: If key exists in $state - update it directly
-        // (This handles cases where "getter" is actually state exposed on store)
-        if (stateKeys.has(key)) {
-          if (store.$state) {
-            store.$state[key] = newValue
-            updated.push(key)
-          }
-          continue
+        try {
+          applyOneKey(key, newGetters[key], patchRoot)
+        } catch (keyErr) {
+          const msg = keyErr instanceof Error ? keyErr.message : String(keyErr)
+          keyFailures.push(`${key}: ${msg}`)
+          console.warn('[injected/pinia/state-writer] patchGetters key failed:', storeId, key, keyErr)
         }
-
-        // Strategy 2: Check if store[key] is a writable ref (not computed)
-        const storeValue = store[key]
-        if (isVueRef(storeValue) && !isComputedRef(storeValue)) {
-          storeValue.value = newValue
-          updated.push(key)
-          continue
-        }
-
-        // Strategy 3: For objects/arrays on store that are reactive but not in $state
-        if (storeValue && typeof storeValue === 'object' && !isComputedRef(storeValue)) {
-          if (Array.isArray(storeValue) && Array.isArray(newValue)) {
-            storeValue.length = 0
-            storeValue.push(...newValue)
-            updated.push(key)
-            continue
-          } else if (!Array.isArray(storeValue) && typeof newValue === 'object') {
-            const keysToPreserve = Object.keys(storeValue).filter(k => typeof storeValue[k] === 'function')
-            const preservedFunctions: Record<string, any> = {}
-            for (const k of keysToPreserve) {
-              preservedFunctions[k] = storeValue[k]
-            }
-            Object.keys(storeValue).forEach(k => delete storeValue[k])
-            Object.assign(storeValue, newValue)
-            Object.assign(storeValue, preservedFunctions)
-            updated.push(key)
-            continue
-          }
-        }
-
-        // For computed getters - skip, cannot update
       }
     })
 
+    if (keyFailures.length && updated.length === 0) {
+      const detail = keyFailures.join('; ')
+      console.error('[injected/pinia/state-writer] patchGetters failed for all keys:', storeId, detail)
+      return {
+        success: false,
+        updated,
+        error: detail || 'Could not apply getter patch (see console)'
+      }
+    }
+
+    if (keyFailures.length) {
+      console.warn('[injected/pinia/state-writer] patchGetters partial failures:', storeId, keyFailures.join('; '))
+    }
+
     return { success: true, updated }
   } catch (e) {
-    return { success: false, updated }
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[injected/pinia/state-writer] patchGetters failed:', storeId, e)
+    return {
+      success: false,
+      updated,
+      error: msg || 'patchGetters threw'
+    }
   }
 }

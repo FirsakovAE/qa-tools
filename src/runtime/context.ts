@@ -14,10 +14,15 @@ let currentAdapter: RuntimeAdapter | null = null
  * Вызывается только из bootstrap
  */
 export function setRuntimeAdapter(adapter: RuntimeAdapter): void {
-  if (currentAdapter) {
-    currentAdapter.destroy()
+  try {
+    if (currentAdapter) {
+      currentAdapter.destroy()
+    }
+    currentAdapter = adapter
+  } catch (e) {
+    console.error('[runtime/context] setRuntimeAdapter failed:', e)
+    currentAdapter = adapter
   }
-  currentAdapter = adapter
 }
 
 /**

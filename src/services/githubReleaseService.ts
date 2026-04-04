@@ -32,8 +32,33 @@ export interface ReleaseDisplayInfo {
   error?: string | null
 }
 
-const REPO = 'FirsakovAE/qa-tools'
+/** `owner/repo` — releases API, repo links, and GitHub Pages project site host/path. */
+export const GITHUB_REPO_SLUG = 'FirsakovAE/qa-tools'
+
+const REPO = GITHUB_REPO_SLUG
 const BASE_URL = `https://api.github.com/repos/${REPO}/releases`
+
+/** `https://github.com/owner/repo` */
+export function getGithubRepoUrl(): string {
+  return `https://github.com/${GITHUB_REPO_SLUG}`
+}
+
+/**
+ * Root of the GitHub Pages *project* site (`https://<owner>.github.io/<repo>/`), no trailing slash.
+ * Matches project Pages when the repo is published from `gh-pages` / Actions.
+ */
+export function getGithubPagesProjectSiteRoot(): string {
+  const [owner, repo] = GITHUB_REPO_SLUG.split('/')
+  if (!owner || !repo) return getGithubRepoUrl()
+  return `https://${owner.toLowerCase()}.github.io/${repo.toLowerCase()}`
+}
+
+/**
+ * English docs entry: home page is the introduction (VitePress `base` = `/{repo}/docs/`).
+ */
+export function getPublishedDocsIntroductionUrl(): string {
+  return `${getGithubPagesProjectSiteRoot()}/docs/index.html`
+}
 
 const etagCache = new Map<string, { etag: string; data: GitHubRelease }>()
 
@@ -102,6 +127,7 @@ async function fetchRelease(url: string): Promise<ReleaseResult> {
       notModified: false,
     }
   } catch (error) {
+    console.error('[services/githubReleaseService] fetchRelease failed:', url, error)
     return {
       release: null,
       error: error instanceof Error ? error.message : 'Network error',

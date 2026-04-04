@@ -4,7 +4,7 @@ import { useEscapeClose } from '@/composables/useEscapeClose'
 import { marked } from 'marked'
 import '@/assets/markdown.css'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { BreakpointItem, MockRule, FavoriteItem, PiniaFavoriteItem, SavedFile } from '@/types/inspector'
+import type { BreakpointItem, MockRule, FavoriteItem, PiniaFavoriteItem, SavedFile, SiteListEntry } from '@/types/inspector'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
 import { mediaUrls, getMediaBlob, getWallpaperBlob } from '@/settings/mediaStore'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -30,14 +30,20 @@ marked.setOptions({ breaks: true, gfm: true })
 const renderedBody = computed(() => {
   const body = props.releaseInfo?.body
   if (!body) return ''
-  return marked.parse(body) as string
+  try {
+    return marked.parse(body) as string
+  } catch (error) {
+    console.error('[settings/SettingsDetails] marked.parse failed:', error)
+    return body
+  }
 })
 
 const props = defineProps<{
   settings: InspectorSettings
-  selectedItem: { type: 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file'; id: string } | null
+  selectedItem: { type: 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'; id: string } | null
   releaseInfo?: ReleaseDisplayInfo | null
   piniaFavoriteEditMode?: boolean
+  siteListEditMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -47,7 +53,25 @@ const emit = defineEmits<{
   (e: 'download-update', url: string): void
   (e: 'edit'): void
   (e: 'pinia-favorite-edit-done', newId?: string): void
+  (e: 'site-list-edit-done'): void
 }>()
+
+const detailsTitle = computed(() => {
+  const t = props.selectedItem?.type
+  if (!t) return 'Details'
+  switch (t) {
+    case 'saved-file':
+      return 'File Preview'
+    case 'pinia-favorite':
+      return 'Favorite Store Details'
+    case 'site-blacklist':
+      return 'Site Blacklist Details'
+    case 'site-whitelist':
+      return 'Site Whitelist Details'
+    default:
+      return t.charAt(0).toUpperCase() + t.slice(1) + ' Details'
+  }
+})
 
 useEscapeClose(
   computed(() => !!(props.selectedItem || props.releaseInfo)),
@@ -124,6 +148,49 @@ function cancelPiniaFavoriteEdit() {
   emit('pinia-favorite-edit-done')
 }
 
+const siteListDetailData = computed<SiteListEntry | null>(() => {
+  const sel = props.selectedItem
+  if (!sel || (sel.type !== 'site-blacklist' && sel.type !== 'site-whitelist')) return null
+  const ar = props.settings.autoRun
+  if (!ar) return null
+  const id = sel.id
+  if (sel.type === 'site-blacklist') {
+    return ar.siteBlacklist.find(e => e.id === id) ?? null
+  }
+  return ar.siteWhitelist.find(e => e.id === id) ?? null
+})
+
+const editedSiteListPattern = ref('')
+watch(
+  () => [props.siteListEditMode, siteListDetailData.value] as const,
+  ([editMode, data]) => {
+    if (editMode && data) {
+      editedSiteListPattern.value = data.pattern
+    }
+  },
+  { immediate: true }
+)
+
+function saveSiteListEdit() {
+  const data = siteListDetailData.value
+  const sel = props.selectedItem
+  if (!data || !sel || (sel.type !== 'site-blacklist' && sel.type !== 'site-whitelist')) return
+  const next = editedSiteListPattern.value.trim()
+  if (!next) return
+  const ar = props.settings.autoRun
+  if (!ar) return
+  const list = sel.type === 'site-blacklist' ? ar.siteBlacklist : ar.siteWhitelist
+  if (list.some(e => e.pattern === next && e.id !== data.id)) return
+  const idx = list.findIndex(e => e.id === data.id)
+  if (idx === -1) return
+  list[idx] = { ...data, pattern: next }
+  emit('site-list-edit-done')
+}
+
+function cancelSiteListEdit() {
+  emit('site-list-edit-done')
+}
+
 const savedFileData = computed<SavedFile | null>(() => {
   if (props.selectedItem?.type !== 'saved-file') return null
   const id = props.selectedItem!.id
@@ -175,7 +242,8 @@ watch(savedFileData, async (file) => {
     } else {
       textPreviewContent.value = '(no data)'
     }
-  } catch {
+  } catch (error) {
+    console.error('[settings/SettingsDetails] getFileBlob/text failed:', error)
     textPreviewContent.value = '(unable to decode)'
   }
 }, { immediate: true })
@@ -207,16 +275,20 @@ function formatFileSize(bytes: number): string {
 }
 
 async function downloadSavedFile(file: SavedFile) {
-  const blob = await getFileBlob(file.id)
-  if (!blob) return
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = file.name
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  try {
+    const blob = await getFileBlob(file.id)
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = file.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('[settings/SettingsDetails] downloadSavedFile failed:', file.id, error)
+  }
 }
 
 function getFileUrl(file: SavedFile): string {
@@ -231,8 +303,12 @@ watch(savedFileData, async (file) => {
     officeBlobUrl.value = null
   }
   if (file && isOfficeFile(file.mimeType)) {
-    const blob = await getFileBlob(file.id)
-    if (blob) officeBlobUrl.value = URL.createObjectURL(blob)
+    try {
+      const blob = await getFileBlob(file.id)
+      if (blob) officeBlobUrl.value = URL.createObjectURL(blob)
+    } catch (error) {
+      console.error('[settings/SettingsDetails] officeBlobUrl getFileBlob failed:', file.id, error)
+    }
   }
 }, { immediate: true })
 
@@ -369,7 +445,7 @@ function formatTrigger(trigger: string): string {
           <ArrowLeft class="h-4 w-4" />
         </Button>
         <span class="text-sm font-semibold">
-          {{ selectedItem.type === 'saved-file' ? 'File Preview' : selectedItem.type === 'pinia-favorite' ? 'Favorite Store Details' : selectedItem.type.charAt(0).toUpperCase() + selectedItem.type.slice(1) + ' Details' }}
+          {{ detailsTitle }}
         </span>
         <div class="flex-1" />
         <Button
@@ -394,6 +470,21 @@ function formatTrigger(trigger: string): string {
               <X class="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" class="h-7 w-7" title="Save" :disabled="!editedPiniaFavoriteName.trim()" @click="savePiniaFavoriteEdit">
+              <Save class="h-4 w-4" />
+            </Button>
+          </template>
+        </template>
+        <template v-else-if="(selectedItem.type === 'site-blacklist' || selectedItem.type === 'site-whitelist') && siteListDetailData">
+          <template v-if="!siteListEditMode">
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Edit" @click="emit('edit')">
+              <Edit class="h-4 w-4" />
+            </Button>
+          </template>
+          <template v-else>
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Cancel" @click="cancelSiteListEdit">
+              <X class="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Save" :disabled="!editedSiteListPattern.trim()" @click="saveSiteListEdit">
               <Save class="h-4 w-4" />
             </Button>
           </template>
@@ -570,6 +661,27 @@ function formatTrigger(trigger: string): string {
               <div>
                 <span class="text-xs text-muted-foreground">Added</span>
                 <p class="text-sm mt-1">{{ new Date(piniaFavoriteData.timestamp).toLocaleString() }}</p>
+              </div>
+            </div>
+          </template>
+
+          <!-- Site blacklist / whitelist entry -->
+          <template v-else-if="(selectedItem.type === 'site-blacklist' || selectedItem.type === 'site-whitelist') && siteListDetailData">
+            <div class="space-y-3">
+              <div>
+                <span class="text-xs text-muted-foreground">Pattern</span>
+                <Input
+                  v-if="siteListEditMode"
+                  v-model="editedSiteListPattern"
+                  class="mt-1 font-mono"
+                  placeholder="Origin pattern"
+                  @keydown.enter.prevent="saveSiteListEdit"
+                />
+                <p v-else class="font-mono text-sm mt-1 break-all">{{ siteListDetailData.pattern }}</p>
+              </div>
+              <div>
+                <span class="text-xs text-muted-foreground">Added</span>
+                <p class="text-sm mt-1">{{ new Date(siteListDetailData.addedAt).toLocaleString() }}</p>
               </div>
             </div>
           </template>

@@ -37,9 +37,7 @@ export function useElementInspector() {
             // #endregion
         }
         catch (error) {
-            // #region agent log
-            logDebug('useElementInspector.ts:startInspecting', 'Failed to start inspection', { error: String(error) });
-            // #endregion
+            console.error('[hooks/useElementInspector] startInspecting failed:', error);
             isInspecting.value = false;
         }
     };
@@ -58,9 +56,7 @@ export function useElementInspector() {
             // #endregion
         }
         catch (error) {
-            // #region agent log
-            logDebug('useElementInspector.ts:stopInspecting', 'Failed to stop inspection', { error: String(error) });
-            // #endregion
+            console.error('[hooks/useElementInspector] stopInspecting failed:', error);
         }
     };
     const inspectElement = (element) => {

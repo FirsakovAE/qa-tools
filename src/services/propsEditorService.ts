@@ -1,5 +1,6 @@
 import type { TreeNodeModel } from '@/types/tree'
 import { getRuntimeAdapter } from '@/runtime'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 // Интерфейс для редактирования пропсов
 export interface PropsEditorService {
@@ -26,11 +27,14 @@ export interface UpdateOptions {
 export class RealPropsEditorService implements PropsEditorService {
     private async sendToContentScript(message: any): Promise<any> {
         const runtime = getRuntimeAdapter()
-        if (!runtime) {
-            throw new Error('Runtime adapter not available')
+        if (!runtime) throw new Error('Runtime adapter not available')
+        try {
+            const response = await runtime.sendMessage(message)
+            return response
+        } catch (e) {
+            if (!isExpectedExtensionError(e)) console.error('[services/propsEditorService] sendToContentScript failed:', message?.type, e)
+            throw e
         }
-        const response = await runtime.sendMessage(message)
-        return response
     }
 
     async getComponentProps(componentUid: string): Promise<Record<string, any> | null> {
@@ -42,6 +46,7 @@ export class RealPropsEditorService implements PropsEditorService {
 
             return response?.props || null
         } catch (error) {
+            console.error('[services/propsEditorService] getComponentProps failed:', componentUid, error)
             return null
         }
     }
@@ -65,9 +70,10 @@ export class RealPropsEditorService implements PropsEditorService {
             })
 
             const success = response?.success || false
-            
+
             return success
         } catch (error) {
+            console.error('[services/propsEditorService] updateComponentProps failed:', componentUid, error)
             return false
         }
     }
@@ -81,6 +87,7 @@ export class RealPropsEditorService implements PropsEditorService {
 
             return response?.component || null
         } catch (error) {
+            console.error('[services/propsEditorService] findComponentByUid failed:', uid, error)
             return null
         }
     }
@@ -90,6 +97,11 @@ export class RealPropsEditorService implements PropsEditorService {
 // Фабрика для создания сервиса
 export class PropsEditorServiceFactory {
     static createService(): PropsEditorService {
-        return new RealPropsEditorService()
+        try {
+            return new RealPropsEditorService()
+        } catch (e) {
+            console.error('[services/propsEditorService] PropsEditorServiceFactory.createService failed:', e)
+            throw e
+        }
     }
 }

@@ -63,8 +63,10 @@ function checkAppForPinia(app: any): boolean {
     if (pinia && pinia._s instanceof Map) {
       return true
     }
-  } catch (e) { /* ignore */ }
-  
+  } catch (e) {
+    console.error('[injected/detector] checkAppForPinia failed:', e)
+  }
+
   return false
 }
 
@@ -214,9 +216,11 @@ export function detectVue(): { detected: boolean; version: 2 | 3 | null } {
         vueVersion = 2
         return { detected: true, version: 2 }
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      console.error('[injected/detector] detectVue DOM check failed:', selector, e)
+    }
   }
-  
+
   return { detected: false, version: null }
 }
 
@@ -233,8 +237,10 @@ export function detectPinia(): boolean {
       piniaDetected = true
       return true
     }
-  } catch (e) { /* ignore */ }
-  
+  } catch (e) {
+    console.error('[injected/detector] detectPinia window._s check failed:', e)
+  }
+
   // Via DevTools hook
   try {
     const hook = (window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__
@@ -246,8 +252,10 @@ export function detectPinia(): boolean {
         }
       }
     }
-  } catch (e) { /* ignore */ }
-  
+  } catch (e) {
+    console.error('[injected/detector] detectPinia DevTools hook check failed:', e)
+  }
+
   // Via DOM elements
   const selectors = ['#app', '#root']
   for (const selector of selectors) {
@@ -257,9 +265,11 @@ export function detectPinia(): boolean {
         piniaDetected = true
         return true
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      console.error('[injected/detector] detectPinia DOM check failed:', selector, e)
+    }
   }
-  
+
   return false
 }
 
@@ -309,30 +319,33 @@ export function setupReactiveDetection(cbs: DetectionCallbacks): () => void {
     const maxChecks = 20 // Stop after 20 checks (about 10 seconds with 500ms interval)
     
     const checkDOM = () => {
-      checkCount++
-      
-      if (!vueDetected) {
-        const vue = detectVue()
-        if (vue.detected) {
-          cbs.onVueDetected?.(vue.version!)
-          
-          // Also check Pinia now that Vue is detected
-          if (!piniaDetected && detectPinia()) {
-            cbs.onPiniaDetected?.()
+      try {
+        checkCount++
+
+        if (!vueDetected) {
+          const vue = detectVue()
+          if (vue.detected) {
+            cbs.onVueDetected?.(vue.version!)
+
+            // Also check Pinia now that Vue is detected
+            if (!piniaDetected && detectPinia()) {
+              cbs.onPiniaDetected?.()
+            }
           }
         }
-      }
-      
-      // Stop observing after max checks or when both detected
-      if (checkCount >= maxChecks || (vueDetected && piniaDetected)) {
-        observer?.disconnect()
-        observer = null
+
+        // Stop observing after max checks or when both detected
+        if (checkCount >= maxChecks || (vueDetected && piniaDetected)) {
+          observer?.disconnect()
+          observer = null
+        }
+      } catch (e) {
+        console.error('[injected/detector] setupReactiveDetection checkDOM failed:', e)
       }
     }
     
     // Observe DOM changes (Vue mounting adds __vue_app__ to elements)
     observer = new MutationObserver(() => {
-      // Debounce checks
       setTimeout(checkDOM, 100)
     })
     

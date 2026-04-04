@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Trash2, Pause, Play, SearchIcon, Upload } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,8 +16,9 @@ import NetworkDetails from './NetworkDetails.vue'
 import MockForm from './MockForm.vue'
 import BreakpointForm from './BreakpointForm.vue'
 import type { NetworkEntry } from '@/types/network'
-import type { BaseInspectorSettings, BreakpointItem, MockRule } from '@/types/inspector'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import type { BreakpointItem, MockRule } from '@/types/inspector'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
+import { useSearchSettings } from '@/composables/useSearchSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
 import { downloadPostmanCollection } from '@/utils/networkUtils'
 import { 
@@ -55,17 +56,24 @@ const emit = defineEmits<{
 // Settings
 // ============================================================================
 
-const settings = ref<BaseInspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
 
-const searchSettings = computed(() => ({
-  byPath: settings.value?.networkSearch?.byPath ?? true,
-  byMethod: settings.value?.networkSearch?.byMethod ?? true,
-  byStatus: settings.value?.networkSearch?.byStatus ?? false,
-  byKey: settings.value?.networkSearch?.byKey ?? false,
-  byValue: settings.value?.networkSearch?.byValue ?? false,
-  debounce: settings.value?.searchParams?.debounce ?? 300,
-  minLength: settings.value?.searchParams?.minLength ?? 2
-}))
+const {
+  searchSettings,
+  selectedSearchTypes,
+  searchTypeOptions
+} = useSearchSettings({
+  settings,
+  searchKey: 'networkSearch',
+  typeMap: {
+    'Status code': 'byStatus',
+    'Method': 'byMethod',
+    'Path': 'byPath',
+    'Name': 'byName',
+    'Key': 'byKey',
+    'Value': 'byValue',
+  }
+})
 
 const activeBreakpoints = computed<BreakpointItem[]>(() => 
   settings.value?.breakpoints?.active ?? []
@@ -111,30 +119,6 @@ const {
   }
 })
 
-type NetworkSearchKey = 'byPath' | 'byMethod' | 'byStatus' | 'byKey' | 'byValue'
-const searchTypeMap: Record<string, NetworkSearchKey> = {
-  'Path': 'byPath',
-  'Method': 'byMethod',
-  'Status code': 'byStatus',
-  'Key': 'byKey',
-  'Value': 'byValue',
-}
-const searchTypeOptions = Object.keys(searchTypeMap)
-
-const selectedSearchTypes = computed<string[]>({
-  get() {
-    if (!settings.value?.networkSearch) return []
-    return searchTypeOptions.filter(label => settings.value!.networkSearch[searchTypeMap[label]] as boolean)
-  },
-  set(selected: string[]) {
-    if (!settings.value?.networkSearch) return
-    for (const label of searchTypeOptions) {
-      const key = searchTypeMap[label]
-      ;(settings.value.networkSearch as any)[key] = selected.includes(label)
-    }
-  }
-})
-
 const {
   searchTerm,
   filteredEntries,
@@ -145,7 +129,7 @@ const {
   rebuildIndex
 } = useNetworkSearch(
   () => entries.value,
-  () => searchSettings.value,
+  () => searchSettings.value as unknown as import('./composables/useNetworkSearch').SearchSettings,
   entriesVersion
 )
 
@@ -321,20 +305,16 @@ watch(pendingBreakpointIds, (newIds, oldIds) => {
 // Lifecycle
 // ============================================================================
 
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-    if (settings.value && !settings.value.mocks) {
-      settings.value.mocks = { active: [], inactive: [] }
-    }
-    setTimeout(() => {
-      breakpointState.syncBreakpoints()
-      mockState.syncMocks()
-    }, 100)
-  } catch {
-    // Use defaults
+watch(settings, (s) => {
+  if (!s) return
+  if (!s.mocks) {
+    s.mocks = { active: [], inactive: [] }
   }
-})
+  setTimeout(() => {
+    breakpointState.syncBreakpoints()
+    mockState.syncMocks()
+  }, 100)
+}, { immediate: true })
 </script>
 
 <template>

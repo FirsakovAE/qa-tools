@@ -1,123 +1,94 @@
-import { SearchIndexEntry } from './types'
 import { getStoreGetters } from './getters'
 import { getStoreState } from './state-reader'
 import { getPiniaInstance } from './context'
 import { normalizeStoreId } from './store-meta'
 
-/**
- * Вспомогательная функция для преобразования вложенных объектов с ограничениями
- */
-export function flattenObject(obj: any, prefix = '', result: Record<string, any> = {}): Record<string, any> {
-  if (obj === null || obj === undefined) return result
+const MAX_SEARCH_DEPTH = 20
 
-  if (typeof obj !== 'object') {
-    result[prefix] = obj
-    return result
-  }
-
-  // Handle arrays
+function searchKeyInObject(obj: any, query: string, exactMatch: boolean, depth = 0): boolean {
+  if (depth > MAX_SEARCH_DEPTH || obj === null || obj === undefined) return false
+  if (typeof obj !== 'object') return false
   if (Array.isArray(obj)) {
-    for (let i = 0; i < obj.length; i++) {
-      const value = obj[i]
-      const nextKey = prefix ? `${prefix}.${i}` : i.toString()
-
-      if (typeof value === 'object' && value !== null) {
-        flattenObject(value, nextKey, result)
-      } else {
-        result[nextKey] = value
-      }
-    }
-    return result
+    return obj.some((item: any) => searchKeyInObject(item, query, exactMatch, depth + 1))
   }
-
-  // Handle regular objects
+  const matchKey = exactMatch
+    ? (k: string) => k.toLowerCase() === query
+    : (k: string) => k.toLowerCase().includes(query)
   for (const key of Object.keys(obj)) {
-    const value = obj[key]
-    const nextKey = prefix ? `${prefix}.${key}` : key
-
-    if (typeof value === 'object' && value !== null) {
-      flattenObject(value, nextKey, result)
-    } else {
-      result[nextKey] = value
-    }
+    if (matchKey(key)) return true
+    if (searchKeyInObject(obj[key], query, exactMatch, depth + 1)) return true
   }
-
-  return result
+  return false
 }
 
-/**
- * Создает поисковый индекс для всех хранилищ
- */
-export function buildStoreSearchIndex(): SearchIndexEntry[] {
-  const index: SearchIndexEntry[] = []
+function searchValueInObject(obj: any, query: string, exactMatch: boolean, depth = 0): boolean {
+  if (depth > MAX_SEARCH_DEPTH) return false
+  if (obj === null || obj === undefined) return false
+  if (typeof obj !== 'object') {
+    const str = String(obj).toLowerCase()
+    return exactMatch ? str === query : str.includes(query)
+  }
+  if (Array.isArray(obj)) {
+    return obj.some((item: any) => searchValueInObject(item, query, exactMatch, depth + 1))
+  }
+  for (const key of Object.keys(obj)) {
+    if (searchValueInObject(obj[key], query, exactMatch, depth + 1)) return true
+  }
+  return false
+}
+
+export interface PiniaSearchResult {
+  storeId: string
+  baseId: string
+}
+
+export interface PiniaSearchOptions {
+  searchByKey?: boolean
+  searchByValue?: boolean
+  exactMatch?: boolean
+  limit?: number
+}
+
+/** Search stores by key/value - on-demand, returns matched store IDs (like PROPS_SEARCH) */
+export function searchStores(
+  query: string,
+  options: PiniaSearchOptions = {}
+): PiniaSearchResult[] {
+  const { searchByKey = false, searchByValue = false, exactMatch = false, limit = 100 } = options
+  const results: PiniaSearchResult[] = []
+  const q = query.toLowerCase().trim()
+  if (!q) return results
+
   const pinia = getPiniaInstance()
-  if (!pinia) return index
+  if (!pinia) return results
 
-  for (const [storeId, store] of pinia._s.entries()) {
+  const storeIds = Array.from((pinia._s as Map<string, any>).keys()) as string[]
+  for (const storeId of storeIds) {
+    if (results.length >= limit) break
+
     const baseId = normalizeStoreId(storeId)
+    let matchByKey = false
+    let matchByValue = false
 
-    // ---- STATE ----
-    const stateSnapshot = getStoreState(storeId)
-    if (stateSnapshot) {
-      const flatState = flattenObject(stateSnapshot)
+    try {
+      const state = getStoreState(storeId)
+      const getters = getStoreGetters(storeId)
 
-      for (const key in flatState) {
-        const value = flatState[key]
-        let valueStr: string
-
-        if (value === null) {
-          valueStr = 'null'
-        } else if (value === undefined) {
-          valueStr = 'undefined'
-        } else if (typeof value === 'object') {
-          valueStr = JSON.stringify(value)
-        } else {
-          valueStr = String(value)
-        }
-
-        valueStr = valueStr.toLowerCase()
-
-        index.push({
-          storeId,
-          baseId,
-          type: 'state' as const,
-          key,
-          value,
-          valueStr
-        })
+      if (searchByKey) {
+        if (state && searchKeyInObject(state, q, exactMatch)) matchByKey = true
+        if (getters && searchKeyInObject(getters, q, exactMatch)) matchByKey = true
       }
-    }
-
-    // ---- GETTERS ----
-    const getters = getStoreGetters(storeId)
-    const flatGetters = flattenObject(getters)
-
-    for (const key in flatGetters) {
-      const value = flatGetters[key]
-      let valueStr: string
-
-      if (value === null) {
-        valueStr = 'null'
-      } else if (value === undefined) {
-        valueStr = 'undefined'
-      } else if (typeof value === 'object') {
-        valueStr = JSON.stringify(value)
-      } else {
-        valueStr = String(value)
+      if (searchByValue) {
+        if (state && searchValueInObject(state, q, exactMatch)) matchByValue = true
+        if (getters && searchValueInObject(getters, q, exactMatch)) matchByValue = true
       }
 
-      valueStr = valueStr.toLowerCase()
-
-      index.push({
-        storeId,
-        baseId,
-        type: 'getter' as const,
-        key,
-        value,
-        valueStr
-      })
+      if (matchByKey || matchByValue) {
+        results.push({ storeId, baseId })
+      }
+    } catch (e) {
+      console.error('[injected/pinia/search] searchStores store failed:', storeId, e)
     }
   }
-
-  return index
+  return results
 }

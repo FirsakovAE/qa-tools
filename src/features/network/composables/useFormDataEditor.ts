@@ -133,17 +133,24 @@ export function useFormDataEditor(options: UseFormDataEditorOptions) {
         const allFiles = getAllAvailableFiles()
         const alreadySaved = allFiles.some(f => f.name === file.name && f.size === file.size)
         if (!alreadySaved) {
-          const fileId = generateId()
-          const blob = dataUriToBlob(dataUri)
-          await addMedia(fileId, blob)
-          s.savedFiles.push({
-            id: fileId,
-            name: file.name,
-            size: file.size,
-            mimeType: file.type || 'application/octet-stream',
-          })
+          try {
+            const fileId = generateId()
+            const blob = dataUriToBlob(dataUri)
+            await addMedia(fileId, blob)
+            s.savedFiles.push({
+              id: fileId,
+              name: file.name,
+              size: file.size,
+              mimeType: file.type || 'application/octet-stream',
+            })
+          } catch (error) {
+            console.error('[network/useFormDataEditor] addMedia failed:', error)
+          }
         }
       }
+    }
+    reader.onerror = () => {
+      console.error('[network/useFormDataEditor] FileReader failed:', reader.error)
     }
     reader.readAsDataURL(file)
     input.value = ''

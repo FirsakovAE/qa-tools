@@ -1,4 +1,4 @@
-import { reactive, watch, toRaw } from 'vue'
+import { reactive, ref, watch, toRaw, onMounted, type Ref } from 'vue'
 import { defaultInspectorSettings, type InspectorSettings } from '@/settings/inspectorSettings'
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
@@ -27,7 +27,9 @@ function trySyncPreload(): void {
             const merged = mergeSettings(defaultInspectorSettings, saved)
             Object.assign(state, merged)
         }
-    } catch { /* sync preload failed — async path will handle it */ }
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] trySyncPreload failed:', e)
+    }
 }
 
 trySyncPreload()
@@ -45,6 +47,7 @@ async function saveToStorage() {
         try {
             settingsToSave = structuredClone(toRaw(state))
         } catch {
+            // structuredClone fails for non-cloneable types (File, Blob, etc.); JSON fallback handles plain data
             settingsToSave = JSON.parse(JSON.stringify(toRaw(state)))
         }
 
@@ -68,8 +71,8 @@ async function saveToStorage() {
                 settings: settingsToSave
             })
         }
-    } catch {
-        // Silent fail
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] saveToStorage failed:', e)
     }
 }
 
@@ -91,7 +94,8 @@ async function loadFromStorage(): Promise<void> {
             Object.assign(state, structuredClone(defaultInspectorSettings))
             saveToStorage()
         }
-    } catch {
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] loadFromStorage failed:', e)
         Object.assign(state, structuredClone(defaultInspectorSettings))
     }
 
@@ -124,7 +128,9 @@ async function loadFromStorage(): Promise<void> {
                 }
                 if (sizesUpdated) debouncedSave()
             }
-        } catch { /* IDB unavailable — fall back silently */ }
+        } catch (e) {
+            console.error('[settings/useInspectorSettings] loadFromStorage media init failed:', e)
+        }
     })()
 }
 
@@ -216,6 +222,10 @@ function migrateSearchSettings(saved: any): void {
         if (saved.networkSearch.byStatus === undefined) {
             saved.networkSearch.byStatus = false
         }
+        // New: Name column search (legacy byName was remapped to byPath above, then deleted)
+        if (saved.networkSearch.byName === undefined) {
+            saved.networkSearch.byName = false
+        }
     }
 
     // Миграция: добавляем networkTableColumns если отсутствует
@@ -241,9 +251,19 @@ function migrateSearchSettings(saved: any): void {
         saved.propsTableColumns = {
             name: true,
             rootElement: true,
-            props: true,
+            propsReceived: true,
+            propsDeclared: true,
         }
     }
+    // Миграция: props -> propsReceived, propsDeclared
+    if (saved.propsTableColumns?.props !== undefined) {
+        const v = !!saved.propsTableColumns.props
+        saved.propsTableColumns.propsReceived = v
+        saved.propsTableColumns.propsDeclared = v
+        delete saved.propsTableColumns.props
+    }
+    // Миграция: удаляем size (колонка перенесена в Details)
+    delete saved.propsTableColumns?.size
 
     // Миграция: добавляем piniaTableColumns если отсутствует
     if (!saved.piniaTableColumns || typeof saved.piniaTableColumns !== 'object') {
@@ -364,6 +384,20 @@ function handleBeforeUnload() {
     saveToStorage()
 }
 
+/**
+ * Composable that loads settings on mount and returns a ref.
+ * Use in components that need settings in a ref for reactive access.
+ */
+export function useInspectorSettingsSync(): Ref<InspectorSettings | null> {
+  const settings = ref<InspectorSettings | null>(null)
+  onMounted(async () => {
+    try {
+      settings.value = await useInspectorSettings()
+    } catch { /* use defaults */ }
+  })
+  return settings
+}
+
 // Основная функция
 export async function useInspectorSettings(): Promise<InspectorSettings> {
     if (!isLoaded) {
@@ -380,7 +414,9 @@ export async function resetInspectorSettings() {
 
     try {
         await clearAllMedia()
-    } catch { /* best-effort */ }
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] resetInspectorSettings clearAllMedia failed:', e)
+    }
 
     try {
         if (isStandaloneMode()) {
@@ -388,7 +424,8 @@ export async function resetInspectorSettings() {
         } else {
             await safeSendMessage({ type: 'RESET_SETTINGS' })
         }
-    } catch {
+    } catch (e) {
+        console.error('[settings/useInspectorSettings] resetInspectorSettings save failed:', e)
         await saveToStorage()
     }
 }
@@ -402,7 +439,9 @@ export async function exportSettings(): Promise<string> {
                 try {
                     const blob = await getMediaBlob(sf.id)
                     if (blob) sf.dataUri = await blobToDataUri(blob)
-                } catch { /* ignore */ }
+                } catch (e) {
+                    console.error('[settings/useInspectorSettings] exportSettings getMediaBlob failed:', sf.id, e)
+                }
             }
         }
     } else {
@@ -415,11 +454,7 @@ export async function exportSettings(): Promise<string> {
 }
 
 export async function importSettings(json: string): Promise<void> {
-    try {
-        const imported = JSON.parse(json)
-        Object.assign(state, mergeSettings(defaultInspectorSettings, imported))
-        await saveToStorage()
-    } catch (error: any) {
-        throw error
-    }
+    const imported = JSON.parse(json)
+    Object.assign(state, mergeSettings(defaultInspectorSettings, imported))
+    await saveToStorage()
 }

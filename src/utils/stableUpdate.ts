@@ -2,18 +2,23 @@
  * Stable hash for props comparison - handles undefined, functions, and ordering
  */
 function stablePropsHash(props: Record<string, any>): string {
-    if (!props || typeof props !== 'object') return 'empty'
-    
-    const keys = Object.keys(props).sort() // Sort keys for stable ordering
-    if (keys.length === 0) return 'empty'
-    
-    const parts: string[] = []
-    for (const key of keys.slice(0, 30)) { // Limit to first 30 keys
-        const value = props[key]
-        parts.push(`${key}:${stableValueHash(value)}`)
+    try {
+        if (!props || typeof props !== 'object') return 'empty'
+
+        const keys = Object.keys(props).sort() // Sort keys for stable ordering
+        if (keys.length === 0) return 'empty'
+
+        const parts: string[] = []
+        for (const key of keys.slice(0, 30)) { // Limit to first 30 keys
+            const value = props[key]
+            parts.push(`${key}:${stableValueHash(value)}`)
+        }
+
+        return parts.join('|')
+    } catch (e) {
+        console.error('[utils/stableUpdate] stablePropsHash failed:', e)
+        return 'error'
     }
-    
-    return parts.join('|')
 }
 
 /**

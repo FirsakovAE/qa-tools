@@ -14,14 +14,3 @@ export const SETTINGS_STORE = 'settings'
 export const MEDIA_STORE = 'media'
 
 export const MEDIA_LIMIT_BYTES = 30 * 1024 * 1024
-
-export type StorageAction =
-  | 'getSettings'
-  | 'setSettings'
-  | 'removeSettings'
-  | 'getMedia'
-  | 'setMedia'
-  | 'removeMedia'
-  | 'getAllMediaIds'
-  | 'getTotalMediaSize'
-  | 'clearAllMedia'

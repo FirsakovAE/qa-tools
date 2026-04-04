@@ -75,7 +75,7 @@ interface CacheConfig {
 }
 
 const DEFAULT_CONFIG: CacheConfig = {
-  maxComponents: 1000,
+  maxComponents: 100000,
   propsCacheTtl: 2000,
   maxHistorySize: 100,
   cleanupInterval: 30000
@@ -414,7 +414,8 @@ export function generatePropsHash(props: any): string {
     }
     
     return parts.join('|')
-  } catch {
+  } catch (e) {
+    console.error('[injected/props/cache] generatePropsHash failed:', e)
     return 'error'
   }
 }
@@ -439,7 +440,7 @@ let globalStore: ComponentStore | null = null
 export function getComponentStore(): ComponentStore {
   if (!globalStore || globalStore.isDisposed()) {
     globalStore = new ComponentStore({
-      maxComponents: 1000,
+      maxComponents: 100000,
       propsCacheTtl: 2000,
       maxHistorySize: 100,
       cleanupInterval: 30000

@@ -52,13 +52,17 @@ async function requestUnpartitionedStorage(): Promise<void> {
       storageAccessGranted = true
       return
     }
-  } catch { /* not supported or denied — try legacy path */ }
+  } catch (e) {
+    console.error('[storage/main] requestStorageAccess (Chrome handle) failed:', e)
+  }
 
   // Firefox / Safari: unlocks window.indexedDB directly
   try {
     await document.requestStorageAccess()
     storageAccessGranted = true
-  } catch { /* denied — fall back to partitioned storage */ }
+  } catch (e) {
+    console.error('[storage/main] requestStorageAccess failed:', e)
+  }
 }
 
 // ────────────────────────────────────────
@@ -84,7 +88,10 @@ function openDB(): Promise<IDBDatabase> {
       db = req.result
       resolve(db)
     }
-    req.onerror = () => reject(req.error)
+    req.onerror = () => {
+      console.error('[storage/main] openDB failed:', req.error)
+      reject(req.error)
+    }
   })
 }
 
@@ -96,7 +103,10 @@ async function getSettings(key: string): Promise<unknown> {
     const tx = database.transaction(SETTINGS_STORE, 'readonly')
     const req = tx.objectStore(SETTINGS_STORE).get(key)
     req.onsuccess = () => resolve(req.result ?? null)
-    req.onerror = () => reject(req.error)
+    req.onerror = () => {
+      console.error('[storage/main] getSettings failed:', key, req.error)
+      reject(req.error)
+    }
   })
 }
 
@@ -106,7 +116,10 @@ async function setSettings(key: string, data: unknown): Promise<void> {
     const tx = database.transaction(SETTINGS_STORE, 'readwrite')
     tx.objectStore(SETTINGS_STORE).put(data, key)
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => {
+      console.error('[storage/main] setSettings failed:', key, tx.error)
+      reject(tx.error)
+    }
   })
 }
 
@@ -116,7 +129,10 @@ async function removeSettings(key: string): Promise<void> {
     const tx = database.transaction(SETTINGS_STORE, 'readwrite')
     tx.objectStore(SETTINGS_STORE).delete(key)
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => {
+      console.error('[storage/main] removeSettings failed:', key, tx.error)
+      reject(tx.error)
+    }
   })
 }
 
@@ -128,7 +144,10 @@ async function getMedia(id: string): Promise<Blob | null> {
     const tx = database.transaction(MEDIA_STORE, 'readonly')
     const req = tx.objectStore(MEDIA_STORE).get(id)
     req.onsuccess = () => resolve(req.result instanceof Blob ? req.result : null)
-    req.onerror = () => reject(req.error)
+    req.onerror = () => {
+      console.error('[storage/main] getMedia failed:', id, req.error)
+      reject(req.error)
+    }
   })
 }
 
@@ -146,7 +165,10 @@ async function setMedia(id: string, blob: Blob): Promise<void> {
     const tx = database.transaction(MEDIA_STORE, 'readwrite')
     tx.objectStore(MEDIA_STORE).put(blob, id)
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => {
+      console.error('[storage/main] setMedia failed:', id, tx.error)
+      reject(tx.error)
+    }
   })
 }
 
@@ -156,7 +178,10 @@ async function removeMedia(id: string): Promise<void> {
     const tx = database.transaction(MEDIA_STORE, 'readwrite')
     tx.objectStore(MEDIA_STORE).delete(id)
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => {
+      console.error('[storage/main] removeMedia failed:', id, tx.error)
+      reject(tx.error)
+    }
   })
 }
 
@@ -166,7 +191,10 @@ async function clearAllMedia(): Promise<void> {
     const tx = database.transaction(MEDIA_STORE, 'readwrite')
     tx.objectStore(MEDIA_STORE).clear()
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => {
+      console.error('[storage/main] clearAllMedia failed:', tx.error)
+      reject(tx.error)
+    }
   })
 }
 
@@ -176,7 +204,10 @@ async function getAllMediaIds(): Promise<string[]> {
     const tx = database.transaction(MEDIA_STORE, 'readonly')
     const req = tx.objectStore(MEDIA_STORE).getAllKeys()
     req.onsuccess = () => resolve(req.result as string[])
-    req.onerror = () => reject(req.error)
+    req.onerror = () => {
+      console.error('[storage/main] getAllMediaIds failed:', req.error)
+      reject(req.error)
+    }
   })
 }
 
@@ -195,7 +226,10 @@ async function getTotalMediaSize(): Promise<number> {
         resolve(total)
       }
     }
-    req.onerror = () => reject(req.error)
+    req.onerror = () => {
+      console.error('[storage/main] getTotalMediaSize failed:', req.error)
+      reject(req.error)
+    }
   })
 }
 
@@ -214,13 +248,21 @@ function tryOpenLegacyDB(name: string): Promise<IDBDatabase | null> {
           try {
             const fallback = indexedDB.open(name)
             fallback.onsuccess = () => resolve(fallback.result)
-            fallback.onerror = () => resolve(null)
-          } catch { resolve(null) }
+            fallback.onerror = () => {
+              console.error('[storage/main] tryOpenLegacyDB fallback failed:', name, fallback.error)
+              resolve(null)
+            }
+          } catch (e) {
+            console.error('[storage/main] tryOpenLegacyDB fallback open failed:', name, e)
+            resolve(null)
+          }
         } else {
+          console.error('[storage/main] tryOpenLegacyDB failed:', name, req.error)
           resolve(null)
         }
       }
-    } catch {
+    } catch (e) {
+      console.error('[storage/main] tryOpenLegacyDB failed:', name, e)
       resolve(null)
     }
   })
@@ -243,7 +285,9 @@ async function migrateFromLegacyDatabases(): Promise<void> {
         })
         if (settings) await setSettings('inspector-settings', settings)
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('[storage/main] migrateFromLegacyDatabases settings failed:', e)
+    }
     oldSettingsDb.close()
   }
 
@@ -281,7 +325,9 @@ async function migrateFromLegacyDatabases(): Promise<void> {
             tx.oncomplete = () => res()
             tx.onerror = () => rej(tx.error)
           })
-        } catch { /* skip individual entries on failure */ }
+        } catch (e) {
+          console.error('[storage/main] migrateFromLegacyDatabases blob entry failed:', key, e)
+        }
       }
     }
 
@@ -320,10 +366,14 @@ async function migrateFromLegacyDatabases(): Promise<void> {
               tx.onerror = () => rej(tx.error)
             })
           }
-        } catch { /* skip */ }
+        } catch (e) {
+          console.error('[storage/main] migrateFromLegacyDatabases wallpaper failed:', id, e)
+        }
       }
     }
-  } catch { /* migration best-effort */ }
+  } catch (e) {
+    console.error('[storage/main] migrateFromLegacyDatabases failed:', e)
+  }
 
   oldMediaDb.close()
 }
@@ -371,6 +421,7 @@ async function handleAction(data: Record<string, any>): Promise<{ result?: unkno
         return { error: `Unknown action: ${data.action}` }
     }
   } catch (err) {
+    console.error('[storage/main] handleAction failed:', data.action, err)
     return { error: err instanceof Error ? err.message : String(err) }
   }
 }
@@ -380,16 +431,28 @@ window.addEventListener('message', async (event) => {
   if (!data || typeof data !== 'object' || !data[STORAGE_PREFIX]) return
   if (!data.requestId || !data.action) return
 
-  const { result, error } = await handleAction(data)
+  try {
+    const { result, error } = await handleAction(data)
 
-  window.parent.postMessage(
-    {
-      [STORAGE_RESPONSE_PREFIX]: true,
-      requestId: data.requestId,
-      ...(error !== undefined ? { error } : { result }),
-    },
-    event.origin || '*',
-  )
+    window.parent.postMessage(
+      {
+        [STORAGE_RESPONSE_PREFIX]: true,
+        requestId: data.requestId,
+        ...(error !== undefined ? { error } : { result }),
+      },
+      event.origin || '*',
+    )
+  } catch (e) {
+    console.error('[storage/main] message handler failed:', data?.action, e)
+    window.parent.postMessage(
+      {
+        [STORAGE_RESPONSE_PREFIX]: true,
+        requestId: data.requestId,
+        error: e instanceof Error ? e.message : String(e),
+      },
+      event.origin || '*',
+    )
+  }
 })
 
 // ────────────────────────────────────────
@@ -397,16 +460,29 @@ window.addEventListener('message', async (event) => {
 // ────────────────────────────────────────
 
 ;(async () => {
-  await requestUnpartitionedStorage()
-  await openDB()
-  await migrateFromLegacyDatabases()
+  try {
+    await requestUnpartitionedStorage()
+    await openDB()
+    await migrateFromLegacyDatabases()
 
-  window.parent.postMessage(
-    {
-      [STORAGE_PREFIX]: true,
-      action: 'ready',
-      storageAccessGranted,
-    },
-    '*',
-  )
+    window.parent.postMessage(
+      {
+        [STORAGE_PREFIX]: true,
+        action: 'ready',
+        storageAccessGranted,
+      },
+      '*',
+    )
+  } catch (e) {
+    console.error('[storage/main] bootstrap failed:', e)
+    window.parent.postMessage(
+      {
+        [STORAGE_PREFIX]: true,
+        action: 'ready',
+        storageAccessGranted: false,
+        error: e instanceof Error ? e.message : String(e),
+      },
+      '*',
+    )
+  }
 })()

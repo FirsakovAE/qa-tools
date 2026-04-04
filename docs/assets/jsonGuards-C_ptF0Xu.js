@@ -1,0 +1,1 @@
+function n(e){const t=e.trim();if(!t)return!1;const r=t[0];return r==="{"||r==="["||r==='"'||t==="true"||t==="false"||t==="null"||r==="-"||r>="0"&&r<="9"}function s(e){const t=e.trim();return t.startsWith("{")&&t.includes('"__formData"')}export{s as a,n as l};

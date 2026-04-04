@@ -2,7 +2,7 @@
  * Script injection logic for the Vue Inspector injected script
  */
 
-import { injectedScriptLoaded, setInjectedScriptLoaded } from './state'
+import { setInjectedScriptLoaded } from './state'
 
 /**
  * Injects the Vue Inspector script into the page context
@@ -30,6 +30,7 @@ export function injectScript(): void {
   }
   
   script.onerror = function() {
+    console.error('[content/script-injector] Failed to load injected script')
     // Remove script tag on error to allow retry
     const scriptEl = document.getElementById('vue-inspector-injected-script')
     if (scriptEl?.parentNode) {
@@ -41,9 +42,3 @@ export function injectScript(): void {
   ;(document.head || document.documentElement).appendChild(script)
 }
 
-/**
- * Check if the injected script is ready
- */
-export function isInjectedScriptReady(): boolean {
-  return injectedScriptLoaded || !!(window as any).__VUE_INSPECTOR_INJECTED__
-}

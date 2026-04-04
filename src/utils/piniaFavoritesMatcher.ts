@@ -8,7 +8,8 @@ export function matchFavoritePattern(storeName: string, pattern: string): boolea
   const regexStr = '^' + pattern.replace(/\*/g, '.*') + '$'
   try {
     return new RegExp(regexStr).test(storeName)
-  } catch {
+  } catch (e) {
+    console.error('[utils/piniaFavoritesMatcher] matchFavoritePattern failed:', pattern, e)
     return false
   }
 }

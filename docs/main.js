@@ -1,7 +1,20 @@
 // ── Bookmarklet ──
     (function(){
-      const baseURL = window.location.origin;
-      const code = `
+      function getStandaloneBaseURL() {
+        var parts = location.pathname.split('/').filter(Boolean);
+        var first = parts[0] || '';
+        if (location.hostname.endsWith('github.io')) {
+          if (first) return location.origin + '/' + first;
+          return location.origin;
+        }
+        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+          if (first && first.indexOf('.') === -1) return location.origin + '/' + first;
+          return location.origin;
+        }
+        return location.origin;
+      }
+      var baseURL = getStandaloneBaseURL();
+      var code = `
         (function(){
           if(window.__VUE_INSPECTOR_INITIALIZED__) return;
           var b='${baseURL}';

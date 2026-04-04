@@ -1,4 +1,5 @@
 import { suppressResizeObserverError } from '@/utils/suppressResizeObserverError'
+import { isExpectedCrossOriginError } from '@/utils/expectedErrors'
 suppressResizeObserverError()
 
 import { createApp } from 'vue'
@@ -15,52 +16,63 @@ import '@/assets/prism-json-theme.css'
 import '@/assets/prism-overrides.css'
 
 function initRuntime() {
-  const params = new URLSearchParams(window.location.search)
+  try {
+    const params = new URLSearchParams(window.location.search)
 
-  // DevTools panel mode
-  if (params.get('devtools') === '1') {
-    const tabId = Number(params.get('tabId'))
-    if (tabId) {
-      const adapter = createDevtoolsAdapter(tabId)
+    // DevTools panel mode
+    if (params.get('devtools') === '1') {
+      const tabId = Number(params.get('tabId'))
+      if (tabId) {
+        document.documentElement.setAttribute('data-devtools', 'true')
+        const adapter = createDevtoolsAdapter(tabId)
+        setRuntimeAdapter(adapter)
+        useDevtoolsSearch()
+        return
+      }
+    }
+
+    // Проверяем standalone режим через URL hash (избегаем CORS проблем)
+    // Format: #standalone=http://localhost:5174
+    const hash = window.location.hash
+    const standaloneMatch = hash.match(/standalone=([^&]+)/)
+
+    let isStandalone = false
+    let baseURL = ''
+
+    if (standaloneMatch) {
+      isStandalone = true
+      baseURL = decodeURIComponent(standaloneMatch[1])
+    } else {
+      try {
+        isStandalone = !!(window.parent as any)?.__VUE_INSPECTOR_STANDALONE__
+        baseURL = (window.parent as any)?.__VUE_INSPECTOR_BASE_URL__ || ''
+      } catch (e) {
+        if (!isExpectedCrossOriginError(e)) console.error('[injected-ui/main] Cross-origin parent access failed:', e)
+      }
+    }
+
+    if (isStandalone) {
+      const storageClient = createStorageClient(baseURL + '/storage/')
+      setMediaStorageClient(storageClient)
+
+      const adapter = createStandaloneAdapter({
+        baseURL,
+        targetWindow: window.parent,
+        storageClient,
+      })
       setRuntimeAdapter(adapter)
-      useDevtoolsSearch()
-      return
+    } else {
+      const adapter = createExtensionAdapter()
+      setRuntimeAdapter(adapter)
     }
-  }
-
-  // Проверяем standalone режим через URL hash (избегаем CORS проблем)
-  // Format: #standalone=http://localhost:5174
-  const hash = window.location.hash
-  const standaloneMatch = hash.match(/standalone=([^&]+)/)
-  
-  let isStandalone = false
-  let baseURL = ''
-  
-  if (standaloneMatch) {
-    isStandalone = true
-    baseURL = decodeURIComponent(standaloneMatch[1])
-  } else {
+  } catch (e) {
+    console.error('[injected-ui/main] initRuntime failed:', e)
     try {
-      isStandalone = !!(window.parent as any)?.__VUE_INSPECTOR_STANDALONE__
-      baseURL = (window.parent as any)?.__VUE_INSPECTOR_BASE_URL__ || ''
-    } catch {
-      // Cross-origin - не standalone
+      const adapter = createExtensionAdapter()
+      setRuntimeAdapter(adapter)
+    } catch (fallbackError) {
+      console.error('[injected-ui/main] initRuntime fallback failed:', fallbackError)
     }
-  }
-
-  if (isStandalone) {
-    const storageClient = createStorageClient(baseURL + '/storage/')
-    setMediaStorageClient(storageClient)
-
-    const adapter = createStandaloneAdapter({
-      baseURL,
-      targetWindow: window.parent,
-      storageClient,
-    })
-    setRuntimeAdapter(adapter)
-  } else {
-    const adapter = createExtensionAdapter()
-    setRuntimeAdapter(adapter)
   }
 }
 
@@ -72,6 +84,11 @@ import { useInspectorSettings } from '@/settings/useInspectorSettings'
 const app = createApp(App)
 app.component('Toaster', Toaster)
 
-useInspectorSettings().then(() => {
-  app.mount('#app')
-})
+useInspectorSettings()
+  .then(() => {
+    app.mount('#app')
+  })
+  .catch(e => {
+    console.error('[injected-ui/main] useInspectorSettings failed:', e)
+    app.mount('#app')
+  })

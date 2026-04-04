@@ -105,6 +105,12 @@ export interface MockRule {
     description?: string
 }
 
+/** Breakpoint with active/inactive status for UI display */
+export type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
+
+/** Mock rule with active/inactive status for UI display */
+export type MockWithStatus = MockRule & { isActive: boolean }
+
 export interface SearchIndexEntry {
     storeId: string
     baseId: string
@@ -128,7 +134,8 @@ export interface NetworkTableColumnsSettings {
 export interface PropsTableColumnsSettings {
     name: boolean
     rootElement: boolean
-    props: boolean
+    propsReceived: boolean
+    propsDeclared: boolean
 }
 
 /** Pinia table column visibility */
@@ -140,6 +147,8 @@ export interface PiniaTableColumnsSettings {
 
 /** Network tab search settings */
 export interface NetworkSearchSettings {
+    /** Search in list column "Name" (short label from URL). Default off. */
+    byName: boolean
     byPath: boolean
     byMethod: boolean
     byStatus: boolean
@@ -213,6 +222,25 @@ export interface SavedFile {
     dataUri?: string
 }
 
+/** Entry in the site whitelist / blacklist for Auto Run */
+export interface SiteListEntry {
+    id: string
+    /**
+     * Matched against location.origin (scheme + host, incl. www + port). Path in the pattern is ignored.
+     * Use a full URL (e.g. https://app.example/) or wildcards (e.g. *localhost*, http://localhost*).
+     */
+    pattern: string
+    /** ISO timestamp when added */
+    addedAt: string
+}
+
+/** Auto Run settings — gate overlay pill display per-site */
+export interface AutoRunSettings {
+    advancedMode: boolean
+    siteBlacklist: SiteListEntry[]
+    siteWhitelist: SiteListEntry[]
+}
+
 export interface BaseInspectorSettings {
     theme: ThemeMode
     displayMode: DisplayMode
@@ -235,6 +263,11 @@ export interface BaseInspectorSettings {
     networkSearch: NetworkSearchSettings
     /** Props tab search settings */
     propsSearch: PropsSearchSettings
+    /**
+     * Overlay mode: collapse the inspector iframe while Props Inspect (element picker) is active.
+     * Default true; restore panel when pick ends (Esc / selection).
+     */
+    collapseOverlayOnPropsInspect: boolean
     /** Pinia Store tab search settings */
     piniaSearch: PiniaSearchSettings
     /** Global search parameters (debounce, minLength) shared across all modules */
@@ -247,4 +280,6 @@ export interface BaseInspectorSettings {
     savedFiles: SavedFile[]
     autoSaveFiles: boolean
     customize: CustomizeSettings
+    /** Auto Run: site whitelist/blacklist to control overlay pill visibility */
+    autoRun?: AutoRunSettings
 }

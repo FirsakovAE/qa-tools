@@ -1,6 +1,7 @@
 // src/features/stores/usePiniaStores.ts
 import { ref, onUnmounted } from 'vue'
 import { useRuntime } from '@/runtime'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 interface PiniaStoresSummaryResponse {
   type: string
@@ -65,7 +66,10 @@ export function usePiniaStores() {
         }, 3000)
       }
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load stores'
+      if (!isExpectedExtensionError(e)) console.error('[stores/usePiniaStores] load failed:', e)
+      error.value = isExpectedExtensionError(e)
+        ? null
+        : (e instanceof Error ? e.message : 'Failed to load stores')
       loading.value = false
     }
   }

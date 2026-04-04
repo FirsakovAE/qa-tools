@@ -5,7 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync } from 'fs'
-import { join } from 'path'
+import { join, dirname, normalize, posix } from 'path'
+import { execFileSync } from 'node:child_process'
 
 export default defineConfig({
   base: './',
@@ -38,7 +39,8 @@ export default defineConfig({
           let content = readFileSync(uiSrcHtml, 'utf-8')
           content = content
             .replace(/src="\.\.\/\.\.\/injected_ui\/index\.js"/g, 'src="./index.js"')
-            .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
+            // One `..` stays under site prefix (/qa-tools/…); `../../assets` escapes to host /assets/
+            .replace(/\.\.\/\.\.\/assets\//g, '../assets/')
           writeFileSync(uiDestHtml, content, 'utf-8')
         }
 
@@ -53,6 +55,19 @@ export default defineConfig({
             .replace(/src="\.\.\/\.\.\/storage\/index\.js"/g, 'src="./index.js"')
             .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
           writeFileSync(storageDestHtml, content, 'utf-8')
+        }
+
+        // popup: dist/src/popup/popup.html → dist/popup/popup.html
+        const popupSrcHtml = join(distPath, 'src', 'popup', 'popup.html')
+        const popupDestDir = join(distPath, 'popup')
+        const popupDestHtml = join(popupDestDir, 'popup.html')
+        if (existsSync(popupSrcHtml)) {
+          if (!existsSync(popupDestDir)) mkdirSync(popupDestDir, { recursive: true })
+          let content = readFileSync(popupSrcHtml, 'utf-8')
+          content = content
+            .replace(/src="\.\.\/\.\.\/popup\/popup\.js"/g, 'src="./popup.js"')
+            .replace(/<link rel="modulepreload"[^>]*>/g, '')
+          writeFileSync(popupDestHtml, content, 'utf-8')
         }
       }
     },
@@ -69,6 +84,10 @@ export default defineConfig({
 
         // Создаем папку docs
         mkdirSync(docsPath, { recursive: true })
+
+        // GitHub Pages по умолчанию прогоняет Jekyll; он не публикует файлы с именами вида `_*.js`
+        // (например Rollup `_commonjsHelpers-….js`), из‑за чего bookmark/injected_ui ломается с 404.
+        writeFileSync(join(docsPath, '.nojekyll'), '', 'utf-8')
 
         // Копируем standalone файлы
         const standaloneSrc = join(distPath, 'standalone')
@@ -91,10 +110,10 @@ export default defineConfig({
         const injectedUiHtmlPath = join(docsPath, 'injected_ui', 'index.html')
         if (existsSync(injectedUiHtmlPath)) {
           let content = readFileSync(injectedUiHtmlPath, 'utf-8')
-          // Заменяем пути для docs/ (они уже относительные из-за base: './')
+          // Заменяем пути для docs/ — `../../assets` из injected_ui ломает GitHub Pages (/qa-tools/…)
           content = content
             .replace(/src="\.\.\/\.\.\/injected_ui\/index\.js"/g, 'src="./index.js"')
-            .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
+            .replace(/\.\.\/\.\.\/assets\//g, '../assets/')
           writeFileSync(injectedUiHtmlPath, content, 'utf-8')
         }
 
@@ -120,19 +139,6 @@ export default defineConfig({
             scriptContent = scriptContent.replace(
               /\/standalone\/loader\.js/g,
               '/loader.js'
-            )
-
-            // Base URL: поддержка GitHub Pages (hostname.github.io)
-            scriptContent = scriptContent.replace(
-              /const currentOrigin = window\.location\.origin;\s*document\.getElementById\('baseUrl'\)\.value = currentOrigin;/,
-              `function getBaseURL() {
-    if (location.hostname.endsWith('github.io')) {
-      const [repo] = location.pathname.split('/').filter(Boolean);
-      return location.origin + '/' + repo;
-    }
-    return location.origin;
-  }
-  document.getElementById('baseUrl').value = getBaseURL();`
             )
 
             const mainJsPath = join(docsPath, 'main.js')
@@ -168,6 +174,15 @@ export default defineConfig({
             rmSync(target, { recursive: true, force: true })
           }
         })
+
+        // 3. VitePress → docs/docs/ (маршрут /docs/ для serve и GitHub Pages)
+        // `execFileSync('npx.cmd', …)` даёт EINVAL на части установок Windows; CLI через тот же node, что и сборка.
+        const vitepressCli = join(process.cwd(), 'node_modules', 'vitepress', 'bin', 'vitepress.js')
+        execFileSync(process.execPath, [vitepressCli, 'build', 'documentation'], {
+          stdio: 'inherit',
+          cwd: process.cwd(),
+          env: process.env,
+        })
       }
     }
   ],
@@ -183,6 +198,7 @@ export default defineConfig({
       input: {
         injected_ui_html: 'src/injected-ui/index.html',
         storage_html: 'src/storage/index.html',
+        popup_html: 'src/popup/popup.html',
         content: 'src/content/index.ts',
         background: 'src/background.ts',
         injected: 'src/injected/main.ts',
@@ -199,6 +215,9 @@ export default defineConfig({
           if (chunkInfo.name === 'storage_html') {
             return 'storage/index.js'
           }
+          if (chunkInfo.name === 'popup_html') {
+            return 'popup/popup.js'
+          }
           return 'assets/[name]-[hash].js'
         },
         chunkFileNames: 'assets/[name]-[hash].js',
@@ -207,7 +226,64 @@ export default defineConfig({
         manualChunks: undefined
       },
       // Prevent code splitting that would break injected scripts
-      preserveEntrySignatures: 'strict'
+      preserveEntrySignatures: 'strict',
+      plugins: [{
+        name: 'inline-shared-chunks-for-scripts',
+        generateBundle(_, bundle) {
+          // Extension content/background scripts can't use ES `import` statements.
+          // If Rollup splits a shared helper into a separate chunk, inline it back.
+          const scriptEntries = ['js/content.js', 'js/background.js', 'js/injected.js', 'js/devtools.js']
+
+          for (const entryName of scriptEntries) {
+            const entry = bundle[entryName]
+            if (!entry || entry.type !== 'chunk') continue
+
+            entry.code = entry.code.replace(
+              /import\s*\{([^}]*)\}\s*from\s*"([^"]+)"\s*;?\n?/g,
+              (fullMatch: string, namedImportsStr: string, relPath: string) => {
+                const entryDir = entryName.substring(0, entryName.lastIndexOf('/'))
+                const resolved = posix.normalize(posix.join(entryDir, relPath))
+                const chunk = bundle[resolved]
+                if (!chunk || chunk.type !== 'chunk') return fullMatch
+
+                // Parse the chunk's export statement to build exportedName→localName map
+                // e.g. "export{o as c, l as g}" → { c: 'o', g: 'l' }
+                const exportMap: Record<string, string> = {}
+                const exportMatch = chunk.code.match(/\bexport\s*\{([^}]*)\}\s*;?\s*$/)
+                if (exportMatch) {
+                  exportMatch[1].split(',').forEach((spec: string) => {
+                    const parts = spec.trim().split(/\s+as\s+/)
+                    if (parts.length === 2) {
+                      exportMap[parts[1]] = parts[0]
+                    } else {
+                      exportMap[parts[0]] = parts[0]
+                    }
+                  })
+                }
+
+                let code = chunk.code.replace(/\bexport\s*\{[^}]*\}\s*;?\s*$/, '')
+
+                // Compose import aliases through the export map:
+                // import { g as Jo } + export { l as g } → var Jo = l;
+                const aliases = namedImportsStr.split(',').map((s: string) => {
+                  const m = s.trim().match(/^(\S+)\s+as\s+(\S+)$/)
+                  const exportedName = m ? m[1] : s.trim()
+                  const localAlias = m ? m[2] : s.trim()
+                  const chunkLocal = exportMap[exportedName] || exportedName
+                  return { chunkLocal, localAlias }
+                })
+
+                const aliasCode = aliases
+                  .filter(a => a.chunkLocal !== a.localAlias)
+                  .map(a => `var ${a.localAlias}=${a.chunkLocal};`)
+                  .join('')
+
+                return code + aliasCode
+              }
+            )
+          }
+        }
+      }]
     },
     chunkSizeWarningLimit: 1500
   },

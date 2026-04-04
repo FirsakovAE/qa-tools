@@ -12,7 +12,7 @@
 import { findComponentByPath } from './find-by-path'
 import { updateComponentProps } from './update-props'
 import { isVueDetected, findVueRoots, detectVueContext } from './vue-detect'
-import { serializeProps } from './serialize'
+import { serializeProps, serializeRawPropsForDeclared } from './serialize'
 
 /** Inlined likeMatch - injected script must not use external imports (no type="module") */
 function likeMatch(value: string, pattern: string): boolean {
@@ -27,6 +27,8 @@ import { scanStructure, getComponentList, getScannerStats } from './structure-sc
 import { 
   readPropsByUid, 
   readPropsByMeta,
+  readPropsWithRawByUid,
+  readPropsWithRawByMeta,
   expandAndReadProps, 
   collapseAndClearProps,
   readExpandedComponentsProps,
@@ -61,7 +63,9 @@ const MESSAGE_TYPES = {
   SEARCH_COMPONENTS: 'VUE_INSPECTOR_SEARCH_COMPONENTS',
   SEARCH_RESULTS: 'VUE_INSPECTOR_SEARCH_RESULTS',
   GET_EXPANDED_PROPS: 'VUE_INSPECTOR_GET_EXPANDED_PROPS',
-  EXPANDED_PROPS_DATA: 'VUE_INSPECTOR_EXPANDED_PROPS_DATA'
+  EXPANDED_PROPS_DATA: 'VUE_INSPECTOR_EXPANDED_PROPS_DATA',
+  GET_COMPONENT_INFO_BY_UID: 'VUE_INSPECTOR_GET_COMPONENT_INFO_BY_UID',
+  COMPONENT_INFO_DATA: 'VUE_INSPECTOR_COMPONENT_INFO_DATA'
 } as const
 
 // ============================================================================
@@ -92,17 +96,26 @@ function buildElementInfo(el: HTMLElement | null): string {
   return tag + cls + id
 }
 
+/** Get props counts without full serialization (for lightweight payload) */
+function getPropsCountsLight(instance: any): { passed: number; declared: number } {
+  const raw = extractRawProps(instance)
+  if (!raw || typeof raw !== 'object') return { passed: 0, declared: 0 }
+  const keys = Object.keys(raw)
+  const declared = keys.length
+  const passed = keys.filter(k => raw[k] !== undefined).length
+  return { passed, declared }
+}
+
 /**
- * Convert ComponentMeta to legacy ComponentInfo format
+ * Lightweight format: structure only, NO serialized props.
+ * Props loaded on-demand via GET_COMPONENT_PROPS. Keeps payload under 64MB.
  */
-function metaToLegacyFormat(meta: any): any {
-  const instance = meta.instance
-  const rawProps = extractRawProps(instance)
+function metaToLegacyFormatLight(meta: any): any {
+  const { passed: propsCountPassed, declared: propsCount } = getPropsCountsLight(meta.instance)
+  const hasProps = propsCount > 0
   
-  // Get element info
   let element = null
   let rootElement = null
-  
   if (meta.rootEl) {
     element = {
       tagName: meta.rootEl.tagName?.toLowerCase(),
@@ -113,26 +126,20 @@ function metaToLegacyFormat(meta: any): any {
     rootElement = element
   }
   
-  // Serialize props
-  const props = rawProps ? serializeProps(rawProps) : {}
-  
-  // Build stable componentUid: "ComponentName::element.class" format
-  // This format is stable for favorites matching
   const name = meta.name || 'Anonymous'
   const elementInfo = buildElementInfo(meta.rootEl)
   const componentUid = `${name}::${elementInfo}`
   
   return {
     name,
-    props,
+    props: {},
     path: `uid:${meta.uid}`,
-    // Use stable componentUid for favorites
     componentUid,
-    // Keep numeric ID for internal use
     id: `uid:${meta.uid}`,
     element,
-    hasProps: Object.keys(props).length > 0,
-    propsCount: Object.keys(props).length,
+    hasProps,
+    propsCount,
+    propsCountPassed,
     rootElement
   }
 }
@@ -157,24 +164,34 @@ function isBlacklisted(name: string, blacklist: { active: string[]; inactive: st
   return blacklist.active.some((rule: string) => likeMatch(n, rule))
 }
 
-/**
- * Get components in legacy format (for backwards compatibility).
- * Blacklisted components are excluded at source: no tree entry, no props extraction, no serialization.
- */
+/** Lightweight format - no serialized props, safe for 64MB limit */
 function getLegacyComponents(
   forceRefresh = false,
-  blacklist?: { active: string[]; inactive: string[] }
+  blacklist?: { active: string[]; inactive: string[] },
+  rootElementUid?: number
 ): any[] {
-  // First scan structure (force=true bypasses throttle when user explicitly refreshes)
   scanStructure({ force: forceRefresh })
-  
   const store = getMetaStore()
-  const metas = store.getAllComponents()
-  
+  let metas = store.getAllComponents()
+
+  // Filter by root element: only components whose rootEl is inside the selected element
+  if (rootElementUid != null) {
+    const rootEl = document.querySelector(`[data-vue-inspector-uid="${rootElementUid}"]`)
+    if (rootEl instanceof HTMLElement) {
+      metas = metas.filter(meta => {
+        if (!meta.rootEl || !meta.rootEl.isConnected) return false
+        return rootEl === meta.rootEl || rootEl.contains(meta.rootEl)
+      })
+    } else {
+      metas = []
+    }
+  }
+
   return metas
     .filter(meta => !isBlacklisted(meta.name ?? 'Anonymous', blacklist))
-    .map(metaToLegacyFormat)
+    .map(metaToLegacyFormatLight)
 }
+
 
 // ============================================================================
 // Component Getters
@@ -200,51 +217,54 @@ function findMetaByStableId(stableId: string): { meta: any; uid: number } | null
 /**
  * Get component props by path (legacy) or UID.
  * When uid lookup fails (component remounted, new uid), falls back to stable id (Name::element).
+ * Returns both props (passed) and rawProps (declared) for Passed/Declared sections.
  */
 function getComponentProps(
   componentPath: string,
   componentPathFallback?: string
-): { props: Record<string, any>; newUid?: number } {
+): { props: Record<string, any>; rawProps: Record<string, any>; newUid?: number } {
   // Check if it's a UID-based path
   if (componentPath.startsWith('uid:')) {
     const uid = parseInt(componentPath.substring(4), 10)
-    const result = readPropsByUid(uid)
+    const result = readPropsWithRawByUid(uid)
     if (result) {
-      return { props: result.props ?? {} }
+      return { props: result.props ?? {}, rawProps: result.rawProps ?? {} }
     }
     // UID not found (component remounted) — fallback to stable id
     if (componentPathFallback) {
       const found = findMetaByStableId(componentPathFallback)
       if (found) {
-        const serialized = readPropsByMeta(found.meta)
-        return { props: serialized.props ?? {}, newUid: found.uid }
+        const { props, rawProps } = readPropsWithRawByMeta(found.meta)
+        return { props, rawProps, newUid: found.uid }
       }
     }
-    return { props: {} }
+    return { props: {}, rawProps: {} }
   }
   
   // Legacy path-based lookup
   const vnode = findComponentByPath(componentPath)
-  if (!vnode) return { props: {} }
+  if (!vnode) return { props: {}, rawProps: {} }
   
   const vueContext = detectVueContext()
   const isVue2 = vueContext.version === 2
   
-  let props: Record<string, any> = {}
+  let raw: Record<string, any> = {}
   
   if (isVue2) {
     const instance = vnode.componentInstance || vnode.context
     if (instance) {
-      props = serializeProps(instance.$props || instance.propsData || instance._props || {})
+      raw = instance.$props || instance.propsData || instance._props || {}
     }
   } else {
     const instance = vnode.component
     if (instance) {
-      props = serializeProps(instance.props || {})
+      raw = instance.props || {}
     }
   }
   
-  return { props }
+  const props = serializeProps(raw)
+  const rawProps = raw && typeof raw === 'object' ? serializeRawPropsForDeclared(raw) : {}
+  return { props: props as Record<string, any>, rawProps }
 }
 
 // ============================================================================
@@ -272,6 +292,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] UPDATE_PROPS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.UPDATE_PROPS_RESULT,
@@ -289,32 +310,36 @@ function handleMessage(event: MessageEvent) {
       const { componentPath, componentPathFallback } = event.data
       // Обновляем meta-store для актуальных ссылок на компоненты (иначе — закэшированные props)
       scanStructure({ force: true })
-      const { props, newUid } = getComponentProps(componentPath, componentPathFallback)
+      const { props, rawProps, newUid } = getComponentProps(componentPath, componentPathFallback)
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENT_PROPS_DATA,
         props,
+        rawProps,
         newUid,
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] GET_COMPONENT_PROPS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENT_PROPS_DATA,
         props: {},
+        rawProps: {},
         requestId
       }, '*')
     }
     return
   }
 
-  // Handle GET_COMPONENTS message (legacy, with props)
+  // Handle GET_COMPONENTS message (always lightweight - no serialized props)
   if (event.source === window && event.data?.type === MESSAGE_TYPES.GET_COMPONENTS) {
     try {
       const forceRefresh = !!(event.data?.forceRefresh)
       const blacklist = normalizeBlacklist(event.data?.blacklist)
-      const components = getLegacyComponents(forceRefresh, blacklist)
+      const rootElementUid = typeof event.data?.rootElementUid === 'number' ? event.data.rootElementUid : undefined
+      const components = getLegacyComponents(forceRefresh, blacklist, rootElementUid)
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
@@ -323,6 +348,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] GET_COMPONENTS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENTS_DATA,
@@ -361,6 +387,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] SCAN_STRUCTURE failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.STRUCTURE_DATA,
@@ -384,10 +411,70 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] GET_COMPONENT_LIST failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENT_LIST_DATA,
         components: [],
+        requestId
+      }, '*')
+    }
+    return
+  }
+
+  // Handle GET_COMPONENT_INFO_BY_UID (for inspector hover panel)
+  if (event.source === window && event.data?.type === MESSAGE_TYPES.GET_COMPONENT_INFO_BY_UID) {
+    try {
+      const uid = event.data.uid
+      const store = getMetaStore()
+      const meta = typeof uid === 'number' ? store.getByUid(uid) : null
+      if (!meta) {
+        window.postMessage({
+          __FROM_VUE_INSPECTOR__: true,
+          type: MESSAGE_TYPES.COMPONENT_INFO_DATA,
+          name: null,
+          rootElementInfo: null,
+          propsCount: 0,
+          childCount: 0,
+          requestId
+        }, '*')
+        return
+      }
+      const { passed: propsCount } = getPropsCountsLight(meta.instance)
+      const name = meta.name || 'Anonymous'
+      const rootElementInfo = buildElementInfo(meta.rootEl ?? null)
+      const rootEl = meta.rootEl
+      let childCount = 0
+      if (rootEl && rootEl.isConnected) {
+        const allMetas = store.getAllComponents()
+        const limit = 800
+        if (allMetas.length <= limit) {
+          for (const m of allMetas) {
+            if (m.uid === uid) continue
+            if (m.rootEl && m.rootEl.isConnected && rootEl.contains(m.rootEl)) {
+              childCount++
+            }
+          }
+        }
+      }
+      window.postMessage({
+        __FROM_VUE_INSPECTOR__: true,
+        type: MESSAGE_TYPES.COMPONENT_INFO_DATA,
+        name,
+        rootElementInfo,
+        propsCount,
+        childCount,
+        requestId
+      }, '*')
+    } catch (e) {
+      console.error('[injected/props/bridge] GET_COMPONENT_INFO_BY_UID failed:', e)
+      window.postMessage({
+        __FROM_VUE_INSPECTOR__: true,
+        type: MESSAGE_TYPES.COMPONENT_INFO_DATA,
+        name: null,
+        rootElementInfo: null,
+        propsCount: 0,
+        childCount: 0,
         requestId
       }, '*')
     }
@@ -407,6 +494,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] EXPAND_COMPONENT failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.COMPONENT_PROPS_DATA,
@@ -430,6 +518,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] COLLAPSE_COMPONENT failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.UPDATE_PROPS_RESULT,
@@ -453,6 +542,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] SEARCH_COMPONENTS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.SEARCH_RESULTS,
@@ -475,6 +565,7 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     } catch (e) {
+      console.error('[injected/props/bridge] GET_EXPANDED_PROPS failed:', e)
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,
         type: MESSAGE_TYPES.EXPANDED_PROPS_DATA,
@@ -487,18 +578,32 @@ function handleMessage(event: MessageEvent) {
 
   // Handle CHECK_VUE message
   if (event.source === window && event.data?.type === MESSAGE_TYPES.CHECK_VUE) {
-    const detected = isVueDetected()
-    const vueRoots = findVueRoots()
+    try {
+      const detected = isVueDetected()
+      const vueRoots = findVueRoots()
 
-    window.postMessage({
-      __FROM_VUE_INSPECTOR__: true,
-      type: MESSAGE_TYPES.VUE_DETECTED,
-      detected: detected,
-      url: window.location.href,
-      appCount: vueRoots.length,
-      hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
-      hasVue2: !!(window as any).__VUE__
-    }, '*')
+      window.postMessage({
+        __FROM_VUE_INSPECTOR__: true,
+        type: MESSAGE_TYPES.VUE_DETECTED,
+        detected: detected,
+        url: window.location.href,
+        appCount: vueRoots.length,
+        hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
+        hasVue2: !!(window as any).__VUE__
+      }, '*')
+    } catch (e) {
+      console.error('[injected/props/bridge] CHECK_VUE failed:', e)
+      window.postMessage({
+        __FROM_VUE_INSPECTOR__: true,
+        type: MESSAGE_TYPES.VUE_DETECTED,
+        detected: false,
+        url: window.location.href,
+        appCount: 0,
+        hasDevToolsHook: false,
+        hasVue2: false,
+        error: String(e)
+      }, '*')
+    }
     return
   }
 
@@ -526,17 +631,21 @@ export function initPropsBridge() {
   window.addEventListener('beforeunload', cleanupPropsBridge)
   window.addEventListener('pagehide', cleanupPropsBridge)
 
-  if (isVueDetected()) {
-    const vueRoots = findVueRoots()
-    window.postMessage({
-      __FROM_VUE_INSPECTOR__: true,
-      type: MESSAGE_TYPES.VUE_DETECTED,
-      detected: true,
-      url: window.location.href,
-      appCount: vueRoots.length,
-      hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
-      hasVue2: !!(window as any).__VUE__
-    }, '*')
+  try {
+    if (isVueDetected()) {
+      const vueRoots = findVueRoots()
+      window.postMessage({
+        __FROM_VUE_INSPECTOR__: true,
+        type: MESSAGE_TYPES.VUE_DETECTED,
+        detected: true,
+        url: window.location.href,
+        appCount: vueRoots.length,
+        hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
+        hasVue2: !!(window as any).__VUE__
+      }, '*')
+    }
+  } catch (e) {
+    console.error('[injected/props/bridge] initPropsBridge Vue detection failed:', e)
   }
 
   window.postMessage({

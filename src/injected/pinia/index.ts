@@ -42,7 +42,7 @@ import {
   detectSetupStoreByEmptyState,
   detectSetupStoreByRefs
 } from './store-meta'
-import { buildStoreSearchIndex, flattenObject } from './search'
+import { searchStores } from './search'
 import { PiniaStore, PiniaInstance, StoreSummary, SearchIndexEntry } from './types'
 
 // Основной интерфейс Pinia Inspector API
@@ -99,9 +99,8 @@ export const PiniaInspectorAPI = {
   detectSetupStoreByEmptyState,
   detectSetupStoreByRefs,
   
- // Search
-  buildStoreSearchIndex,
-  flattenObject,
+  // Search (on-demand via PINIA_SEARCH)
+  searchStores,
   
   // Types are not included in runtime object
 }
@@ -161,8 +160,7 @@ export {
   detectSetupStoreByRefs,
   
   // Search
-  buildStoreSearchIndex,
-  flattenObject
+  searchStores
 }
 
 export type { 

@@ -29,6 +29,7 @@ export async function callAction(storeId: string, actionName: string, ...args: a
     const result = await store[actionName](...args)
     return result
   } catch (e) {
+    console.error('[injected/pinia/actions] callAction failed:', storeId, actionName, e)
     throw e
   }
 }

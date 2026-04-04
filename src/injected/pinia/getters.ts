@@ -16,7 +16,8 @@ export function getStoreGetters(storeId: string): Record<string, any> {
   for (const key of getterKeys) {
     try {
       getters[key] = unwrapValue(store[key])
-    } catch {
+    } catch (e) {
+      console.error('[injected/pinia/getters] getStoreGetters unwrap failed:', storeId, key, e)
       getters[key] = '[Non-serializable]'
     }
   }

@@ -88,22 +88,77 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
     }
 
     /**
+     * Convert a wildcard pattern (e.g. *host*) to a RegExp.
+     * Supports `*` as zero-or-more-of-any-char wildcard.
+     */
+    function wildcardToRegex(pattern: string): RegExp {
+      const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+      return new RegExp(`^${escaped}$`, 'i')
+    }
+
+    /**
+     * Match autoRun pattern against {@link Location.origin} (scheme + host + non-default port).
+     * Absolute URL patterns without `*` are normalized with the URL API (path/query/hash ignored; ports normalized).
+     * Patterns with `*` use shell-style wildcards against the same origin string.
+     */
+    function originMatchesPattern(pattern: string, origin: string): boolean {
+      const p = pattern.trim()
+      if (!p) return false
+      if (p.includes('*')) return wildcardToRegex(p).test(origin)
+      if (/^https?:\/\//i.test(p)) {
+        try {
+          return new URL(p).origin.toLowerCase() === origin.toLowerCase()
+        } catch {
+          return false
+        }
+      }
+      return wildcardToRegex(p).test(origin)
+    }
+
+    /**
+     * Check if the current page origin is allowed by the autoRun whitelist/blacklist.
+     * Returns false if the pill should NOT be shown.
+     */
+    function isAutoRunAllowed(autoRun: { advancedMode?: boolean; siteBlacklist?: { pattern: string }[]; siteWhitelist?: { pattern: string }[] } | null | undefined): boolean {
+      if (!autoRun) return true
+      const origin = location.origin
+
+      const whitelist = autoRun.advancedMode ? (autoRun.siteWhitelist ?? []) : []
+      if (whitelist.length > 0) {
+        const whitelisted = whitelist.some(e => originMatchesPattern(e.pattern, origin))
+        if (!whitelisted) return false
+      }
+
+      const blacklist = autoRun.siteBlacklist ?? []
+      if (blacklist.length > 0) {
+        const blacklisted = blacklist.some(e => originMatchesPattern(e.pattern, origin))
+        if (blacklisted) return false
+      }
+
+      return true
+    }
+
+    /**
      * Main initialization function
      */
     async function initializeContentScript(): Promise<void> {
       init()
 
-      // Check display mode setting before injecting overlay
+      // Check display mode + autoRun settings before injecting overlay
       let displayMode: string = 'overlay'
+      let autoRun: any = null
       try {
         if (chrome?.runtime?.id) {
           const response = await chrome.runtime.sendMessage({ type: 'GET_DISPLAY_MODE' })
           if (response?.displayMode) {
             displayMode = response.displayMode
           }
+          if (response?.autoRun) {
+            autoRun = response.autoRun
+          }
         }
-      } catch {
-        // Fallback to overlay
+      } catch (error) {
+        console.error('[content] Failed to get display mode:', error)
       }
 
       // Detect static site before creating UI
@@ -119,18 +174,37 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
           chrome.runtime.sendMessage({
             type: 'SET_STATIC_SITE',
             isStatic: detection.isLikelyStatic
-          }).catch(() => {})
+          }).catch((error) => {
+            console.error('[content] Failed to send SET_STATIC_SITE:', error)
+          })
         }
-      } catch {}
+      } catch (error) {
+        console.error('[content] chrome.runtime.sendMessage (SET_STATIC_SITE) error:', error)
+      }
 
-      // Show overlay ONLY in overlay mode, on non-static sites
-      if (displayMode === 'overlay' && !detection.isLikelyStatic && !uiInjected) {
+      // Show overlay ONLY in overlay mode, on non-static sites, and allowed by autoRun
+      if (displayMode === 'overlay' && !detection.isLikelyStatic && !uiInjected && isAutoRunAllowed(autoRun)) {
         setUiInjected(true)
         injectInspectorUI()
       }
 
       setupHighlightEventListeners()
       setupRuntimeMessageListener()
+
+      // Forced launch listener — bypasses static-site / autoRun guards
+      try {
+        if (chrome?.runtime?.id) {
+          chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+            if (message?.type !== 'FORCE_INJECT_UI') return false
+            if (!uiInjected) {
+              setUiInjected(true)
+              injectInspectorUI()
+            }
+            sendResponse({ success: true })
+            return true
+          })
+        }
+      } catch { /* extension context may be invalidated */ }
 
       // Always set up DevTools bridge so the panel can connect when opened
       setupDevtoolsBridge()

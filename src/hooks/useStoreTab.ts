@@ -35,11 +35,15 @@ export function useStoreTab(
             searchTerm.value = savedSearch
             debouncedTerm.value = savedSearch
         }
+    }).catch((error) => {
+        console.error('[hooks/useStoreTab] storage.get failed:', error)
     })
 
     // Сохраняем состояние поиска при изменении
     watch(searchTerm, (value) => {
-        runtime.storage.set(STORAGE_KEY_SEARCH, value)
+        runtime.storage.set(STORAGE_KEY_SEARCH, value).catch((error) => {
+            console.error('[hooks/useStoreTab] storage.set failed:', error)
+        })
     })
 
     const settingsRef = ref<any>(null)
@@ -47,6 +51,8 @@ export function useStoreTab(
     // Загружаем настройки
     useInspectorSettings().then(s => {
         settingsRef.value = s
+    }).catch((error) => {
+        console.error('[hooks/useStoreTab] useInspectorSettings failed:', error)
     })
 
     const applyDebounce = useDebounceFn(() => { debouncedTerm.value = searchTerm.value }, 300)

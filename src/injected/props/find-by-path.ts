@@ -256,8 +256,8 @@ export function findComponentByPath(componentUid: string): any {
           return component
         }
       }
-    } catch {
-      // Ignore invalid selector errors
+    } catch (e) {
+      console.error('[injected/props/find-by-path] findComponentByPath selector failed:', selector, e)
     }
   }
 

@@ -229,7 +229,22 @@ export function getVueComponents(options?: GetVueComponentsOptions): ComponentIn
 
   // Filter blacklisted BEFORE componentRefToInfo - no props extraction, no serialization
   const filteredRefs = filterByBlacklist(allRefs, blacklist)
-  return filteredRefs.map(componentRefToInfo)
+  return filteredRefs.map(ref => {
+    try {
+      return componentRefToInfo(ref)
+    } catch (e) {
+      console.error('[injected/props/collect-all] componentRefToInfo failed:', ref.path, e)
+      return {
+        name: ref.name,
+        props: {},
+        path: ref.path,
+        element: ref.element,
+        hasProps: false,
+        propsCount: 0,
+        rootElement: ref.rootElement
+      }
+    }
+  })
 }
 
 /**
@@ -289,12 +304,17 @@ export function clearComponentCache(): void {
  * Get a single component's props by path (lazy serialization)
  */
 export function getComponentPropsByPath(path: string): Record<string, any> | null {
-  const store = getComponentStore()
-  const ref = store.getByPath(path)
-  
-  if (!ref) return null
-  
-  // Import getSerializedProps dynamically to avoid circular dependency
-  const { getSerializedProps } = require('./collect')
-  return getSerializedProps(ref)
+  try {
+    const store = getComponentStore()
+    const ref = store.getByPath(path)
+
+    if (!ref) return null
+
+    // Import getSerializedProps dynamically to avoid circular dependency
+    const { getSerializedProps } = require('./collect')
+    return getSerializedProps(ref)
+  } catch (e) {
+    console.error('[injected/props/collect-all] getComponentPropsByPath failed:', path, e)
+    return null
+  }
 }

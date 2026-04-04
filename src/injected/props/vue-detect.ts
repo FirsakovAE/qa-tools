@@ -73,9 +73,10 @@ export function findVueRoots(): VueHTMLElement[] {
  */
 export function extractRootVNode(root: VueHTMLElement): any {
  if (root.__vue_app__) {
-    // Vue 3
+    // Vue 3 — нужен именно корневой VNode. `app._instance.root` — это ComponentInternalInstance,
+    // а не VNode; траверс по нему не находит `vnode.component` и даёт почти пустое дерево.
     const app = root.__vue_app__ as any
-    return app._instance?.root ?? app._container?._vnode ?? root._vnode
+    return app._instance?.vnode ?? app._container?._vnode ?? root._vnode
   } else if (root.__vue__) {
     // Vue 2
     const vue2Instance = root.__vue__ as any

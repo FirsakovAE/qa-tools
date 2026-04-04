@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { ArrowLeft, Star, X, Save, Edit, RefreshCw } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
@@ -14,95 +14,50 @@ import JsonEditor from '@/components/JsonEditor.vue'
 
 import type { TreeNodeModel } from '@/types/tree'
 import type { FavoriteItem, BaseInspectorSettings } from '@/types/inspector'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
 import { isInFavorites, matchFavoriteIds } from '@/utils/favoritesMatcher'
 import { useComponentsTab } from '@/hooks/useComponentsTab'
 import { ref as createRef } from 'vue'
+import { getPropsFavoriteNodeId, isPropsRowResolvedFavorite } from '../propsFavorites'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
 // --- Props и Emits ---
 const props = withDefaults(
-  defineProps<{ node: TreeNodeModel; refreshing?: boolean }>(),
-  { refreshing: false }
+  defineProps<{
+    node: TreeNodeModel
+    /** Full Props table rows; required for correct star when names/stable ids collide */
+    allRows?: TreeNodeModel[]
+    refreshing?: boolean
+  }>(),
+  { refreshing: false, allRows: () => [] }
 )
 const emit = defineEmits<{ (e: 'back'): void; (e: 'refresh'): void }>()
 
 // --- Settings ---
-const settings = ref<BaseInspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
 const jsonMode = ref<'text' | 'tree'>('text')
 
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-    jsonMode.value = settings.value?.json?.mode ?? 'text'
-  } catch { /* use defaults */ }
-})
+watch(settings, (s) => {
+  if (s) jsonMode.value = s.json?.mode ?? 'text'
+}, { immediate: true })
 
-// --- Favorites ---
+// --- Favorites (same resolution as PropsTab.updateFavoriteFlags when allRows is provided) ---
 const isFavorite = computed(() => {
-  if (!settings.value?.favorites) return false
-  const elementId = getElementIdentifier(props.node)
-  return isInFavorites(elementId, settings.value.favorites)
+  if (!settings.value?.favorites?.length) return false
+  const rows = props.allRows
+  if (rows.length > 0) {
+    return isPropsRowResolvedFavorite(props.node, settings.value.favorites, rows)
+  }
+  return isInFavorites(getPropsFavoriteNodeId(props.node), settings.value.favorites)
 })
-
-function getElementIdentifier(node: TreeNodeModel): string {
-  if (node.componentUid) {
-    return node.componentUid
-  }
-  const elementInfo = getElementInfo(node)
-  return `${node.name}::${elementInfo}`
-}
-
-function buildElementSelector(
-  tag: string,
-  elId?: string,
-  cls?: string,
-  testId?: string
-): string {
-  let sel = tag.toLowerCase()
-  if (elId) sel += '#' + elId
-  if (cls) sel += '.' + cls.trim().replace(/\s+/g, '.')
-  if (testId) sel += `[${testId}]`
-  return sel
-}
-
-function getElementInfo(node: TreeNodeModel): string {
-  if (node.element) {
-    if (node.element instanceof HTMLElement) {
-      return buildElementSelector(
-        node.element.tagName,
-        node.element.id || undefined,
-        node.element.className || undefined,
-        node.element.getAttribute?.('data-testid') || undefined
-      )
-    } else if (node.element.tagName) {
-      return buildElementSelector(
-        node.element.tagName,
-        node.element.id,
-        node.element.className,
-        node.element.testId
-      )
-    }
-  }
-
-  if (node.rootElement?.tagName) {
-    return buildElementSelector(
-      node.rootElement.tagName,
-      node.rootElement.id,
-      node.rootElement.className,
-      node.rootElement.testId
-    )
-  }
-
-  return 'div'
-}
 
 async function toggleFavorite() {
   if (!settings.value) return
 
-  const elementId = getElementIdentifier(props.node)
+  const elementId = getPropsFavoriteNodeId(props.node)
 
   if (isFavorite.value) {
     const stableMatches = settings.value.favorites.filter(f => matchFavoriteIds(elementId, f.id))
@@ -128,7 +83,7 @@ async function toggleFavorite() {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
   } catch (error) {
-    // Ignore save errors
+    console.error('[props/ComponentDetails] toggleFavorite save failed:', error)
   }
 }
 
@@ -146,6 +101,15 @@ const componentPath = computed(() =>
   props.node.id?.startsWith('uid:') ? props.node.id : (props.node.componentUid || props.node.id || '')
 )
 
+// --- Sections (Received / Declared, like PiniaDetails State / Getters) ---
+type SectionId = 'received' | 'declared'
+const activeSection = ref<SectionId>('received')
+
+const sections = computed<Array<{ id: SectionId; label: string }>>(() => [
+  { id: 'received', label: 'Received' },
+  { id: 'declared', label: 'Declared' }
+])
+
 // --- JSON State ---
 const json = computed(() => {
   if (props.node.props) return JSON.stringify(props.node.props, null, 2)
@@ -158,6 +122,13 @@ const isEditing = ref(false)
 
 const isJsonValid = computed(() => {
   try { JSON.parse(editedJson.value); return true } catch { return false }
+})
+
+/** Declared section: rawProps as JSON (read-only) */
+const rawPropsJson = computed(() => {
+  const raw = props.node.rawProps
+  if (!raw || typeof raw !== 'object') return '{}'
+  return JSON.stringify(raw, null, 2)
 })
 
 // Watch for node changes
@@ -214,6 +185,16 @@ const formattedTime = computed(() => {
   return d.toISOString().replace('T', ' ').slice(0, 19)
 })
 
+/** Фактический размер props в байтах (честный расчёт через TextEncoder) */
+const propsSizeFormatted = computed(() => {
+  const str = json.value
+  if (!str || str === '{}') return null
+  const bytes = new TextEncoder().encode(str).length
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+})
+
 // --- Actions ---
 function startEditing() {
   editedJson.value = json.value.trim()
@@ -256,6 +237,9 @@ async function saveChanges() {
     
     isEditing.value = false
   } catch (err) {
+    if (!isExpectedExtensionError(err)) {
+      console.error('[props/ComponentDetails] saveChanges failed:', err)
+    }
     // Keep editing on error
   }
 }
@@ -275,7 +259,7 @@ async function saveChanges() {
             <span class="font-semibold truncate">{{ nodeName }}</span>
             <Tooltip>
               <TooltipTrigger as-child>
-                <Badge variant="outline" class="text-xs truncate max-w-[200px]">
+                <Badge variant="secondary" class="text-xs truncate max-w-[200px]">
                   {{ truncatedElementInfo }}
                 </Badge>
               </TooltipTrigger>
@@ -283,6 +267,9 @@ async function saveChanges() {
                 {{ elementInfo }}
               </TooltipContent>
             </Tooltip>
+            <Badge v-if="propsSizeFormatted" variant="outline" class="text-xs font-mono shrink-0">
+              {{ propsSizeFormatted }}
+            </Badge>
           </div>
           <div class="text-xs text-muted-foreground">
             Updated: {{ formattedTime }}
@@ -329,8 +316,8 @@ async function saveChanges() {
             </TooltipContent>
           </Tooltip>
           
-          <!-- Edit/Save/Cancel buttons -->
-          <Tooltip v-if="!isEditing">
+          <!-- Edit/Save/Cancel buttons (only for Received section) -->
+          <Tooltip v-if="!isEditing && activeSection === 'received'">
             <TooltipTrigger as-child>
               <Button
                 variant="ghost"
@@ -383,16 +370,51 @@ async function saveChanges() {
         </div>
       </div>
 
-      <!-- JSON Editor -->
-      <div class="flex-1 min-h-0">
-        <JsonEditor
-          v-model="editedJson"
-          :editable="isEditing"
-          :show-copy="true"
-          :mode="jsonMode"
-          :full-height="true"
-          class="h-full"
-        />
+      <!-- Section tabs (Menubar style - like PiniaDetails) -->
+      <div class="shrink-0 flex items-center gap-1 p-1 border-b bg-muted/30">
+        <button
+          v-for="section in sections"
+          :key="section.id"
+          class="px-3 py-1.5 text-sm font-medium rounded-sm transition-colors"
+          :class="{
+            'bg-secondary text-secondary-foreground': activeSection === section.id,
+            'hover:bg-secondary/50 text-muted-foreground': activeSection !== section.id
+          }"
+          @click="activeSection = section.id"
+        >
+          {{ section.label }}
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div class="flex-1 min-h-0 overflow-hidden">
+        <!-- Received section: current data (editable) -->
+        <div v-if="activeSection === 'received'" class="h-full flex flex-col">
+          <div class="flex-1 min-h-0">
+            <JsonEditor
+              v-model="editedJson"
+              :editable="isEditing"
+              :show-copy="true"
+              :mode="jsonMode"
+              :full-height="true"
+              class="h-full"
+            />
+          </div>
+        </div>
+
+        <!-- Declared section: rawProps as JSON (read-only) -->
+        <div v-else-if="activeSection === 'declared'" class="h-full flex flex-col">
+          <div class="flex-1 min-h-0">
+            <JsonEditor
+              :model-value="rawPropsJson"
+              :editable="false"
+              :show-copy="true"
+              :mode="jsonMode"
+              :full-height="true"
+              class="h-full"
+            />
+          </div>
+        </div>
       </div>
     </div>
   </TooltipProvider>

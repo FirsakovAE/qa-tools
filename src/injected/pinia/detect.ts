@@ -19,7 +19,9 @@ export function detectFromWindow(): PiniaInstance | null {
         $id: 'found-in-window'
       }
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    console.error('[injected/pinia/detect] detectFromWindow failed:', e)
+  }
 
   return null
 }
@@ -40,8 +42,10 @@ export function detectFromDevtools(): PiniaInstance | null {
         }
       }
     }
-  } catch (e) { /* ignore */ }
-  
+  } catch (e) {
+    console.error('[injected/pinia/detect] detectFromDevtools failed:', e)
+  }
+
   return null
 }
 
@@ -81,7 +85,9 @@ export function detectFromVueRoots(): PiniaInstance | null {
         }
       }
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    console.error('[injected/pinia/detect] detectFromVueRoots failed:', e)
+  }
 
   return null
 }
@@ -106,7 +112,9 @@ export function detectFromInspector(): PiniaInstance | null {
         }
       }
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    console.error('[injected/pinia/detect] detectFromInspector failed:', e)
+  }
 
   return null
 }
@@ -223,24 +231,36 @@ export function watchPiniaStores(pinia: PiniaInstance, onUpdate: () => void): ()
     return () => {}
   }
 
-  const originalSet = pinia._s.set.bind(pinia._s)
-  const originalDelete = pinia._s.delete.bind(pinia._s)
+  try {
+    const originalSet = pinia._s.set.bind(pinia._s)
+    const originalDelete = pinia._s.delete.bind(pinia._s)
 
-  pinia._s.set = function (...args) {
-    const result = originalSet(...args)
-    onUpdate()
-    return result
-  }
+    pinia._s.set = function (...args) {
+      const result = originalSet(...args)
+      try {
+        onUpdate()
+      } catch (e) {
+        console.error('[injected/pinia/detect] watchPiniaStores onUpdate failed:', e)
+      }
+      return result
+    }
 
-  pinia._s.delete = function (...args) {
-    const result = originalDelete(...args)
-    onUpdate()
-    return result
-  }
+    pinia._s.delete = function (...args) {
+      const result = originalDelete(...args)
+      try {
+        onUpdate()
+      } catch (e) {
+        console.error('[injected/pinia/detect] watchPiniaStores onUpdate failed:', e)
+      }
+      return result
+    }
 
-  // Return cleanup function
-  return () => {
-    pinia._s.set = originalSet
-    pinia._s.delete = originalDelete
+    return () => {
+      pinia._s.set = originalSet
+      pinia._s.delete = originalDelete
+    }
+  } catch (e) {
+    console.error('[injected/pinia/detect] watchPiniaStores setup failed:', e)
+    return () => {}
   }
 }

@@ -75,7 +75,8 @@ export function matchesBreakpoint(entry: NetworkEntry, bp: BreakpointItem): bool
     }
     
     return true
-  } catch {
+  } catch (error) {
+    console.error('[network/useBreakpointMatching] matchesBreakpoint failed:', entry.url, error)
     return false
   }
 }
@@ -167,7 +168,8 @@ export function matchesMock(entry: NetworkEntry, mock: MockRule): boolean {
     }
     
     return true
-  } catch {
+  } catch (error) {
+    console.error('[network/useBreakpointMatching] matchesMock failed:', entry.url, error)
     return false
   }
 }

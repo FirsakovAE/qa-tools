@@ -38,6 +38,7 @@ function openDB(): Promise<IDBDatabase> {
                     dbPromise = null
                     tryOpen(true)
                 } else {
+                    console.error('[settings/mediaStore] openDB failed:', err)
                     reject(err)
                 }
             }
@@ -50,46 +51,70 @@ function openDB(): Promise<IDBDatabase> {
 export const mediaUrls = reactive<Record<string, string>>({})
 
 export async function saveMediaBlob(id: string, blob: Blob): Promise<void> {
-    if (_storageClient) {
-        return _storageClient.setMedia(id, blob)
+    try {
+        if (_storageClient) {
+            return _storageClient.setMedia(id, blob)
+        }
+        const db = await openDB()
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite')
+            tx.objectStore(STORE_NAME).put(blob, id)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => {
+                console.error('[settings/mediaStore] saveMediaBlob tx failed:', id, tx.error)
+                reject(tx.error)
+            }
+        })
+    } catch (e) {
+        console.error('[settings/mediaStore] saveMediaBlob failed:', id, e)
+        throw e
     }
-    const db = await openDB()
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite')
-        tx.objectStore(STORE_NAME).put(blob, id)
-        tx.oncomplete = () => resolve()
-        tx.onerror = () => reject(tx.error)
-    })
 }
 
 export async function getMediaBlob(id: string): Promise<Blob | null> {
-    if (_storageClient) {
-        return _storageClient.getMedia(id)
+    try {
+        if (_storageClient) {
+            return _storageClient.getMedia(id)
+        }
+        const db = await openDB()
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly')
+            const req = tx.objectStore(STORE_NAME).get(id)
+            req.onsuccess = () => resolve(req.result ?? null)
+            req.onerror = () => {
+                console.error('[settings/mediaStore] getMediaBlob failed:', id, req.error)
+                reject(req.error)
+            }
+        })
+    } catch (e) {
+        console.error('[settings/mediaStore] getMediaBlob failed:', id, e)
+        return null
     }
-    const db = await openDB()
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly')
-        const req = tx.objectStore(STORE_NAME).get(id)
-        req.onsuccess = () => resolve(req.result ?? null)
-        req.onerror = () => reject(req.error)
-    })
 }
 
 export async function removeMediaBlob(id: string): Promise<void> {
-    if (_storageClient) {
-        await _storageClient.removeMedia(id)
-    } else {
-        const db = await openDB()
-        await new Promise<void>((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readwrite')
-            tx.objectStore(STORE_NAME).delete(id)
-            tx.oncomplete = () => resolve()
-            tx.onerror = () => reject(tx.error)
-        })
-    }
-    if (mediaUrls[id]) {
-        URL.revokeObjectURL(mediaUrls[id])
-        delete mediaUrls[id]
+    try {
+        if (_storageClient) {
+            await _storageClient.removeMedia(id)
+        } else {
+            const db = await openDB()
+            await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite')
+                tx.objectStore(STORE_NAME).delete(id)
+                tx.oncomplete = () => resolve()
+                tx.onerror = () => {
+                    console.error('[settings/mediaStore] removeMediaBlob tx failed:', id, tx.error)
+                    reject(tx.error)
+                }
+            })
+        }
+        if (mediaUrls[id]) {
+            URL.revokeObjectURL(mediaUrls[id])
+            delete mediaUrls[id]
+        }
+    } catch (e) {
+        console.error('[settings/mediaStore] removeMediaBlob failed:', id, e)
+        throw e
     }
 }
 
@@ -97,7 +122,10 @@ export function blobToDataUri(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const r = new FileReader()
         r.onload = () => resolve(r.result as string)
-        r.onerror = () => reject(r.error)
+        r.onerror = () => {
+            console.error('[settings/mediaStore] blobToDataUri failed:', r.error)
+            reject(r.error)
+        }
         r.readAsDataURL(blob)
     })
 }
@@ -131,14 +159,19 @@ export async function initMediaStore(files: SavedFile[]): Promise<void> {
                 mediaUrls[file.id] = URL.createObjectURL(blob)
             }
         }
-    } catch {
-        // IDB unavailable — fall back silently
+    } catch (e) {
+        console.error('[settings/mediaStore] initMediaStore failed:', e)
     }
 }
 
 export async function addMedia(id: string, blob: Blob): Promise<void> {
-    await saveMediaBlob(id, blob)
-    mediaUrls[id] = URL.createObjectURL(blob)
+    try {
+        await saveMediaBlob(id, blob)
+        mediaUrls[id] = URL.createObjectURL(blob)
+    } catch (e) {
+        console.error('[settings/mediaStore] addMedia failed:', id, e)
+        throw e
+    }
 }
 
 export async function removeMedia(id: string): Promise<void> {
@@ -167,52 +200,78 @@ export async function clearAllMedia(): Promise<void> {
             tx.oncomplete = () => resolve()
             tx.onerror = () => reject(tx.error)
         })
-    } catch { /* IDB unavailable */ }
+    } catch (e) {
+        console.error('[settings/mediaStore] clearAllMedia failed:', e)
+    }
 }
 
 // --- Wallpapers (standalone: unified media store via StorageClient, extension: wallpapers store) ---
 
 export async function getWallpaperBlob(id: string): Promise<Blob | null> {
-    if (_storageClient) {
-        return _storageClient.getMedia(id)
+    try {
+        if (_storageClient) {
+            return _storageClient.getMedia(id)
+        }
+        const db = await openDB()
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(WALLPAPERS_STORE, 'readonly')
+            const req = tx.objectStore(WALLPAPERS_STORE).get(id)
+            req.onsuccess = () => resolve(req.result ?? null)
+            req.onerror = () => {
+                console.error('[settings/mediaStore] getWallpaperBlob failed:', id, req.error)
+                reject(req.error)
+            }
+        })
+    } catch (e) {
+        console.error('[settings/mediaStore] getWallpaperBlob failed:', id, e)
+        return null
     }
-    const db = await openDB()
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(WALLPAPERS_STORE, 'readonly')
-        const req = tx.objectStore(WALLPAPERS_STORE).get(id)
-        req.onsuccess = () => resolve(req.result ?? null)
-        req.onerror = () => reject(req.error)
-    })
 }
 
 export async function putWallpaperBlob(id: string, blob: Blob): Promise<void> {
-    if (_storageClient) {
-        return _storageClient.setMedia(id, blob)
+    try {
+        if (_storageClient) {
+            return _storageClient.setMedia(id, blob)
+        }
+        const db = await openDB()
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
+            tx.objectStore(WALLPAPERS_STORE).put(blob, id)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => {
+                console.error('[settings/mediaStore] putWallpaperBlob tx failed:', id, tx.error)
+                reject(tx.error)
+            }
+        })
+    } catch (e) {
+        console.error('[settings/mediaStore] putWallpaperBlob failed:', id, e)
+        throw e
     }
-    const db = await openDB()
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
-        tx.objectStore(WALLPAPERS_STORE).put(blob, id)
-        tx.oncomplete = () => resolve()
-        tx.onerror = () => reject(tx.error)
-    })
 }
 
 export async function removeWallpaperBlob(id: string): Promise<void> {
-    if (_storageClient) {
-        await _storageClient.removeMedia(id)
-    } else {
-        const db = await openDB()
-        await new Promise<void>((resolve, reject) => {
-            const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
-            tx.objectStore(WALLPAPERS_STORE).delete(id)
-            tx.oncomplete = () => resolve()
-            tx.onerror = () => reject(tx.error)
-        })
-    }
-    if (mediaUrls[id]) {
-        URL.revokeObjectURL(mediaUrls[id])
-        delete mediaUrls[id]
+    try {
+        if (_storageClient) {
+            await _storageClient.removeMedia(id)
+        } else {
+            const db = await openDB()
+            await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction(WALLPAPERS_STORE, 'readwrite')
+                tx.objectStore(WALLPAPERS_STORE).delete(id)
+                tx.oncomplete = () => resolve()
+                tx.onerror = () => {
+                    console.error('[settings/mediaStore] removeWallpaperBlob tx failed:', id, tx.error)
+                    reject(tx.error)
+                }
+            })
+        }
+        if (mediaUrls[id]) {
+            URL.revokeObjectURL(mediaUrls[id])
+            delete mediaUrls[id]
+        }
+    } catch (e) {
+        console.error('[settings/mediaStore] removeWallpaperBlob failed:', id, e)
+        throw e
     }
 }
 
@@ -230,7 +289,7 @@ export async function initWallpapersStore(ids: string[]): Promise<void> {
                 mediaUrls[id] = URL.createObjectURL(blob)
             }
         }
-    } catch {
-        // IDB unavailable — fall back silently
+    } catch (e) {
+        console.error('[settings/mediaStore] initWallpapersStore failed:', e)
     }
 }

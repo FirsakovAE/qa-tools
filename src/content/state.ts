@@ -68,10 +68,6 @@ export function setFeatureFlags(flags: FeatureFlags): void {
   featureFlags = flags
 }
 
-export function updateFeatureFlags(flags: Partial<FeatureFlags>): void {
-  featureFlags = { ...featureFlags, ...flags }
-}
-
 export function setInjectedScriptLoaded(value: boolean): void {
   injectedScriptLoaded = value
 }
@@ -134,23 +130,3 @@ export function resetDetectionState(): void {
   detectionAttempts = 0
 }
 
-/**
- * Reset all state to initial values
- */
-export function resetAllState(): void {
-  vueCheckInProgress = false
-  detectionCompleted = false
-  detectionAttempts = 0
-  detectionStopped = false
-  featureFlags = { hasVue: false, hasPinia: false, vueVersion: null }
-  injectedScriptLoaded = false
-  uiInjected = false
-  messageListenerAdded = false
-  staticSiteDetection = null
-  currentHighlightedElement = null
-  highlightOverlay = null
-  highlightRafId = null
-  checkTimeout = null
-  uiBridgeInitialized = false
-  // Note: Element marks (data attributes) are managed by injected script
-}

@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useElementSize } from '@vueuse/core'
-import { RecycleScroller } from 'vue-virtual-scroller'
-import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import VirtualTable from '@/components/VirtualTable.vue'
 import { Badge } from '@/components/ui/badge'
 import { Star, StarOff, MoreHorizontal } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -17,11 +16,12 @@ import {
 import { PropsTableActionsMenuContent } from '@/components/PropsTableActionsMenu'
 import { TableColumnSelector } from '@/components/ui/TableColumnSelector'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { defaultInspectorSettings } from '@/settings/inspectorSettings'
 import type { PropsTableColumnsSettings } from '@/types/inspector'
 import type { PropsRow } from './types'
 import { useRuntime } from '@/runtime'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
@@ -32,10 +32,10 @@ const props = defineProps<{
 }>()
 
 // Column visibility from settings
-const settings = ref<Awaited<ReturnType<typeof useInspectorSettings>> | null>(null)
+const settings = useInspectorSettingsSync()
 const columns = computed(() => {
   const cols = settings.value?.propsTableColumns ?? defaultInspectorSettings.propsTableColumns
-  return cols ?? { name: true, rootElement: true, props: true }
+  return cols ?? { name: true, rootElement: true, propsReceived: true, propsDeclared: true }
 })
 
 function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
@@ -46,13 +46,11 @@ function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
   settings.value.propsTableColumns[key] = value
 }
 
-onMounted(async () => {
-  settings.value = await useInspectorSettings()
-})
 
 const propsColumnDefs = [
   { key: 'rootElement', label: 'Root Element' },
-  { key: 'props', label: 'Props' },
+  { key: 'propsReceived', label: 'Received' },
+  { key: 'propsDeclared', label: 'Declared' },
 ] as const
 
 const ROW_HEIGHT = 40
@@ -111,8 +109,10 @@ async function sendHighlight(uid: number) {
       type: 'HIGHLIGHT_BY_UID',
       uid
     })
-  } catch {
-    // Silently ignore
+  } catch (error) {
+    if (!isExpectedExtensionError(error)) {
+      console.error('[props/PropsTable] sendHighlight failed:', error)
+    }
   }
 }
 
@@ -121,8 +121,10 @@ async function sendUnhighlight() {
     await runtime.sendMessage({
       type: 'UNHIGHLIGHT_ELEMENT'
     })
-  } catch {
-    // Silently ignore
+  } catch (error) {
+    if (!isExpectedExtensionError(error)) {
+      console.error('[props/PropsTable] sendUnhighlight failed:', error)
+    }
   }
 }
 
@@ -190,8 +192,15 @@ function truncateElementInfo(info: string): string {
   return info.length > 25 ? info.substring(0, 25) + '...' : info
 }
 
-function getPropsCount(row: PropsRow): number {
-  return row.props ? Object.keys(row.props).length : 0
+function getPropsPassed(row: PropsRow): number {
+  if (row.props && Object.keys(row.props).length > 0) {
+    return Object.keys(row.props).length
+  }
+  return row.propsCountPassed ?? row.propsCount ?? 0
+}
+
+function getPropsDeclared(row: PropsRow): number {
+  return row.propsCount ?? 0
 }
 
 function handleRowClick(row: PropsRow) {
@@ -207,38 +216,36 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 </script>
 
 <template>
-  <div ref="tableContainerRef" class="h-full flex flex-col border rounded-lg overflow-hidden table-scroll-x">
-    <div class="min-w-[360px] flex flex-col h-full">
-      <!-- Fixed Header -->
-      <div class="shrink-0 border-b bg-muted/30">
-        <div class="props-header">
-          <div class="props-cell props-cell-star"></div>
-          <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
-          <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
-          <div v-if="columns.props" class="props-cell props-cell-props text-xs font-semibold">Props</div>
-          <div class="props-cell props-cell-actions">
-            <TableColumnSelector
-              :columns="{ ...columns }"
-              :column-definitions="propsColumnDefs"
-              @update:column="(k, v) => setColumn(k as keyof PropsTableColumnsSettings, v)"
-            />
-          </div>
-        </div>
-      </div>
-      
-      <!-- Virtualized Body (RecycleScroller has its own scroll) -->
-      <RecycleScroller
-      class="flex-1 min-h-0"
+  <div ref="tableContainerRef" class="h-full">
+    <VirtualTable
       :items="rows"
-      :item-size="40"
       key-field="id"
+      :item-size="40"
+      min-width="360px"
+      empty-message="No components found"
+      :is-loading="isLoading"
       @mouseleave="onScrollerLeave"
     >
+      <template #header>
+        <div class="props-cell props-cell-star"></div>
+        <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
+        <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
+        <div v-if="columns.propsReceived" class="props-cell props-cell-props text-xs font-semibold">Received</div>
+        <div v-if="columns.propsDeclared" class="props-cell props-cell-props text-xs font-semibold">Declared</div>
+              <div class="props-cell props-cell-actions virtual-table__cell-actions">
+                <TableColumnSelector
+            :columns="{ ...columns }"
+            :column-definitions="propsColumnDefs"
+            @update:column="(k, v) => setColumn(k as keyof PropsTableColumnsSettings, v)"
+          />
+        </div>
+      </template>
+
       <template #default="{ item: row }">
         <ContextMenu>
           <ContextMenuTrigger as-child>
             <div
-              class="props-row"
+              class="props-row virtual-table__row"
               :class="{
                 'props-row-selected': selectedId === row.id,
                 'props-row-clickable': row.hasPropsFlag,
@@ -248,7 +255,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               @click="handleRowClick(row)"
               @mouseenter="onRowHover(row, $event)"
             >
-              <!-- Star Column -->
               <div class="props-cell props-cell-star">
                 <button
                   class="star-btn"
@@ -267,15 +273,11 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                   />
                 </button>
               </div>
-              
-              <!-- Name Column -->
               <div class="props-cell props-cell-name">
                 <div class="truncate text-sm font-medium" :title="row.name">
                   {{ row.name }}
                 </div>
               </div>
-              
-              <!-- Element Column -->
               <div v-if="columns.rootElement" class="props-cell props-cell-element">
                 <Badge 
                   :variant="row.elementInfo === 'Logic only' ? 'destructive_text' : 'secondary'"
@@ -285,21 +287,27 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                   {{ truncateElementInfo(row.elementInfo) }}
                 </Badge>
               </div>
-              
-              <!-- Props Column -->
-              <div v-if="columns.props" class="props-cell props-cell-props">
+              <div v-if="columns.propsReceived" class="props-cell props-cell-props">
                 <Badge 
                   v-if="row.hasPropsFlag"
                   variant="outline" 
                   class="text-xs font-mono"
                 >
-                  {{ getPropsCount(row) }}
+                  {{ getPropsPassed(row) }}
                 </Badge>
                 <span v-else class="text-xs text-muted-foreground">—</span>
               </div>
-
-              <!-- Actions Column (3-dot button) -->
-              <div class="props-cell props-cell-actions">
+              <div v-if="columns.propsDeclared" class="props-cell props-cell-props">
+                <Badge 
+                  v-if="row.hasPropsFlag"
+                  variant="secondary" 
+                  class="text-xs font-mono"
+                >
+                  {{ getPropsDeclared(row) }}
+                </Badge>
+                <span v-else class="text-xs text-muted-foreground">—</span>
+              </div>
+              <div class="props-cell props-cell-actions virtual-table__cell-actions">
                 <DropdownMenu>
                   <DropdownMenuTrigger as-child>
                     <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
@@ -316,7 +324,6 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
               </div>
             </div>
           </ContextMenuTrigger>
-
           <PropsTableActionsMenuContent
             variant="context"
             :row="row"
@@ -325,11 +332,10 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
           />
         </ContextMenu>
       </template>
-      
-      <!-- Loading skeleton (only when no data yet) -->
+
       <template #after>
         <div v-if="isLoading && rows.length === 0" class="flex flex-col gap-0">
-          <div v-for="i in skeletonRowCount" :key="i" class="props-row flex items-center h-10 px-2 border-b border-border/50">
+          <div v-for="i in skeletonRowCount" :key="i" class="props-row virtual-table__row flex items-center h-10 px-2 border-b border-border/50">
             <div class="props-cell props-cell-star w-10 flex justify-center">
               <Skeleton class="h-3.5 w-3.5 rounded" />
             </div>
@@ -339,41 +345,30 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
             <div v-if="columns.rootElement" class="props-cell props-cell-element">
               <Skeleton class="h-5 w-24" />
             </div>
-            <div v-if="columns.props" class="props-cell props-cell-props">
+            <div v-if="columns.propsReceived" class="props-cell props-cell-props">
               <Skeleton class="h-5 w-8 mx-auto" />
             </div>
-            <div class="props-cell props-cell-actions w-11">
+            <div v-if="columns.propsDeclared" class="props-cell props-cell-props">
+              <Skeleton class="h-5 w-8 mx-auto" />
+            </div>
+            <div class="props-cell props-cell-actions virtual-table__cell-actions">
               <Skeleton class="h-6 w-6 rounded mx-auto" />
             </div>
           </div>
         </div>
-        <div v-else-if="rows.length === 0" class="h-32 flex items-center justify-center text-muted-foreground">
-          No components found
-        </div>
       </template>
-    </RecycleScroller>
-    </div>
+    </VirtualTable>
   </div>
 </template>
 
 <style scoped>
-/* Row layout */
-.props-header,
+/* Row layout - padding matches header (padding-right: 0 when scrollbar-gutter reserves space) */
 .props-row {
   display: flex;
   align-items: center;
   height: 40px;
   padding: 0 8px;
-}
-
-.props-row {
   padding-right: 0;
-}
-
-.props-header {
-  color: hsl(var(--muted-foreground));
-  /* Reserve scrollbar space so header and rows align (8px scrollbar) */
-  padding-right: 8px;
 }
 
 /* Cell sizes */
@@ -388,34 +383,33 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   justify-content: center;
 }
 
+/* Name: shrinks first (high flex-shrink), min 130px; Root Element shrinks only after Name hits min */
 .props-cell-name {
-  flex: 1;
-  min-width: 0;
+  flex: 1 10 0;
+  min-width: 130px;
   text-align: left;
   padding-left: 8px;
+  overflow: hidden;
 }
 
+/* Root Element: default 180px, min 100px, shrinks when Name already at min */
 .props-cell-element {
-  width: 180px;
+  flex: 0 1 180px;
+  min-width: 100px;
   text-align: left;
   padding: 0;
+  overflow: hidden;
 }
 
-/* Props column - align with Getters (Pinia Store): w-80px, center */
+/* Props columns (Received / Declared) */
 .props-cell-props {
-  width: 80px;
+  width: 56px;
   display: flex;
   justify-content: center;
   align-items: center;
   text-align: center;
-  padding-left: 8px;
-  padding-right: 16px;
-}
-
-.props-cell-actions {
-  width: 44px;
-  display: flex;
-  justify-content: center;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 /* Row states */
@@ -465,66 +459,4 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
   fill: hsl(48 100% 50%);
 }
 
-/* Custom scrollbar styling to match ui-kit ScrollArea */
-:deep(.vue-recycle-scroller) {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
-  /* Reserve scrollbar space so header and content have same width */
-  scrollbar-gutter: stable;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar) {
-  width: 8px;
-  height: 8px;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar-track) {
-  background: transparent;
-  border-radius: 4px;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar-thumb) {
-  background: hsl(var(--border));
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar-thumb:hover) {
-  background: hsl(var(--border) / 0.8);
-  background-clip: padding-box;
-}
-
-:deep(.vue-recycle-scroller::-webkit-scrollbar-corner) {
-  background: transparent;
-}
-
-/* Horizontal scroll (min-width 360px) - Uikit-style */
-.table-scroll-x {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
-}
-
-.table-scroll-x::-webkit-scrollbar {
-  height: 8px;
-}
-
-.table-scroll-x::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-.table-scroll-x::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-.table-scroll-x::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--border) / 0.8);
-  background-clip: padding-box;
-}
 </style>

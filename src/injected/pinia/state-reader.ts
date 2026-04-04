@@ -21,7 +21,8 @@ export function createSnapshot(store: PiniaStore): StoreSnapshot {
     try {
       // Use unwrapValue to handle refs and reactive objects
       snapshot[key] = unwrapValue(store[key])
-    } catch {
+    } catch (e) {
+      console.error('[injected/pinia/state-reader] createSnapshot unwrap failed:', key, e)
       snapshot[key] = '[Non-serializable]'
     }
   }

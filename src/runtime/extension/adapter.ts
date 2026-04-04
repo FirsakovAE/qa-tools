@@ -5,6 +5,7 @@
  * Использует реальные chrome.* APIs.
  */
 
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 import type { 
   RuntimeAdapter, 
   RuntimeCapabilities, 
@@ -19,7 +20,8 @@ class ExtensionStorage implements RuntimeStorage {
     try {
       const result = await chrome.storage.local.get(key)
       return (result[key] as T) ?? null
-    } catch {
+    } catch (e) {
+      console.error('[runtime/extension] ExtensionStorage.get failed:', key, e)
       return null
     }
   }
@@ -27,16 +29,16 @@ class ExtensionStorage implements RuntimeStorage {
   async set(key: string, value: unknown): Promise<void> {
     try {
       await chrome.storage.local.set({ [key]: value })
-    } catch {
-      // Silent fail
+    } catch (e) {
+      console.error('[runtime/extension] ExtensionStorage.set failed:', key, e)
     }
   }
 
   async remove(key: string): Promise<void> {
     try {
       await chrome.storage.local.remove(key)
-    } catch {
-      // Silent fail
+    } catch (e) {
+      console.error('[runtime/extension] ExtensionStorage.remove failed:', key, e)
     }
   }
 }
@@ -123,20 +125,26 @@ export class ExtensionAdapter implements RuntimeAdapter {
       }, timeout)
 
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (!tabs[0]?.id) {
-          clearTimeout(timeoutId)
-          reject(new Error('No active tab'))
-          return
-        }
-
-        chrome.tabs.sendMessage(tabs[0].id, message, (response) => {
-          clearTimeout(timeoutId)
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message))
-          } else {
-            resolve(response as T)
+        try {
+          if (!tabs[0]?.id) {
+            clearTimeout(timeoutId)
+            reject(new Error('No active tab'))
+            return
           }
-        })
+
+          chrome.tabs.sendMessage(tabs[0].id, message, (response) => {
+            clearTimeout(timeoutId)
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message))
+            } else {
+              resolve(response as T)
+            }
+          })
+        } catch (e) {
+          clearTimeout(timeoutId)
+          if (!isExpectedExtensionError(e)) console.error('[runtime/extension] sendViaChrome failed:', e)
+          reject(e)
+        }
       })
     })
   }
@@ -187,6 +195,7 @@ export class ExtensionAdapter implements RuntimeAdapter {
           try {
             handler(data.message, () => {})
           } catch (e) {
+            console.error('[runtime/extension] message handler failed:', e)
           }
         }
       }

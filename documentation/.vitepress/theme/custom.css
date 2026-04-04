@@ -1,0 +1,180 @@
+/**
+ * Align docs accent with standalone landing (zinc + violet).
+ */
+:root {
+  --vp-c-brand-1: #8b5cf6;
+  --vp-c-brand-2: #7c3aed;
+  --vp-c-brand-3: #6d28d9;
+  /* Firefox + Chrome 121+: thin track; WebKit uses the same vars below */
+  --vp-scrollbar-thumb: color-mix(in srgb, var(--vp-c-text-2) 32%, transparent);
+  --vp-scrollbar-thumb-hover: color-mix(in srgb, var(--vp-c-text-2) 54%, transparent);
+}
+
+/**
+ * Thin scrollbars (Firefox / modern Chromium) + WebKit tuning so Chrome/Edge
+ * are closer to Firefox’s default narrow bar. Document + nested overflow share the same look.
+ */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-scrollbar-thumb) transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar,
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--vp-scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--vp-scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Боковая панель: полоса менее заметна, пока курсор не над панелью (чуть ближе к overlay Firefox) */
+.VPSidebar:not(:hover):not(:focus-within)::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+.VPSidebar:hover::-webkit-scrollbar-thumb,
+.VPSidebar:focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--vp-scrollbar-thumb);
+}
+
+.VPSidebar:hover::-webkit-scrollbar-thumb:hover,
+.VPSidebar:focus-within::-webkit-scrollbar-thumb:hover {
+  background-color: var(--vp-scrollbar-thumb-hover);
+}
+
+/* Основной текст статей — по ширине (заголовки и код не трогаем) */
+.vp-doc p,
+.vp-doc li,
+.vp-doc summary,
+.vp-doc blockquote,
+.vp-doc td {
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+/* Карточки выбора способа установки (как на vuejs.org/devtools installation) */
+.install-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.install-option-card {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1.25rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.install-option-card:hover {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--vp-c-brand-1) 18%, transparent);
+}
+
+/* Сильнее, чем .vp-doc a { text-decoration: underline } */
+.vp-doc a.install-option-card,
+.vp-doc a.install-option-card:hover {
+  text-decoration: none;
+}
+
+.install-option-icon {
+  flex-shrink: 0;
+  display: flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-brand-1);
+}
+
+.install-option-icon--brand {
+  background: var(--vp-c-bg-alt);
+  border: 1px solid var(--vp-c-divider);
+}
+
+.install-option-icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.install-option-icon img {
+  width: 2rem;
+  height: 2rem;
+  object-fit: contain;
+  display: block;
+}
+
+/* Изображения в статьях: по центру и со скруглением.
+   margin-inline: auto — из-за перевода строки в MD рядом с ![]
+   между <p> и <img> появляется текстовый узел, поэтому text-align + :only-child ненадёжны. */
+.vp-doc img {
+  display: block;
+  border-radius: 12px;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+.vp-doc .install-option-icon img {
+  border-radius: 0;
+  margin-inline: 0;
+}
+
+.vp-doc figure {
+  margin: 1.25rem auto;
+  text-align: center;
+}
+
+.vp-doc figure img {
+  margin-inline: auto;
+}
+
+.install-option-body {
+  min-width: 0;
+}
+
+.install-option-title {
+  display: block;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--vp-c-brand-1);
+  margin-bottom: 0.35rem;
+}
+
+.install-option-desc {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
+  line-height: 1.5;
+}

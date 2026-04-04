@@ -77,8 +77,8 @@ export function toPlainObject(value: any): any {
   // Попытка сериализации и десериализации для получения обычного объекта
   try {
     return JSON.parse(JSON.stringify(value))
-  } catch {
-    // Если сериализация не работает, возвращаем как есть
+  } catch (e) {
+    console.error('[injected/pinia/unwrap] toPlainObject JSON serialization failed:', e)
     return value
   }
 }
@@ -112,7 +112,8 @@ export function unwrapValue(value: any): any {
     // Try to serialize and parse to get plain object (as in old version)
     try {
       return JSON.parse(JSON.stringify(value))
-    } catch {
+    } catch (e) {
+      console.error('[injected/pinia/unwrap] unwrapValue JSON serialization failed:', e)
       // If serialization fails, process manually
       const result: any = {}
       for (const key in value) {
