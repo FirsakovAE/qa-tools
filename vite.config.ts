@@ -85,6 +85,10 @@ export default defineConfig({
         // Создаем папку docs
         mkdirSync(docsPath, { recursive: true })
 
+        // GitHub Pages по умолчанию прогоняет Jekyll; он не публикует файлы с именами вида `_*.js`
+        // (например Rollup `_commonjsHelpers-….js`), из‑за чего bookmark/injected_ui ломается с 404.
+        writeFileSync(join(docsPath, '.nojekyll'), '', 'utf-8')
+
         // Копируем standalone файлы
         const standaloneSrc = join(distPath, 'standalone')
         const standaloneDest = docsPath
