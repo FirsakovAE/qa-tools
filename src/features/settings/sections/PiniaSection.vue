@@ -2,29 +2,12 @@
 import { computed, ref } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { PiniaFavoriteItem } from '@/types/inspector'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu'
-import {
-  ContextMenu,
-  ContextMenuTrigger,
-} from '@/components/ui/ContextMenu'
-import { OptionsItemActionsMenuContent, type MenuAction } from '@/components/OptionsItemActionsMenu'
-import { MoreHorizontal, Trash, Pencil } from 'lucide-vue-next'
+import { TableCell } from '@/components/ui/table'
+import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
+import SettingsTableSection from '../components/SettingsTableSection.vue'
+import type { TableColumn } from '../components/SettingsTableSection.vue'
+import type { MenuAction } from '@/components/OptionsItemActionsMenu'
+import { Pencil, Trash } from 'lucide-vue-next'
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -36,9 +19,29 @@ const emit = defineEmits<{
   (e: 'edit', item: { type: 'pinia-favorite'; id: string }): void
 }>()
 
-// -------------------- ADD BY NAME --------------------
+// -------------------- SEARCH SETTINGS --------------------
+type SearchKey = 'byName' | 'byKey' | 'byValue'
+
+const searchItems: Array<{ key: SearchKey; label: string }> = [
+  { key: 'byName', label: 'Search by store name' },
+  { key: 'byKey', label: 'Search by key' },
+  { key: 'byValue', label: 'Search by value' },
+]
+
+function toggleSearch(key: SearchKey) {
+  props.settings.piniaSearch[key] = !props.settings.piniaSearch[key]
+}
+
+// -------------------- FAVORITES --------------------
 const newStoreName = ref('')
 const addStoreError = ref<string | null>(null)
+
+const piniaFavoritesList = computed<PiniaFavoriteItem[]>(() => props.settings.piniaFavorites || [])
+
+const favoritesColumns: TableColumn[] = [
+  { header: 'Store Name' },
+  { header: 'Added', width: '80px', class: 'text-center' },
+]
 
 function addToFavoritesByName() {
   const value = newStoreName.value.trim()
@@ -63,21 +66,6 @@ function addToFavoritesByName() {
   newStoreName.value = ''
 }
 
-type SearchKey = 'byName' | 'byKey' | 'byValue'
-
-const searchItems: Array<{ key: SearchKey; label: string }> = [
-  { key: 'byName', label: 'Search by store name' },
-  { key: 'byKey', label: 'Search by key' },
-  { key: 'byValue', label: 'Search by value' },
-]
-
-function toggleSearch(key: SearchKey) {
-  props.settings.piniaSearch[key] = !props.settings.piniaSearch[key]
-}
-
-// -------------------- FAVORITES --------------------
-const piniaFavoritesList = computed<PiniaFavoriteItem[]>(() => props.settings.piniaFavorites || [])
-
 function removeFromFavorites(id: string) {
   props.settings.piniaFavorites = props.settings.piniaFavorites.filter(f => f.id !== id)
 }
@@ -85,169 +73,46 @@ function removeFromFavorites(id: string) {
 function getPiniaFavoriteActions(fav: PiniaFavoriteItem): MenuAction[] {
   return [
     { label: 'Edit', icon: Pencil, onClick: () => emit('edit', { type: 'pinia-favorite', id: fav.id }) },
-    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructive: true },
+    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructiveText: true },
   ]
 }
-
-const favoritesTableHeight = computed(() => {
-  const rowCount = Math.max(piniaFavoritesList.value.length, 1)
-  return Math.min(rowCount * 41, 205)
-})
-const favoritesNeedsScroll = computed(() => piniaFavoritesList.value.length > 4)
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="space-y-3">
-      <h4 class="text-sm font-semibold">Search Settings</h4>
-      <div class="grid grid-cols-1 gap-2">
-        <div v-for="item in searchItems" :key="item.key" class="flex items-center space-x-3">
-          <Checkbox
-            :id="`pinia-search-${item.key}`"
-            :model-value="settings.piniaSearch[item.key]"
-            @update:model-value="toggleSearch(item.key)"
-          />
-          <Label :for="`pinia-search-${item.key}`" class="text-sm">
-            {{ item.label }}
-          </Label>
-        </div>
-      </div>
-    </div>
+    <SearchSettingsBlock
+      :search-settings="settings.piniaSearch as unknown as Record<string, boolean>"
+      :search-items="searchItems"
+      id-prefix="pinia-search"
+      @toggle="(k) => toggleSearch(k as SearchKey)"
+    />
 
-    <!-- Favorite Stores -->
-    <div id="pinia-favorites-section" class="space-y-2 border-t pt-4">
-      <h4 class="text-sm font-semibold">Favorite Stores</h4>
-
-      <div class="flex gap-2">
-        <Input
-          v-model="newStoreName"
-          placeholder="Store name (supports wildcards: *Store*)"
-          @keydown.enter.prevent="addToFavoritesByName"
-          :aria-invalid="!!addStoreError"
-          class="flex-1 h-8"
-        />
-        <Button size="sm" @click="addToFavoritesByName" class="h-8">Add</Button>
-      </div>
-
-      <p v-if="addStoreError" class="text-sm text-destructive_text">{{ addStoreError }}</p>
-
-      <div class="flex flex-col border rounded-lg overflow-hidden">
-        <!-- Fixed Header -->
-        <div class="shrink-0 border-b bg-muted/30">
-          <Table class="table-fixed">
-            <TableHeader class="[&_th]:h-10">
-              <TableRow class="hover:bg-transparent">
-                <TableHead class="text-xs font-semibold">Store Name</TableHead>
-                <TableHead class="text-xs font-semibold w-[80px] text-center">Added</TableHead>
-                <TableHead class="w-[48px] text-center p-0" />
-              </TableRow>
-            </TableHeader>
-          </Table>
-        </div>
-
-        <!-- Scrollable Body -->
-        <div class="min-h-0 max-h-[205px] overflow-hidden">
-          <template v-if="favoritesNeedsScroll">
-            <ScrollArea :style="{ height: `${favoritesTableHeight}px` }">
-              <Table class="table-fixed">
-                <TableBody>
-                  <ContextMenu v-for="fav in piniaFavoritesList" :key="fav.id">
-                    <ContextMenuTrigger as-child>
-                      <TableRow
-                        class="h-[41px] cursor-pointer transition-colors"
-                        :class="{ 'bg-muted': selectedItemId === fav.id }"
-                        @click="emit('select', { type: 'pinia-favorite', id: fav.id })"
-                      >
-                        <TableCell class="overflow-hidden !py-2">
-                          <div class="font-mono text-sm truncate">{{ fav.name }}</div>
-                        </TableCell>
-                        <TableCell class="w-[80px] text-center !py-2">
-                          <div class="text-xs text-muted-foreground">
-                            {{ new Date(fav.timestamp).toLocaleDateString() }}
-                          </div>
-                        </TableCell>
-                        <TableCell class="w-[48px] text-center p-0">
-                          <div class="flex justify-center items-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger as-child>
-                                <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                                  <MoreHorizontal class="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <OptionsItemActionsMenuContent
-                                variant="dropdown"
-                                :actions="getPiniaFavoriteActions(fav)"
-                              />
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    </ContextMenuTrigger>
-                    <OptionsItemActionsMenuContent
-                      variant="context"
-                      :actions="getPiniaFavoriteActions(fav)"
-                    />
-                  </ContextMenu>
-
-                  <TableRow v-if="!piniaFavoritesList.length">
-                    <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                      No favorite stores
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </template>
-          <template v-else>
-            <Table class="table-fixed">
-              <TableBody>
-                <ContextMenu v-for="fav in piniaFavoritesList" :key="fav.id">
-                  <ContextMenuTrigger as-child>
-                    <TableRow
-                      class="h-[41px] cursor-pointer transition-colors"
-                      :class="{ 'bg-muted': selectedItemId === fav.id }"
-                      @click="emit('select', { type: 'pinia-favorite', id: fav.id })"
-                    >
-                      <TableCell class="overflow-hidden !py-2">
-                        <div class="font-mono text-sm truncate">{{ fav.name }}</div>
-                      </TableCell>
-                      <TableCell class="w-[80px] text-center !py-2">
-                        <div class="text-xs text-muted-foreground">
-                          {{ new Date(fav.timestamp).toLocaleDateString() }}
-                        </div>
-                      </TableCell>
-                      <TableCell class="w-[48px] text-center p-0">
-                        <div class="flex justify-center items-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger as-child>
-                              <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
-                                <MoreHorizontal class="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <OptionsItemActionsMenuContent
-                              variant="dropdown"
-                              :actions="getPiniaFavoriteActions(fav)"
-                            />
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  </ContextMenuTrigger>
-                  <OptionsItemActionsMenuContent
-                    variant="context"
-                    :actions="getPiniaFavoriteActions(fav)"
-                  />
-                </ContextMenu>
-                <TableRow v-if="!piniaFavoritesList.length">
-                  <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                    No favorite stores
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </template>
-        </div>
-      </div>
-    </div>
+    <SettingsTableSection
+      section-id="pinia-favorites-section"
+      title="Favorite Stores"
+      :columns="favoritesColumns"
+      :rows="piniaFavoritesList"
+      :row-key="(r) => (r as PiniaFavoriteItem).id"
+      :get-actions="(row) => getPiniaFavoriteActions(row as PiniaFavoriteItem)"
+      empty-message="No favorite stores"
+      :selected-item-id="selectedItemId"
+      show-add
+      add-placeholder="Store name (supports wildcards: *Store*)"
+      v-model:add-model-value="newStoreName"
+      :add-error="addStoreError"
+      @add="addToFavoritesByName"
+      @select="(row) => emit('select', { type: 'pinia-favorite', id: (row as PiniaFavoriteItem).id })"
+    >
+      <template #row="{ row }">
+        <TableCell class="overflow-hidden !py-2">
+          <div class="font-mono text-sm truncate">{{ (row as PiniaFavoriteItem).name }}</div>
+        </TableCell>
+        <TableCell class="w-[80px] text-center !py-2">
+          <div class="text-xs text-muted-foreground">
+            {{ new Date((row as PiniaFavoriteItem).timestamp).toLocaleDateString() }}
+          </div>
+        </TableCell>
+      </template>
+    </SettingsTableSection>
   </div>
 </template>

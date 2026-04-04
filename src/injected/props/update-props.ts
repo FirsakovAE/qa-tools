@@ -151,7 +151,7 @@ export function updateComponentProps(
       success = true
 
     } catch (e) {
-      // Ignore errors for individual props
+      console.error('[injected/props/update-props] updateComponentProps failed for key:', key, e)
     }
   }
 
@@ -162,14 +162,14 @@ export function updateComponentProps(
  * Fallback функция для поиска компонента по UID (как в старом коде)
  */
 function findComponentByUidFallback(uid: string) {
+  try {
+    const { findVueRoots, extractRootVNode, detectVueContext } = require('./vue-detect')
+    const vueRoots = findVueRoots()
+    const vueContext = detectVueContext()
+    const isVue2 = vueContext.version === 2
 
-  const { findVueRoots, extractRootVNode, detectVueContext } = require('./vue-detect')
-  const vueRoots = findVueRoots()
-  const vueContext = detectVueContext()
-  const isVue2 = vueContext.version === 2
-
-  // Рекурсивная функция для поиска компонента по дереву
-  function findInTree(vnode: any, path: string = ''): any {
+    // Рекурсивная функция для поиска компонента по дереву
+    function findInTree(vnode: any, path: string = ''): any {
     if (!vnode) return null
 
     // Проверяем текущий vnode
@@ -221,18 +221,22 @@ function findComponentByUidFallback(uid: string) {
       }
     }
 
+      return null
+    }
+
+    // Ищем во всех корнях
+    for (let rootIndex = 0; rootIndex < vueRoots.length; rootIndex++) {
+      const root = vueRoots[rootIndex]
+      const rootVNode = extractRootVNode(root)
+      if (rootVNode) {
+        const found = findInTree(rootVNode, `root[${rootIndex}]`)
+        if (found) return found
+      }
+    }
+
+    return null
+  } catch (e) {
+    console.error('[injected/props/update-props] findComponentByUidFallback failed:', uid, e)
     return null
   }
-
-  // Ищем во всех корнях
-  for (let rootIndex = 0; rootIndex < vueRoots.length; rootIndex++) {
-    const root = vueRoots[rootIndex]
-    const rootVNode = extractRootVNode(root)
-    if (rootVNode) {
-      const found = findInTree(rootVNode, `root[${rootIndex}]`)
-      if (found) return found
-    }
-  }
-
-  return null
 }

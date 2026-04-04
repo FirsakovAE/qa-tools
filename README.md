@@ -1,87 +1,107 @@
-# Vue Runtime Inspector
+# Vue Inspector
 
-**Vue Runtime Inspector** — инструмент для глубокой runtime-инспекции Vue-приложений в production- и test-сценариях.
+**Vue Inspector** is a tool for analyzing Vue applications at runtime without requiring access to source code, local builds, or a development environment.
 
-Проект создан для ситуаций, когда стандартных browser devtools уже недостаточно: значительная часть frontend-логики находится внутри props, store, реактивных связей и внутренних runtime-состояний компонентов, которые не видны через DOM и network alone.
+The project is designed for scenarios where standard browser devtools are no longer sufficient: a significant part of frontend logic lives inside props, stores, reactive connections, and internal component runtime states that are not visible through the DOM, network, or console alone.
 
-Инструмент позволяет работать с приложением изнутри:
-
-* инспектировать и изменять `props` Vue-компонентов
-* читать и редактировать `state` и `getters` Pinia
-* перехватывать и изменять сетевые запросы
-* подменять ответы без proxy и сертификатов
-* запускать инспектор как extension, iframe, DevTools или standalone bookmark
+The tool makes it possible to inspect an application directly on a live page — exactly in the state in which it exists at execution time.
 
 ---
 
-## Почему это нужно
+## Why It Matters
 
-Современные frontend-приложения всё чаще строятся так, что внешнее наблюдение перестаёт объяснять внутреннее поведение.
+Modern frontend applications are increasingly structured in a way where external observation no longer explains internal behavior.
 
-Стандартные инструменты показывают только часть картины:
+Standard tools reveal only part of the picture:
 
-* Network показывает транспорт
-* DOM показывает результат
-* Console показывает ошибки
+* Network shows transport
+* DOM shows output
+* Console shows errors
 
-Но значимая часть логики находится между ними:
+But a substantial part of the logic exists between them:
 
 * props
 * store
 * reactive state
 * internal component transitions
 
-Vue Runtime Inspector даёт прямой доступ к этому слою.
+Vue Runtime Inspector provides direct access to this runtime layer without requiring additional dev tools or local environment reproduction.
 
 ---
 
-## Основные возможности
+## Core Features
 
 ### Props
 
-* обнаружение Vue-компонентов на странице
-* просмотр runtime props
-* поиск по компонентам, DOM и значениям
-* редактирование JSON без перезагрузки страницы
+* Vue component detection on the page
+* runtime props inspection
+* analysis of received and declared props
+* search by component, DOM, and values
+* JSON editing without page reload
 * favorites / blacklist / quick actions
+* direct component selection on the page via Inspect mode
 
 ### Store
 
-* обнаружение активных stores
-* просмотр `state` и `getters`
-* редактирование состояния во время работы страницы
-* favorites и пользовательские шаблоны поиска
+* active Pinia store detection
+* inspection of `state`, `getters`, and `actions`
+* live state editing during page execution
+* favorites and custom search templates
 
 ### Network
 
-* просмотр `fetch` / `XHR`
-* breakpoint перед отправкой
-* изменение request payload
-* mock response
-* генерация Postman collection
+* `fetch` / `XHR` inspection
+* request breakpoint before sending
+* request payload modification
+* mock response support
+* response substitution without proxy or certificates
+* Postman collection generation
 
 ---
 
-## Режимы запуска
+## How It Differs from Standard DevTools
+
+Unlike classic Vue Devtools, this tool is designed not only for local development but also for working with already running applications where:
+
+* source code access is unavailable
+* local project build is not accessible
+* production or test environments must be inspected
+* fast access to runtime data is required without dev environment setup
+
+---
+
+## Launch Modes
 
 * Browser Extension
 * Embedded iframe
 * DevTools mode
-* Standalone bookmark (без установки)
+* Standalone bookmark
 
-Standalone-режим особенно полезен в корпоративных окружениях, где установка расширений ограничена.
+The standalone mode is especially useful in corporate environments where extension installation is restricted.
+
+---
+
+## Best Use Cases
+
+Vue Runtime Inspector is especially useful for:
+
+* frontend application testing
+* complex integration analysis
+* locating data transfer issues
+* component behavior investigation
+* reactive state verification
 
 ---
 
 ## Roadmap
 
-Текущая production-ветка проекта реализована для Vue.
+The current production branch of the project is implemented for Vue.
 
-В перспективе архитектура проекта рассматривается как база для расширения runtime inspection-подхода на другие frontend ecosystems, включая React.
+In the future, the architecture is considered a foundation for extending the runtime inspection approach to other frontend ecosystems, including React.
 
 ---
 
-## Установка
+## Installation
 
 ### Extension
 
@@ -90,7 +110,7 @@ npm install
 npm run build
 ```
 
-Далее:
+Then:
 
 ```text
 chrome://extensions/
@@ -101,10 +121,10 @@ chrome://extensions/
 
 ### Standalone
 
-Открыть:
+Open:
 
 ```text
 https://firsakovae.github.io/qa-tools/
 ```
 
-Перетащить bookmark и запускать на целевой странице.
+Drag the bookmark and launch it on the target page.

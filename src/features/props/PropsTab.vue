@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { SearchIcon, RefreshCw, Star } from 'lucide-vue-next'
+import { SearchIcon, RefreshCw, Star, MousePointer2, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -16,17 +16,21 @@ import PropsTable from './PropsTable.vue'
 import ComponentDetails from './prop-details/ComponentDetails.vue'
 import type { TreeNodeModel } from '@/types/tree'
 import type { BaseInspectorSettings, FavoriteItem } from '@/types/inspector'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettings, useInspectorSettingsSync } from '@/settings/useInspectorSettings'
+import { useSearchSettings } from '@/composables/useSearchSettings'
 import { useTreeData } from '@/hooks/useTreeData'
 import { useRuntime } from '@/runtime'
 import { safeRuntime, safeTabs, safeStorage } from '@/utils/extensionBridge'
 import { isInFavorites, findMatchingFavorite, matchFavoriteIds } from '@/utils/favoritesMatcher'
+import { parseSearchTerm } from '@/utils/searchUtils'
 import { 
   type PropsRow, 
   createPropsRow, 
   updateRowsVisibility,
-  sortRowsByFavorite 
+  sortRowsByFavorite
 } from './types'
+import { getPropsFavoriteNodeId } from './propsFavorites'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
@@ -49,51 +53,35 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 const lastUpdated = ref<string>('')
 
+// Inspector mode (element picker like Chrome DevTools Elements)
+const isInspectorMode = ref(false)
+const inspectRootUid = ref<number | null>(null)
+
 // Search state
 const searchTerm = ref('')
 const debouncedSearchTerm = ref('')
-const settings = ref<BaseInspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
+
+const {
+  searchSettings,
+  selectedSearchTypes,
+  searchTypeOptions: propsSearchTypeOptions
+} = useSearchSettings({
+  settings,
+  searchKey: 'propsSearch',
+  typeMap: {
+    'Name': 'byName',
+    'Label': 'byLabel',
+    'Root': 'byRootElement',
+    'Key': 'byKey',
+    'Value': 'byValue',
+  }
+})
 
 // Favorites (pass full objects for proper matching)
 const favorites = computed(() => {
   if (!settings.value?.favorites) return []
   return settings.value.favorites
-})
-
-// Search settings from inspector settings
-const searchSettings = computed(() => ({
-  byName: settings.value?.propsSearch?.byName ?? true,
-  byLabel: settings.value?.propsSearch?.byLabel ?? false,
-  byRootElement: settings.value?.propsSearch?.byRootElement ?? false,
-  byKey: settings.value?.propsSearch?.byKey ?? false,
-  byValue: settings.value?.propsSearch?.byValue ?? false,
-  debounce: settings.value?.searchParams?.debounce ?? 300,
-  minLength: settings.value?.searchParams?.minLength ?? 2
-}))
-
-// Search type options for FacetedFilter
-type PropsSearchKey = 'byName' | 'byLabel' | 'byRootElement' | 'byKey' | 'byValue'
-const propsSearchTypeMap: Record<string, PropsSearchKey> = {
-  'Name': 'byName',
-  'Label': 'byLabel',
-  'Root': 'byRootElement',
-  'Key': 'byKey',
-  'Value': 'byValue',
-}
-const propsSearchTypeOptions = Object.keys(propsSearchTypeMap)
-
-const selectedSearchTypes = computed<string[]>({
-  get() {
-    if (!settings.value?.propsSearch) return []
-    return propsSearchTypeOptions.filter(label => settings.value!.propsSearch[propsSearchTypeMap[label]] as boolean)
-  },
-  set(selected: string[]) {
-    if (!settings.value?.propsSearch) return
-    for (const label of propsSearchTypeOptions) {
-      const key = propsSearchTypeMap[label]
-      ;(settings.value.propsSearch as any)[key] = selected.includes(label)
-    }
-  }
 })
 
 // ============================================================================
@@ -110,54 +98,8 @@ function formatDateTime(date: Date): string {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
-function buildElementSelector(
-  tag: string,
-  elId?: string,
-  cls?: string,
-  testId?: string
-): string {
-  let sel = tag.toLowerCase()
-  if (elId) sel += '#' + elId
-  if (cls) sel += '.' + cls.trim().replace(/\s+/g, '.')
-  if (testId) sel += `[${testId}]`
-  return sel
-}
-
-function getElementInfo(node: TreeNodeModel): string {
-  if (node.element) {
-    if (node.element instanceof HTMLElement) {
-      return buildElementSelector(
-        node.element.tagName,
-        node.element.id || undefined,
-        node.element.className || undefined,
-        node.element.getAttribute?.('data-testid') || undefined
-      )
-    } else if (node.element.tagName) {
-      return buildElementSelector(
-        node.element.tagName,
-        node.element.id,
-        node.element.className,
-        node.element.testId
-      )
-    }
-  }
-
-  if (node.rootElement?.tagName) {
-    return buildElementSelector(
-      node.rootElement.tagName,
-      node.rootElement.id,
-      node.rootElement.className,
-      node.rootElement.testId
-    )
-  }
-
-  return 'Logic only'
-}
-
 function getNodeId(node: TreeNodeModel): string {
-  if (node.componentUid) return node.componentUid
-  if (node.id && node.id.includes('::')) return node.id
-  return `${node.name}::${getElementInfo(node)}`
+  return getPropsFavoriteNodeId(node)
 }
 
 function isFavoriteNode(node: TreeNodeModel): boolean {
@@ -166,16 +108,42 @@ function isFavoriteNode(node: TreeNodeModel): boolean {
   return isInFavorites(id, settings.value.favorites)
 }
 
-function applyFilters() {
+async function applyFilters() {
+  const term = debouncedSearchTerm.value
+  const { query, exactMatch } = parseSearchTerm(term)
+  const byKey = !!searchSettings.value.byKey
+  const byValue = !!searchSettings.value.byValue
+  const needsKeyValueSearch = (byKey || byValue) && query.length >= (searchSettings.value.minLength ?? 2)
+
+  let matchedUids: Set<number> | undefined
+  if (needsKeyValueSearch) {
+    try {
+      const res = await runtime.sendMessage<{ results?: Array<{ uid: number }> }>({
+        type: 'PROPS_SEARCH',
+        query,
+        searchByKey: byKey,
+        searchByValue: byValue,
+        exactMatch
+      })
+      matchedUids = new Set((res?.results ?? []).map(r => r.uid))
+    } catch (e) {
+      if (!isExpectedExtensionError(e)) {
+        console.error('[props/PropsTab] PROPS_SEARCH failed:', e)
+      }
+      matchedUids = new Set()
+    }
+  }
+
   updateRowsVisibility(rows.value, {
-    searchTerm: debouncedSearchTerm.value,
-    searchByName: searchSettings.value.byName,
-    searchByRootElement: searchSettings.value.byRootElement,
-    searchByKey: searchSettings.value.byKey,
-    searchByValue: searchSettings.value.byValue
+    searchTerm: query,
+    searchByName: !!searchSettings.value.byName,
+    searchByRootElement: !!searchSettings.value.byRootElement,
+    searchByKey: byKey,
+    searchByValue: byValue,
+    exactMatch,
+    matchedUids
   })
 
-  // Trigger re-render (cheap - just increments a number)
   visibilityVersion.value++
 }
 
@@ -236,8 +204,12 @@ function updateFavoriteFlags() {
       }
       try {
         const settingsToSave = JSON.parse(JSON.stringify(settings.value))
-        runtime.storage.set('vue-inspector-settings', settingsToSave).catch(() => {})
-      } catch { /* ignore */ }
+        runtime.storage.set('vue-inspector-settings', settingsToSave).catch((error) => {
+          console.error('[props/PropsTab] Failed to save favorites nodeId:', error)
+        })
+      } catch (error) {
+        console.error('[props/PropsTab] updateFavoriteFlags JSON/save failed:', error)
+      }
     }
   } finally {
     updatingFavorites = false
@@ -248,11 +220,6 @@ function updateFavoriteFlags() {
 // Settings
 // ============================================================================
 
-onMounted(async () => {
-  try {
-    settings.value = await useInspectorSettings()
-  } catch { /* use defaults */ }
-})
 
 // Sync favorite flags on any favorites mutation (add/remove from table,
 // details panel, settings load, or external storage change).
@@ -282,7 +249,9 @@ if (storage?.onChanged) {
     if (changes[settingsKey]) {
       useInspectorSettings().then(newSettings => {
         settings.value = newSettings
-      }).catch(() => {})
+      }).catch((error) => {
+        console.error('[props/PropsTab] storageListener useInspectorSettings failed:', error)
+      })
     }
   }
   storage.onChanged.addListener(storageListener)
@@ -309,10 +278,10 @@ watch(treeData, (data) => {
     // Apply current visibility filters
     updateRowsVisibility(rows.value, {
       searchTerm: debouncedSearchTerm.value,
-      searchByName: searchSettings.value.byName,
-      searchByRootElement: searchSettings.value.byRootElement,
-      searchByKey: searchSettings.value.byKey,
-      searchByValue: searchSettings.value.byValue
+      searchByName: !!searchSettings.value.byName,
+      searchByRootElement: !!searchSettings.value.byRootElement,
+      searchByKey: !!searchSettings.value.byKey,
+      searchByValue: !!searchSettings.value.byValue
     })
     
     lastUpdated.value = formatDateTime(new Date())
@@ -399,17 +368,6 @@ const visibleRows = computed(() => {
   return rows.value.filter(r => r.visible)
 })
 
-// Active search types for badges
-const activeSearchTypes = computed(() => {
-  const types: string[] = []
-  if (searchSettings.value.byName) types.push('Name')
-  if (searchSettings.value.byLabel) types.push('Label')
-  if (searchSettings.value.byRootElement) types.push('Root')
-  if (searchSettings.value.byKey) types.push('Key')
-  if (searchSettings.value.byValue) types.push('Value')
-  return types
-})
-
 // ============================================================================
 // Computed
 // ============================================================================
@@ -429,8 +387,10 @@ const favoritesLabel = computed(() => {
 // Actions
 // ============================================================================
 
-function selectEntry(node: PropsRow) {
+async function selectEntry(node: PropsRow) {
   selectedNode.value = node
+  const needsProps = node.hasPropsFlag && (!node.props || Object.keys(node.props).length === 0)
+  if (needsProps) await handleRefreshSelected()
 }
 
 function deselectEntry() {
@@ -439,7 +399,7 @@ function deselectEntry() {
 
 async function handleRefresh() {
   if (isLoading.value) return
-  await refresh()
+  await refresh(inspectRootUid.value != null ? { rootElementUid: inspectRootUid.value } : undefined)
   lastUpdated.value = formatDateTime(new Date())
 }
 
@@ -453,22 +413,27 @@ async function handleRefreshSelected() {
 
   isLoading.value = true
   try {
-    const response = await runtime.sendMessage<{ props?: Record<string, any>; newUid?: number }>({
+    const response = await runtime.sendMessage<{ props?: Record<string, any>; rawProps?: Record<string, any>; newUid?: number }>({
       type: 'GET_COMPONENT_PROPS',
       componentUid: componentPath,
       componentPathFallback: node.componentUid || undefined
     })
     const freshProps = response?.props ?? {}
+    const rawProps = response?.rawProps ?? {}
     const newUid = response?.newUid
     selectedNode.value = {
       ...node,
       id: newUid != null ? `uid:${newUid}` : node.id,
       componentUid: node.componentUid,
       props: freshProps,
+      rawProps,
       jsonProps: JSON.stringify(freshProps, null, 2)
     }
     lastUpdated.value = formatDateTime(new Date())
-  } catch {
+  } catch (error) {
+    if (!isExpectedExtensionError(error)) {
+      console.error('[props/PropsTab] handleRefreshSelected GET_COMPONENT_PROPS failed:', error)
+    }
     // Fallback: full refresh if single-component refresh fails
     await refresh()
     await nextTick()
@@ -493,8 +458,8 @@ async function ignoreByName(node: PropsRow) {
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
-  } catch {
-    // Ignore save errors
+  } catch (error) {
+    console.error('[props/PropsTab] ignoreByName save failed:', error)
   }
 }
 
@@ -532,10 +497,84 @@ async function toggleFavorite(node: PropsRow) {
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
-  } catch {
-    // Ignore save errors
+  } catch (error) {
+    console.error('[props/PropsTab] toggleFavorite save failed:', error)
   }
 }
+
+// ============================================================================
+// Inspector mode (element picker)
+// ============================================================================
+
+async function toggleInspectorMode() {
+  if (isInspectorMode.value) {
+    // Exit inspector mode only (filter stays)
+    isInspectorMode.value = false
+    await runtime.sendMessage({ type: 'PROPS_INSPECTOR_STOP' })
+  } else {
+    // Enter: refresh first (lazy load), then start inspector
+    await refresh(inspectRootUid.value != null ? { rootElementUid: inspectRootUid.value } : undefined)
+    isInspectorMode.value = true
+    await runtime.sendMessage({
+      type: 'PROPS_INSPECTOR_START',
+      theme: settings.value?.theme ?? 'dark',
+      collapseOverlayOnPropsInspect: settings.value?.collapseOverlayOnPropsInspect !== false
+    })
+  }
+}
+
+async function handleInspectorElementSelected(uid: number) {
+  inspectRootUid.value = uid
+  isInspectorMode.value = false
+  await runtime.sendMessage({ type: 'PROPS_INSPECTOR_STOP' })
+  refresh({ rootElementUid: uid })
+}
+
+async function clearInspectFilter() {
+  inspectRootUid.value = null
+  await refresh()
+}
+
+/** Esc while focus is in DevTools / UI iframe — content script on the page never sees this key. */
+function onInspectorEscapeKeydown(e: KeyboardEvent) {
+  if (!isInspectorMode.value || e.key !== 'Escape') return
+  e.preventDefault()
+  e.stopPropagation()
+  isInspectorMode.value = false
+  runtime.sendMessage({ type: 'PROPS_INSPECTOR_STOP' }).catch(() => {})
+}
+
+watch(isInspectorMode, active => {
+  if (active) {
+    window.addEventListener('keydown', onInspectorEscapeKeydown, true)
+  } else {
+    window.removeEventListener('keydown', onInspectorEscapeKeydown, true)
+  }
+})
+
+// Listen for inspector events from content script (via devtools port broadcast)
+let inspectorUnsubscribe: (() => void) | null = null
+onMounted(() => {
+  inspectorUnsubscribe = runtime.onMessage((msg: { type?: string; uid?: number }) => {
+    if (msg.type === 'PROPS_INSPECTOR_ELEMENT_SELECTED' && typeof msg.uid === 'number') {
+      handleInspectorElementSelected(msg.uid)
+    } else if (msg.type === 'PROPS_INSPECTOR_CANCELLED') {
+      isInspectorMode.value = false
+    }
+  })
+})
+
+// Exit inspector on tab switch, DevTools close
+onUnmounted(() => {
+  window.removeEventListener('keydown', onInspectorEscapeKeydown, true)
+  if (inspectorUnsubscribe) {
+    inspectorUnsubscribe()
+    inspectorUnsubscribe = null
+  }
+  if (isInspectorMode.value) {
+    runtime.sendMessage({ type: 'PROPS_INSPECTOR_STOP' }).catch(() => {})
+  }
+})
 
 // ============================================================================
 // Highlight
@@ -554,7 +593,11 @@ async function unhighlightElements() {
       type: 'UNHIGHLIGHT_ELEMENT',
       tabId: tabs[0].id
     })
-  } catch { /* ignore */ }
+  } catch (error) {
+    if (!isExpectedExtensionError(error)) {
+      console.error('[props/PropsTab] unhighlightElements failed:', error)
+    }
+  }
 }
 
 watch(searchTerm, val => {
@@ -608,11 +651,73 @@ onUnmounted(() => {
               title="Search by"
               :options="propsSearchTypeOptions"
             />
+
+            <!-- Inspect (inline — hidden when toolbar is narrow) -->
+            <div class="inspect-inline">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="inspect-btn h-8 gap-1.5"
+                    :class="isInspectorMode ? 'border-primary bg-primary/10 text-primary' : ''"
+                    :disabled="isLoading"
+                    @click="toggleInspectorMode"
+                  >
+                    <MousePointer2 class="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span class="inspect-btn-label text-xs font-medium">Inspect</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  Select element on page to filter Props
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </div>
         
         <!-- Right block: Status badges and controls -->
         <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
+          <!-- Inspect (wrapped — shown when toolbar is narrow) -->
+          <div class="hidden inspect-wrapped">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="inspect-btn h-8 gap-1.5"
+                  :class="isInspectorMode ? 'border-primary bg-primary/10 text-primary' : ''"
+                  :disabled="isLoading"
+                  @click="toggleInspectorMode"
+                >
+                  <MousePointer2 class="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span class="inspect-btn-label text-xs font-medium">Inspect</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Select element on page to filter Props
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <div class="hidden flex-1 inspect-spacer" />
+
+          <!-- Inspect filter reset (when filtered by element) -->
+          <Tooltip v-if="inspectRootUid != null">
+            <TooltipTrigger as-child>
+              <Badge
+                variant="outline"
+                class="filtered-badge cursor-pointer gap-1.5 pl-2 pr-1.5 py-1 text-amber-600 border-amber-500/40 hover:bg-amber-500/10 dark:text-amber-400 dark:border-amber-400/40 dark:hover:bg-amber-400/10 transition-colors"
+                @click="clearInspectFilter"
+              >
+                <MousePointer2 class="h-3 w-3 shrink-0" aria-hidden />
+                <span class="filtered-badge-label text-xs font-medium">Filtered</span>
+                <X class="h-3 w-3 shrink-0 ml-0.5 opacity-70" aria-hidden />
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Clear element filter, show full list
+            </TooltipContent>
+          </Tooltip>
           <Badge variant="secondary" class="font-mono">
             {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
           </Badge>
@@ -674,6 +779,7 @@ onUnmounted(() => {
             v-if="selectedNode"
             :key="selectedNode.id || selectedNode.componentUid"
             :node="selectedNode"
+            :all-rows="rows"
             :refreshing="isLoading"
             @back="deselectEntry"
             @refresh="handleRefreshSelected"

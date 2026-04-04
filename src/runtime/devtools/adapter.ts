@@ -5,6 +5,7 @@
  * Automatically reconnects when the inspected page reloads.
  */
 
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 import type {
   RuntimeAdapter,
   RuntimeCapabilities,
@@ -19,7 +20,8 @@ class DevtoolsStorage implements RuntimeStorage {
     try {
       const result = await chrome.storage.local.get(key)
       return (result[key] as T) ?? null
-    } catch {
+    } catch (e) {
+      console.error('[runtime/devtools] DevtoolsStorage.get failed:', key, e)
       return null
     }
   }
@@ -27,13 +29,17 @@ class DevtoolsStorage implements RuntimeStorage {
   async set(key: string, value: unknown): Promise<void> {
     try {
       await chrome.storage.local.set({ [key]: value })
-    } catch {}
+    } catch (e) {
+      console.error('[runtime/devtools] DevtoolsStorage.set failed:', key, e)
+    }
   }
 
   async remove(key: string): Promise<void> {
     try {
       await chrome.storage.local.remove(key)
-    } catch {}
+    } catch (e) {
+      console.error('[runtime/devtools] DevtoolsStorage.remove failed:', key, e)
+    }
   }
 }
 
@@ -62,6 +68,7 @@ export class DevtoolsAdapter implements RuntimeAdapter {
   private destroyed = false
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private hasConnectedOnce = false
+  private portDisconnected = false
 
   constructor(private tabId: number) {
     this.portMessageHandler = this.handlePortMessage.bind(this)
@@ -69,9 +76,11 @@ export class DevtoolsAdapter implements RuntimeAdapter {
   }
 
   private connect(): void {
+    this.portDisconnected = false
     try {
       this.port = chrome.tabs.connect(this.tabId, { name: 'devtools' })
-    } catch {
+    } catch (e) {
+      if (!isExpectedExtensionError(e)) console.error('[runtime/devtools] connect failed:', this.tabId, e)
       this.scheduleReconnect()
       return
     }
@@ -83,6 +92,7 @@ export class DevtoolsAdapter implements RuntimeAdapter {
 
     this.port.onDisconnect.addListener(() => {
       void chrome.runtime.lastError
+      this.portDisconnected = true
       for (const { timeout, reject } of this.pendingRequests.values()) {
         clearTimeout(timeout)
         reject(new Error('Port disconnected'))
@@ -135,7 +145,9 @@ export class DevtoolsAdapter implements RuntimeAdapter {
       for (const handler of this.messageListeners) {
         try {
           handler(msg, () => {})
-        } catch {}
+        } catch (e) {
+          console.error('[runtime/devtools] message handler failed:', e)
+        }
       }
 
       // Broadcast format for window.addEventListener handlers
@@ -164,6 +176,10 @@ export class DevtoolsAdapter implements RuntimeAdapter {
     return new Promise((resolve, reject) => {
       if (this.destroyed) {
         reject(new Error('Adapter destroyed'))
+        return
+      }
+      if (this.portDisconnected) {
+        reject(new Error('Port disconnected'))
         return
       }
 
@@ -213,7 +229,9 @@ export class DevtoolsAdapter implements RuntimeAdapter {
     }
     try {
       this.port.disconnect()
-    } catch {}
+    } catch (e) {
+      if (!isExpectedExtensionError(e)) console.error('[runtime/devtools] port.disconnect failed:', e)
+    }
 
     for (const { timeout, reject } of this.pendingRequests.values()) {
       clearTimeout(timeout)

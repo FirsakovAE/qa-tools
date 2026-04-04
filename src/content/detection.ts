@@ -3,64 +3,18 @@
  */
 
 import {
-  vueCheckInProgress,
   detectionCompleted,
-  detectionAttempts,
   detectionStopped,
   featureFlags,
-  injectedScriptLoaded,
   messageListenerAdded,
   checkTimeout,
-  setVueCheckInProgress,
   setDetectionCompleted,
-  incrementDetectionAttempts,
   setDetectionStopped,
   setFeatureFlags,
-  setInjectedScriptLoaded,
   setMessageListenerAdded,
   setCheckTimeout,
-  MAX_DETECTION_ATTEMPTS
 } from './state'
-import { injectScript } from './script-injector'
 import { sendFlagsToUI, broadcastToUI } from './ui-bridge'
-
-/**
- * Runs Vue/Pinia detection via injected script
- */
-export function runDetection(): void {
-  // Skip if already checking or detection completed/stopped
-  if (vueCheckInProgress || detectionCompleted || detectionStopped) {
-    return
-  }
-
-  // Increment attempt counter
-  incrementDetectionAttempts()
-  
-  // If exceeded attempt limit - stop detection WITHOUT loading script
-  if (detectionAttempts > MAX_DETECTION_ATTEMPTS) {
-    stopDetection()
-    // Mark detection as completed with zero flags
-    setDetectionCompleted(true)
-    setFeatureFlags({ hasVue: false, hasPinia: false, vueVersion: null })
-    return
-  }
-
-  setVueCheckInProgress(true)
-  
-  // Inject script if not loaded yet
-  if (!injectedScriptLoaded) {
-    injectScript()
-    setInjectedScriptLoaded(true)
-  }
-  
-  // Send detection request via injected script
-  window.postMessage({ type: 'VUE_INSPECTOR_CHECK_VUE' }, '*')
-  
-  // Reset flag after small delay
-  setTimeout(() => {
-    setVueCheckInProgress(false)
-  }, 1000)
-}
 
 /**
  * Stops all detection processes to save resources
@@ -124,9 +78,13 @@ export function handleInjectedMessage(event: MessageEvent): void {
           type: 'VUE_INSPECTOR_FLAGS',
           flags: newFlags,
           url: window.location.href
-        }).catch(() => {})
+        }).catch((error) => {
+          console.error('[content/detection] Failed to send VUE_INSPECTOR_FLAGS:', error)
+        })
       }
-    } catch {}
+    } catch (error) {
+      console.error('[content/detection] chrome.runtime.sendMessage error:', error)
+    }
     
     return
   }

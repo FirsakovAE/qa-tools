@@ -20,9 +20,13 @@ export function likeMatch(value: string, pattern: string): boolean {
     // escape regex special chars except % and *
     const escaped = p.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&')
 
-    const regex = new RegExp(
-        '^' + escaped.replace(/[%*]/g, '.*') + '$',
-    )
-
-    return regex.test(v)
+    try {
+        const regex = new RegExp(
+            '^' + escaped.replace(/[%*]/g, '.*') + '$',
+        )
+        return regex.test(v)
+    } catch (e) {
+        console.error('[utils/likeMatch] likeMatch RegExp failed:', pattern, e)
+        return false
+    }
 }

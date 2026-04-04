@@ -358,6 +358,7 @@ img{max-width:100%;display:block}
       <a href="#features">Features</a>
       <a href="#installation">Installation</a>
       <a href="#releases">Releases</a>
+      <a href="./docs/index.html">Documentation</a>
       <a href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">GitHub</a>
     </nav>
     <button class="hamburger" onclick="document.getElementById('mobileNav').classList.toggle('open')" aria-label="Menu">
@@ -367,6 +368,7 @@ img{max-width:100%;display:block}
       <a href="#features" onclick="this.parentElement.classList.remove('open')">Features</a>
       <a href="#installation" onclick="this.parentElement.classList.remove('open')">Installation</a>
       <a href="#releases" onclick="this.parentElement.classList.remove('open')">Releases</a>
+      <a href="./docs/index.html" onclick="this.parentElement.classList.remove('open')">Documentation</a>
       <a href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">GitHub</a>
     </nav>
   </div>
@@ -582,7 +584,9 @@ No proxies. No rebuilds. No DevTools limitations.
       <span>&middot;</span>
       <a href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">GitHub</a>
       <span>&middot;</span>
-      <span>MIT License</span>
+      <span>© 2026 FirsakovAE</span>
+      <span>&middot;</span>
+      <span>Licensed under <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU GPLv3</a></span>
     </div>
   </div>
 </footer>
@@ -596,9 +600,20 @@ No proxies. No rebuilds. No DevTools limitations.
     (function(){
       var el = document.getElementById('bookmarklet');
       if (el) {
-        var baseURL = location.hostname.endsWith('github.io')
-          ? location.origin + (location.pathname.split('/').filter(Boolean)[0] ? '/' + location.pathname.split('/').filter(Boolean)[0] : '')
-          : location.origin;
+        function getStandaloneBaseURL() {
+          var parts = location.pathname.split('/').filter(Boolean);
+          var first = parts[0] || '';
+          if (location.hostname.endsWith('github.io')) {
+            if (first) return location.origin + '/' + first;
+            return location.origin;
+          }
+          if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+            if (first && first.indexOf('.') === -1) return location.origin + '/' + first;
+            return location.origin;
+          }
+          return location.origin;
+        }
+        var baseURL = getStandaloneBaseURL();
         var loaderPath = '/loader.js';
         var code = "(function(){if(window.__VUE_INSPECTOR_INITIALIZED__)return;var b='"+baseURL+"';window.__VUE_INSPECTOR_CONFIG__={baseURL:b};window.__VUE_INSPECTOR_INITIALIZED__=true;var s=document.createElement('script');s.src=b+'"+loaderPath+"';s.onerror=function(){alert('Vue Inspector: Failed to load from '+b)};document.head.appendChild(s);})();";
         el.href = 'javascript:' + encodeURIComponent(code);

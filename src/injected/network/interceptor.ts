@@ -20,6 +20,7 @@ import type {
   MockConfig,
   MockMatch
 } from './types'
+import { looksLikeFormDataDraftJson } from '../../utils/jsonGuards'
 
 // Store original implementations
 const originalFetch = window.fetch
@@ -27,6 +28,20 @@ const originalXHROpen = XMLHttpRequest.prototype.open
 const originalXHRSend = XMLHttpRequest.prototype.send
 const originalXHRSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader
 const originalXHRResponseTypeDescriptor = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseType')
+
+/**
+ * `new Event()` / `new ProgressEvent()` instances have `target === null` until dispatched.
+ * We invoke stored listeners manually with `handler.call(xhr, event)`; code that uses
+ * `event.target.status` (Vite HMR client, axios, etc.) then throws "Cannot read properties of null (reading 'status')".
+ */
+function patchSyntheticEventTarget(event: Event, target: EventTarget): void {
+  try {
+    Object.defineProperty(event, 'target', { value: target, enumerable: true, configurable: true })
+    Object.defineProperty(event, 'currentTarget', { value: target, enumerable: true, configurable: true })
+  } catch {
+    // Host may refuse patching in edge environments
+  }
+}
 
 // Extension URL patterns to exclude
 const EXTENSION_PATTERNS = [
@@ -199,8 +214,11 @@ function getContentLength(headers: Array<{ name: string; value: string }>): numb
   return contentLength ? parseInt(contentLength.value, 10) || 0 : 0
 }
 
+/** Max time to read `response.clone().text()` — avoids hanging the Network row if the stream never completes. */
+const READ_RESPONSE_BODY_TIMEOUT_MS = 45_000
+
 /**
- * Read response body safely
+ * Read response body safely (bounded time so inspector rows still finalize).
  */
 async function readResponseBody(response: Response, clone: Response): Promise<string | null> {
   const contentType = response.headers.get('content-type') || ''
@@ -212,8 +230,19 @@ async function readResponseBody(response: Response, clone: Response): Promise<st
   }
   
   try {
-    return await clone.text()
-  } catch {
+    const deadline = new Promise<never>((_, reject) => {
+      setTimeout(
+        () => reject(new Error('READ_RESPONSE_BODY_TIMEOUT')),
+        READ_RESPONSE_BODY_TIMEOUT_MS
+      )
+    })
+    return await Promise.race([clone.text(), deadline])
+  } catch (error) {
+    if (error instanceof Error && error.message === 'READ_RESPONSE_BODY_TIMEOUT') {
+      console.warn('[injected/network] readResponseBody timed out after', READ_RESPONSE_BODY_TIMEOUT_MS, 'ms', contentType)
+    } else {
+      console.error('[injected/network] readResponseBody failed:', error)
+    }
     return null
   }
 }
@@ -278,7 +307,8 @@ function serializeRequestBody(body: BodyInit | null | undefined): string | null 
   
   try {
     return JSON.stringify(body)
-  } catch {
+  } catch (error) {
+    console.error('[injected/network] serializeRequestBody failed:', error)
     return '[Object]'
   }
 }
@@ -336,7 +366,7 @@ function buildModifiedUrl(
     
     return url.toString()
   } catch (e) {
-    console.warn('[VueInspector Interceptor] Failed to build modified URL:', e)
+    console.error('[injected/network] buildModifiedUrl failed:', e)
     return originalUrl
   }
 }
@@ -431,6 +461,7 @@ async function deserializeBodyForRequest(
   originalFD?: FormData | null
 ): Promise<BodyInit | null> {
   if (!body) return body
+  if (!looksLikeFormDataDraftJson(body)) return body
   try {
     const parsed = JSON.parse(body)
     if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
@@ -490,8 +521,8 @@ async function deserializeBodyForRequest(
             try {
               const resp = await originalFetch.call(window, fileUri)
               blob = await resp.blob()
-            } catch {
-              console.warn('[VueInspector] Cannot fetch file from path (browser security restriction):', rawValue)
+            } catch (err) {
+              console.error('[injected/network] Cannot fetch file from path:', rawValue, err)
               blob = new Blob([], { type: 'application/octet-stream' })
             }
             fd.append(entry.key, blob, fileName)
@@ -506,7 +537,9 @@ async function deserializeBodyForRequest(
       }
       return fd
     }
-  } catch { /* not JSON — send as raw string */ }
+  } catch {
+    /* not our FormData draft — send as raw string */
+  }
   return body
 }
 
@@ -566,7 +599,7 @@ function interceptFetch(): void {
     
     const method = init?.method || (input instanceof Request ? input.method : 'GET')
     
-    // Check exclusions (but NOT isPaused - that only affects logging, not breakpoints)
+    // Check exclusions
     if (shouldExcludeUrl(url) || shouldExcludeMethod(method)) {
       return originalFetch.call(window, input, init)
     }
@@ -606,10 +639,8 @@ function interceptFetch(): void {
           
           if (contentType.includes('json') && mockBody) {
             try {
-              // Validate it's parseable JSON
               JSON.parse(mockBody)
             } catch {
-              console.warn('[VueInspector Interceptor] Mock body is not valid JSON, wrapping as string')
               mockBody = JSON.stringify(mockBody)
             }
           }
@@ -677,7 +708,7 @@ function interceptFetch(): void {
             })
           }
           
-          // Log the mocked response
+          // Log the mocked response (skip if paused — onRequest was skipped too, no pending row to finalize)
           const endTime = performance.now()
           if (callbacks?.onResponse && !isPaused) {
             callbacks.onResponse(requestId, {
@@ -693,7 +724,7 @@ function interceptFetch(): void {
           return mockResponse
           
         } catch (mockError) {
-          console.error('[VueInspector Interceptor] ❌ Error creating mock response:', mockError)
+          console.error('[injected/network] Error creating mock response:', mockError)
           // Fall through to real network call if mock fails
         }
       }
@@ -898,7 +929,7 @@ function interceptFetch(): void {
       }
 
       // No response breakpoint - read body normally from the existing clone
-      responseBody = await readResponseBody(clone, clone)
+      responseBody = await readResponseBody(response, clone)
       const trunc = truncateBody(responseBody)
       let bodyText = trunc.text
       let truncated = trunc.truncated
@@ -908,9 +939,8 @@ function interceptFetch(): void {
       const contentLength = getContentLength(responseHeaders)
       const size = contentLength || originalSize
 
-      // Notify about response (normal flow, no response breakpoint)
-      // Only log if not paused
-      if (callbacks?.onResponse && !isPaused) {
+      // Notify about response (normal flow). Always emit so rows never stay pending if interception pauses mid-flight.
+      if (callbacks?.onResponse) {
         callbacks.onResponse(requestId, {
           status: response.status,
           statusText: response.statusText,
@@ -924,6 +954,7 @@ function interceptFetch(): void {
       return finalResponse
     } catch (error) {
       originalFormDataBodies.delete(requestId)
+      console.error('[injected/network] Fetch request failed:', requestId, error)
       // Notify about error
       if (callbacks?.onError) {
         callbacks.onError(
@@ -965,6 +996,8 @@ interface XHRData {
     statusText: string
     responseHeaders: Array<{ name: string; value: string }>
   } | null
+  /** One XHR send() can only complete once; prevents duplicate logging when `load` never fires but DONE does, or when listeners stack on XHR reuse. */
+  xhrResponseHandled?: boolean
 }
 
 /**
@@ -973,7 +1006,7 @@ interface XHRData {
  * Response breakpoint strategy for XHR:
  * 1. Intercept addEventListener and onload/onreadystatechange setters
  * 2. Store all handlers instead of attaching them directly
- * 3. When load event fires, check for breakpoint
+ * 3. When readyState reaches DONE (4), check for breakpoint — not only `load` (e.g. `timeout` skips `load`, DevTools still shows completion)
  * 4. If breakpoint, wait for resume, apply modifications
  * 5. Override response properties with (possibly modified) values
  * 6. THEN call stored handlers - they see modified data
@@ -1164,7 +1197,6 @@ function interceptXHR(): void {
           try {
             JSON.parse(mockBody)
           } catch {
-            console.warn('[VueInspector Interceptor] XHR Mock body is not valid JSON, wrapping')
             mockBody = JSON.stringify(mockBody)
           }
         }
@@ -1278,7 +1310,7 @@ function interceptXHR(): void {
             xhr.dispatchEvent(new ProgressEvent('load', progressEventInit))
             xhr.dispatchEvent(new ProgressEvent('loadend', progressEventInit))
                         
-            // Log the mocked response
+            // Log the mocked response (skip if paused — no pending row)
             if (callbacks?.onResponse && !isPaused) {
               callbacks.onResponse(data.id, {
                 status: mockStatus,
@@ -1299,7 +1331,7 @@ function interceptXHR(): void {
             callStoredHandlers(xhr, data)
             
           } catch (mockError) {
-            console.error('[VueInspector Interceptor] ❌ Error applying XHR mock:', mockError)
+            console.error('[injected/network] Error applying XHR mock:', mockError)
             // If mock fails, we can't recover for XHR - just log error
           }
         }
@@ -1384,7 +1416,9 @@ function interceptXHR(): void {
                 if (isFormDataBody && h.name.toLowerCase() === 'content-type') return
                 try {
                   originalXHRSetRequestHeader.call(xhr, h.name, h.value)
-                } catch { /* Some headers can't be set */ }
+                } catch (err) {
+                  console.error('[injected/network] XHR setRequestHeader failed:', h.name, err)
+                }
               })
               
               // Update data for logging
@@ -1455,9 +1489,12 @@ function interceptXHR(): void {
     xhr: XMLHttpRequest,
     data: XHRData
   ): void {
-    // Use native addEventListener to attach our internal handler
-    // This handler fires BEFORE we call app handlers
-    originalXHRAddEventListener.call(xhr, 'load', async function(this: XMLHttpRequest) {
+    // Use readystatechange DONE, not `load`: `load` is omitted for some outcomes (notably `timeout`) while DONE still runs — otherwise the inspector never gets onResponse and rows stay "pending".
+    originalXHRAddEventListener.call(xhr, 'readystatechange', async function(this: XMLHttpRequest) {
+      if (this.readyState !== XMLHttpRequest.DONE) return
+      if (data.xhrResponseHandled) return
+      data.xhrResponseHandled = true
+
       const endTime = performance.now()
       const duration = endTime - data.startTime
       
@@ -1591,7 +1628,7 @@ function interceptXHR(): void {
           // Check for status 0 which indicates CORS or network error
           if (this.status === 0 && callbacks?.onError) {
             callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
-          } else if (callbacks?.onResponse && !isPaused) {
+          } else if (callbacks?.onResponse) {
             callbacks.onResponse(data.id, {
               status: this.status,
               statusText: this.statusText,
@@ -1609,7 +1646,7 @@ function interceptXHR(): void {
         // Check for status 0 which indicates CORS or network error
         if (this.status === 0 && callbacks?.onError) {
           callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
-        } else if (callbacks?.onResponse && !isPaused) {
+        } else if (callbacks?.onResponse) {
           callbacks.onResponse(data.id, {
             status: this.status,
             statusText: this.statusText,
@@ -1662,12 +1699,20 @@ function interceptXHR(): void {
    * This is called AFTER breakpoint is resolved and modifications are applied
    */
   function callStoredHandlers(xhr: XMLHttpRequest, data: XHRData): void {
-    // Create a synthetic load event
+    let loaded = 0
+    try {
+      const rt = xhr.responseText
+      loaded = typeof rt === 'string' ? rt.length : 0
+    } catch {
+      loaded = 0
+    }
+    // Create a synthetic load event (target patched — see patchSyntheticEventTarget)
     const loadEvent = new ProgressEvent('load', {
       lengthComputable: true,
-      loaded: xhr.response?.length || 0,
-      total: xhr.response?.length || 0
+      loaded,
+      total: loaded
     })
+    patchSyntheticEventTarget(loadEvent, xhr)
     
     // Call all stored load handlers
     for (const handler of data.loadHandlers) {
@@ -1678,12 +1723,13 @@ function interceptXHR(): void {
           handler.handleEvent(loadEvent)
         }
       } catch (err) {
-        console.error('[VueInspector Interceptor] Error calling load handler:', err)
+        console.error('[injected/network] Error calling load handler:', err)
       }
     }
     
     // Call readystatechange handlers (readyState should be 4 = DONE)
     const readystateEvent = new Event('readystatechange')
+    patchSyntheticEventTarget(readystateEvent, xhr)
     for (const handler of data.readystatechangeHandlers) {
       try {
         if (typeof handler === 'function') {
@@ -1692,7 +1738,7 @@ function interceptXHR(): void {
           handler.handleEvent(readystateEvent)
         }
       } catch (err) {
-        console.error('[VueInspector Interceptor] Error calling readystatechange handler:', err)
+        console.error('[injected/network] Error calling readystatechange handler:', err)
       }
     }
   }
@@ -1702,6 +1748,7 @@ function interceptXHR(): void {
    */
   function callStoredErrorHandlers(xhr: XMLHttpRequest, data: XHRData): void {
     const errorEvent = new ProgressEvent('error')
+    patchSyntheticEventTarget(errorEvent, xhr)
     
     for (const handler of data.errorHandlers) {
       try {
@@ -1711,10 +1758,33 @@ function interceptXHR(): void {
           handler.handleEvent(errorEvent)
         }
       } catch (err) {
-        console.error('[VueInspector Interceptor] Error calling error handler:', err)
+        console.error('[injected/network] Error calling error handler:', err)
       }
     }
   }
+}
+
+/**
+ * Restore native fetch / XMLHttpRequest so DevTools attribute network calls to app code,
+ * not this script. Used when Network is paused and on full cleanup.
+ */
+function restoreNativeNetworkAPIs(): void {
+  window.fetch = originalFetch
+  XMLHttpRequest.prototype.open = originalXHROpen
+  XMLHttpRequest.prototype.send = originalXHRSend
+  XMLHttpRequest.prototype.setRequestHeader = originalXHRSetRequestHeader
+
+  if (originalXHRResponseTypeDescriptor) {
+    Object.defineProperty(XMLHttpRequest.prototype, 'responseType', originalXHRResponseTypeDescriptor)
+  }
+}
+
+/**
+ * Install fetch + XHR patches (idempotent if called after restoreNativeNetworkAPIs).
+ */
+function installNetworkPatches(): void {
+  interceptFetch()
+  interceptXHR()
 }
 
 // ============================================================================
@@ -1731,15 +1801,15 @@ export function initNetworkInterceptor(cbs: InterceptorCallbacks, maxSize?: numb
     maxBodySize = maxSize
   }
   
-  interceptFetch()
-  interceptXHR()
+  installNetworkPatches()
 }
 
 /**
- * Pause interception (new requests won't be captured)
+ * Pause: restore native fetch/XHR so DevTools initiator points at app code, not this script.
  */
 export function pauseInterception(): void {
   isPaused = true
+  restoreNativeNetworkAPIs()
 }
 
 /**
@@ -1747,6 +1817,7 @@ export function pauseInterception(): void {
  */
 export function resumeInterception(): void {
   isPaused = false
+  installNetworkPatches()
 }
 
 /**
@@ -1760,15 +1831,7 @@ export function isInterceptionPaused(): boolean {
  * Restore original implementations (cleanup)
  */
 export function cleanupNetworkInterceptor(): void {
-  window.fetch = originalFetch
-  XMLHttpRequest.prototype.open = originalXHROpen
-  XMLHttpRequest.prototype.send = originalXHRSend
-  XMLHttpRequest.prototype.setRequestHeader = originalXHRSetRequestHeader
-  
-  // Restore responseType descriptor
-  if (originalXHRResponseTypeDescriptor) {
-    Object.defineProperty(XMLHttpRequest.prototype, 'responseType', originalXHRResponseTypeDescriptor)
-  }
+  restoreNativeNetworkAPIs()
   
   callbacks = null
   

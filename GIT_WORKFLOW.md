@@ -8,8 +8,10 @@
 ## Основные команды
 
 ```bash
-npm run build                         # Собрать билд (dist/ + docs/)
-npm run serve:standalone              # локальный тест корп. версии
+npm run build #Сборка приложения (Vue + vue-tsc, вывод в обычный каталог Vite)	
+npm run build:extension #То же для расширения (отдельного скрипта по смыслу)
+npm run docs:build #Сборка документации (VitePress из папки documentation)
+npm run build:standalone #Приложение и пометка standalone (по факту запускает build)
 git add .                             # Добавить все изменения
 git commit -m "chore: update preview build"
 git push origin master
@@ -38,7 +40,7 @@ git checkout -b features/{name}
 git add src/
 git commit -m "wip: pinia rewrite"
 # З. Запушить ветку
-git push -u origin features/features/2.2.0
+git push -u origin features/features/2.4.0
 # 3. Удалить ветку
 
 git checkout master

@@ -10,26 +10,54 @@
  *    DevTools panel reconnects to the new content script instance
  */
 
-import { runtimeHandlers } from './handlers'
-import { requestWindow, getExpectedResponseType } from './ipc'
+import { routeRequest, forwardInjectedBroadcast } from './message-router'
 import {
   injectedScriptLoaded,
   setInjectedScriptLoaded,
-  featureFlags,
   resetDetectionState
 } from './state'
 import { injectScript } from './script-injector'
 import { addMessageListenerIfNeeded } from './detection'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
+
+let devtoolsPort: chrome.runtime.Port | null = null
+const onDisconnectCleanups: Array<() => void> = []
+
+/**
+ * Register a cleanup to run when DevTools panel disconnects (e.g. stop props inspector)
+ */
+export function registerOnDisconnectCleanup(fn: () => void): void {
+  onDisconnectCleanups.push(fn)
+}
+
+/**
+ * Send a broadcast message to the DevTools panel (e.g. PROPS_INSPECTOR_ELEMENT_SELECTED).
+ * Only works when panel is connected via port.
+ */
+export function sendBroadcastToPanel(msg: { type: string; [key: string]: unknown }): void {
+  if (devtoolsPort) {
+    try {
+      devtoolsPort.postMessage({ broadcast: true, message: msg })
+    } catch (e) {
+      if (!isExpectedExtensionError(e)) {
+        console.error('[content/devtools-bridge] sendBroadcastToPanel failed:', e)
+      }
+    }
+  }
+}
 
 export function setupDevtoolsBridge(): void {
   try {
     if (!chrome?.runtime?.id) return
-  } catch {
+  } catch (error) {
+    console.error('[content/devtools-bridge] Chrome runtime not available:', error)
     return
   }
 
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== 'devtools') return
+
+    devtoolsPort = port
 
     // Inject detection script if not loaded yet
     if (!injectedScriptLoaded) {
@@ -46,33 +74,14 @@ export function setupDevtoolsBridge(): void {
       const sendResponse = (response: any) => {
         try {
           port.postMessage({ responseId: requestId, response })
-        } catch {}
-      }
-
-      // Network commands → forward to injected script, ack immediately
-      if (message.__NETWORK_CMD__) {
-        window.postMessage({
-          ...message,
-          __VUE_INSPECTOR__: true,
-          __NETWORK_CMD__: true
-        }, '*')
-        sendResponse({ success: true })
-        return
-      }
-
-      const handler = runtimeHandlers[message.type]
-
-      if (handler) {
-        try {
-          handler(message, {} as chrome.runtime.MessageSender, sendResponse)
         } catch (error) {
-          sendResponse({ success: false, error: String(error) })
+          if (!isExpectedExtensionError(error)) {
+            console.error('[content/devtools-bridge] port.postMessage failed:', error)
+          }
         }
-      } else {
-        requestWindow(message, getExpectedResponseType(message.type), 5000)
-          .then(sendResponse)
-          .catch((err: Error) => sendResponse({ error: err.message }))
       }
+
+      routeRequest(message, sendResponse, '[content/devtools-bridge]')
     })
 
     // Forward broadcasts from injected script to DevTools panel
@@ -80,52 +89,29 @@ export function setupDevtoolsBridge(): void {
       const data = event.data
       if (!data || typeof data !== 'object') return
 
-      // Network events from injected script
-      if (data.__FROM_VUE_INSPECTOR__ && data.__NETWORK__) {
+      forwardInjectedBroadcast(data, (msg) => {
         try {
-          port.postMessage({ broadcast: true, message: data })
-        } catch {}
-        return
-      }
-
-      // Detection results → send feature flags broadcast
-      if (data.__FROM_VUE_INSPECTOR__ && data.type === 'VUE_INSPECTOR_DETECTION_RESULT') {
-        try {
-          port.postMessage({
-            broadcast: true,
-            message: {
-              type: 'VUE_INSPECTOR_FEATURE_FLAGS',
-              flags: featureFlags
-            }
-          })
-        } catch {}
-        return
-      }
-
-      // Props/Pinia ready → send both formats
-      if (data.__FROM_VUE_INSPECTOR__ && (
-        data.type === 'VUE_INSPECTOR_PROPS_READY' ||
-        data.type === 'VUE_INSPECTOR_PINIA_READY'
-      )) {
-        try {
-          port.postMessage({
-            broadcast: true,
-            message: {
-              type: 'VUE_INSPECTOR_FEATURE_FLAGS',
-              flags: featureFlags
-            }
-          })
-          port.postMessage({
-            broadcast: true,
-            message: data
-          })
-        } catch {}
-      }
+          port.postMessage(msg)
+        } catch (error) {
+          if (!isExpectedExtensionError(error)) {
+            console.error('[content/devtools-bridge] port.postMessage (broadcast) failed:', error)
+          }
+        }
+      })
     }
     window.addEventListener('message', broadcastListener)
 
     // DevTools panel closed → clean up injected interception
     port.onDisconnect.addListener(() => {
+      devtoolsPort = null
+      for (const fn of onDisconnectCleanups) {
+        try {
+          fn()
+        } catch (e) {
+          console.error('[content/devtools-bridge] onDisconnect cleanup failed:', e)
+        }
+      }
+      onDisconnectCleanups.length = 0
       window.removeEventListener('message', broadcastListener)
 
       // Trigger fresh detection so overlay gets correct Vue/Pinia flags when user switches to it
@@ -153,9 +139,13 @@ export function setupDevtoolsBridge(): void {
     // Restore breakpoints and mocks from settings after a short delay
     // (injected network bridge needs time to initialize)
     setTimeout(() => {
-      try {
-        chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (settings) => {
-          if (chrome.runtime.lastError || !settings || typeof settings !== 'object') return
+        try {
+          chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (settings) => {
+          if (chrome.runtime.lastError) {
+            console.error('[content/devtools-bridge] GET_SETTINGS failed:', chrome.runtime.lastError.message)
+            return
+          }
+          if (!settings || typeof settings !== 'object') return
 
           const activeBps = settings.breakpoints?.active
           if (Array.isArray(activeBps) && activeBps.length > 0) {
@@ -190,7 +180,9 @@ export function setupDevtoolsBridge(): void {
             }, '*')
           }
         })
-      } catch {}
+      } catch (error) {
+        console.error('[content/devtools-bridge] Failed to restore breakpoints/mocks:', error)
+      }
     }, 500)
   })
 }

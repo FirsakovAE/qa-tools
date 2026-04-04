@@ -10,10 +10,18 @@
 const tabId = chrome.devtools.inspectedWindow.tabId
 
 chrome.runtime.sendMessage({ type: 'GET_DISPLAY_MODE' }, (modeResp) => {
-  if (chrome.runtime.lastError || modeResp?.displayMode !== 'devtools') return
+  if (chrome.runtime.lastError) {
+    console.error('[devtools] GET_DISPLAY_MODE failed:', chrome.runtime.lastError.message)
+    return
+  }
+  if (modeResp?.displayMode !== 'devtools') return
 
   chrome.runtime.sendMessage({ type: 'IS_STATIC_SITE', tabId }, (staticResp) => {
-    if (chrome.runtime.lastError || staticResp?.isStatic) return
+    if (chrome.runtime.lastError) {
+      console.error('[devtools] IS_STATIC_SITE failed:', chrome.runtime.lastError.message)
+      return
+    }
+    if (staticResp?.isStatic) return
 
     chrome.devtools.panels.create(
       'Vue Inspector',
@@ -25,7 +33,9 @@ chrome.runtime.sendMessage({ type: 'GET_DISPLAY_MODE' }, (modeResp) => {
             type: 'RELAY_DEVTOOLS_SEARCH',
             action,
             query: queryString ?? ''
-          }).catch(() => {})
+          }).catch((error) => {
+            console.error('[devtools] RELAY_DEVTOOLS_SEARCH failed:', error)
+          })
         })
       }
     )

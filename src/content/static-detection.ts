@@ -51,7 +51,9 @@ export function detectStaticSite(): StaticDetectionResult {
     if (navType === 'navigate') {
       reasons.push('navigation type = navigate')
     }
-  } catch {}
+  } catch (error) {
+    console.error('[content/static-detection] performance.getEntriesByType failed:', error)
+  }
 
   // 3. Absence of SPA router indicators (less strict criterion)
   const hasRouterIndicators =

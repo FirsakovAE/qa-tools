@@ -166,7 +166,10 @@ function onInput(e: Event) {
           v-else
           class="json-viewer p-2 leading-relaxed
                  whitespace-pre-wrap break-words"
-          :class="fullHeight ? 'min-h-full' : 'min-h-[300px]'"
+          :class="[
+            fullHeight ? 'min-h-full' : 'min-h-[300px]',
+            isLargePayload && 'json-viewer--plain'
+          ]"
         ><code ref="codeRef" :class="prismClass"></code></pre>
       </div>
       <ScrollBar orientation="vertical" />

@@ -27,7 +27,8 @@ function sessionGet<T>(key: string): T | null {
     const stored = sessionStorage.getItem(STORAGE_KEY)
     const data = stored ? JSON.parse(stored) : {}
     return (data[key] as T) ?? null
-  } catch {
+  } catch (e) {
+    console.error('[runtime/standalone] sessionGet failed:', key, e)
     return null
   }
 }
@@ -38,7 +39,9 @@ function sessionSet(key: string, value: unknown): void {
     const data = stored ? JSON.parse(stored) : {}
     data[key] = value
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch { /* quota / private mode */ }
+  } catch (e) {
+    console.error('[runtime/standalone] sessionSet failed:', key, e)
+  }
 }
 
 function sessionRemove(key: string): void {
@@ -47,7 +50,9 @@ function sessionRemove(key: string): void {
     const data = stored ? JSON.parse(stored) : {}
     delete data[key]
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[runtime/standalone] sessionRemove failed:', key, e)
+  }
 }
 
 class StandaloneStorage implements RuntimeStorage {
@@ -60,19 +65,30 @@ class StandaloneStorage implements RuntimeStorage {
         sessionSet(key, value)
       }
       return value
-    } catch {
+    } catch (e) {
+      console.error('[runtime/standalone] StandaloneStorage.get failed:', key, e)
       return sessionGet<T>(key)
     }
   }
 
   async set(key: string, value: unknown): Promise<void> {
-    sessionSet(key, value)
-    await this.client.setSettings(value, key)
+    try {
+      sessionSet(key, value)
+      await this.client.setSettings(value, key)
+    } catch (e) {
+      console.error('[runtime/standalone] StandaloneStorage.set failed:', key, e)
+      throw e
+    }
   }
 
   async remove(key: string): Promise<void> {
-    sessionRemove(key)
-    await this.client.removeSettings(key)
+    try {
+      sessionRemove(key)
+      await this.client.removeSettings(key)
+    } catch (e) {
+      console.error('[runtime/standalone] StandaloneStorage.remove failed:', key, e)
+      throw e
+    }
   }
 }
 
@@ -163,6 +179,7 @@ export class StandaloneAdapter implements RuntimeAdapter {
           message
         }, this.config.targetOrigin!)
       } catch (err) {
+        console.error('[runtime/standalone] sendMessage failed:', err)
         reject(err)
       }
     })
@@ -228,7 +245,7 @@ export class StandaloneAdapter implements RuntimeAdapter {
               // Broadcasts don't expect response
             })
           } catch (e) {
-            // Ignore handler errors
+            console.error('[runtime/standalone] broadcast handler failed:', e)
           }
         }
         return
@@ -255,7 +272,7 @@ export class StandaloneAdapter implements RuntimeAdapter {
               return
             }
           } catch (e) {
-            // Ignore handler errors
+            console.error('[runtime/standalone] request handler failed:', e)
           }
         }
       }

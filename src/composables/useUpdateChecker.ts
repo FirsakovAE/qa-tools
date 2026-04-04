@@ -29,7 +29,8 @@ export function useUpdateChecker() {
     try {
       const manifest = runtime.getManifest()
       return manifest?.version || '0.0.0'
-    } catch {
+    } catch (error) {
+      console.error('[useUpdateChecker] Failed to get local version:', error)
       return '0.0.0'
     }
   }
@@ -44,7 +45,8 @@ export function useUpdateChecker() {
         }
       }
       return true
-    } catch {
+    } catch (error) {
+      console.error('[useUpdateChecker] Failed to check last update time:', error)
       return true
     }
   }
@@ -53,7 +55,8 @@ export function useUpdateChecker() {
     try {
       const ignoredVersion = await runtime.storage.get<string>(IGNORED_VERSION_KEY)
       return ignoredVersion === version
-    } catch {
+    } catch (error) {
+      console.error('[useUpdateChecker] Failed to check ignored version:', error)
       return false
     }
   }
@@ -87,7 +90,8 @@ export function useUpdateChecker() {
         },
       })
       return id
-    } catch {
+    } catch (error) {
+      console.error('[useUpdateChecker] Failed to show update toast:', error)
       return null
     }
   }
@@ -124,7 +128,7 @@ export function useUpdateChecker() {
         }
       }
     } catch (error) {
-      console.error('Failed to check for updates:', error)
+      console.error('[useUpdateChecker] Failed to check for updates:', error)
     } finally {
       isChecking.value = false
     }

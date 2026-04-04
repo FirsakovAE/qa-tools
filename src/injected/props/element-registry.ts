@@ -59,13 +59,21 @@ export function clearAllMarks(): void {
  * Called after structure scan to ensure all visible components have marked elements
  */
 export function syncElementMarks(): void {
-  const store = getMetaStore()
-  const components = store.getAllComponents()
+  try {
+    const store = getMetaStore()
+    const components = store.getAllComponents()
 
-  for (const meta of components) {
-    if (meta.rootEl && meta.rootEl.isConnected) {
-      markElementWithUid(meta.uid, meta.rootEl)
+    for (const meta of components) {
+      try {
+        if (meta.rootEl && meta.rootEl.isConnected) {
+          markElementWithUid(meta.uid, meta.rootEl)
+        }
+      } catch (e) {
+        console.error('[injected/props/element-registry] syncElementMarks meta failed:', meta.uid, e)
+      }
     }
+  } catch (e) {
+    console.error('[injected/props/element-registry] syncElementMarks failed:', e)
   }
 }
 

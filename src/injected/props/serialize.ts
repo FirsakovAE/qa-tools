@@ -128,7 +128,8 @@ function safeGetKeys(value: any, ctx: SerializationContext): string[] {
   
   try {
     return Object.keys(value)
-  } catch {
+  } catch (e) {
+    console.error('[injected/props/serialize] safeGetKeys failed:', e)
     return []
   }
 }
@@ -140,7 +141,8 @@ function safeGetKeys(value: any, ctx: SerializationContext): string[] {
 function safeGetProperty(obj: any, key: string): any {
   try {
     return obj[key]
-  } catch {
+  } catch (e) {
+    console.error('[injected/props/serialize] safeGetProperty failed:', key, e)
     return undefined
   }
 }
@@ -177,7 +179,8 @@ function unwrapRef(value: any, maxDepth: number = MAX_REF_UNWRAP_DEPTH): any {
   while (current && isVueRef(current) && depth < maxDepth) {
     try {
       current = current.value
-    } catch {
+    } catch (e) {
+      console.error('[injected/props/serialize] unwrapRef failed:', e)
       return '[Ref access error]'
     }
     depth++
@@ -212,7 +215,8 @@ function serializeMap(map: Map<any, any>, ctx: SerializationContext, depth: numb
       result.entries.push([serializedKey, serializedValue])
       count++
     }
-  } catch {
+  } catch (e) {
+    console.error('[injected/props/serialize] serializeMap failed:', e)
     result.error = true
   }
   
@@ -235,7 +239,8 @@ function serializeSet(set: Set<any>, ctx: SerializationContext, depth: number): 
       result.values.push(serializeValue(value, ctx, depth + 1))
       count++
     }
-  } catch {
+  } catch (e) {
+    console.error('[injected/props/serialize] serializeSet failed:', e)
     result.error = true
   }
   
@@ -442,6 +447,37 @@ export function serializeProps(props: any, visited?: WeakSet<object>): any {
   
   // Serialize with all protections
   return serializeValue(props, ctx, 0)
+}
+
+/**
+ * Serialize raw props for Declared section - includes ALL keys (including undefined).
+ * Converts non-JSON-serializable values to placeholders.
+ */
+export function serializeRawPropsForDeclared(rawProps: any): Record<string, any> {
+  if (rawProps === null || rawProps === undefined || typeof rawProps !== 'object') {
+    return {}
+  }
+
+  const normalized: Record<string, any> = {}
+  try {
+    for (const key of Object.keys(rawProps)) {
+      const v = rawProps[key]
+      if (v === undefined) {
+        normalized[key] = null
+      } else if (typeof v === 'function') {
+        normalized[key] = '[Function]'
+      } else if (v && typeof v === 'object' && typeof (v as any).nodeType === 'number') {
+        normalized[key] = '[DOM Node]'
+      } else {
+        normalized[key] = v
+      }
+    }
+  } catch (e) {
+    console.error('[injected/props/serialize] serializeRawPropsForDeclared failed:', e)
+    return {}
+  }
+
+  return serializeProps(normalized) as Record<string, any>
 }
 
 /**

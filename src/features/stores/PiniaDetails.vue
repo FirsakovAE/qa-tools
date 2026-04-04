@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ArrowLeft, Edit, X, Save, RefreshCw, Star } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,11 @@ import {
   TooltipTrigger
 } from '@/components/ui/tooltip'
 import JsonEditor from '@/components/JsonEditor.vue'
-import { useInspectorSettings } from '@/settings/useInspectorSettings'
+import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useRuntime } from '@/runtime'
 import type { BaseInspectorSettings, PiniaFavoriteItem } from '@/types/inspector'
 import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavoritesMatcher'
+import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
 
@@ -63,7 +64,7 @@ const isGettersJsonValid = computed(() => {
 const jsonMode = ref<'text' | 'tree'>('text')
 
 // --- Favorites (by store name) ---
-const settings = ref<BaseInspectorSettings | null>(null)
+const settings = useInspectorSettingsSync()
 const storeName = computed(() => props.store.baseId || 'Unknown Store')
 const isFavorite = computed(() => {
   if (!settings.value?.piniaFavorites) return false
@@ -95,8 +96,8 @@ async function toggleFavorite() {
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
-  } catch {
-    // Ignore save errors
+  } catch (error) {
+    console.error('[stores/PiniaDetails] toggleFavorite save failed:', error)
   }
 }
 
@@ -181,7 +182,9 @@ async function loadStoreData() {
     const now = new Date()
     lastFetched.value = now.toISOString().replace('T', ' ').slice(0, 19)
   } catch (err) {
-    console.error('[PiniaDetails] Error loading store data:', err)
+    if (!isExpectedExtensionError(err)) {
+      console.error('[stores/PiniaDetails] loadStoreData failed:', err)
+    }
     // Set empty objects to show "empty" state instead of loading
     stateData.value = {}
     gettersData.value = {}
@@ -200,7 +203,7 @@ function handlePiniaMessage(message: any) {
     if (message.success) {
       loadStoreData()
     } else {
-      console.warn('[PiniaDetails] Failed to replace state:', message.error)
+      console.error('[stores/PiniaDetails] Failed to replace state:', message.error)
     }
   }
   
@@ -208,7 +211,7 @@ function handlePiniaMessage(message: any) {
     if (message.success) {
       loadStoreData()
     } else {
-      console.warn('[PiniaDetails] Failed to patch getters:', message.error)
+      console.error('[stores/PiniaDetails] Failed to patch getters:', message.error)
     }
   }
 }
@@ -265,10 +268,12 @@ async function saveStateChanges() {
       stateData.value = newState
       isEditingState.value = false
     } else {
-      console.warn('[PiniaDetails] Failed to save state:', response?.error)
+      console.error('[stores/PiniaDetails] Failed to save state:', response?.error)
     }
   } catch (err) {
-    console.warn('[PiniaDetails] Error saving state:', err)
+    if (!isExpectedExtensionError(err)) {
+      console.error('[stores/PiniaDetails] saveStateChanges failed:', err)
+    }
   }
 }
 
@@ -290,25 +295,28 @@ async function saveGettersChanges() {
       gettersData.value = newGetters
       isEditingGetters.value = false
     } else {
-      console.warn('[PiniaDetails] Failed to save getters:', response?.error)
+      const detail =
+        typeof response?.error === 'string' && response.error.length > 0
+          ? response.error
+          : 'Save failed (no detail — check the page console and injected [injected/pinia/state-writer] logs)'
+      console.error('[stores/PiniaDetails] Failed to save getters:', detail)
     }
   } catch (err) {
-    console.warn('[PiniaDetails] Error saving getters:', err)
+    if (!isExpectedExtensionError(err)) {
+      console.error('[stores/PiniaDetails] saveGettersChanges failed:', err)
+    }
   }
 }
 
 let unsubscribeMessage: (() => void) | null = null
 
-// Mount - load data once
-onMounted(async () => {
-  unsubscribeMessage = runtime.onMessage(handlePiniaMessage)
+watch(settings, (s: BaseInspectorSettings | null) => {
+  if (s) jsonMode.value = s.json?.mode ?? 'text'
+}, { immediate: true })
 
-  // Load settings (for favorites and JSON mode)
-  const loadedSettings = await useInspectorSettings()
-  settings.value = loadedSettings
-  jsonMode.value = loadedSettings?.json?.mode ?? 'text'
-  
-  // Load store data
+// Mount - load data once
+onMounted(() => {
+  unsubscribeMessage = runtime.onMessage(handlePiniaMessage)
   loadStoreData()
 })
 

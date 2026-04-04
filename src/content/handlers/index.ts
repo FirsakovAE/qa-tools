@@ -20,14 +20,20 @@ import {
   handleHighlightByUid,
   handleClearElementRegistry,
   handleUpdateComponentProps,
-  handleGetComponentProps
+  handleGetComponentProps,
+  handlePropsSearch
 } from './props'
+
+import {
+  handlePropsInspectorStart,
+  handlePropsInspectorStop
+} from './propsInspector'
 
 // Pinia handlers
 import {
   handlePiniaGetStoresSummary,
   handlePiniaGetStoreState,
-  handlePiniaBuildSearchIndex,
+  handlePiniaSearch,
   handlePiniaPatchState,
   handlePiniaReplaceState,
   handlePiniaPatchGetters,
@@ -63,11 +69,14 @@ export const runtimeHandlers: Record<string, RuntimeHandler> = {
   CLEAR_ELEMENT_REGISTRY: handleClearElementRegistry,
   UPDATE_COMPONENT_PROPS: handleUpdateComponentProps,
   GET_COMPONENT_PROPS: handleGetComponentProps,
-  
+  PROPS_SEARCH: handlePropsSearch,
+  PROPS_INSPECTOR_START: handlePropsInspectorStart,
+  PROPS_INSPECTOR_STOP: handlePropsInspectorStop,
+
   // Pinia
   PINIA_GET_STORES_SUMMARY: handlePiniaGetStoresSummary,
   PINIA_GET_STORE_STATE: handlePiniaGetStoreState,
-  PINIA_BUILD_SEARCH_INDEX: handlePiniaBuildSearchIndex,
+  PINIA_SEARCH: handlePiniaSearch,
   PINIA_PATCH_STATE: handlePiniaPatchState,
   PINIA_REPLACE_STATE: handlePiniaReplaceState,
   PINIA_PATCH_GETTERS: handlePiniaPatchGetters,
@@ -100,11 +109,12 @@ export function setupRuntimeMessageListener(): void {
       try {
         return handler(message, sender, sendResponse) ?? true
       } catch (error) {
+        console.error('[content/handlers] Handler error for', message?.type, error)
         sendResponse({ success: false, error: String(error) })
         return true
       }
     })
-  } catch {
-    // Extension context not available
+  } catch (error) {
+    console.error('[content/handlers] Failed to setup runtime message listener:', error)
   }
 }

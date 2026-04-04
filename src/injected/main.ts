@@ -29,14 +29,14 @@ let cleanupDetection: (() => void) | null = null
  * Send detection result to content script
  */
 function sendDetectionResult(result: DetectionResult) {
-  window.postMessage({
-    type: 'VUE_INSPECTOR_DETECTION_RESULT',
-    __FROM_VUE_INSPECTOR__: true,
-    ...result
-  }, '*')
-  
-  // Also send legacy format for compatibility
-  window.postMessage({
+  try {
+    window.postMessage({
+      type: 'VUE_INSPECTOR_DETECTION_RESULT',
+      __FROM_VUE_INSPECTOR__: true,
+      ...result
+    }, '*')
+
+    window.postMessage({
     type: 'VUE_INSPECTOR_VUE_DETECTED',
     __FROM_VUE_INSPECTOR__: true,
     detected: result.hasVue,
@@ -44,6 +44,9 @@ function sendDetectionResult(result: DetectionResult) {
     hasDevToolsHook: !!(window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__,
     hasVue2: result.vueVersion === 2
   }, '*')
+  } catch (e) {
+    console.error('[injected/main] sendDetectionResult failed:', e)
+  }
 }
 
 /**
@@ -51,14 +54,18 @@ function sendDetectionResult(result: DetectionResult) {
  */
 function loadPropsModule() {
   if (propsModuleLoaded) return
-  propsModuleLoaded = true
-  initPropsModule()
-  
-  // Notify that props module is ready
-  window.postMessage({
-    type: 'VUE_INSPECTOR_PROPS_READY',
-    __FROM_VUE_INSPECTOR__: true
-  }, '*')
+  try {
+    propsModuleLoaded = true
+    initPropsModule()
+
+    window.postMessage({
+      type: 'VUE_INSPECTOR_PROPS_READY',
+      __FROM_VUE_INSPECTOR__: true
+    }, '*')
+  } catch (e) {
+    console.error('[injected/main] loadPropsModule failed:', e)
+    propsModuleLoaded = false
+  }
 }
 
 /**
@@ -66,14 +73,18 @@ function loadPropsModule() {
  */
 function loadPiniaModule() {
   if (piniaModuleLoaded) return
-  piniaModuleLoaded = true
-  initPiniaModule()
-  
-  // Notify that pinia module is ready
-  window.postMessage({
-    type: 'VUE_INSPECTOR_PINIA_READY',
-    __FROM_VUE_INSPECTOR__: true
-  }, '*')
+  try {
+    piniaModuleLoaded = true
+    initPiniaModule()
+
+    window.postMessage({
+      type: 'VUE_INSPECTOR_PINIA_READY',
+      __FROM_VUE_INSPECTOR__: true
+    }, '*')
+  } catch (e) {
+    console.error('[injected/main] loadPiniaModule failed:', e)
+    piniaModuleLoaded = false
+  }
 }
 
 /**
@@ -103,35 +114,39 @@ function handleMessage(event: MessageEvent) {
   if (event.source !== window || !event.data || typeof event.data !== 'object') {
     return
   }
-  
-  const { type } = event.data
-  
-  // Request to check Vue
-  if (type === 'VUE_INSPECTOR_CHECK_VUE') {
-    sendDetectionResult(getDetectionState())
-    return
-  }
-  
-  // Request to get flags (for UI)
-  if (type === 'VUE_INSPECTOR_GET_FLAGS') {
-    sendDetectionResult(getDetectionState())
-    return
-  }
-  
-  // Force re-detection request
-  if (type === 'VUE_INSPECTOR_FORCE_DETECT') {
-    const result = detect()
-    
-    if (result.hasVue && !propsModuleLoaded) {
-      loadPropsModule()
+
+  try {
+    const { type } = event.data
+
+    // Request to check Vue
+    if (type === 'VUE_INSPECTOR_CHECK_VUE') {
+      sendDetectionResult(getDetectionState())
+      return
     }
-    
-    if (result.hasPinia && !piniaModuleLoaded) {
-      loadPiniaModule()
+
+    // Request to get flags (for UI)
+    if (type === 'VUE_INSPECTOR_GET_FLAGS') {
+      sendDetectionResult(getDetectionState())
+      return
     }
-    
-    sendDetectionResult(result)
-    return
+
+    // Force re-detection request
+    if (type === 'VUE_INSPECTOR_FORCE_DETECT') {
+      const result = detect()
+
+      if (result.hasVue && !propsModuleLoaded) {
+        loadPropsModule()
+      }
+
+      if (result.hasPinia && !piniaModuleLoaded) {
+        loadPiniaModule()
+      }
+
+      sendDetectionResult(result)
+      return
+    }
+  } catch (e) {
+    console.error('[injected/main] handleMessage failed:', event.data?.type, e)
   }
 }
 
@@ -139,29 +154,26 @@ function handleMessage(event: MessageEvent) {
  * Initialize the inspector
  */
 function initialize() {
-  // Register message handler
-  window.addEventListener('message', handleMessage)
-  
-  // Initialize network module immediately (doesn't require Vue)
-  loadNetworkModule()
-  
-  // Setup reactive detection with callbacks
-  cleanupDetection = setupReactiveDetection({
-    onVueDetected,
-    onPiniaDetected
-  })
-  
-  // Get initial detection state
-  const initialResult = getDetectionState()
-  
-  // Send initial detection result
-  sendDetectionResult(initialResult)
-  
-  // Send ready signal
-  window.postMessage({
-    type: 'VUE_INSPECTOR_READY',
-    __FROM_VUE_INSPECTOR__: true
-  }, '*')
+  try {
+    window.addEventListener('message', handleMessage)
+
+    loadNetworkModule()
+
+    cleanupDetection = setupReactiveDetection({
+      onVueDetected,
+      onPiniaDetected
+    })
+
+    const initialResult = getDetectionState()
+    sendDetectionResult(initialResult)
+
+    window.postMessage({
+      type: 'VUE_INSPECTOR_READY',
+      __FROM_VUE_INSPECTOR__: true
+    }, '*')
+  } catch (e) {
+    console.error('[injected/main] initialize failed:', e)
+  }
 }
 
 /**
@@ -169,24 +181,32 @@ function initialize() {
  */
 function loadNetworkModule() {
   if (networkModuleLoaded) return
-  networkModuleLoaded = true
-  initNetworkModule()
-  
-  // Notify that network module is ready
-  window.postMessage({
-    type: 'VUE_INSPECTOR_NETWORK_READY',
-    __FROM_VUE_INSPECTOR__: true
-  }, '*')
+  try {
+    networkModuleLoaded = true
+    initNetworkModule()
+
+    window.postMessage({
+      type: 'VUE_INSPECTOR_NETWORK_READY',
+      __FROM_VUE_INSPECTOR__: true
+    }, '*')
+  } catch (e) {
+    console.error('[injected/main] loadNetworkModule failed:', e)
+    networkModuleLoaded = false
+  }
 }
 
 /**
  * Cleanup on page unload
  */
 function cleanup() {
-  window.removeEventListener('message', handleMessage)
-  cleanupDetection?.()
-  cleanupPropsModule()
-  cleanupNetworkModule()
+  try {
+    window.removeEventListener('message', handleMessage)
+    cleanupDetection?.()
+    cleanupPropsModule()
+    cleanupNetworkModule()
+  } catch (e) {
+    console.error('[injected/main] cleanup failed:', e)
+  }
 }
 
 // Register cleanup
@@ -199,7 +219,12 @@ initialize()
 // Export for debugging
 ;(window as any).__VUE_INSPECTOR_DETECTION__ = () => getDetectionState()
 ;(window as any).__VUE_INSPECTOR_FORCE_DETECT__ = () => {
-  const result = detect()
-  sendDetectionResult(result)
-  return result
+  try {
+    const result = detect()
+    sendDetectionResult(result)
+    return result
+  } catch (e) {
+    console.error('[injected/main] __VUE_INSPECTOR_FORCE_DETECT__ failed:', e)
+    return { hasVue: false, hasPinia: false, vueVersion: null }
+  }
 }

@@ -35,6 +35,16 @@
     color: hsl(var(--foreground));
 }
 
+/* Large JSON: Prism highlighting disabled, inherit typography from parent */
+.json-viewer--plain,
+.json-viewer--plain code {
+    font-family: inherit !important;
+    font-size: inherit !important;
+    line-height: inherit !important;
+    font-weight: inherit !important;
+    font-style: inherit !important;
+}
+
 /* Prism styles - inherit from parent like text mode */
 pre[class*=language-] {
     background: transparent !important;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { GlobeIcon, PlusIcon, Trash2Icon, LoaderCircleIcon, VideoIcon } from 'lucide-vue-next'
+import { GlobeIcon, PlusIcon, Trash2Icon, LoaderCircleIcon } from 'lucide-vue-next'
 import {
   Drawer,
   DrawerContent,
@@ -77,7 +77,8 @@ function getUrlDisplayName(url: string): string {
     const path = u.pathname
     const name = path.split('/').filter(Boolean).pop() || u.hostname
     return decodeURIComponent(name)
-  } catch {
+  } catch (error) {
+    console.error('[settings/ImagePickerDrawer] getUrlDisplayName failed:', url, error)
     return url.slice(0, 40) + (url.length > 40 ? '…' : '')
   }
 }
@@ -187,7 +188,7 @@ function formatFileSize(bytes: number): string {
                         @error="($event.target as HTMLImageElement).style.display = 'none'"
                       />
                       <div class="image-picker__item-placeholder image-picker__item-placeholder--url-fallback">
-                        <GlobeIcon :size="20" class="image-picker__loader-icon" />
+                        <LoaderCircleIcon :size="20" class="image-picker__loader-icon" />
                       </div>
                     </div>
 
@@ -232,8 +233,7 @@ function formatFileSize(bytes: number): string {
                         loading="lazy"
                       />
                       <div v-else class="image-picker__item-placeholder">
-                        <LoaderCircleIcon v-if="!isVideoFile(file.mimeType)" :size="20" class="image-picker__loader-icon" />
-                        <VideoIcon v-else :size="20" class="image-picker__loader-icon" />
+                        <LoaderCircleIcon :size="20" class="image-picker__loader-icon" />
                       </div>
                     </div>
 

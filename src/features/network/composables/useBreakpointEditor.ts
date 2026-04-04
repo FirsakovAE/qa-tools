@@ -1,5 +1,6 @@
 import { ref, computed, watch, type Ref } from 'vue'
 import type { HeaderEntry, UrlParam, NetworkEntry, FormDataEntry } from '@/types/network'
+import { formatJson } from '../utils'
 
 export interface BreakpointEditData {
   entryId: string
@@ -39,28 +40,6 @@ interface UseBreakpointEditorOptions {
   serializeFormDataToDraft: () => string
 }
 
-function formatJsonForEdit(text: string | undefined | null): string {
-  if (!text) return ''
-  try {
-    const parsed = JSON.parse(text)
-    if (typeof parsed === 'string') {
-      try {
-        const inner = JSON.parse(parsed)
-        if (typeof inner === 'object' && inner !== null) {
-          return JSON.stringify(inner, null, 2)
-        }
-      } catch { /* inner is not JSON */ }
-      return parsed
-    }
-    if (typeof parsed === 'object' && parsed !== null) {
-      return JSON.stringify(parsed, null, 2)
-    }
-    return text
-  } catch {
-    return text
-  }
-}
-
 export function useBreakpointEditor(options: UseBreakpointEditorOptions) {
   const {
     entry,
@@ -85,7 +64,7 @@ export function useBreakpointEditor(options: UseBreakpointEditorOptions) {
   const editableResponseBody = ref<string>('')
 
   const initializedEntryId = ref<string | null>(null)
-  const activeSection = ref<'url' | 'params' | 'headers' | 'request' | 'response'>('headers')
+  const activeSection = ref<'url' | 'params' | 'headers' | 'request' | 'response'>('response')
 
   // Initialize editable data from DRAFT once when entering breakpoint mode
   watch(
@@ -112,14 +91,14 @@ export function useBreakpointEditor(options: UseBreakpointEditorOptions) {
         } else {
           bodyFormatMode.value = 'raw'
           editableFormData.value = []
-          editableRequestBody.value = formatJsonForEdit(draft.requestBody)
+          editableRequestBody.value = formatJson(draft.requestBody)
         }
-        editableResponseBody.value = formatJsonForEdit(draft.responseBody)
+        editableResponseBody.value = formatJson(draft.responseBody)
 
         if (breakpointTrigger() === 'response') {
           activeSection.value = 'response'
         } else if (breakpointTrigger() === 'request') {
-          activeSection.value = 'url'
+          activeSection.value = 'request'
         }
       }
 

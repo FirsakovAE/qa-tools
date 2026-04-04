@@ -16,7 +16,8 @@ export interface MenuAction {
   label: string
   icon: Component
   onClick?: () => void
-  destructive?: boolean
+  /** Red text + separator before this action; same styling as `class="text-destructive_text"` elsewhere */
+  destructiveText?: boolean
   /** When set, render slot with this name instead of default (for custom content like file input) */
   slot?: string
 }
@@ -24,7 +25,7 @@ export interface MenuAction {
 const props = withDefaults(
   defineProps<{
     variant: 'context' | 'dropdown'
-    /** Actions to display. Before the last destructive action, a separator is auto-inserted. */
+    /** Actions to display. Before the first destructiveText action (if not first), a separator is auto-inserted. */
     actions: MenuAction[]
     /** Current item (passed to slots) */
     item?: unknown
@@ -58,16 +59,16 @@ function handleClick(e: Event, action: MenuAction) {
     v-bind="variant === 'dropdown' ? { align: 'end' } : {}"
   >
     <template v-for="(action, idx) in actions" :key="idx">
-      <!-- Separator before first destructive action (if not first) -->
+      <!-- Separator before first destructiveText action (if not first) -->
       <component
-        v-if="action.destructive && idx > 0 && !actions.slice(0, idx).some(a => a.destructive)"
+        v-if="action.destructiveText && idx > 0 && !actions.slice(0, idx).some(a => a.destructiveText)"
         :is="Separator"
       />
       <component
         v-if="action.slot"
         :is="Item"
         as-child
-        :class="action.destructive ? 'text-destructive_text' : undefined"
+        :class="action.destructiveText ? 'text-destructive_text' : undefined"
       >
         <slot :name="action.slot" :item="item" :variant="variant">
           <span class="flex items-center">
@@ -79,7 +80,7 @@ function handleClick(e: Event, action: MenuAction) {
       <component
         v-else
         :is="Item"
-        :class="action.destructive ? 'text-destructive_text' : undefined"
+        :class="action.destructiveText ? 'text-destructive_text' : undefined"
         @click="handleClick($event, action)"
       >
         <component :is="action.icon" class="h-4 w-4 mr-2" />

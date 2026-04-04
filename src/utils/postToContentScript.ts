@@ -4,17 +4,24 @@
  */
 
 import { getRuntimeAdapter } from '@/runtime'
+import { isExpectedExtensionError } from './expectedErrors'
 
 export function postToContentScript(message: any): void {
-  const adapter = getRuntimeAdapter()
+  try {
+    const adapter = getRuntimeAdapter()
 
-  if (adapter?.id === 'devtools') {
-    adapter.sendMessage(message).catch(() => {})
-    return
+    if (adapter?.id === 'devtools') {
+      adapter.sendMessage(message).catch((e) => {
+        if (!isExpectedExtensionError(e)) console.error('[utils/postToContentScript] sendMessage failed:', e)
+      })
+      return
+    }
+
+    window.parent?.postMessage({
+      __VUE_INSPECTOR__: true,
+      message
+    }, '*')
+  } catch (e) {
+    if (!isExpectedExtensionError(e)) console.error('[utils/postToContentScript] postToContentScript failed:', e)
   }
-
-  window.parent?.postMessage({
-    __VUE_INSPECTOR__: true,
-    message
-  }, '*')
 }
