@@ -4,7 +4,7 @@ import { getStoreActions, callActionUnwrapped } from './actions'
 import { isPiniaDetected, waitForPinia, watchPiniaStores } from './detect'
 import { searchStores } from './search'
 import { patchState, replaceState, patchGetters } from './state-writer'
-import { getStoreStateKeys, getGetterKeys, getActionKeys, normalizeStoreId } from './store-meta'
+import { getStoreStateKeys, getGetterKeys, normalizeStoreId } from './store-meta'
 import { updatePiniaContext } from './context'
 
 // Типы для сообщений
@@ -316,8 +316,8 @@ function getAllStoresSummaryLight(): Record<string, any> {
       const store = getStore(storeId)
       const stateKeys = store ? getStoreStateKeys(store as any).length : 0
       const getterKeys = store ? getGetterKeys(store as any).length : 0
-      const actions = getStoreActions(storeId)
-      const actionKeys = actions ? getActionKeys(actions as any).length : 0
+      const actionList = getStoreActions(storeId)
+      const actionKeys = actionList?.length ?? 0
 
       summary[storeId] = {
         id: storeId,

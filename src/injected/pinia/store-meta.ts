@@ -165,54 +165,63 @@ export function isVueRef(value: any): boolean {
 }
 
 /**
+ * Descriptor from own props or prototype chain — does not invoke accessors
+ * (reading store[key] for Pinia options getters would run user code and can throw).
+ */
+function getPropertyDescriptorChain(obj: object, key: string): PropertyDescriptor | undefined {
+  let cur: object | null = obj
+  while (cur && cur !== Object.prototype) {
+    const d = Object.getOwnPropertyDescriptor(cur, key)
+    if (d) return d
+    cur = Object.getPrototypeOf(cur)
+  }
+  return undefined
+}
+
+/**
  * Получает ключи геттеров из хранилища (несколько стратегий обнаружения)
  */
 export function getGetterKeys(store: PiniaStore): string[] {
   const getters: string[] = []
   const stateKeys = new Set(Object.keys(store.$state || {}))
 
-  // Strategy 1: Look for computed refs (setup-store with computed())
-  for (const key of Object.keys(store)) {
-    if (
-      key.startsWith('$') ||
-      key.startsWith('_') ||
-      typeof store[key] === 'function'
-    ) continue
+  const considerKey = (key: string) => {
+    if (key.startsWith('$') || key.startsWith('_')) return
+    if (getters.includes(key)) return
 
-    const value = store[key]
+    const desc = getPropertyDescriptorChain(store, key)
+    if (!desc) return
 
-    if (isComputedRef(value)) {
+    // Options-store getters: accessor on instance/prototype (never call .get)
+    if (typeof desc.get === 'function') {
       getters.push(key)
+      return
     }
-  }
-  
-  // Strategy 2: Keys on store but NOT in $state are getters (Pinia pattern)
-  for (const key of Object.keys(store)) {
-    if (
-      key.startsWith('$') ||
-      key.startsWith('_') ||
-      typeof store[key] === 'function'
-    ) continue
-    
-    if (getters.includes(key)) continue
-    
-    // Key exists on store but NOT in $state = getter
+
+    // Actions are data properties whose value is a function
+    if (typeof desc.value === 'function') return
+
+    // Setup-store: computed() exposed as ComputedRef (inspect .value only)
+    if (isComputedRef(desc.value)) {
+      getters.push(key)
+      return
+    }
+
+    // Keys on store but not in $state → treated as getters (Pinia pattern)
     if (!stateKeys.has(key)) {
       getters.push(key)
     }
   }
-  
-  // Strategy 3: Look for getters in prototype (options-store pattern)
+
+  for (const key of Object.keys(store)) {
+    considerKey(key)
+  }
+
   const proto = Object.getPrototypeOf(store)
   if (proto && proto !== Object.prototype) {
     for (const key of Object.getOwnPropertyNames(proto)) {
-      if (key === 'constructor' || key.startsWith('$') || key.startsWith('_')) continue
-      if (getters.includes(key)) continue
-      
-      const desc = Object.getOwnPropertyDescriptor(proto, key)
-      if (desc && typeof desc.get === 'function') {
-        getters.push(key)
-      }
+      if (key === 'constructor') continue
+      considerKey(key)
     }
   }
 
@@ -220,14 +229,20 @@ export function getGetterKeys(store: PiniaStore): string[] {
 }
 
 /**
- * Получает ключи действий из хранилища
+ * Получает ключи действий из хранилища (без чтения store[key]: геттеры не вызываются)
  */
 export function getActionKeys(store: PiniaStore): string[] {
   const actions: string[] = []
-  for (const key in store) {
-    if (!key.startsWith('$') && !key.startsWith('_') && typeof store[key] === 'function') {
-      actions.push(key)
-    }
+  const keys = new Set<string>()
+  for (const key in store) keys.add(key)
+  for (const key of Object.getOwnPropertyNames(store)) keys.add(key)
+
+  for (const key of keys) {
+    if (key.startsWith('$') || key.startsWith('_')) continue
+    const desc = getPropertyDescriptorChain(store, key)
+    if (!desc) continue
+    if (typeof desc.get === 'function') continue
+    if (typeof desc.value === 'function') actions.push(key)
   }
   return actions
 }
