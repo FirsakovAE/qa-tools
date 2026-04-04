@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { resolveRootLandingHref } from './rootLandingNav'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -23,10 +24,9 @@ function vitepressBase(): string {
 
 const base = vitepressBase()
 
-/** Absolute path to landing at site root (logo only; do not use in nav — VPLink adds base). */
+/** Host-root landing `/{repo}/index.html` (outside VitePress `…/docs/`). Logo uses raw href; nav uses `VPNavBarRootLandingLink`. */
 function landingHref(): string {
-  const prefix = vitepressBase().replace(/\/docs\/$/, '/')
-  return prefix === '/' ? '/index.html' : `${prefix.replace(/\/$/, '')}/index.html`
+  return resolveRootLandingHref(base)
 }
 
 const sharedTheme = {
@@ -154,7 +154,7 @@ export default defineConfig({
       themeConfig: {
         ...sharedTheme,
         nav: [
-          { text: 'Home', link: '../../index.html', target: '_self', rel: 'noopener' },
+          { component: 'VPNavBarRootLandingLink', props: { text: 'Home' } },
           { text: 'GitHub', link: 'https://github.com/FirsakovAE/qa-tools' },
         ],
         sidebar: sidebarEn,
@@ -171,7 +171,7 @@ export default defineConfig({
       themeConfig: {
         ...sharedTheme,
         nav: [
-          { text: 'Главная', link: '../../../index.html', target: '_self', rel: 'noopener' },
+          { component: 'VPNavBarRootLandingLink', props: { text: 'Главная' } },
           { text: 'GitHub', link: 'https://github.com/FirsakovAE/qa-tools' },
         ],
         sidebar: [
