@@ -201,7 +201,7 @@ title: Release history
 * JSON edit mode styling.
 * Minor cosmetic fixes.
 
-## [2.4.0] - 2026-04-19
+## [2.4.0] - 2026-04-05
 
 ### Network
 
