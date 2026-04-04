@@ -5,6 +5,63 @@
   --vp-c-brand-1: #8b5cf6;
   --vp-c-brand-2: #7c3aed;
   --vp-c-brand-3: #6d28d9;
+  /* Firefox + Chrome 121+: thin track; WebKit uses the same vars below */
+  --vp-scrollbar-thumb: color-mix(in srgb, var(--vp-c-text-2) 32%, transparent);
+  --vp-scrollbar-thumb-hover: color-mix(in srgb, var(--vp-c-text-2) 54%, transparent);
+}
+
+/**
+ * Thin scrollbars (Firefox / modern Chromium) + WebKit tuning so Chrome/Edge
+ * are closer to Firefox’s default narrow bar. Document + nested overflow share the same look.
+ */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-scrollbar-thumb) transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar,
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--vp-scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--vp-scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Боковая панель: полоса менее заметна, пока курсор не над панелью (чуть ближе к overlay Firefox) */
+.VPSidebar:not(:hover):not(:focus-within)::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+.VPSidebar:hover::-webkit-scrollbar-thumb,
+.VPSidebar:focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--vp-scrollbar-thumb);
+}
+
+.VPSidebar:hover::-webkit-scrollbar-thumb:hover,
+.VPSidebar:focus-within::-webkit-scrollbar-thumb:hover {
+  background-color: var(--vp-scrollbar-thumb-hover);
 }
 
 /* Основной текст статей — по ширине (заголовки и код не трогаем) */

@@ -4,17 +4,21 @@ import { dirname, resolve } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+/** Repository segment in GitHub Pages project URLs: https://{user}.github.io/{repo}/ */
+function githubPagesRepoSegment(): string {
+  const fromEnv = process.env.VITEPRESS_REPO?.trim()
+  if (fromEnv) return fromEnv.replace(/^\/+|\/+$/g, '')
+  return process.env.GITHUB_REPOSITORY?.split('/')[1]?.trim() || 'qa-tools'
+}
+
 /**
- * URL prefix where the VitePress app is mounted.
- * - Local `serve docs`: http://localhost:5174/docs/ → `/docs/`
- * - GitHub Pages project site: /{repo}/docs/ (set VITEPRESS_BASE or build on GITHUB_REPOSITORY)
+ * URL prefix where the VitePress app is mounted (must match GH Pages: /{repo}/docs/).
+ * Override with VITEPRESS_BASE=/other/docs/ when needed.
  */
 function vitepressBase(): string {
   const fromEnv = process.env.VITEPRESS_BASE?.trim()
   if (fromEnv) return fromEnv.endsWith('/') ? fromEnv : `${fromEnv}/`
-  const repo = process.env.GITHUB_REPOSITORY?.split('/')[1]
-  if (repo) return `/${repo}/docs/`
-  return '/docs/'
+  return `/${githubPagesRepoSegment()}/docs/`
 }
 
 const base = vitepressBase()
@@ -26,7 +30,8 @@ function landingHref(): string {
 }
 
 const sharedTheme = {
-  logo: { src: '../../icons/icon32.png', alt: 'Vue Inspector' },
+  /** `documentation/public/icons/` → `{base}icons/icon32.png` (VPImage applies `withBase`). */
+  logo: { src: '/icons/icon32.png', alt: 'Vue Inspector' },
   logoLink: { link: landingHref(), target: '_self', rel: 'noopener' } as const,
   siteTitle: 'Vue Inspector',
   socialLinks: [{ icon: 'github' as const, link: 'https://github.com/FirsakovAE/qa-tools' }],
@@ -83,7 +88,7 @@ const sidebarEn = [
   },
 ]
 
-/** Absolute-from-host paths (include VitePress `base`) — plain `/icons/...` in `head` is not prefixed by VitePress. */
+/** Absolute-from-host paths (include VitePress `base`) — icons under `documentation/public/icons/`. */
 function faviconHead(): [string, Record<string, string>][] {
   const prefix = base.replace(/\/$/, '')
   return [
@@ -96,6 +101,10 @@ function faviconHead(): [string, Record<string, string>][] {
 export default defineConfig({
   base,
   outDir: resolve(__dirname, '../../docs/docs'),
+  vite: {
+    /** `install/*.svg` + `icons/*.png` (PNG duplicated from `public/icons` for one `publicDir`). */
+    publicDir: resolve(__dirname, '../public'),
+  },
   head: faviconHead(),
   ignoreDeadLinks: [/^\.\/?(\.\.\/)+index(\.html)?$/],
   /**

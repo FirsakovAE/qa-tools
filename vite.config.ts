@@ -6,7 +6,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { join, dirname, normalize, posix } from 'path'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 
 export default defineConfig({
   base: './',
@@ -39,7 +39,8 @@ export default defineConfig({
           let content = readFileSync(uiSrcHtml, 'utf-8')
           content = content
             .replace(/src="\.\.\/\.\.\/injected_ui\/index\.js"/g, 'src="./index.js"')
-            .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
+            // One `..` stays under site prefix (/qa-tools/…); `../../assets` escapes to host /assets/
+            .replace(/\.\.\/\.\.\/assets\//g, '../assets/')
           writeFileSync(uiDestHtml, content, 'utf-8')
         }
 
@@ -105,10 +106,10 @@ export default defineConfig({
         const injectedUiHtmlPath = join(docsPath, 'injected_ui', 'index.html')
         if (existsSync(injectedUiHtmlPath)) {
           let content = readFileSync(injectedUiHtmlPath, 'utf-8')
-          // Заменяем пути для docs/ (они уже относительные из-за base: './')
+          // Заменяем пути для docs/ — `../../assets` из injected_ui ломает GitHub Pages (/qa-tools/…)
           content = content
             .replace(/src="\.\.\/\.\.\/injected_ui\/index\.js"/g, 'src="./index.js"')
-            .replace(/href="\.\.\/\.\.\/assets\//g, 'href="../assets/')
+            .replace(/\.\.\/\.\.\/assets\//g, '../assets/')
           writeFileSync(injectedUiHtmlPath, content, 'utf-8')
         }
 
@@ -134,19 +135,6 @@ export default defineConfig({
             scriptContent = scriptContent.replace(
               /\/standalone\/loader\.js/g,
               '/loader.js'
-            )
-
-            // Base URL: поддержка GitHub Pages (hostname.github.io)
-            scriptContent = scriptContent.replace(
-              /const currentOrigin = window\.location\.origin;\s*document\.getElementById\('baseUrl'\)\.value = currentOrigin;/,
-              `function getBaseURL() {
-    if (location.hostname.endsWith('github.io')) {
-      const [repo] = location.pathname.split('/').filter(Boolean);
-      return location.origin + '/' + repo;
-    }
-    return location.origin;
-  }
-  document.getElementById('baseUrl').value = getBaseURL();`
             )
 
             const mainJsPath = join(docsPath, 'main.js')
@@ -184,11 +172,12 @@ export default defineConfig({
         })
 
         // 3. VitePress → docs/docs/ (маршрут /docs/ для serve и GitHub Pages)
-        execSync('npx vitepress build documentation', {
+        // `execFileSync('npx.cmd', …)` даёт EINVAL на части установок Windows; CLI через тот же node, что и сборка.
+        const vitepressCli = join(process.cwd(), 'node_modules', 'vitepress', 'bin', 'vitepress.js')
+        execFileSync(process.execPath, [vitepressCli, 'build', 'documentation'], {
           stdio: 'inherit',
           cwd: process.cwd(),
           env: process.env,
-          shell: true,
         })
       }
     }

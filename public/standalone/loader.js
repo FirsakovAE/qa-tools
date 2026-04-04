@@ -12,9 +12,9 @@
   if (!config || !config.baseURL) {
     return;
   }
-  
+
   var baseURL = config.baseURL;
-  
+
   window.__VUE_INSPECTOR_STANDALONE__ = true;
   window.__VUE_INSPECTOR_BASE_URL__ = baseURL;
   
@@ -707,6 +707,182 @@
     var lastHoveredUid = null;
     var lastPickCoords = null;
     var CAPTURE_OVERLAY_ID = 'vue-inspector-capture-overlay';
+    var INFO_PANEL_ID = 'vue-inspector-info-panel';
+    var infoPanel = null;
+    var infoPanelTheme = 'dark';
+    var pendingInfoUid = null;
+    var fetchDebounceTimer = null;
+    var FETCH_DEBOUNCE_MS = 60;
+    var PANEL_THEMES = {
+      dark: {
+        bg: 'rgba(15, 15, 15, 0.95)',
+        border: 'rgba(139, 92, 246, 0.5)',
+        color: 'rgba(255, 255, 255, 0.95)',
+        secondary: 'rgba(255, 255, 255, 0.7)',
+        accent: 'rgba(197, 173, 250, 0.95)',
+        shadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+      },
+      light: {
+        bg: 'rgba(255, 255, 255, 0.95)',
+        border: 'rgba(139, 92, 246, 0.4)',
+        color: 'rgba(30, 30, 30, 0.95)',
+        secondary: 'rgba(60, 60, 60, 0.8)',
+        accent: 'rgba(99, 70, 180, 0.85)',
+        shadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+      }
+    };
+
+    function applyPanelTheme(panel, theme) {
+      var t = PANEL_THEMES[theme] || PANEL_THEMES.dark;
+      panel.style.background = t.bg;
+      panel.style.borderColor = t.border;
+      panel.style.color = t.color;
+      panel.style.boxShadow = t.shadow;
+    }
+
+    function setPropsInspectTheme(theme) {
+      infoPanelTheme = theme === 'light' ? 'light' : 'dark';
+      if (infoPanel) applyPanelTheme(infoPanel, infoPanelTheme);
+    }
+
+    function escapeHtml(s) {
+      var div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function getElementByUid(uid) {
+      return document.querySelector('[' + ELEMENT_UID_ATTR + '="' + uid + '"]');
+    }
+
+    function getDomElementInfo(el) {
+      if (!el || !el.tagName) return '—';
+      var tag = el.tagName.toLowerCase();
+      var id = el.id ? '#' + el.id : '';
+      var cls = el.className && typeof el.className === 'string'
+        ? '.' + el.className.trim().replace(/\s+/g, '.').slice(0, 50)
+        : '';
+      return tag + id + cls;
+    }
+
+    function createInfoPanel() {
+      if (infoPanel) {
+        applyPanelTheme(infoPanel, infoPanelTheme);
+        return infoPanel;
+      }
+      var panel = document.createElement('div');
+      panel.id = INFO_PANEL_ID;
+      panel.style.cssText =
+        'position:fixed;pointer-events:none;z-index:1000002;visibility:visible;opacity:1;' +
+        'padding:8px 12px;border:1px solid;border-radius:6px;font-family:ui-monospace,monospace;' +
+        'font-size:14px;line-height:1.4;max-width:360px;white-space:normal;overflow-wrap:anywhere;';
+      applyPanelTheme(panel, infoPanelTheme);
+      document.documentElement.appendChild(panel);
+      infoPanel = panel;
+      return panel;
+    }
+
+    function hideInfoPanel() {
+      if (infoPanel) infoPanel.style.display = 'none';
+    }
+
+    function positionInfoPanel(element, panel) {
+      var rect = element.getBoundingClientRect();
+      var panelRect = panel.getBoundingClientRect();
+      var pad = 8;
+      var vw = window.innerWidth;
+      var vh = window.innerHeight;
+      var top = rect.bottom + pad;
+      var left = rect.left;
+      if (vh - rect.bottom >= panelRect.height + pad) {
+        top = rect.bottom + pad;
+      } else if (rect.top >= panelRect.height + pad) {
+        top = rect.top - panelRect.height - pad;
+      } else if (vw - rect.right >= panelRect.width + pad) {
+        top = rect.top;
+        left = rect.right + pad;
+      } else if (rect.left >= panelRect.width + pad) {
+        top = rect.top;
+        left = rect.left - panelRect.width - pad;
+      }
+      left = Math.max(pad, Math.min(left, vw - panelRect.width - pad));
+      top = Math.max(pad, Math.min(top, vh - panelRect.height - pad));
+      panel.style.top = top + 'px';
+      panel.style.left = left + 'px';
+    }
+
+    function showInfoPanel(uid, data) {
+      if (!propsInspectActive) return;
+      var panel = createInfoPanel();
+      var t = PANEL_THEMES[infoPanelTheme] || PANEL_THEMES.dark;
+      panel.innerHTML =
+        '<div style="font-weight:600;margin-bottom:2px;">' + escapeHtml(data.name) + '</div>' +
+        '<div style="color:' + t.secondary + ';font-size:13px;margin-bottom:2px;">' + escapeHtml(data.rootEl) + '</div>' +
+        '<div style="color:' + t.accent + ';font-size:13px;">Props: ' + data.propsCount + '</div>' +
+        '<div style="color:' + t.accent + ';font-size:13px;">Child elements: ' + data.childCount + '</div>';
+      panel.style.display = 'block';
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          if (!propsInspectActive || !infoPanel) return;
+          if (lastHoveredUid !== uid) return;
+          var el = getElementByUid(uid);
+          if (el) positionInfoPanel(el, infoPanel);
+        });
+      });
+    }
+
+    function requestComponentInfo(uid) {
+      return new Promise(function(resolve, reject) {
+        var requestId = 'ci_' + Math.random().toString(36).slice(2);
+        var timeoutId = setTimeout(function() {
+          window.removeEventListener('message', onMsg);
+          reject(new Error('timeout'));
+        }, 1500);
+        function onMsg(ev) {
+          var d = ev.data;
+          if (!d || typeof d !== 'object') return;
+          if (ev.source !== window) return;
+          if (d.type !== 'VUE_INSPECTOR_COMPONENT_INFO_DATA' || d.requestId !== requestId) return;
+          window.removeEventListener('message', onMsg);
+          clearTimeout(timeoutId);
+          resolve(d);
+        }
+        window.addEventListener('message', onMsg);
+        window.postMessage({
+          type: 'VUE_INSPECTOR_GET_COMPONENT_INFO_BY_UID',
+          uid: uid,
+          requestId: requestId
+        }, '*');
+      });
+    }
+
+    function fetchAndShowInfo(uid) {
+      if (pendingInfoUid === uid) return;
+      pendingInfoUid = uid;
+      showInfoPanel(uid, { name: 'Loading…', rootEl: '—', propsCount: 0, childCount: 0 });
+      requestComponentInfo(uid).then(function(response) {
+        if (pendingInfoUid !== uid || !propsInspectActive) return;
+        showInfoPanel(uid, {
+          name: response.name != null ? response.name : 'Anonymous',
+          rootEl: response.rootElementInfo != null ? response.rootElementInfo : '—',
+          propsCount: response.propsCount != null ? response.propsCount : 0,
+          childCount: response.childCount != null ? response.childCount : 0
+        });
+      }).catch(function() {
+        if (pendingInfoUid !== uid || !propsInspectActive) return;
+        var el = getElementByUid(uid);
+        showInfoPanel(uid, { name: 'Component', rootEl: getDomElementInfo(el), propsCount: 0, childCount: 0 });
+      }).finally(function() {
+        if (pendingInfoUid === uid) pendingInfoUid = null;
+      });
+    }
+
+    function onScrollResizePick() {
+      if (lastHoveredUid !== null && infoPanel && infoPanel.style.display !== 'none') {
+        var el = getElementByUid(lastHoveredUid);
+        if (el) positionInfoPanel(el, infoPanel);
+      }
+    }
 
     function getUidFromElement(el) {
       if (!el) return null;
@@ -721,7 +897,8 @@
     function getElementAtPoint(x, y) {
       var cap = document.getElementById(CAPTURE_OVERLAY_ID);
       var hi = document.getElementById('vue-inspector-highlight-overlay');
-      var overlays = [cap, hi].filter(Boolean);
+      var ip = document.getElementById(INFO_PANEL_ID);
+      var overlays = [cap, hi, ip].filter(Boolean);
       overlays.forEach(function(el) { el.style.pointerEvents = 'none'; });
       var target = document.elementFromPoint(x, y);
       overlays.forEach(function(el) { el.style.pointerEvents = ''; });
@@ -729,30 +906,33 @@
     }
 
     function isPointOverPickModeChrome(x, y) {
-      var cap = document.getElementById(CAPTURE_OVERLAY_ID);
-      var hi = document.getElementById('vue-inspector-highlight-overlay');
-      var overlays = [cap, hi].filter(Boolean);
-      overlays.forEach(function(el) { el.style.pointerEvents = 'none'; });
       var el = document.elementFromPoint(x, y);
-      overlays.forEach(function(el) { el.style.pointerEvents = ''; });
       if (!el) return false;
-      return el.closest('#vue-inspector-root') != null;
+      return el.closest('#vue-inspector-root') != null || el.closest('#' + INFO_PANEL_ID) != null;
     }
 
     function stopPropsInspectStandalone() {
       if (!propsInspectActive) return;
       propsInspectActive = false;
       lastHoveredUid = null;
+      pendingInfoUid = null;
+      if (fetchDebounceTimer) {
+        clearTimeout(fetchDebounceTimer);
+        fetchDebounceTimer = null;
+      }
       if (propsInspectMoveRaf) {
         cancelAnimationFrame(propsInspectMoveRaf);
         propsInspectMoveRaf = null;
       }
       document.body.classList.remove('vue-inspector-pick-mode');
       hideOverlay();
+      hideInfoPanel();
       if (captureOverlayEl && captureOverlayEl.parentNode) {
         captureOverlayEl.parentNode.removeChild(captureOverlayEl);
         captureOverlayEl = null;
       }
+      window.removeEventListener('scroll', onScrollResizePick, true);
+      window.removeEventListener('resize', onScrollResizePick);
       window.removeEventListener('pointermove', onPickPointerMove, true);
       window.removeEventListener('pointerdown', onPickPointerDown, true);
       window.removeEventListener('keydown', onPickKeyDown, true);
@@ -763,9 +943,19 @@
       var cx = e.clientX;
       var cy = e.clientY;
       if (isPointOverPickModeChrome(cx, cy)) {
+        if (propsInspectMoveRaf) {
+          cancelAnimationFrame(propsInspectMoveRaf);
+          propsInspectMoveRaf = null;
+        }
+        lastPickCoords = null;
         if (lastHoveredUid !== null) {
           lastHoveredUid = null;
           hideOverlay();
+        }
+        hideInfoPanel();
+        if (fetchDebounceTimer) {
+          clearTimeout(fetchDebounceTimer);
+          fetchDebounceTimer = null;
         }
         return;
       }
@@ -782,10 +972,21 @@
           if (uid !== lastHoveredUid) {
             lastHoveredUid = uid;
             highlightByUid(uid);
+            showInfoPanel(uid, { name: 'Loading…', rootEl: '—', propsCount: 0, childCount: 0 });
+            if (fetchDebounceTimer) clearTimeout(fetchDebounceTimer);
+            fetchDebounceTimer = window.setTimeout(function() {
+              fetchDebounceTimer = null;
+              if (lastHoveredUid === uid && propsInspectActive) fetchAndShowInfo(uid);
+            }, FETCH_DEBOUNCE_MS);
           }
         } else {
           lastHoveredUid = null;
           hideOverlay();
+          hideInfoPanel();
+          if (fetchDebounceTimer) {
+            clearTimeout(fetchDebounceTimer);
+            fetchDebounceTimer = null;
+          }
         }
       });
     }
@@ -840,6 +1041,8 @@
       captureOverlayEl.id = CAPTURE_OVERLAY_ID;
       captureOverlayEl.style.cssText = 'position:fixed;inset:0;z-index:999999;pointer-events:auto;cursor:crosshair;';
       document.documentElement.appendChild(captureOverlayEl);
+      window.addEventListener('scroll', onScrollResizePick, { passive: true, capture: true });
+      window.addEventListener('resize', onScrollResizePick);
       window.addEventListener('pointermove', onPickPointerMove, { passive: true, capture: true });
       window.addEventListener('pointerdown', onPickPointerDown, { capture: true });
       window.addEventListener('keydown', onPickKeyDown, true);
@@ -890,6 +1093,7 @@
         }
 
         if (message.type === 'PROPS_INSPECTOR_START') {
+          setPropsInspectTheme(message.theme);
           startPropsInspectStandalone();
           if (requestId && iframe.contentWindow) {
             iframe.contentWindow.postMessage({
