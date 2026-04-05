@@ -20,7 +20,8 @@
   "permissions": [
     "scripting",
     "activeTab",
-    "storage"
+    "storage",
+    "webRequest"
   ],
   "host_permissions": ["<all_urls>"],
   "devtools_page": "devtools/devtools.html",

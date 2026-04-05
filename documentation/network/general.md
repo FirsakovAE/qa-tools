@@ -114,6 +114,8 @@ Access-Control-Expose-Headers: X-Request-Id
 
 On **same-origin** requests headers are usually available unless another policy hides them.
 
+In the **Vue Inspector extension** for Chrome / Edge, **Advanced mode** (capture setting under **Options → Network**) can enrich request and response headers with browser-level data beyond what the page is allowed to read. For details, header pinning, **Header links**, and help on **Extract regex** and **Transform**, see [Advanced capture mode](./advanced.md).
+
 Very large bodies may be truncated (roughly **20 MB** captured text in code); some binary payloads are not serialized as text for the tab.
 
 ### Storage cap

@@ -136,6 +136,161 @@ const settingsStorage = new SettingsStorage()
 // Per-tab static site flags
 const staticSiteTabs = new Map<number, boolean>()
 
+// ----- Network Advanced capture (chrome.webRequest) -----
+let networkCaptureMode: 'saved' | 'advanced' = 'saved'
+
+interface WebRequestCaptureRecord {
+  url: string
+  method: string
+  requestHeaders: chrome.webRequest.HttpHeader[]
+  responseHeaders: chrome.webRequest.HttpHeader[]
+  time: number
+}
+
+const pendingChromeRequestMeta = new Map<string, {
+  tabId: number
+  url: string
+  method: string
+  requestHeaders: chrome.webRequest.HttpHeader[]
+}>()
+
+const webRequestCaptureQueues = new Map<number, WebRequestCaptureRecord[]>()
+
+const WEBREQUEST_QUEUE_MAX = 80
+const WEBREQUEST_CAPTURE_MAX_AGE_MS = 120_000
+
+function normalizeUrlForWebRequestMatch(url: string): string {
+  try {
+    return new URL(url).href
+  } catch {
+    return url
+  }
+}
+
+function chromeHeadersToInspectorHeaders(
+  headers: chrome.webRequest.HttpHeader[] | undefined,
+): Array<{ name: string; value: string }> {
+  if (!headers?.length) return []
+  const out: Array<{ name: string; value: string }> = []
+  for (const h of headers) {
+    if (h?.name == null) continue
+    const raw = h.value
+    const v = raw == null ? '' : String(raw)
+    out.push({ name: h.name, value: v })
+  }
+  return out
+}
+
+function pruneCaptureQueue(tabId: number, queue: WebRequestCaptureRecord[]): WebRequestCaptureRecord[] {
+  const now = Date.now()
+  let next = queue.filter((r) => now - r.time < WEBREQUEST_CAPTURE_MAX_AGE_MS)
+  while (next.length > WEBREQUEST_QUEUE_MAX) {
+    next.shift()
+  }
+  webRequestCaptureQueues.set(tabId, next)
+  return next
+}
+
+function pushCapture(tabId: number, rec: WebRequestCaptureRecord): void {
+  let q = webRequestCaptureQueues.get(tabId) || []
+  q.push(rec)
+  q = pruneCaptureQueue(tabId, q)
+}
+
+function takeMatchingCapture(tabId: number, entry: any): WebRequestCaptureRecord | null {
+  const q = webRequestCaptureQueues.get(tabId)
+  if (!q?.length || !entry) return null
+  const url = normalizeUrlForWebRequestMatch(String(entry.url || ''))
+  const method = String(entry.method || 'GET').toUpperCase()
+  const idx = q.findIndex((c) => c.url === url && c.method === method)
+  if (idx === -1) return null
+  const [cap] = q.splice(idx, 1)
+  webRequestCaptureQueues.set(tabId, q)
+  return cap || null
+}
+
+function applyWebRequestCaptureToEntry(entry: any, cap: WebRequestCaptureRecord): any {
+  return {
+    ...entry,
+    requestHeaders: chromeHeadersToInspectorHeaders(cap.requestHeaders),
+    responseHeaders: chromeHeadersToInspectorHeaders(cap.responseHeaders),
+  }
+}
+
+async function waitForMatchingCapture(tabId: number, entry: any, maxWaitMs: number): Promise<WebRequestCaptureRecord | null> {
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    const cap = takeMatchingCapture(tabId, entry)
+    if (cap) return cap
+    await new Promise((r) => setTimeout(r, 20))
+  }
+  return takeMatchingCapture(tabId, entry)
+}
+
+function onWebRequestBeforeSendHeaders(
+  details: chrome.webRequest.OnBeforeSendHeadersDetails,
+): chrome.webRequest.BlockingResponse | undefined {
+  if (networkCaptureMode !== 'advanced') return undefined
+  if (details.tabId == null || details.tabId < 0) return undefined
+  if (details.type !== 'xmlhttprequest') return undefined
+  pendingChromeRequestMeta.set(details.requestId, {
+    tabId: details.tabId,
+    url: details.url,
+    method: details.method || 'GET',
+    requestHeaders: details.requestHeaders || [],
+  })
+  return undefined
+}
+
+function onWebRequestHeadersReceived(
+  details: chrome.webRequest.OnHeadersReceivedDetails,
+): chrome.webRequest.BlockingResponse | undefined {
+  if (networkCaptureMode !== 'advanced') return undefined
+  if (details.tabId == null || details.tabId < 0) return undefined
+  if (details.type !== 'xmlhttprequest') return undefined
+  const pending = pendingChromeRequestMeta.get(details.requestId)
+  pendingChromeRequestMeta.delete(details.requestId)
+  if (!pending) return undefined
+  const method = String(pending.method || details.method || 'GET').toUpperCase()
+  const rec: WebRequestCaptureRecord = {
+    url: normalizeUrlForWebRequestMatch(pending.url),
+    method,
+    requestHeaders: pending.requestHeaders,
+    responseHeaders: details.responseHeaders || [],
+    time: Date.now(),
+  }
+  pushCapture(pending.tabId, rec)
+  return undefined
+}
+
+try {
+  const wrFilter: chrome.webRequest.RequestFilter = { urls: ['<all_urls>'] }
+  chrome.webRequest.onBeforeSendHeaders.addListener(
+    onWebRequestBeforeSendHeaders,
+    wrFilter,
+    ['requestHeaders', 'extraHeaders'],
+  )
+  chrome.webRequest.onHeadersReceived.addListener(
+    onWebRequestHeadersReceived,
+    wrFilter,
+    ['responseHeaders', 'extraHeaders'],
+  )
+} catch (e) {
+  console.error('[background] webRequest listeners registration failed:', e)
+}
+
+async function refreshNetworkCaptureModeFromStorage(): Promise<void> {
+  try {
+    const settings = await loadSettingsWithFallback()
+    networkCaptureMode = settings?.networkCaptureMode === 'advanced' ? 'advanced' : 'saved'
+  } catch (e) {
+    console.error('[background] refreshNetworkCaptureModeFromStorage failed:', e)
+    networkCaptureMode = 'saved'
+  }
+}
+
+void refreshNetworkCaptureModeFromStorage()
+
 // DevTools panel search: panel connects here, devtools relays search via sendMessage
 const SEARCH_PORT_NAME = 'vue-inspector-devtools-search'
 let devtoolsSearchPort: chrome.runtime.Port | null = null
@@ -291,6 +446,8 @@ chrome.runtime.onInstalled.addListener(async () => {
         console.error('[background] settingsStorage.init failed:', error)
     }
 
+    await refreshNetworkCaptureModeFromStorage()
+
 })
 
 // NOTE: Расширение теперь работает через injected UI без popup
@@ -362,6 +519,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // Сохраняем настройки в IndexedDB и синхронизируем в chrome.storage.local
             saveSettings(message.settings)
                 .then(() => {
+                    if (message.settings && typeof message.settings === 'object') {
+                        networkCaptureMode = message.settings.networkCaptureMode === 'advanced' ? 'advanced' : 'saved'
+                    }
                     sendResponse({ success: true })
                 })
                 .catch((error) => {
@@ -370,12 +530,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 })
             return true // Асинхронный ответ
 
+        case 'NETWORK_MERGE_WEBREQUEST_HEADERS': {
+            if (networkCaptureMode !== 'advanced' || message.entry == null) {
+                sendResponse({ entry: message.entry })
+                return false
+            }
+            const mergeTabId = sender.tab?.id
+            if (mergeTabId == null) {
+                sendResponse({ entry: message.entry })
+                return false
+            }
+            ;(async () => {
+                try {
+                    const cap = await waitForMatchingCapture(mergeTabId, message.entry, 480)
+                    if (!cap) {
+                        sendResponse({ entry: message.entry })
+                        return
+                    }
+                    sendResponse({ entry: applyWebRequestCaptureToEntry(message.entry, cap) })
+                } catch (e) {
+                    console.error('[background] NETWORK_MERGE_WEBREQUEST_HEADERS failed:', e)
+                    sendResponse({ entry: message.entry })
+                }
+            })()
+            return true
+        }
+
         case 'RESET_SETTINGS':
             // Очищаем настройки из IndexedDB
             settingsStorage.clearSettings()
                 .then(async () => {
                     // Также очищаем из chrome.storage.local
                     await chrome.storage.local.remove(['vue-inspector-settings', 'vue-inspector-settings-version'])
+                    await refreshNetworkCaptureModeFromStorage()
                     sendResponse({ success: true })
                 })
                 .catch((error) => {

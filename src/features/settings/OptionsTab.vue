@@ -77,13 +77,14 @@ const sections = [
 ]
 
 // -------------------- SELECTED ITEM --------------------
-type SelectedItemType = 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'
+type SelectedItemType = 'breakpoint' | 'mock' | 'header-link' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'
 const selectedItem = ref<{ type: SelectedItemType; id: string } | null>(null)
 
 watch(activeSection, () => {
   selectedItem.value = null
   piniaFavoriteEditMode.value = false
   siteListEditMode.value = false
+  headerLinkEditMode.value = false
   if (activeSection.value !== 'about') {
     releaseInfo.value = null
   }
@@ -93,6 +94,7 @@ function onSelectItem(item: { type: SelectedItemType; id: string }) {
   selectedItem.value = item
   piniaFavoriteEditMode.value = false
   siteListEditMode.value = false
+  headerLinkEditMode.value = false
 }
 
 // -------------------- EDIT MODE --------------------
@@ -166,16 +168,24 @@ function handleEditFromDetails() {
   if (selectedItem.value.type === 'breakpoint') {
     piniaFavoriteEditMode.value = false
     siteListEditMode.value = false
+    headerLinkEditMode.value = false
     handleEditBreakpoint(selectedItem.value.id)
   } else if (selectedItem.value.type === 'mock') {
     piniaFavoriteEditMode.value = false
     siteListEditMode.value = false
+    headerLinkEditMode.value = false
     handleEditMock(selectedItem.value.id)
   } else if (selectedItem.value.type === 'pinia-favorite') {
     siteListEditMode.value = false
+    headerLinkEditMode.value = false
     piniaFavoriteEditMode.value = true
+  } else if (selectedItem.value.type === 'header-link') {
+    piniaFavoriteEditMode.value = false
+    siteListEditMode.value = false
+    headerLinkEditMode.value = true
   } else if (selectedItem.value.type === 'site-blacklist' || selectedItem.value.type === 'site-whitelist') {
     piniaFavoriteEditMode.value = false
+    headerLinkEditMode.value = false
     siteListEditMode.value = true
   }
 }
@@ -187,20 +197,31 @@ function handleEditFormBack() {
   editExistingMock.value = null
   piniaFavoriteEditMode.value = false
   siteListEditMode.value = false
+  headerLinkEditMode.value = false
 }
 
 const piniaFavoriteEditMode = ref(false)
 const siteListEditMode = ref(false)
+const headerLinkEditMode = ref(false)
 
 function handleEditPiniaFavorite(item: { type: 'pinia-favorite'; id: string }) {
   selectedItem.value = item
   siteListEditMode.value = false
+  headerLinkEditMode.value = false
   piniaFavoriteEditMode.value = true
+}
+
+function handleEditHeaderLink(item: { type: 'header-link'; id: string }) {
+  selectedItem.value = item
+  piniaFavoriteEditMode.value = false
+  siteListEditMode.value = false
+  headerLinkEditMode.value = true
 }
 
 function handleEditSiteList(item: { type: 'site-blacklist' | 'site-whitelist'; id: string }) {
   selectedItem.value = item
   piniaFavoriteEditMode.value = false
+  headerLinkEditMode.value = false
   siteListEditMode.value = true
 }
 
@@ -213,6 +234,10 @@ function handlePiniaFavoriteEditDone(newId?: string) {
 
 function handleSiteListEditDone() {
   siteListEditMode.value = false
+}
+
+function handleHeaderLinkEditDone() {
+  headerLinkEditMode.value = false
 }
 
 function handleBreakpointEditConfirm(breakpoint: BreakpointItem) {
@@ -582,10 +607,17 @@ onMounted(async () => {
             <NetworkSection
               v-else-if="activeSection === 'network'"
               :settings="settings"
-              :selected-item-id="selectedItem?.type === 'breakpoint' || selectedItem?.type === 'mock' ? selectedItem.id : null"
+              :selected-item-id="
+                selectedItem?.type === 'breakpoint' ||
+                selectedItem?.type === 'mock' ||
+                selectedItem?.type === 'header-link'
+                  ? selectedItem.id
+                  : null
+              "
               @select="onSelectItem"
               @edit-breakpoint="handleEditBreakpoint"
               @edit-mock="handleEditMock"
+              @edit-header-link="handleEditHeaderLink"
             />
             <PropsSection
               v-else-if="activeSection === 'props'"
@@ -638,13 +670,15 @@ onMounted(async () => {
           :release-info="activeSection === 'about' ? releaseInfo : null"
           :pinia-favorite-edit-mode="piniaFavoriteEditMode"
           :site-list-edit-mode="siteListEditMode"
-          @close="selectedItem = null; piniaFavoriteEditMode = false; siteListEditMode = false"
+          :header-link-edit-mode="headerLinkEditMode"
+          @close="selectedItem = null; piniaFavoriteEditMode = false; siteListEditMode = false; headerLinkEditMode = false"
           @close-release="handleCloseRelease"
           @ignore-version="handleIgnoreVersion"
           @download-update="handleDownloadUpdate"
           @edit="handleEditFromDetails"
           @pinia-favorite-edit-done="handlePiniaFavoriteEditDone"
           @site-list-edit-done="handleSiteListEditDone"
+          @header-link-edit-done="handleHeaderLinkEditDone"
         />
       </div>
     </div>

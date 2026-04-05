@@ -260,10 +260,36 @@ const {
 } = handlers
 
 // ============================================================================
+// Header link editor (full right panel, same slot as details)
+// ============================================================================
+
+const headerLinkEditor = ref<{ headerName: string; mode: 'create' | 'edit' } | null>(null)
+
+function openHeaderLinkEditor(payload: { headerName: string; mode: 'create' | 'edit' }) {
+  headerLinkEditor.value = payload
+}
+
+function closeHeaderLinkEditor() {
+  headerLinkEditor.value = null
+}
+
+// ============================================================================
 // Watchers
 // ============================================================================
 
 watch(entriesVersion, () => { rebuildIndex() })
+
+watch(selectedEntryId, () => {
+  headerLinkEditor.value = null
+})
+
+watch(() => settings.value?.networkCaptureMode, (mode) => {
+  if (mode !== 'advanced') headerLinkEditor.value = null
+})
+
+watch([mockFormMode, breakpointFormMode], ([mock, bp]) => {
+  if (mock || bp) headerLinkEditor.value = null
+})
 
 watch(() => props.pendingBreakpoint, (pending) => {
   if (pending) {
@@ -320,7 +346,7 @@ watch(settings, (s) => {
 <template>
   <div class="h-full flex flex-col overflow-hidden">
     <!-- Toolbar -->
-    <div class="shrink-0 flex flex-wrap items-center gap-2 p-2 border-b toolbar-container" :class="{ 'toolbar-hide-on-details': selectedEntry || mockFormMode || breakpointFormMode }">
+    <div class="shrink-0 flex flex-wrap items-center gap-2 p-2 border-b toolbar-container" :class="{ 'toolbar-hide-on-details': selectedEntry || mockFormMode || breakpointFormMode || headerLinkEditor }">
       <!-- Left block: Title + Search + Filter + Export (inline) -->
       <div class="flex items-center gap-2 toolbar-left-block">
         <h3 class="text-lg font-semibold shrink-0 toolbar-title">Network</h3>
@@ -497,7 +523,8 @@ watch(settings, (s) => {
       <div class="h-full min-h-0 overflow-hidden border rounded-lg details-panel" :class="{ 
         'ring-2 ring-amber-500': isShowingPendingBreakpoint || breakpointFormMode,
         'ring-2 ring-purple-500': mockFormMode,
-        'details-active': selectedEntry || mockFormMode || breakpointFormMode
+        'ring-2 ring-sky-500/60': headerLinkEditor,
+        'details-active': selectedEntry || mockFormMode || breakpointFormMode || headerLinkEditor
       }">
         <MockForm
           v-if="mockFormMode && mockFormEntry"
@@ -514,7 +541,7 @@ watch(settings, (s) => {
           @back="handleBreakpointFormBack"
           @confirm="handleBreakpointConfirm"
         />
-        
+
         <NetworkDetails
           v-else-if="selectedEntry"
           :entry="selectedEntry"
@@ -525,6 +552,7 @@ watch(settings, (s) => {
           :mock-matching-ids="mockState.entriesMatchingMocks.value"
           :all-breakpoints="allBreakpointsWithStatus"
           :all-mocks="allMocksWithStatus"
+          :header-link-editor="headerLinkEditor"
           @back="deselectEntry"
           @cancel-breakpoint="handleCancelBreakpoint"
           @apply-breakpoint="handleApplyBreakpoint"
@@ -536,6 +564,8 @@ watch(settings, (s) => {
           @delete-breakpoint="handleDeleteBreakpoint"
           @toggle-mock="handleToggleMock"
           @delete-mock="handleDeleteMock"
+          @open-header-link-editor="openHeaderLinkEditor"
+          @close-header-link-editor="closeHeaderLinkEditor"
         />
         
         <div

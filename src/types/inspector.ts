@@ -182,6 +182,53 @@ export type DisplayMode = 'overlay' | 'devtools'
 
 export type ThemeMode = 'dark' | 'light'
 
+/**
+ * Network tab capture: page hooks only (CORS-filtered headers) vs extension webRequest (full headers).
+ */
+export type NetworkCaptureMode = 'saved' | 'advanced'
+
+/** Open external trace/monitoring URL from a header value ({value} in template) */
+export interface NetworkHeaderLinkRule {
+    id: string
+    /** Header name, matched case-insensitively */
+    headerName: string
+    /** Request URL host this rule applies to (e.g. api.example.com) */
+    host: string
+    /** URL template; use {value} for the header value */
+    urlTemplate: string
+    /**
+     * Optional RegExp (pattern as for `new RegExp(pattern)`).
+     * When set, the substring for `{value}` is the first capturing group if present, else the full match;
+     * if the pattern does not match or is invalid, the raw header value is used.
+     */
+    valueExtractRegex?: string
+    /**
+     * Optional transform pipeline after extraction: steps separated by `|`, e.g. replace("-", "") | lowercase().
+     */
+    valueTransform?: string
+    /** ISO timestamp */
+    addedAt: string
+}
+
+export type NetworkPinnedHeaderScope = 'request' | 'response'
+
+export interface NetworkPinnedHeaderItem {
+    id: string
+    /** Header name (matched case-insensitively) */
+    name: string
+    scope: NetworkPinnedHeaderScope
+}
+
+/** Draft row while editing header link rules (Options / Network) */
+export interface HeaderLinkRuleRowDraft {
+    id: string | null
+    host: string
+    urlTemplate: string
+    valueExtractRegex: string
+    valueTransform: string
+    addedAt: string | null
+}
+
 export type ImageSourceType = 'file' | 'link'
 
 /** Standalone: wallpaper entry in IndexedDB wallpapers store */
@@ -261,6 +308,12 @@ export interface BaseInspectorSettings {
     search?: any
     /** Network tab search settings */
     networkSearch: NetworkSearchSettings
+    /** Network capture: saved (Classic) = page-visible headers only; advanced = full request/response headers via webRequest */
+    networkCaptureMode: NetworkCaptureMode
+    /** Header → external link rules (Advanced headers UI + Options) */
+    networkHeaderLinks: NetworkHeaderLinkRule[]
+    /** Pinned headers per scope (Advanced Network only), in display order */
+    networkPinnedHeaders: NetworkPinnedHeaderItem[]
     /** Props tab search settings */
     propsSearch: PropsSearchSettings
     /**

@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { BreakpointItem, MockRule } from '@/types/inspector'
+import type { BreakpointItem, MockRule, NetworkCaptureMode, NetworkHeaderLinkRule, NetworkPinnedHeaderItem } from '@/types/inspector'
 import { TableCell } from '@/components/ui/table'
 import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
 import SettingsTableSection from '../components/SettingsTableSection.vue'
 import type { TableColumn } from '../components/SettingsTableSection.vue'
 import type { MenuAction } from '@/components/OptionsItemActionsMenu'
-import { Power, Trash, Pencil } from 'lucide-vue-next'
+import { Power, Trash, Pencil, Info } from 'lucide-vue-next'
+import { Label } from '@/components/ui/label'
+import RadioGroup from '@/components/ui/RadioGroup/RadioGroup.vue'
+import RadioGroupItem from '@/components/ui/RadioGroup/RadioGroupItem.vue'
+import { getRuntimeAdapter } from '@/runtime'
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -15,10 +19,21 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'select', item: { type: 'breakpoint' | 'mock'; id: string }): void
+  (e: 'select', item: { type: 'breakpoint' | 'mock' | 'header-link'; id: string }): void
   (e: 'edit-breakpoint', id: string): void
   (e: 'edit-mock', id: string): void
+  (e: 'edit-header-link', item: { type: 'header-link'; id: string }): void
 }>()
+
+const runtime = getRuntimeAdapter()
+const isStandalone = runtime?.capabilities.mode === 'standalone'
+
+const networkCaptureMode = computed({
+  get: (): NetworkCaptureMode => props.settings.networkCaptureMode ?? 'saved',
+  set: (val: NetworkCaptureMode) => {
+    props.settings.networkCaptureMode = val
+  },
+})
 
 // -------------------- SEARCH SETTINGS --------------------
 type SearchKey = 'byName' | 'byPath' | 'byMethod' | 'byStatus' | 'byKey' | 'byValue'
@@ -135,6 +150,78 @@ function getMockActions(row: MockRow): MenuAction[] {
     { label: 'Delete', icon: Trash, onClick: () => removeMock(row.id), destructiveText: true },
   ]
 }
+
+// -------------------- HEADER LINKS (Advanced) --------------------
+type HeaderLinkGroupRow = {
+  headerKey: string
+  displayHeader: string
+  ruleCount: number
+}
+
+const headerLinkColumns: TableColumn[] = [
+  { header: 'Header', width: '55%' },
+  { header: 'Rules', width: '72px', class: 'text-center' },
+]
+
+const headerLinkGroupRows = computed<HeaderLinkGroupRow[]>(() => {
+  const list = props.settings.networkHeaderLinks
+  if (!Array.isArray(list) || !list.length) return []
+  const byKey = new Map<string, NetworkHeaderLinkRule[]>()
+  for (const r of list) {
+    const k = r.headerName.toLowerCase()
+    if (!byKey.has(k)) byKey.set(k, [])
+    byKey.get(k)!.push(r)
+  }
+  return Array.from(byKey.entries())
+    .map(([headerKey, rules]) => ({
+      headerKey,
+      displayHeader: rules[0]!.headerName,
+      ruleCount: rules.length,
+    }))
+    .sort((a, b) => a.displayHeader.localeCompare(b.displayHeader))
+})
+
+function removeHeaderLinkGroup(headerKey: string) {
+  if (!Array.isArray(props.settings.networkHeaderLinks)) return
+  const k = headerKey.toLowerCase()
+  props.settings.networkHeaderLinks = props.settings.networkHeaderLinks.filter(
+    (r) => r.headerName.toLowerCase() !== k,
+  )
+}
+
+function getHeaderLinkGroupActions(row: HeaderLinkGroupRow): MenuAction[] {
+  return [
+    { label: 'Edit', icon: Pencil, onClick: () => emit('edit-header-link', { type: 'header-link', id: row.headerKey }) },
+    { label: 'Delete', icon: Trash, onClick: () => removeHeaderLinkGroup(row.headerKey), destructiveText: true },
+  ]
+}
+
+// -------------------- PINNED HEADERS (Advanced) --------------------
+const pinnedHeaderColumns: TableColumn[] = [
+  { header: 'Header', width: '55%' },
+  { header: 'Type', width: '100px', class: 'text-center' },
+]
+
+const pinnedHeaderRows = computed<NetworkPinnedHeaderItem[]>(() => {
+  const list = props.settings.networkPinnedHeaders
+  if (!Array.isArray(list) || !list.length) return []
+  return [...list].sort((a, b) => {
+    const byName = a.name.localeCompare(b.name)
+    if (byName !== 0) return byName
+    return a.scope.localeCompare(b.scope)
+  })
+})
+
+function removePinnedHeader(id: string) {
+  if (!Array.isArray(props.settings.networkPinnedHeaders)) return
+  props.settings.networkPinnedHeaders = props.settings.networkPinnedHeaders.filter((p) => p.id !== id)
+}
+
+function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
+  return [
+    { label: 'Delete', icon: Trash, onClick: () => removePinnedHeader(row.id), destructiveText: true },
+  ]
+}
 </script>
 
 <template>
@@ -145,6 +232,119 @@ function getMockActions(row: MockRow): MenuAction[] {
       id-prefix="network-search"
       @toggle="(k) => toggleSearch(k as SearchKey)"
     />
+
+    <div class="space-y-3 border-t border-border pt-4">
+      <div>
+        <h3 class="text-sm font-medium">Capture mode</h3>
+        <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
+          Choose how Network captures request and response headers.
+        </p>
+      </div>
+      <RadioGroup v-model="networkCaptureMode" :disabled="isStandalone" class="gap-3">
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center space-x-2">
+            <RadioGroupItem value="saved" id="network-capture-saved" />
+            <Label
+              for="network-capture-saved"
+              class="text-sm font-normal"
+              :class="isStandalone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'"
+            >
+              Classic mode
+            </Label>
+          </div>
+          <p
+            v-if="networkCaptureMode === 'saved'"
+            class="text-xs text-muted-foreground leading-relaxed pl-6"
+          >
+            Captures standard headers available in the classic (non-extension) view.
+          </p>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center space-x-2">
+            <RadioGroupItem value="advanced" id="network-capture-advanced" />
+            <Label
+              for="network-capture-advanced"
+              class="text-sm font-normal"
+              :class="isStandalone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'"
+            >
+              Advanced mode
+            </Label>
+          </div>
+          <p
+            v-if="networkCaptureMode === 'advanced'"
+            class="text-xs text-muted-foreground leading-relaxed pl-6"
+          >
+            Captures full header data close to original DevTools output.
+          </p>
+        </div>
+      </RadioGroup>
+      <div
+        v-if="isStandalone"
+        class="flex items-start gap-2 rounded-md bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400"
+      >
+        <Info class="h-4 w-4 shrink-0 mt-0.5" />
+        <p>Capture Mode is only available for the browser extension version.</p>
+      </div>
+    </div>
+
+    <div v-if="networkCaptureMode === 'advanced'" class="space-y-6">
+      <SettingsTableSection
+        section-id="header-links-section"
+        title="Header links"
+        description="URL templates for a header on a given host; use {value} for the header value. Available in the Network tab → Headers when Advanced capture mode is on."
+        :columns="headerLinkColumns"
+        :rows="headerLinkGroupRows"
+        :row-key="(r) => (r as HeaderLinkGroupRow).headerKey"
+        :get-actions="(row) => getHeaderLinkGroupActions(row as HeaderLinkGroupRow)"
+        empty-message="No header links. Create one from the Network tab (Advanced) via a header row menu."
+        :selected-item-id="selectedItemId"
+        @select="(row) => emit('select', { type: 'header-link', id: (row as HeaderLinkGroupRow).headerKey })"
+      >
+        <template #row="{ row }">
+          <TableCell class="overflow-hidden !py-2">
+            <div
+              class="text-sm font-mono truncate"
+              :title="(row as HeaderLinkGroupRow).displayHeader"
+            >
+              {{ (row as HeaderLinkGroupRow).displayHeader }}
+            </div>
+          </TableCell>
+          <TableCell class="w-[72px] text-center !py-2">
+            <div class="text-xs text-muted-foreground tabular-nums">
+              {{ (row as HeaderLinkGroupRow).ruleCount }}
+            </div>
+          </TableCell>
+        </template>
+      </SettingsTableSection>
+
+      <SettingsTableSection
+        section-id="pinned-headers-section"
+        title="Pinned headers"
+        description="Headers pinned to the top of the Request or Response list in Network → Headers (Advanced mode). Add or remove pins from a header row menu in the Network tab."
+        :columns="pinnedHeaderColumns"
+        :rows="pinnedHeaderRows"
+        :row-key="(r) => (r as NetworkPinnedHeaderItem).id"
+        :get-actions="(row) => getPinnedHeaderActions(row as NetworkPinnedHeaderItem)"
+        empty-message="No pinned headers. Add pins from the Network tab (header row menu)."
+        @select="() => {}"
+      >
+        <template #row="{ row }">
+          <TableCell class="overflow-hidden !py-2">
+            <div
+              class="text-sm font-mono truncate"
+              :title="(row as NetworkPinnedHeaderItem).name"
+            >
+              {{ (row as NetworkPinnedHeaderItem).name }}
+            </div>
+          </TableCell>
+          <TableCell class="w-[100px] text-center !py-2">
+            <span class="text-xs text-muted-foreground">
+              {{ (row as NetworkPinnedHeaderItem).scope === 'request' ? 'Request' : 'Response' }}
+            </span>
+          </TableCell>
+        </template>
+      </SettingsTableSection>
+    </div>
 
     <SettingsTableSection
       section-id="breakpoints-section"
@@ -223,5 +423,6 @@ function getMockActions(row: MockRow): MenuAction[] {
         </TableCell>
       </template>
     </SettingsTableSection>
+
   </div>
 </template>

@@ -50,6 +50,7 @@ const sidebarEn = [
     text: 'Network',
     items: [
       { text: 'Working with requests', link: '/network/general' },
+      { text: 'Advanced capture mode', link: '/network/advanced' },
       { text: 'Traffic interception', link: '/network/traffic' },
       { text: 'Export collections', link: '/network/export' },
     ],
@@ -187,6 +188,7 @@ export default defineConfig({
             text: 'Network',
             items: [
               { text: 'Работа с запросами', link: '/ru/network/general' },
+              { text: 'Расширенный режим (Advanced)', link: '/ru/network/advanced' },
               { text: 'Подмена трафика', link: '/ru/network/traffic' },
               { text: 'Экспорт коллекций', link: '/ru/network/export' },
             ],
