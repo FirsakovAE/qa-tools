@@ -163,8 +163,6 @@ watch(
         id: r.id,
         host: r.host,
         urlTemplate: r.urlTemplate,
-        valueExtractRegex: r.valueExtractRegex ?? '',
-        valueTransform: r.valueTransform ?? '',
         addedAt: r.addedAt,
       }))
     }

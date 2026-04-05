@@ -32,10 +32,7 @@ const emit = defineEmits<{
 }>()
 
 function addRow() {
-  rows.value = [
-    ...rows.value,
-    { id: null, host: '', urlTemplate: '', valueExtractRegex: '', valueTransform: '', addedAt: null },
-  ]
+  rows.value = [...rows.value, { id: null, host: '', urlTemplate: '', addedAt: null }]
 }
 
 function removeRow(index: number) {
@@ -58,14 +55,11 @@ function removeAllRows() {
       >
         No link rules
       </div>
-      <div v-else class="overflow-x-auto -mx-1 px-1">
-        <Table class="table-fixed w-full min-w-[720px]">
+      <Table v-else>
         <TableHeader>
           <TableRow>
-            <TableHead class="w-[18%]">Host</TableHead>
-            <TableHead class="w-[28%]">Link</TableHead>
-            <TableHead class="w-[22%]">Extract regex</TableHead>
-            <TableHead class="w-[30%]">Transform</TableHead>
+            <TableHead class="w-1/3">Host</TableHead>
+            <TableHead>Link</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -76,16 +70,9 @@ function removeAllRows() {
             <TableCell class="py-2 align-top font-mono text-xs break-all whitespace-pre-wrap">
               {{ r.urlTemplate }}
             </TableCell>
-            <TableCell class="py-2 align-top font-mono text-xs text-muted-foreground break-all whitespace-pre-wrap">
-              {{ r.valueExtractRegex?.trim() ? r.valueExtractRegex : '—' }}
-            </TableCell>
-            <TableCell class="py-2 align-top font-mono text-xs text-muted-foreground break-all whitespace-pre-wrap">
-              {{ r.valueTransform?.trim() ? r.valueTransform : '—' }}
-            </TableCell>
           </TableRow>
         </TableBody>
-        </Table>
-      </div>
+      </Table>
     </template>
 
     <template v-else>
@@ -109,87 +96,49 @@ function removeAllRows() {
       >
         No link rules
       </div>
-      <div v-else class="overflow-x-auto -mx-1 px-1">
-        <Table class="table-fixed w-full min-w-[760px]">
-          <TableHeader>
-            <TableRow>
-              <TableHead class="w-[17%]">Host</TableHead>
-              <TableHead class="w-[26%]">Link</TableHead>
-              <TableHead class="w-[20%]">Extract regex</TableHead>
-              <TableHead class="w-[30%]">Transform</TableHead>
-              <TableHead class="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-for="(row, index) in rows" :key="row.id ?? `r-${index}`">
-              <TableCell class="py-2 align-top">
-                <Input
-                  v-model="row.host"
-                  placeholder="api.example.com"
-                  class="h-7 text-xs font-mono"
-                  autocomplete="off"
-                  @keydown.enter.prevent="emit('submit')"
-                />
-              </TableCell>
-              <TableCell class="py-2 align-top">
-                <Input
-                  v-model="row.urlTemplate"
-                  placeholder="https://example.com/trace/{value}"
-                  class="h-7 text-xs font-mono"
-                  autocomplete="off"
-                  @keydown.enter.prevent="emit('submit')"
-                />
-              </TableCell>
-              <TableCell class="py-2 align-top">
-                <Input
-                  v-model="row.valueExtractRegex"
-                  placeholder="([a-f0-9-]+)"
-                  class="h-7 text-xs font-mono"
-                  autocomplete="off"
-                  @keydown.enter.prevent="emit('submit')"
-                />
-              </TableCell>
-              <TableCell class="py-2 align-top">
-                <Input
-                  v-model="row.valueTransform"
-                  placeholder='replace("-", "") | lowercase()'
-                  class="h-7 text-xs font-mono"
-                  autocomplete="off"
-                  @keydown.enter.prevent="emit('submit')"
-                />
-              </TableCell>
-              <TableCell class="py-2 text-center align-top">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="h-6 w-6 p-0 text-destructive_text hover:text-destructive_text"
-                  @click="removeRow(index)"
-                >
-                  ×
-                </Button>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </div>
-      <p class="text-xs text-muted-foreground space-y-1.5">
-        <span>
-          Use <code class="text-[11px]">{{ '{value}' }}</code> where the header value should go.
-        </span>
-        <span class="block">
-          <strong class="font-medium text-foreground/80">Extract regex</strong> —
-          <code class="text-[11px]">new RegExp(pattern)</code>, applied to the raw header value. Uses the first capturing group
-          when present, otherwise the full match. If the pattern is invalid or does not match, the raw value is unchanged before
-          transforms.
-        </span>
-        <span class="block">
-          <strong class="font-medium text-foreground/80">Transform</strong> —
-          optional steps after extraction, separated by <code class="text-[11px]">|</code> (left to right).
-          Examples: <code class="text-[11px]">trim()</code>, <code class="text-[11px]">lowercase()</code>,
-          <code class="text-[11px]">replace("-", "")</code>,
-          <code class="text-[11px]">substring(0,8)</code>, <code class="text-[11px]">removeNonDigits()</code>,
-          <code class="text-[11px]">prefix("id-")</code>, <code class="text-[11px]">suffix("-prod")</code>.
-        </span>
+      <Table v-else>
+        <TableHeader>
+          <TableRow>
+            <TableHead class="w-1/3">Host</TableHead>
+            <TableHead>Link</TableHead>
+            <TableHead class="w-10" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="(row, index) in rows" :key="row.id ?? `r-${index}`">
+            <TableCell class="py-2 align-top">
+              <Input
+                v-model="row.host"
+                placeholder="api.example.com"
+                class="h-7 text-xs font-mono"
+                autocomplete="off"
+                @keydown.enter.prevent="emit('submit')"
+              />
+            </TableCell>
+            <TableCell class="py-2 align-top">
+              <Input
+                v-model="row.urlTemplate"
+                placeholder="https://example.com/trace/{value}"
+                class="h-7 text-xs font-mono"
+                autocomplete="off"
+                @keydown.enter.prevent="emit('submit')"
+              />
+            </TableCell>
+            <TableCell class="py-2 text-center align-top">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-6 w-6 p-0 text-destructive_text hover:text-destructive_text"
+                @click="removeRow(index)"
+              >
+                ×
+              </Button>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <p class="text-xs text-muted-foreground">
+        Use <code class="text-[11px]">{{ '{value}' }}</code> where the header value should go.
       </p>
     </template>
   </div>

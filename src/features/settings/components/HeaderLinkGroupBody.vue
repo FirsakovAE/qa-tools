@@ -19,7 +19,7 @@ const emit = defineEmits<{
 function addHeaderLinkRow() {
   rows.value = [
     ...rows.value,
-    { id: null, host: '', urlTemplate: '', valueExtractRegex: '', valueTransform: '', addedAt: null },
+    { id: null, host: '', urlTemplate: '', addedAt: null },
   ]
 }
 

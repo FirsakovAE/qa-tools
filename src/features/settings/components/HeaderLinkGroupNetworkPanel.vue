@@ -42,7 +42,7 @@ const lastUpdated = computed(() => {
 function loadRowsFromSettings() {
   if (props.mode === 'create') {
     rows.value = [
-      { id: null, host: props.entryHost, urlTemplate: '', valueExtractRegex: '', valueTransform: '', addedAt: null },
+      { id: null, host: props.entryHost, urlTemplate: '', addedAt: null },
     ]
     return
   }
@@ -52,11 +52,9 @@ function loadRowsFromSettings() {
         id: r.id,
         host: r.host,
         urlTemplate: r.urlTemplate,
-        valueExtractRegex: r.valueExtractRegex ?? '',
-        valueTransform: r.valueTransform ?? '',
         addedAt: r.addedAt,
       }))
-    : [{ id: null, host: props.entryHost, urlTemplate: '', valueExtractRegex: '', valueTransform: '', addedAt: null }]
+    : [{ id: null, host: props.entryHost, urlTemplate: '', addedAt: null }]
 }
 
 function syncEditorFromSettings() {

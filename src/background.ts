@@ -210,8 +210,16 @@ function takeMatchingCapture(tabId: number, entry: any): WebRequestCaptureRecord
 }
 
 function applyWebRequestCaptureToEntry(entry: any, cap: WebRequestCaptureRecord): any {
+  const reqPage = Array.isArray(entry.requestHeaders)
+    ? entry.requestHeaders.map((h: any) => ({ name: String(h.name), value: String(h.value ?? '') }))
+    : []
+  const resPage = Array.isArray(entry.responseHeaders)
+    ? entry.responseHeaders.map((h: any) => ({ name: String(h.name), value: String(h.value ?? '') }))
+    : []
   return {
     ...entry,
+    requestHeadersPageVisible: reqPage,
+    responseHeadersPageVisible: resPage,
     requestHeaders: chromeHeadersToInspectorHeaders(cap.requestHeaders),
     responseHeaders: chromeHeadersToInspectorHeaders(cap.responseHeaders),
   }

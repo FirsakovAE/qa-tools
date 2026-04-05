@@ -1,7 +1,7 @@
-import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
+import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
 
 export type InspectorSettings = BaseInspectorSettings
-export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope }
+export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope }
 
 /** Default Network table columns (all visible except Name) */
 const defaultNetworkTableColumns: NetworkTableColumnsSettings = {
@@ -73,6 +73,11 @@ export const defaultInspectorSettings: InspectorSettings = {
     piniaTableColumns: { ...defaultPiniaTableColumns },
     networkSearch: { ...defaultNetworkSearchSettings },
     networkCaptureMode: 'saved',
+    networkAdvancedHeaderPolicy: {
+        showInDetails: true,
+        includeInCurl: true,
+        includeInExport: true,
+    },
     networkHeaderLinks: [],
     networkPinnedHeaders: [],
     propsSearch: { ...defaultPropsSearchSettings },

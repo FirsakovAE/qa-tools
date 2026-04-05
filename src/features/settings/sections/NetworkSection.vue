@@ -9,6 +9,7 @@ import type { TableColumn } from '../components/SettingsTableSection.vue'
 import type { MenuAction } from '@/components/OptionsItemActionsMenu'
 import { Power, Trash, Pencil, Info } from 'lucide-vue-next'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import RadioGroup from '@/components/ui/RadioGroup/RadioGroup.vue'
 import RadioGroupItem from '@/components/ui/RadioGroup/RadioGroupItem.vue'
 import { getRuntimeAdapter } from '@/runtime'
@@ -217,6 +218,17 @@ function removePinnedHeader(id: string) {
   props.settings.networkPinnedHeaders = props.settings.networkPinnedHeaders.filter((p) => p.id !== id)
 }
 
+function ensureAdvancedHeaderPolicy() {
+  if (!props.settings.networkAdvancedHeaderPolicy) {
+    props.settings.networkAdvancedHeaderPolicy = {
+      showInDetails: true,
+      includeInCurl: true,
+      includeInExport: true,
+    }
+  }
+  return props.settings.networkAdvancedHeaderPolicy
+}
+
 function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
   return [
     { label: 'Delete', icon: Trash, onClick: () => removePinnedHeader(row.id), destructiveText: true },
@@ -288,10 +300,63 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
     </div>
 
     <div v-if="networkCaptureMode === 'advanced'" class="space-y-6">
+      <div class="space-y-4 border-t border-border pt-4">
+        <div>
+          <h3 class="text-sm font-medium">Advanced headers</h3>
+          <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
+            Manage how headers captured only in Advanced mode are displayed and exported. Pinned headers are always shown.
+          </p>
+        </div>
+        <div class="space-y-3 max-w-xl">
+          <div class="flex items-start gap-3">
+            <Checkbox
+              id="adv-hdr-show-details"
+              class="mt-0.5"
+              :model-value="ensureAdvancedHeaderPolicy().showInDetails"
+              @update:model-value="ensureAdvancedHeaderPolicy().showInDetails = !!$event"
+            />
+            <div class="space-y-0.5 min-w-0">
+              <Label for="adv-hdr-show-details" class="text-sm font-normal cursor-pointer">Show in details</Label>
+              <p class="text-xs text-muted-foreground leading-relaxed">
+                When off, hides headers that appear only with Advanced (webRequest) capture from the Network tab. Pinned names still use full values.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <Checkbox
+              id="adv-hdr-curl"
+              class="mt-0.5"
+              :model-value="ensureAdvancedHeaderPolicy().includeInCurl"
+              @update:model-value="ensureAdvancedHeaderPolicy().includeInCurl = !!$event"
+            />
+            <div class="space-y-0.5 min-w-0">
+              <Label for="adv-hdr-curl" class="text-sm font-normal cursor-pointer">Include in Copy cURL</Label>
+              <p class="text-xs text-muted-foreground leading-relaxed">
+                When off, Advanced-only request headers are omitted from the copied cURL command. Pinned names are still included.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <Checkbox
+              id="adv-hdr-export"
+              class="mt-0.5"
+              :model-value="ensureAdvancedHeaderPolicy().includeInExport"
+              @update:model-value="ensureAdvancedHeaderPolicy().includeInExport = !!$event"
+            />
+            <div class="space-y-0.5 min-w-0">
+              <Label for="adv-hdr-export" class="text-sm font-normal cursor-pointer">Include in Collection export</Label>
+              <p class="text-xs text-muted-foreground leading-relaxed">
+                When off, Advanced-only request headers are omitted from the Postman collection export. Pinned names are still included.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <SettingsTableSection
         section-id="header-links-section"
         title="Header links"
-        description="URL templates for a header on a given host; use {value} for the header value. Available in the Network tab → Headers when Advanced capture mode is on."
+        description="URL templates for a header on a given host."
         :columns="headerLinkColumns"
         :rows="headerLinkGroupRows"
         :row-key="(r) => (r as HeaderLinkGroupRow).headerKey"
@@ -320,7 +385,7 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
       <SettingsTableSection
         section-id="pinned-headers-section"
         title="Pinned headers"
-        description="Headers pinned to the top of the Request or Response list in Network → Headers (Advanced mode). Add or remove pins from a header row menu in the Network tab."
+        description="Headers pinned to the top of the Request or Response list."
         :columns="pinnedHeaderColumns"
         :rows="pinnedHeaderRows"
         :row-key="(r) => (r as NetworkPinnedHeaderItem).id"
