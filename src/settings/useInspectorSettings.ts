@@ -3,6 +3,8 @@ import { defaultInspectorSettings, type InspectorSettings } from '@/settings/ins
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
 import { initMediaStore, initWallpapersStore, getMediaBlob, getWallpaperBlob, blobToDataUri, clearAllMedia } from '@/settings/mediaStore'
+import { newPinnedHeaderId } from '@/utils/networkHeaderLinks'
+import type { NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
 
 const SETTINGS_STORAGE_KEY = 'inspector-settings'
 const STANDALONE_STORAGE_KEY = '__vue_inspector_storage__'
@@ -13,33 +15,78 @@ let isLoaded = false
 let saveTimeout: number | null = null
 
 /**
+ * Heuristic: standalone UI iframe (hash / parent flag) before `getRuntimeAdapter()` exists.
+ * Static import order can evaluate settings before `setRuntimeAdapter(standalone)`.
+ */
+function isStandaloneUiContext(): boolean {
+    if (typeof window === 'undefined') return false
+    try {
+        if (window.location.hash.includes('standalone=')) return true
+    } catch {
+        /* ignore */
+    }
+    try {
+        const p = window.parent as Window & { __VUE_INSPECTOR_STANDALONE__?: boolean }
+        if (p.__VUE_INSPECTOR_STANDALONE__) return true
+    } catch {
+        /* cross-origin parent */
+    }
+    return false
+}
+
+function isStandaloneMode(): boolean {
+    const adapter = getRuntimeAdapter()
+    return adapter?.capabilities.mode === 'standalone'
+}
+
+function isStandaloneInspector(): boolean {
+    return isStandaloneMode() || isStandaloneUiContext()
+}
+
+/**
+ * Advanced capture is extension-only; in standalone always use Saved.
+ * @returns true if mode was changed
+ */
+function coerceNetworkCaptureModeForStandalone(): boolean {
+    if (!isStandaloneInspector()) return false
+    if (state.networkCaptureMode !== 'advanced') return false
+    state.networkCaptureMode = 'saved'
+    return true
+}
+
+/** Persist coerced capture mode (standalone only mutates). */
+async function flushStandaloneNetworkCaptureToStorageIfNeeded(): Promise<void> {
+    if (coerceNetworkCaptureModeForStandalone()) {
+        await saveToStorage()
+    }
+}
+
+/**
  * Synchronous preload from sessionStorage (standalone mode).
  * Populates `state` immediately so the first render already has real settings.
  * Does NOT set isLoaded — loadFromStorage will confirm from central-store.
  */
 function trySyncPreload(): void {
+    let appliedFromSession = false
     try {
         const raw = sessionStorage.getItem(STANDALONE_STORAGE_KEY)
         if (!raw) return
         const data = JSON.parse(raw)
         const saved = data[SETTINGS_STORAGE_KEY]
         if (saved && typeof saved === 'object') {
-            const merged = mergeSettings(defaultInspectorSettings, saved)
-            Object.assign(state, merged)
+            Object.assign(state, mergeSettings(defaultInspectorSettings, saved))
+            appliedFromSession = true
         }
     } catch (e) {
         console.error('[settings/useInspectorSettings] trySyncPreload failed:', e)
     }
+    // Only normalize when session data could have pulled `advanced` from an extension export.
+    if (appliedFromSession) coerceNetworkCaptureModeForStandalone()
 }
 
 trySyncPreload()
 
 export { state as inspectorState }
-
-function isStandaloneMode(): boolean {
-    const adapter = getRuntimeAdapter()
-    return adapter?.capabilities.mode === 'standalone'
-}
 
 async function saveToStorage() {
     try {
@@ -98,6 +145,8 @@ async function loadFromStorage(): Promise<void> {
         console.error('[settings/useInspectorSettings] loadFromStorage failed:', e)
         Object.assign(state, structuredClone(defaultInspectorSettings))
     }
+
+    await flushStandaloneNetworkCaptureToStorageIfNeeded()
 
     isLoaded = true
 
@@ -160,6 +209,50 @@ function migrateFavoriteIds(saved: any): void {
             return true
         })
     }
+}
+
+function migrateNetworkPinnedHeaders(saved: any): void {
+    const raw = saved.networkPinnedHeaders
+    if (!Array.isArray(raw)) {
+        saved.networkPinnedHeaders = []
+        return
+    }
+    if (raw.length === 0) {
+        saved.networkPinnedHeaders = []
+        return
+    }
+    if (typeof raw[0] === 'string') {
+        const newPins: NetworkPinnedHeaderItem[] = []
+        for (const s of raw as string[]) {
+            const name = String(s).trim()
+            if (!name) continue
+            newPins.push({
+                id: newPinnedHeaderId(),
+                name,
+                scope: 'request',
+            })
+            newPins.push({
+                id: newPinnedHeaderId(),
+                name,
+                scope: 'response',
+            })
+        }
+        saved.networkPinnedHeaders = newPins
+        return
+    }
+    saved.networkPinnedHeaders = raw
+        .filter(
+            (x: any) =>
+                x &&
+                typeof x === 'object' &&
+                typeof x.name === 'string' &&
+                (x.scope === 'request' || x.scope === 'response'),
+        )
+        .map((x: any) => ({
+            id: typeof x.id === 'string' && x.id ? x.id : newPinnedHeaderId(),
+            name: String(x.name).trim(),
+            scope: x.scope as NetworkPinnedHeaderScope,
+        }))
 }
 
 function migrateSearchSettings(saved: any): void {
@@ -273,6 +366,12 @@ function migrateSearchSettings(saved: any): void {
             getters: true,
         }
     }
+
+    // Миграция: header links + pinned headers (Advanced Network)
+    if (!Array.isArray(saved.networkHeaderLinks)) {
+        saved.networkHeaderLinks = []
+    }
+    migrateNetworkPinnedHeaders(saved)
 
     // Миграция: удаляем version из настроек
     delete saved.version
@@ -456,5 +555,6 @@ export async function exportSettings(): Promise<string> {
 export async function importSettings(json: string): Promise<void> {
     const imported = JSON.parse(json)
     Object.assign(state, mergeSettings(defaultInspectorSettings, imported))
+    coerceNetworkCaptureModeForStandalone()
     await saveToStorage()
 }

@@ -4,7 +4,8 @@ import { useEscapeClose } from '@/composables/useEscapeClose'
 import { marked } from 'marked'
 import '@/assets/markdown.css'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { BreakpointItem, MockRule, FavoriteItem, PiniaFavoriteItem, SavedFile, SiteListEntry } from '@/types/inspector'
+import type { BreakpointItem, MockRule, FavoriteItem, PiniaFavoriteItem, SavedFile, SiteListEntry, HeaderLinkRuleRowDraft } from '@/types/inspector'
+import { replaceHeaderLinkRulesForHeaderName } from '@/utils/networkHeaderLinks'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
 import { mediaUrls, getMediaBlob, getWallpaperBlob } from '@/settings/mediaStore'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -24,6 +25,15 @@ import {
   Save,
 } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import HeaderLinkGroupBody from '@/features/settings/components/HeaderLinkGroupBody.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -40,10 +50,11 @@ const renderedBody = computed(() => {
 
 const props = defineProps<{
   settings: InspectorSettings
-  selectedItem: { type: 'breakpoint' | 'mock' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'; id: string } | null
+  selectedItem: { type: 'breakpoint' | 'mock' | 'header-link' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'; id: string } | null
   releaseInfo?: ReleaseDisplayInfo | null
   piniaFavoriteEditMode?: boolean
   siteListEditMode?: boolean
+  headerLinkEditMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -54,6 +65,7 @@ const emit = defineEmits<{
   (e: 'edit'): void
   (e: 'pinia-favorite-edit-done', newId?: string): void
   (e: 'site-list-edit-done'): void
+  (e: 'header-link-edit-done'): void
 }>()
 
 const detailsTitle = computed(() => {
@@ -64,6 +76,8 @@ const detailsTitle = computed(() => {
       return 'File Preview'
     case 'pinia-favorite':
       return 'Favorite Store Details'
+    case 'header-link':
+      return 'Header Link Details'
     case 'site-blacklist':
       return 'Site Blacklist Details'
     case 'site-whitelist':
@@ -119,6 +133,62 @@ const piniaFavoriteData = computed<PiniaFavoriteItem | null>(() => {
   if (props.selectedItem?.type !== 'pinia-favorite') return null
   return props.settings.piniaFavorites?.find(f => f.id === props.selectedItem!.id) || null
 })
+
+const headerLinkGroup = computed(() => {
+  if (props.selectedItem?.type !== 'header-link') return null
+  const selKey = props.selectedItem.id
+  const list = props.settings.networkHeaderLinks
+  if (!Array.isArray(list)) return null
+  const rules = list.filter((r) => r.headerName.toLowerCase() === selKey.toLowerCase())
+  if (!rules.length) return null
+  return {
+    headerKey: selKey.toLowerCase(),
+    displayHeader: rules[0]!.headerName,
+    rules,
+  }
+})
+
+const headerLinkLatestAdded = computed(() => {
+  const g = headerLinkGroup.value
+  if (!g?.rules.length) return null
+  return g.rules.reduce((latest, r) => (r.addedAt > latest ? r.addedAt : latest), g.rules[0]!.addedAt)
+})
+
+const editedHeaderLinkRows = ref<HeaderLinkRuleRowDraft[]>([])
+watch(
+  () => [props.headerLinkEditMode, headerLinkGroup.value] as const,
+  ([editMode, group]) => {
+    if (editMode && group) {
+      editedHeaderLinkRows.value = group.rules.map((r) => ({
+        id: r.id,
+        host: r.host,
+        urlTemplate: r.urlTemplate,
+        valueExtractRegex: r.valueExtractRegex ?? '',
+        valueTransform: r.valueTransform ?? '',
+        addedAt: r.addedAt,
+      }))
+    }
+  },
+  { immediate: true },
+)
+
+function saveHeaderLinkEdit() {
+  const group = headerLinkGroup.value
+  if (!group) return
+  if (!Array.isArray(props.settings.networkHeaderLinks)) {
+    props.settings.networkHeaderLinks = []
+  }
+  replaceHeaderLinkRulesForHeaderName(
+    props.settings.networkHeaderLinks,
+    group.displayHeader,
+    editedHeaderLinkRows.value,
+  )
+  emit('header-link-edit-done')
+}
+
+function cancelHeaderLinkEdit() {
+  emit('header-link-edit-done')
+}
 
 // Pinia favorite edit state
 const editedPiniaFavoriteName = ref('')
@@ -474,6 +544,21 @@ function formatTrigger(trigger: string): string {
             </Button>
           </template>
         </template>
+        <template v-else-if="selectedItem.type === 'header-link' && headerLinkGroup">
+          <template v-if="!headerLinkEditMode">
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Edit" @click="emit('edit')">
+              <Edit class="h-4 w-4" />
+            </Button>
+          </template>
+          <template v-else>
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Cancel" @click="cancelHeaderLinkEdit">
+              <X class="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" class="h-7 w-7" title="Save" @click="saveHeaderLinkEdit">
+              <Save class="h-4 w-4" />
+            </Button>
+          </template>
+        </template>
         <template v-else-if="(selectedItem.type === 'site-blacklist' || selectedItem.type === 'site-whitelist') && siteListDetailData">
           <template v-if="!siteListEditMode">
             <Button variant="ghost" size="icon" class="h-7 w-7" title="Edit" @click="emit('edit')">
@@ -663,6 +748,20 @@ function formatTrigger(trigger: string): string {
                 <p class="text-sm mt-1">{{ new Date(piniaFavoriteData.timestamp).toLocaleString() }}</p>
               </div>
             </div>
+          </template>
+
+          <!-- Network header link (grouped by header name; Host | Link table) -->
+          <template v-else-if="selectedItem.type === 'header-link'">
+            <HeaderLinkGroupBody
+              v-if="headerLinkGroup"
+              v-model="editedHeaderLinkRows"
+              :display-header="headerLinkGroup.displayHeader"
+              :edit-mode="!!headerLinkEditMode"
+              :readonly-rules="headerLinkGroup.rules"
+              :last-updated="headerLinkLatestAdded"
+              @submit="saveHeaderLinkEdit"
+            />
+            <p v-else class="text-sm text-muted-foreground">This header link was removed.</p>
           </template>
 
           <!-- Site blacklist / whitelist entry -->

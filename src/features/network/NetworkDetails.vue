@@ -39,6 +39,20 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
 import { NetworkActionsMenuContent } from '@/components/NetworkActionsMenu'
+import NetworkHeaderRowMenuContent from '@/features/network/NetworkHeaderRowMenuContent.vue'
+import NetworkHeaderValueCell from '@/features/network/NetworkHeaderValueCell.vue'
+import HeaderLinkGroupNetworkPanel from '@/features/settings/components/HeaderLinkGroupNetworkPanel.vue'
+import type { NetworkHeaderLinkRule, NetworkPinnedHeaderScope } from '@/types/inspector'
+import {
+  buildHeaderLinkUrl,
+  findHeaderLinkRule,
+  getEntryRequestHost,
+  headersMatchingPinOrder,
+  headersNotPinned,
+  normalizeNetworkHeaderHost,
+  pinnedHeaderOrderForScope,
+  togglePinnedHeaderItem,
+} from '@/utils/networkHeaderLinks'
 
 /** Lazy load JsonEditor (Prism, tree) - only when user opens Request/Response tab */
 const JsonEditor = defineAsyncComponent({
@@ -77,6 +91,7 @@ const props = defineProps<{
   mockMatchingIds?: Set<string>
   allBreakpoints?: BreakpointWithStatus[]
   allMocks?: MockWithStatus[]
+  headerLinkEditor?: { headerName: string; mode: 'create' | 'edit' } | null
 }>()
 
 const emit = defineEmits<{
@@ -91,6 +106,8 @@ const emit = defineEmits<{
   (e: 'deleteBreakpoint', entry: NetworkEntry): void
   (e: 'toggleMock', entry: NetworkEntry): void
   (e: 'deleteMock', entry: NetworkEntry): void
+  (e: 'openHeaderLinkEditor', payload: { headerName: string; mode: 'create' | 'edit' }): void
+  (e: 'closeHeaderLinkEditor'): void
 }>()
 
 // ============================================================================
@@ -148,6 +165,8 @@ const settings = useInspectorSettingsSync()
 const jsonMode = ref<'text' | 'tree'>('text')
 const copiedHeaderIndex = ref<number | null>(null)
 const copiedResponseHeaderIndex = ref<number | null>(null)
+/** Read-only Advanced header row copy feedback (req:/res: + lowercase name) */
+const copiedHeaderKey = ref<string | null>(null)
 const { curlCopied, copyCurl: copyCurlCommand } = useCurlCopy()
 
 const urlRef = ref<HTMLElement | null>(null)
@@ -241,16 +260,127 @@ const responseBodyLanguage = computed(() =>
   detectLanguage(props.entry.responseBody?.contentType)
 )
 
-const xRequestId = computed(() => {
-  const header = props.entry.responseHeaders.find(h => h.name.toLowerCase() === 'x-request-id')
-  return header?.value || null
-})
+const entryHost = computed(() => getEntryRequestHost(props.entry.url))
+
+const showAdvancedHeaderMenus = computed(
+  () => settings.value?.networkCaptureMode === 'advanced'
+)
+
+const networkPinnedItems = computed(() => settings.value?.networkPinnedHeaders ?? [])
+
+const networkPinnedOrderRequest = computed(() =>
+  pinnedHeaderOrderForScope(networkPinnedItems.value, 'request'),
+)
+
+const networkPinnedOrderResponse = computed(() =>
+  pinnedHeaderOrderForScope(networkPinnedItems.value, 'response'),
+)
+
+const pinnedRequestHeadersDisplay = computed(() =>
+  headersMatchingPinOrder(props.entry.requestHeaders, networkPinnedOrderRequest.value),
+)
+
+const pinnedResponseHeadersDisplay = computed(() =>
+  headersMatchingPinOrder(props.entry.responseHeaders, networkPinnedOrderResponse.value),
+)
+
+const unpinnedRequestHeadersReadonly = computed(() =>
+  headersNotPinned(props.entry.requestHeaders, networkPinnedOrderRequest.value),
+)
+
+const unpinnedResponseHeadersReadonly = computed(() =>
+  headersNotPinned(props.entry.responseHeaders, networkPinnedOrderResponse.value),
+)
+
+const showPinnedRequestSection = computed(
+  () =>
+    showAdvancedHeaderMenus.value &&
+    !canEditRequest.value &&
+    pinnedRequestHeadersDisplay.value.length > 0,
+)
+
+const showPinnedResponseSection = computed(
+  () =>
+    showAdvancedHeaderMenus.value &&
+    !canEditResponse.value &&
+    pinnedResponseHeadersDisplay.value.length > 0,
+)
+
+function headerLinkRuleFor(name: string): NetworkHeaderLinkRule | undefined {
+  return findHeaderLinkRule(settings.value?.networkHeaderLinks, name, entryHost.value)
+}
+
+function isHeaderPinned(name: string, scope: NetworkPinnedHeaderScope): boolean {
+  const pl = name.toLowerCase()
+  return (settings.value?.networkPinnedHeaders ?? []).some(
+    (p) => p.name.toLowerCase() === pl && p.scope === scope,
+  )
+}
+
+function emitOpenHeaderLinkEditor(headerName: string, mode: 'create' | 'edit') {
+  emit('openHeaderLinkEditor', { headerName, mode })
+}
+
+function deleteHeaderLinkById(id: string) {
+  if (!settings.value?.networkHeaderLinks) return
+  const i = settings.value.networkHeaderLinks.findIndex((r) => r.id === id)
+  if (i !== -1) settings.value.networkHeaderLinks.splice(i, 1)
+}
+
+function openHeaderLinkUrl(rule: NetworkHeaderLinkRule, headerValue: string) {
+  const url = buildHeaderLinkUrl(
+    rule.urlTemplate,
+    headerValue,
+    rule.valueExtractRegex,
+    rule.valueTransform,
+  )
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+function togglePinHeaderName(headerName: string, scope: NetworkPinnedHeaderScope) {
+  if (!settings.value) return
+  if (!Array.isArray(settings.value.networkPinnedHeaders)) {
+    settings.value.networkPinnedHeaders = []
+  }
+  settings.value.networkPinnedHeaders = togglePinnedHeaderItem(
+    settings.value.networkPinnedHeaders,
+    headerName,
+    scope,
+  )
+}
+
+function isRequestHeaderPinned(name: string) {
+  return isHeaderPinned(name, 'request')
+}
+function isResponseHeaderPinned(name: string) {
+  return isHeaderPinned(name, 'response')
+}
+function toggleRequestPin(name: string) {
+  togglePinHeaderName(name, 'request')
+}
+function toggleResponsePin(name: string) {
+  togglePinHeaderName(name, 'response')
+}
+
+async function copyReadonlyHeaderValue(value: string, kind: 'req' | 'res', headerName: string) {
+  const success = await copyToClipboard(value)
+  if (success) {
+    copiedHeaderKey.value = `${kind}:${headerName.toLowerCase()}`
+    setTimeout(() => {
+      copiedHeaderKey.value = null
+    }, 2000)
+  }
+}
 
 // ============================================================================
 // Handlers
 // ============================================================================
 
 function handleBack() {
+  if (props.headerLinkEditor) {
+    emit('closeHeaderLinkEditor')
+    return
+  }
   if (props.breakpointMode) {
     emit('cancelBreakpoint', props.entry.id)
   } else {
@@ -259,6 +389,13 @@ function handleBack() {
 }
 
 useEscapeClose(computed(() => true), handleBack)
+
+watch(
+  () => props.headerLinkEditor,
+  (ed) => {
+    if (ed) activeSection.value = 'headers'
+  },
+)
 
 function handleApplyBreakpoint() {
   if (!props.breakpointMode) return
@@ -273,6 +410,7 @@ watch(
       curlCopied.value = false
       copiedHeaderIndex.value = null
       copiedResponseHeaderIndex.value = null
+      copiedHeaderKey.value = null
       if (!props.breakpointMode) {
         activeSection.value = 'response'
       }
@@ -585,20 +723,210 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         <!-- Headers Section -->
         <ScrollArea v-else-if="activeSection === 'headers'" class="h-full">
           <div class="p-3 space-y-4">
-            <!-- x-request-id badge if present -->
-            <div v-if="xRequestId" class="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
-              <Badge variant="outline" class="text-xs">x-request-id</Badge>
-              <code class="text-xs font-mono flex-1 truncate" :title="xRequestId">{{ xRequestId }}</code>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-6 w-6 p-0 shrink-0"
-                @click="copyToClipboard(xRequestId!)"
-              >
-                <Copy class="h-3 w-3" />
-              </Button>
+            <HeaderLinkGroupNetworkPanel
+              v-if="headerLinkEditor"
+              :key="`${headerLinkEditor.headerName}:${headerLinkEditor.mode}`"
+              :header-name="headerLinkEditor.headerName"
+              :mode="headerLinkEditor.mode"
+              :entry-host="getEntryRequestHost(entry.url)"
+              @close="emit('closeHeaderLinkEditor')"
+            />
+            <!-- Pinned Request Headers -->
+            <div v-if="showPinnedRequestSection" class="space-y-2">
+              <h4 class="text-sm font-semibold">Pinned Request Headers</h4>
+              <Table class="network-headers-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead class="w-1/3">Name</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead class="w-10 text-center">
+                      <span v-if="showAdvancedHeaderMenus" />
+                      <span v-else>Copy</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <template v-if="showAdvancedHeaderMenus">
+                    <ContextMenu
+                      v-for="(header, index) in pinnedRequestHeadersDisplay"
+                      :key="`preq-${header.name}-${index}`"
+                    >
+                      <ContextMenuTrigger as-child>
+                        <TableRow>
+                          <TableCell class="font-mono text-xs py-2 align-top">{{ header.name }}</TableCell>
+                          <TableCell class="font-mono text-xs py-2 align-top">
+                            <NetworkHeaderValueCell
+                              :value="header.value"
+                              :link-rule="headerLinkRuleFor(header.name)"
+                            />
+                          </TableCell>
+                          <TableCell class="py-2 text-center align-top">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-6 w-6 p-0 transition-colors"
+                                  :class="{ 'text-green-500': copiedHeaderKey === `req:${header.name.toLowerCase()}` }"
+                                  @click.stop
+                                >
+                                  <MoreHorizontal class="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <NetworkHeaderRowMenuContent
+                                variant="dropdown"
+                                :link-rule-id="headerLinkRuleFor(header.name)?.id ?? null"
+                                :is-pinned="isRequestHeaderPinned(header.name)"
+                                :can-open-link="!!header.value && !!headerLinkRuleFor(header.name)"
+                                @copy="copyReadonlyHeaderValue(header.value, 'req', header.name)"
+                                @create-link="emitOpenHeaderLinkEditor(header.name, 'create')"
+                                @open-link="openHeaderLinkUrl(headerLinkRuleFor(header.name)!, header.value)"
+                                @edit-link="emitOpenHeaderLinkEditor(header.name, 'edit')"
+                                @delete-link="deleteHeaderLinkById(headerLinkRuleFor(header.name)!.id)"
+                                @toggle-pin="toggleRequestPin(header.name)"
+                              />
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      </ContextMenuTrigger>
+                      <NetworkHeaderRowMenuContent
+                        variant="context"
+                        :link-rule-id="headerLinkRuleFor(header.name)?.id ?? null"
+                        :is-pinned="isRequestHeaderPinned(header.name)"
+                        :can-open-link="!!header.value && !!headerLinkRuleFor(header.name)"
+                        @copy="copyReadonlyHeaderValue(header.value, 'req', header.name)"
+                        @create-link="emitOpenHeaderLinkEditor(header.name, 'create')"
+                        @open-link="openHeaderLinkUrl(headerLinkRuleFor(header.name)!, header.value)"
+                        @edit-link="emitOpenHeaderLinkEditor(header.name, 'edit')"
+                        @delete-link="deleteHeaderLinkById(headerLinkRuleFor(header.name)!.id)"
+                        @toggle-pin="toggleRequestPin(header.name)"
+                      />
+                    </ContextMenu>
+                  </template>
+                  <template v-else>
+                    <TableRow v-for="(header, index) in pinnedRequestHeadersDisplay" :key="`preq-copy-${index}`">
+                      <TableCell class="font-mono text-xs py-2 align-top">{{ header.name }}</TableCell>
+                      <TableCell class="font-mono text-xs py-2 align-top">
+                        <NetworkHeaderValueCell
+                          :value="header.value"
+                          :link-rule="headerLinkRuleFor(header.name)"
+                        />
+                      </TableCell>
+                      <TableCell class="py-2 text-center align-top">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="h-6 w-6 p-0 transition-colors"
+                          :class="{ 'text-green-500': copiedHeaderKey === `req:${header.name.toLowerCase()}` }"
+                          @click="copyReadonlyHeaderValue(header.value, 'req', header.name)"
+                        >
+                          <component :is="copiedHeaderKey === `req:${header.name.toLowerCase()}` ? Check : Copy" class="h-3 w-3" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  </template>
+                </TableBody>
+              </Table>
             </div>
-            
+
+            <!-- Pinned Response Headers -->
+            <div v-if="showPinnedResponseSection" class="space-y-2">
+              <h4 class="text-sm font-semibold">Pinned Response Headers</h4>
+              <Table class="network-headers-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead class="w-1/3">Name</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead class="w-10 text-center">
+                      <span v-if="showAdvancedHeaderMenus" />
+                      <span v-else>Copy</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <template v-if="showAdvancedHeaderMenus">
+                    <ContextMenu
+                      v-for="(header, index) in pinnedResponseHeadersDisplay"
+                      :key="`pres-${header.name}-${index}`"
+                    >
+                      <ContextMenuTrigger as-child>
+                        <TableRow>
+                          <TableCell class="font-mono text-xs py-2 align-top">{{ header.name }}</TableCell>
+                          <TableCell class="font-mono text-xs py-2 align-top">
+                            <NetworkHeaderValueCell
+                              :value="header.value"
+                              :link-rule="headerLinkRuleFor(header.name)"
+                            />
+                          </TableCell>
+                          <TableCell class="py-2 text-center align-top">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-6 w-6 p-0 transition-colors"
+                                  :class="{ 'text-green-500': copiedHeaderKey === `res:${header.name.toLowerCase()}` }"
+                                  @click.stop
+                                >
+                                  <MoreHorizontal class="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <NetworkHeaderRowMenuContent
+                                variant="dropdown"
+                                :link-rule-id="headerLinkRuleFor(header.name)?.id ?? null"
+                                :is-pinned="isResponseHeaderPinned(header.name)"
+                                :can-open-link="!!header.value && !!headerLinkRuleFor(header.name)"
+                                @copy="copyReadonlyHeaderValue(header.value, 'res', header.name)"
+                                @create-link="emitOpenHeaderLinkEditor(header.name, 'create')"
+                                @open-link="openHeaderLinkUrl(headerLinkRuleFor(header.name)!, header.value)"
+                                @edit-link="emitOpenHeaderLinkEditor(header.name, 'edit')"
+                                @delete-link="deleteHeaderLinkById(headerLinkRuleFor(header.name)!.id)"
+                                @toggle-pin="toggleResponsePin(header.name)"
+                              />
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      </ContextMenuTrigger>
+                      <NetworkHeaderRowMenuContent
+                        variant="context"
+                        :link-rule-id="headerLinkRuleFor(header.name)?.id ?? null"
+                        :is-pinned="isResponseHeaderPinned(header.name)"
+                        :can-open-link="!!header.value && !!headerLinkRuleFor(header.name)"
+                        @copy="copyReadonlyHeaderValue(header.value, 'res', header.name)"
+                        @create-link="emitOpenHeaderLinkEditor(header.name, 'create')"
+                        @open-link="openHeaderLinkUrl(headerLinkRuleFor(header.name)!, header.value)"
+                        @edit-link="emitOpenHeaderLinkEditor(header.name, 'edit')"
+                        @delete-link="deleteHeaderLinkById(headerLinkRuleFor(header.name)!.id)"
+                        @toggle-pin="toggleResponsePin(header.name)"
+                      />
+                    </ContextMenu>
+                  </template>
+                  <template v-else>
+                    <TableRow v-for="(header, index) in pinnedResponseHeadersDisplay" :key="`pres-copy-${index}`">
+                      <TableCell class="font-mono text-xs py-2 align-top">{{ header.name }}</TableCell>
+                      <TableCell class="font-mono text-xs py-2 align-top">
+                        <NetworkHeaderValueCell
+                          :value="header.value"
+                          :link-rule="headerLinkRuleFor(header.name)"
+                        />
+                      </TableCell>
+                      <TableCell class="py-2 text-center align-top">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="h-6 w-6 p-0 transition-colors"
+                          :class="{ 'text-green-500': copiedHeaderKey === `res:${header.name.toLowerCase()}` }"
+                          @click="copyReadonlyHeaderValue(header.value, 'res', header.name)"
+                        >
+                          <component :is="copiedHeaderKey === `res:${header.name.toLowerCase()}` ? Check : Copy" class="h-3 w-3" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  </template>
+                </TableBody>
+              </Table>
+            </div>
+
             <!-- Request Headers -->
             <div>
               <div class="flex items-center justify-between mb-2">
@@ -618,52 +946,129 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   </Button>
                 </div>
               </div>
-              <div v-if="(canEditRequest ? editableRequestHeaders : entry.requestHeaders).length === 0" class="text-sm text-muted-foreground">
+              <div
+                v-if="canEditRequest ? editableRequestHeaders.length === 0 : entry.requestHeaders.length === 0"
+                class="text-sm text-muted-foreground"
+              >
                 No request headers
               </div>
-              <Table v-else class="network-headers-table">
+              <Table v-else-if="canEditRequest" class="network-headers-table">
                 <TableHeader>
                   <TableRow>
                     <TableHead class="w-1/3">Name</TableHead>
                     <TableHead>Value</TableHead>
-                    <TableHead class="w-10 text-center">{{ canEditRequest ? '' : 'Copy' }}</TableHead>
+                    <TableHead class="w-10 text-center" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <template v-if="canEditRequest">
-                    <TableRow v-for="(header, index) in editableRequestHeaders" :key="index">
-                      <TableCell class="py-2 align-top">
-                        <Input
-                          :model-value="header.name"
-                          @update:model-value="updateRequestHeader(index, 'name', $event)"
-                          placeholder="Header name"
-                          class="h-7 text-xs font-mono"
-                        />
-                      </TableCell>
-                      <TableCell class="py-2 align-top">
-                        <Input
-                          :model-value="header.value"
-                          @update:model-value="updateRequestHeader(index, 'value', $event)"
-                          placeholder="Header value"
-                          class="h-7 text-xs font-mono"
-                        />
-                      </TableCell>
-                      <TableCell class="py-2 text-center align-top">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          class="h-6 w-6 p-0 text-destructive_text hover:text-destructive_text"
-                          @click="removeRequestHeader(index)"
-                        >
-                          ×
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                  <TableRow v-for="(header, index) in editableRequestHeaders" :key="index">
+                    <TableCell class="py-2 align-top">
+                      <Input
+                        :model-value="header.name"
+                        @update:model-value="updateRequestHeader(index, 'name', $event)"
+                        placeholder="Header name"
+                        class="h-7 text-xs font-mono"
+                      />
+                    </TableCell>
+                    <TableCell class="py-2 align-top">
+                      <Input
+                        :model-value="header.value"
+                        @update:model-value="updateRequestHeader(index, 'value', $event)"
+                        placeholder="Header value"
+                        class="h-7 text-xs font-mono"
+                      />
+                    </TableCell>
+                    <TableCell class="py-2 text-center align-top">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-6 w-6 p-0 text-destructive_text hover:text-destructive_text"
+                        @click="removeRequestHeader(index)"
+                      >
+                        ×
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+              <Table v-else-if="unpinnedRequestHeadersReadonly.length > 0" class="network-headers-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead class="w-1/3">Name</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead class="w-10 text-center">
+                      <span v-if="showAdvancedHeaderMenus" />
+                      <span v-else>Copy</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <template v-if="showAdvancedHeaderMenus">
+                    <ContextMenu
+                      v-for="(header, index) in unpinnedRequestHeadersReadonly"
+                      :key="`req-${header.name}-${index}`"
+                    >
+                      <ContextMenuTrigger as-child>
+                        <TableRow>
+                          <TableCell class="font-mono text-xs py-2 align-top">{{ header.name }}</TableCell>
+                          <TableCell class="font-mono text-xs py-2 align-top">
+                            <NetworkHeaderValueCell
+                              :value="header.value"
+                              :link-rule="headerLinkRuleFor(header.name)"
+                            />
+                          </TableCell>
+                          <TableCell class="py-2 text-center align-top">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-6 w-6 p-0 transition-colors"
+                                  :class="{ 'text-green-500': copiedHeaderKey === `req:${header.name.toLowerCase()}` }"
+                                  @click.stop
+                                >
+                                  <MoreHorizontal class="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <NetworkHeaderRowMenuContent
+                                variant="dropdown"
+                                :link-rule-id="headerLinkRuleFor(header.name)?.id ?? null"
+                                :is-pinned="isRequestHeaderPinned(header.name)"
+                                :can-open-link="!!header.value && !!headerLinkRuleFor(header.name)"
+                                @copy="copyReadonlyHeaderValue(header.value, 'req', header.name)"
+                                @create-link="emitOpenHeaderLinkEditor(header.name, 'create')"
+                                @open-link="openHeaderLinkUrl(headerLinkRuleFor(header.name)!, header.value)"
+                                @edit-link="emitOpenHeaderLinkEditor(header.name, 'edit')"
+                                @delete-link="deleteHeaderLinkById(headerLinkRuleFor(header.name)!.id)"
+                                @toggle-pin="toggleRequestPin(header.name)"
+                              />
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      </ContextMenuTrigger>
+                      <NetworkHeaderRowMenuContent
+                        variant="context"
+                        :link-rule-id="headerLinkRuleFor(header.name)?.id ?? null"
+                        :is-pinned="isRequestHeaderPinned(header.name)"
+                        :can-open-link="!!header.value && !!headerLinkRuleFor(header.name)"
+                        @copy="copyReadonlyHeaderValue(header.value, 'req', header.name)"
+                        @create-link="emitOpenHeaderLinkEditor(header.name, 'create')"
+                        @open-link="openHeaderLinkUrl(headerLinkRuleFor(header.name)!, header.value)"
+                        @edit-link="emitOpenHeaderLinkEditor(header.name, 'edit')"
+                        @delete-link="deleteHeaderLinkById(headerLinkRuleFor(header.name)!.id)"
+                        @toggle-pin="toggleRequestPin(header.name)"
+                      />
+                    </ContextMenu>
                   </template>
                   <template v-else>
-                    <TableRow v-for="(header, index) in entry.requestHeaders" :key="index">
+                    <TableRow v-for="(header, index) in unpinnedRequestHeadersReadonly" :key="index">
                       <TableCell class="font-mono text-xs py-2 align-top">{{ header.name }}</TableCell>
-                      <TableCell class="font-mono text-xs py-2 break-all align-top whitespace-pre-wrap">{{ header.value }}</TableCell>
+                      <TableCell class="font-mono text-xs py-2 align-top">
+                        <NetworkHeaderValueCell
+                          :value="header.value"
+                          :link-rule="headerLinkRuleFor(header.name)"
+                        />
+                      </TableCell>
                       <TableCell class="py-2 text-center align-top">
                         <Button
                           variant="ghost"
@@ -679,64 +1084,139 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   </template>
                 </TableBody>
               </Table>
+              <p
+                v-else-if="!canEditRequest && entry.requestHeaders.length > 0 && unpinnedRequestHeadersReadonly.length === 0"
+                class="text-sm text-muted-foreground"
+              >
+                All request headers are listed under Pinned Request Headers above.
+              </p>
             </div>
-            
+
             <!-- Response Headers -->
             <div>
               <h4 class="text-sm font-semibold mb-2">Response Headers</h4>
-              <div v-if="(canEditResponse ? editableResponseHeaders : entry.responseHeaders).length === 0" class="text-sm text-muted-foreground">
+              <div
+                v-if="(canEditResponse ? editableResponseHeaders : entry.responseHeaders).length === 0"
+                class="text-sm text-muted-foreground"
+              >
                 {{ entry.pending ? 'Waiting for response...' : 'No response headers' }}
               </div>
-              <Table v-else class="network-headers-table">
+              <Table v-else-if="canEditResponse" class="network-headers-table">
                 <TableHeader>
                   <TableRow>
                     <TableHead class="w-1/3">Name</TableHead>
                     <TableHead>Value</TableHead>
-                    <TableHead class="w-10 text-center">Copy</TableHead>
+                    <TableHead class="w-10 text-center" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <template v-if="canEditResponse">
-                    <TableRow v-for="(header, index) in editableResponseHeaders" :key="index">
-                      <TableCell class="py-2 align-top">
-                        <Input
-                          :model-value="header.name"
-                          @update:model-value="updateResponseHeader(index, 'name', $event)"
-                          class="h-7 text-xs font-mono"
-                        />
-                      </TableCell>
-                      <TableCell class="py-2 align-top">
-                        <Input
-                          :model-value="header.value"
-                          @update:model-value="updateResponseHeader(index, 'value', $event)"
-                          class="h-7 text-xs font-mono"
-                        />
-                      </TableCell>
-                      <TableCell class="py-2 text-center align-top">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          class="h-6 w-6 p-0 transition-colors"
-                          :class="{ 'text-green-500': copiedResponseHeaderIndex === index }"
-                          @click="copyHeaderValue(header.value, index, true)"
-                        >
-                          <component :is="copiedResponseHeaderIndex === index ? Check : Copy" class="h-3 w-3" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                  <TableRow v-for="(header, index) in editableResponseHeaders" :key="index">
+                    <TableCell class="py-2 align-top">
+                      <Input
+                        :model-value="header.name"
+                        @update:model-value="updateResponseHeader(index, 'name', $event)"
+                        class="h-7 text-xs font-mono"
+                      />
+                    </TableCell>
+                    <TableCell class="py-2 align-top">
+                      <Input
+                        :model-value="header.value"
+                        @update:model-value="updateResponseHeader(index, 'value', $event)"
+                        class="h-7 text-xs font-mono"
+                      />
+                    </TableCell>
+                    <TableCell class="py-2 text-center align-top">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-6 w-6 p-0 transition-colors"
+                        :class="{ 'text-green-500': copiedResponseHeaderIndex === index }"
+                        @click="copyHeaderValue(header.value, index, true)"
+                      >
+                        <component :is="copiedResponseHeaderIndex === index ? Check : Copy" class="h-3 w-3" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+              <Table v-else-if="unpinnedResponseHeadersReadonly.length > 0" class="network-headers-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead class="w-1/3">Name</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead class="w-10 text-center">
+                      <span v-if="showAdvancedHeaderMenus" />
+                      <span v-else>Copy</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <template v-if="showAdvancedHeaderMenus">
+                    <ContextMenu
+                      v-for="(header, index) in unpinnedResponseHeadersReadonly"
+                      :key="`res-${header.name}-${index}`"
+                    >
+                      <ContextMenuTrigger as-child>
+                        <TableRow>
+                          <TableCell class="font-mono text-xs py-2 align-top">{{ header.name }}</TableCell>
+                          <TableCell class="font-mono text-xs py-2 align-top">
+                            <NetworkHeaderValueCell
+                              :value="header.value"
+                              :link-rule="headerLinkRuleFor(header.name)"
+                            />
+                          </TableCell>
+                          <TableCell class="py-2 text-center align-top">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-6 w-6 p-0 transition-colors"
+                                  :class="{ 'text-green-500': copiedHeaderKey === `res:${header.name.toLowerCase()}` }"
+                                  @click.stop
+                                >
+                                  <MoreHorizontal class="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <NetworkHeaderRowMenuContent
+                                variant="dropdown"
+                                :link-rule-id="headerLinkRuleFor(header.name)?.id ?? null"
+                                :is-pinned="isResponseHeaderPinned(header.name)"
+                                :can-open-link="!!header.value && !!headerLinkRuleFor(header.name)"
+                                @copy="copyReadonlyHeaderValue(header.value, 'res', header.name)"
+                                @create-link="emitOpenHeaderLinkEditor(header.name, 'create')"
+                                @open-link="openHeaderLinkUrl(headerLinkRuleFor(header.name)!, header.value)"
+                                @edit-link="emitOpenHeaderLinkEditor(header.name, 'edit')"
+                                @delete-link="deleteHeaderLinkById(headerLinkRuleFor(header.name)!.id)"
+                                @toggle-pin="toggleResponsePin(header.name)"
+                              />
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      </ContextMenuTrigger>
+                      <NetworkHeaderRowMenuContent
+                        variant="context"
+                        :link-rule-id="headerLinkRuleFor(header.name)?.id ?? null"
+                        :is-pinned="isResponseHeaderPinned(header.name)"
+                        :can-open-link="!!header.value && !!headerLinkRuleFor(header.name)"
+                        @copy="copyReadonlyHeaderValue(header.value, 'res', header.name)"
+                        @create-link="emitOpenHeaderLinkEditor(header.name, 'create')"
+                        @open-link="openHeaderLinkUrl(headerLinkRuleFor(header.name)!, header.value)"
+                        @edit-link="emitOpenHeaderLinkEditor(header.name, 'edit')"
+                        @delete-link="deleteHeaderLinkById(headerLinkRuleFor(header.name)!.id)"
+                        @toggle-pin="toggleResponsePin(header.name)"
+                      />
+                    </ContextMenu>
                   </template>
                   <template v-else>
-                    <TableRow 
-                      v-for="(header, index) in entry.responseHeaders" 
-                      :key="index"
-                      :class="{ 'bg-blue-500/10': header.name.toLowerCase() === 'x-request-id' }"
-                    >
+                    <TableRow v-for="(header, index) in unpinnedResponseHeadersReadonly" :key="index">
+                      <TableCell class="font-mono text-xs py-2 align-top">{{ header.name }}</TableCell>
                       <TableCell class="font-mono text-xs py-2 align-top">
-                        <span :class="{ 'text-blue-500 font-semibold': header.name.toLowerCase() === 'x-request-id' }">
-                          {{ header.name }}
-                        </span>
+                        <NetworkHeaderValueCell
+                          :value="header.value"
+                          :link-rule="headerLinkRuleFor(header.name)"
+                        />
                       </TableCell>
-                      <TableCell class="font-mono text-xs py-2 break-all align-top whitespace-pre-wrap">{{ header.value }}</TableCell>
                       <TableCell class="py-2 text-center align-top">
                         <Button
                           variant="ghost"
@@ -752,6 +1232,12 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   </template>
                 </TableBody>
               </Table>
+              <p
+                v-else-if="!canEditResponse && entry.responseHeaders.length > 0 && unpinnedResponseHeadersReadonly.length === 0"
+                class="text-sm text-muted-foreground"
+              >
+                All response headers are shown in Pinned Response Headers at the top of this tab.
+              </p>
             </div>
           </div>
         </ScrollArea>
@@ -1057,6 +1543,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         </div>
       </div>
     </div>
+
   </TooltipProvider>
 </template>
 

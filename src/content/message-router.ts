@@ -6,6 +6,7 @@
 import { runtimeHandlers } from './handlers'
 import { requestWindow, getExpectedResponseType } from './ipc'
 import { featureFlags } from './state'
+import { enrichNetworkBroadcastIfNeeded } from './network-header-enrichment'
 
 export type SendResponse = (response: any) => void
 
@@ -71,7 +72,7 @@ export function forwardInjectedBroadcast(
   if (!data.__FROM_VUE_INSPECTOR__) return false
 
   if (data.__NETWORK__) {
-    sendToTarget({ broadcast: true, message: data })
+    enrichNetworkBroadcastIfNeeded(data, sendToTarget)
     return true
   }
 
