@@ -112,9 +112,18 @@ export interface NetworkEntry {
   
   /** Request headers */
   requestHeaders: HeaderEntry[]
+
+  /**
+   * Before Advanced webRequest merge: headers visible to page scripts (Classic subset).
+   * Used to hide “advanced-only” headers in UI / cURL / export when settings ask for it; pinned names still use merged values.
+   */
+  requestHeadersPageVisible?: HeaderEntry[]
   
   /** Response headers */
   responseHeaders: HeaderEntry[]
+
+  /** Same as requestHeadersPageVisible for the response direction (after merge). */
+  responseHeadersPageVisible?: HeaderEntry[]
   
   /** URL query parameters */
   params: UrlParam[]

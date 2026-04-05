@@ -4,7 +4,6 @@ import type {
   NetworkPinnedHeaderItem,
   NetworkPinnedHeaderScope,
 } from '@/types/inspector'
-import { applyHeaderLinkValueTransform } from '@/utils/headerLinkTransform'
 
 export function normalizeNetworkHeaderHost(host: string): string {
   return String(host || '')
@@ -35,38 +34,9 @@ export function findHeaderLinkRule(
   )
 }
 
-/**
- * Apply optional regex to the raw header value before URL substitution.
- * Uses the first capturing group when available, otherwise the full match; on no match or invalid pattern, returns the raw value.
- */
-export function applyHeaderLinkValueExtract(
-  headerValue: string,
-  valueExtractRegex: string | undefined | null,
-): string {
-  const raw = String(headerValue ?? '')
-  const p = String(valueExtractRegex ?? '').trim()
-  if (!p) return raw
-  try {
-    const re = new RegExp(p)
-    const m = raw.match(re)
-    if (!m) return raw
-    if (m.length > 1 && m[1] !== undefined) return m[1]
-    return m[0] ?? raw
-  } catch {
-    return raw
-  }
-}
-
-/** Replace {value} placeholders (all occurrences) after optional extract + transform pipeline. */
-export function buildHeaderLinkUrl(
-  template: string,
-  headerValue: string,
-  valueExtractRegex?: string | null,
-  valueTransform?: string | null,
-): string {
-  const extracted = applyHeaderLinkValueExtract(headerValue, valueExtractRegex)
-  const value = applyHeaderLinkValueTransform(extracted, valueTransform)
-  return template.split('{value}').join(value)
+/** Replace {value} placeholders (all occurrences) with the raw header value. */
+export function buildHeaderLinkUrl(template: string, headerValue: string): string {
+  return template.split('{value}').join(headerValue)
 }
 
 /** Pinned headers that exist in `headers`, in `pinnedLowercase` order (one row per pinned name from map). */
@@ -133,15 +103,11 @@ export function replaceHeaderLinkRulesForHeaderName(
   for (const row of byHost.values()) {
     const hostNorm = normalizeNetworkHeaderHost(row.host)
     const tpl = row.urlTemplate.trim()
-    const rx = (row.valueExtractRegex ?? '').trim()
-    const tf = (row.valueTransform ?? '').trim()
     list.push({
       id: row.id ?? newHeaderLinkRuleId(),
       headerName: headerDisplayName,
       host: hostNorm,
       urlTemplate: tpl,
-      ...(rx ? { valueExtractRegex: rx } : {}),
-      ...(tf ? { valueTransform: tf } : {}),
       addedAt: row.addedAt ?? now,
     })
   }

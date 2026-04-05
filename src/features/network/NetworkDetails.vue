@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick, onUnmounted, defineAsyncComponent } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { ArrowLeft, Copy, Check, Send, MoreHorizontal } from 'lucide-vue-next'
+import { ArrowLeft, Copy, Check, Send, MoreHorizontal, ChevronDown } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -38,6 +38,11 @@ import {
   ContextMenu,
   ContextMenuTrigger,
 } from '@/components/ui/ContextMenu'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { NetworkActionsMenuContent } from '@/components/NetworkActionsMenu'
 import NetworkHeaderRowMenuContent from '@/features/network/NetworkHeaderRowMenuContent.vue'
 import NetworkHeaderValueCell from '@/features/network/NetworkHeaderValueCell.vue'
@@ -53,6 +58,10 @@ import {
   pinnedHeaderOrderForScope,
   togglePinnedHeaderItem,
 } from '@/utils/networkHeaderLinks'
+import {
+  effectiveRequestHeadersForDisplay,
+  effectiveResponseHeadersForDisplay,
+} from '@/utils/networkAdvancedHeaders'
 
 /** Lazy load JsonEditor (Prism, tree) - only when user opens Request/Response tab */
 const JsonEditor = defineAsyncComponent({
@@ -167,7 +176,7 @@ const copiedHeaderIndex = ref<number | null>(null)
 const copiedResponseHeaderIndex = ref<number | null>(null)
 /** Read-only Advanced header row copy feedback (req:/res: + lowercase name) */
 const copiedHeaderKey = ref<string | null>(null)
-const { curlCopied, copyCurl: copyCurlCommand } = useCurlCopy()
+const { curlCopied, copyCurl: copyCurlCommand } = useCurlCopy(() => settings.value ?? undefined)
 
 const urlRef = ref<HTMLElement | null>(null)
 const urlContainerRef = ref<HTMLElement | null>(null)
@@ -276,20 +285,30 @@ const networkPinnedOrderResponse = computed(() =>
   pinnedHeaderOrderForScope(networkPinnedItems.value, 'response'),
 )
 
+const readonlyRequestHeadersForDisplay = computed(() => {
+  if (canEditRequest.value) return props.entry.requestHeaders
+  return effectiveRequestHeadersForDisplay(props.entry, settings.value)
+})
+
+const readonlyResponseHeadersForDisplay = computed(() => {
+  if (canEditResponse.value) return props.entry.responseHeaders
+  return effectiveResponseHeadersForDisplay(props.entry, settings.value)
+})
+
 const pinnedRequestHeadersDisplay = computed(() =>
-  headersMatchingPinOrder(props.entry.requestHeaders, networkPinnedOrderRequest.value),
+  headersMatchingPinOrder(readonlyRequestHeadersForDisplay.value, networkPinnedOrderRequest.value),
 )
 
 const pinnedResponseHeadersDisplay = computed(() =>
-  headersMatchingPinOrder(props.entry.responseHeaders, networkPinnedOrderResponse.value),
+  headersMatchingPinOrder(readonlyResponseHeadersForDisplay.value, networkPinnedOrderResponse.value),
 )
 
 const unpinnedRequestHeadersReadonly = computed(() =>
-  headersNotPinned(props.entry.requestHeaders, networkPinnedOrderRequest.value),
+  headersNotPinned(readonlyRequestHeadersForDisplay.value, networkPinnedOrderRequest.value),
 )
 
 const unpinnedResponseHeadersReadonly = computed(() =>
-  headersNotPinned(props.entry.responseHeaders, networkPinnedOrderResponse.value),
+  headersNotPinned(readonlyResponseHeadersForDisplay.value, networkPinnedOrderResponse.value),
 )
 
 const showPinnedRequestSection = computed(
@@ -328,12 +347,7 @@ function deleteHeaderLinkById(id: string) {
 }
 
 function openHeaderLinkUrl(rule: NetworkHeaderLinkRule, headerValue: string) {
-  const url = buildHeaderLinkUrl(
-    rule.urlTemplate,
-    headerValue,
-    rule.valueExtractRegex,
-    rule.valueTransform,
-  )
+  const url = buildHeaderLinkUrl(rule.urlTemplate, headerValue)
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
@@ -732,8 +746,25 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               @close="emit('closeHeaderLinkEditor')"
             />
             <!-- Pinned Request Headers -->
-            <div v-if="showPinnedRequestSection" class="space-y-2">
-              <h4 class="text-sm font-semibold">Pinned Request Headers</h4>
+            <Collapsible
+              v-if="showPinnedRequestSection"
+              v-slot="{ open }"
+              class="space-y-2"
+              default-open
+            >
+              <CollapsibleTrigger as-child>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 rounded-md py-1 text-left -mx-1 px-1 hover:bg-muted/50"
+                >
+                  <ChevronDown
+                    class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
+                    :class="open ? '' : '-rotate-90'"
+                  />
+                  <h4 class="text-sm font-semibold">Pinned Request Headers</h4>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent class="pt-2">
               <Table class="network-headers-table">
                 <TableHeader>
                   <TableRow>
@@ -827,11 +858,29 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   </template>
                 </TableBody>
               </Table>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             <!-- Pinned Response Headers -->
-            <div v-if="showPinnedResponseSection" class="space-y-2">
-              <h4 class="text-sm font-semibold">Pinned Response Headers</h4>
+            <Collapsible
+              v-if="showPinnedResponseSection"
+              v-slot="{ open }"
+              class="space-y-2"
+              default-open
+            >
+              <CollapsibleTrigger as-child>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 rounded-md py-1 text-left -mx-1 px-1 hover:bg-muted/50"
+                >
+                  <ChevronDown
+                    class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
+                    :class="open ? '' : '-rotate-90'"
+                  />
+                  <h4 class="text-sm font-semibold">Pinned Response Headers</h4>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent class="pt-2">
               <Table class="network-headers-table">
                 <TableHeader>
                   <TableRow>
@@ -925,29 +974,40 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   </template>
                 </TableBody>
               </Table>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             <!-- Request Headers -->
-            <div>
-              <div class="flex items-center justify-between mb-2">
-                <h4 class="text-sm font-semibold">Request Headers</h4>
-                <div v-if="canEditRequest" class="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    class="h-7 text-xs text-destructive_text hover:text-destructive_text" 
-                    :disabled="editableRequestHeaders.length === 0"
-                    @click="removeAllRequestHeaders"
-                  >
-                    Remove all
-                  </Button>
-                  <Button variant="outline" size="sm" class="h-7 text-xs" @click="addRequestHeader">
-                    Add Header
-                  </Button>
-                </div>
+            <Collapsible v-slot="{ open }" class="space-y-2" default-open>
+              <CollapsibleTrigger as-child>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 rounded-md py-1 text-left -mx-1 px-1 hover:bg-muted/50"
+                >
+                  <ChevronDown
+                    class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
+                    :class="open ? '' : '-rotate-90'"
+                  />
+                  <h4 class="text-sm font-semibold">Request Headers</h4>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent class="space-y-2 pt-2">
+              <div v-if="canEditRequest" class="flex justify-end items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="h-7 text-xs text-destructive_text hover:text-destructive_text"
+                  :disabled="editableRequestHeaders.length === 0"
+                  @click="removeAllRequestHeaders"
+                >
+                  Remove all
+                </Button>
+                <Button variant="outline" size="sm" class="h-7 text-xs" @click="addRequestHeader">
+                  Add Header
+                </Button>
               </div>
               <div
-                v-if="canEditRequest ? editableRequestHeaders.length === 0 : entry.requestHeaders.length === 0"
+                v-if="canEditRequest ? editableRequestHeaders.length === 0 : readonlyRequestHeadersForDisplay.length === 0"
                 class="text-sm text-muted-foreground"
               >
                 No request headers
@@ -1085,18 +1145,31 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 </TableBody>
               </Table>
               <p
-                v-else-if="!canEditRequest && entry.requestHeaders.length > 0 && unpinnedRequestHeadersReadonly.length === 0"
+                v-else-if="!canEditRequest && readonlyRequestHeadersForDisplay.length > 0 && unpinnedRequestHeadersReadonly.length === 0"
                 class="text-sm text-muted-foreground"
               >
                 All request headers are listed under Pinned Request Headers above.
               </p>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             <!-- Response Headers -->
-            <div>
-              <h4 class="text-sm font-semibold mb-2">Response Headers</h4>
+            <Collapsible v-slot="{ open }" class="space-y-2" default-open>
+              <CollapsibleTrigger as-child>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 rounded-md py-1 text-left -mx-1 px-1 hover:bg-muted/50"
+                >
+                  <ChevronDown
+                    class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
+                    :class="open ? '' : '-rotate-90'"
+                  />
+                  <h4 class="text-sm font-semibold">Response Headers</h4>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent class="space-y-2 pt-2">
               <div
-                v-if="(canEditResponse ? editableResponseHeaders : entry.responseHeaders).length === 0"
+                v-if="(canEditResponse ? editableResponseHeaders : readonlyResponseHeadersForDisplay).length === 0"
                 class="text-sm text-muted-foreground"
               >
                 {{ entry.pending ? 'Waiting for response...' : 'No response headers' }}
@@ -1233,12 +1306,13 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 </TableBody>
               </Table>
               <p
-                v-else-if="!canEditResponse && entry.responseHeaders.length > 0 && unpinnedResponseHeadersReadonly.length === 0"
+                v-else-if="!canEditResponse && readonlyResponseHeadersForDisplay.length > 0 && unpinnedResponseHeadersReadonly.length === 0"
                 class="text-sm text-muted-foreground"
               >
                 All response headers are shown in Pinned Response Headers at the top of this tab.
               </p>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         </ScrollArea>
         

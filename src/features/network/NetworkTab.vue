@@ -21,6 +21,7 @@ import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useSearchSettings } from '@/composables/useSearchSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
 import { downloadPostmanCollection } from '@/utils/networkUtils'
+import { mapEntriesForPostmanExport } from '@/utils/networkAdvancedHeaders'
 import { 
   useNetworkEntries, 
   useNetworkSearch, 
@@ -145,7 +146,7 @@ const mockState = useMockState(
   () => entries.value
 )
 
-const { copyCurl } = useCurlCopy()
+const { copyCurl } = useCurlCopy(() => settings.value ?? undefined)
 const { selectedEntryId } = useNetworkUIState()
 
 // Pending breakpoint from Navigation
@@ -204,6 +205,10 @@ const selectedEntry = computed(() => {
 })
 
 const entriesCount = computed(() => filteredEntries.value.length)
+
+const entriesForPostmanExport = computed(() =>
+  mapEntriesForPostmanExport(filteredEntries.value, settings.value ?? undefined),
+)
 
 const currentBreakpointDraft = computed<BreakpointDraft | null>(() => {
   if (!activeEntryId.value) return null
@@ -380,7 +385,7 @@ watch(settings, (s) => {
                   size="sm"
                   class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
                   :disabled="filteredEntries.length === 0"
-                  @click="downloadPostmanCollection(filteredEntries)"
+                  @click="downloadPostmanCollection(entriesForPostmanExport)"
                 >
                   <Upload class="h-3.5 w-3.5" />
                   <span class="text-xs font-medium">Export Collection</span>
@@ -407,7 +412,7 @@ watch(settings, (s) => {
                   size="sm"
                   class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
                   :disabled="filteredEntries.length === 0"
-                  @click="downloadPostmanCollection(filteredEntries)"
+                  @click="downloadPostmanCollection(entriesForPostmanExport)"
                 >
                   <Upload class="h-3.5 w-3.5" />
                   <span class="text-xs font-medium">Export Collection</span>

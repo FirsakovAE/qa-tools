@@ -419,8 +419,22 @@ function migrateCustomizeSettings(settings: any) {
     delete c.noiseOpacity
 }
 
+/** Drop removed Header link fields from stored JSON. */
+function migrateNetworkHeaderLinksLegacy(saved: Partial<InspectorSettings>) {
+    const list = saved.networkHeaderLinks
+    if (!Array.isArray(list)) return
+    for (const r of list) {
+        if (r && typeof r === 'object') {
+            const o = r as unknown as Record<string, unknown>
+            delete o.valueExtractRegex
+            delete o.valueTransform
+        }
+    }
+}
+
 // Мердж настроек
 function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSettings>) {
+    migrateNetworkHeaderLinksLegacy(saved)
     migrateSearchSettings(saved)
     migrateJsonMode(saved)
     migrateFavoriteIds(saved)

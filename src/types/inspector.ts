@@ -187,6 +187,16 @@ export type ThemeMode = 'dark' | 'light'
  */
 export type NetworkCaptureMode = 'saved' | 'advanced'
 
+/** Visibility / export policy for headers only available after Advanced (webRequest) merge */
+export interface NetworkAdvancedHeaderPolicy {
+    /** When false, hide webRequest-only headers in Network details (pinned still shown). Default true. */
+    showInDetails: boolean
+    /** When false, omit webRequest-only headers from Copy cURL. Default true. */
+    includeInCurl: boolean
+    /** When false, omit webRequest-only headers from Postman collection export. Default true. */
+    includeInExport: boolean
+}
+
 /** Open external trace/monitoring URL from a header value ({value} in template) */
 export interface NetworkHeaderLinkRule {
     id: string
@@ -196,16 +206,6 @@ export interface NetworkHeaderLinkRule {
     host: string
     /** URL template; use {value} for the header value */
     urlTemplate: string
-    /**
-     * Optional RegExp (pattern as for `new RegExp(pattern)`).
-     * When set, the substring for `{value}` is the first capturing group if present, else the full match;
-     * if the pattern does not match or is invalid, the raw header value is used.
-     */
-    valueExtractRegex?: string
-    /**
-     * Optional transform pipeline after extraction: steps separated by `|`, e.g. replace("-", "") | lowercase().
-     */
-    valueTransform?: string
     /** ISO timestamp */
     addedAt: string
 }
@@ -224,8 +224,6 @@ export interface HeaderLinkRuleRowDraft {
     id: string | null
     host: string
     urlTemplate: string
-    valueExtractRegex: string
-    valueTransform: string
     addedAt: string | null
 }
 
@@ -310,6 +308,8 @@ export interface BaseInspectorSettings {
     networkSearch: NetworkSearchSettings
     /** Network capture: saved (Classic) = page-visible headers only; advanced = full request/response headers via webRequest */
     networkCaptureMode: NetworkCaptureMode
+    /** Advanced-only headers: display and export toggles (extension Advanced mode). */
+    networkAdvancedHeaderPolicy: NetworkAdvancedHeaderPolicy
     /** Header → external link rules (Advanced headers UI + Options) */
     networkHeaderLinks: NetworkHeaderLinkRule[]
     /** Pinned headers per scope (Advanced Network only), in display order */

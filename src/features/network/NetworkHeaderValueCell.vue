@@ -10,12 +10,7 @@ const props = defineProps<{
 
 const href = computed(() => {
   if (!props.linkRule || !String(props.value ?? '').trim()) return null
-  return buildHeaderLinkUrl(
-    props.linkRule.urlTemplate,
-    props.value,
-    props.linkRule.valueExtractRegex,
-    props.linkRule.valueTransform,
-  )
+  return buildHeaderLinkUrl(props.linkRule.urlTemplate, props.value)
 })
 </script>
 
