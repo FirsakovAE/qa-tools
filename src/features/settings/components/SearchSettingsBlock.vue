@@ -30,7 +30,7 @@ function toggle(key: string) {
           :model-value="searchSettings[item.key]"
           @update:model-value="toggle(item.key)"
         />
-        <Label :for="`${idPrefix}-${item.key}`" class="text-sm">
+        <Label :for="`${idPrefix}-${item.key}`" class="text-sm font-normal cursor-pointer">
           {{ item.label }}
         </Label>
       </div>

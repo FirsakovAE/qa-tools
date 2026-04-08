@@ -160,7 +160,7 @@ type HeaderLinkGroupRow = {
 }
 
 const headerLinkColumns: TableColumn[] = [
-  { header: 'Header', width: '55%' },
+  { header: 'Header', class: 'min-w-0' },
   { header: 'Rules', width: '72px', class: 'text-center' },
 ]
 
@@ -199,7 +199,7 @@ function getHeaderLinkGroupActions(row: HeaderLinkGroupRow): MenuAction[] {
 
 // -------------------- PINNED HEADERS (Advanced) --------------------
 const pinnedHeaderColumns: TableColumn[] = [
-  { header: 'Header', width: '55%' },
+  { header: 'Header', class: 'min-w-0' },
   { header: 'Type', width: '100px', class: 'text-center' },
 ]
 
@@ -308,47 +308,29 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
           </p>
         </div>
         <div class="space-y-3 max-w-xl">
-          <div class="flex items-start gap-3">
+          <div class="flex items-center gap-3">
             <Checkbox
               id="adv-hdr-show-details"
-              class="mt-0.5"
               :model-value="ensureAdvancedHeaderPolicy().showInDetails"
               @update:model-value="ensureAdvancedHeaderPolicy().showInDetails = !!$event"
             />
-            <div class="space-y-0.5 min-w-0">
-              <Label for="adv-hdr-show-details" class="text-sm font-normal cursor-pointer">Show in details</Label>
-              <p class="text-xs text-muted-foreground leading-relaxed">
-                When off, hides headers that appear only with Advanced (webRequest) capture from the Network tab. Pinned names still use full values.
-              </p>
-            </div>
+            <Label for="adv-hdr-show-details" class="text-sm font-normal cursor-pointer">Show in details</Label>
           </div>
-          <div class="flex items-start gap-3">
+          <div class="flex items-center gap-3">
             <Checkbox
               id="adv-hdr-curl"
-              class="mt-0.5"
               :model-value="ensureAdvancedHeaderPolicy().includeInCurl"
               @update:model-value="ensureAdvancedHeaderPolicy().includeInCurl = !!$event"
             />
-            <div class="space-y-0.5 min-w-0">
-              <Label for="adv-hdr-curl" class="text-sm font-normal cursor-pointer">Include in Copy cURL</Label>
-              <p class="text-xs text-muted-foreground leading-relaxed">
-                When off, Advanced-only request headers are omitted from the copied cURL command. Pinned names are still included.
-              </p>
-            </div>
+            <Label for="adv-hdr-curl" class="text-sm font-normal cursor-pointer">Include in Copy cURL</Label>
           </div>
-          <div class="flex items-start gap-3">
+          <div class="flex items-center gap-3">
             <Checkbox
               id="adv-hdr-export"
-              class="mt-0.5"
               :model-value="ensureAdvancedHeaderPolicy().includeInExport"
               @update:model-value="ensureAdvancedHeaderPolicy().includeInExport = !!$event"
             />
-            <div class="space-y-0.5 min-w-0">
-              <Label for="adv-hdr-export" class="text-sm font-normal cursor-pointer">Include in Collection export</Label>
-              <p class="text-xs text-muted-foreground leading-relaxed">
-                When off, Advanced-only request headers are omitted from the Postman collection export. Pinned names are still included.
-              </p>
-            </div>
+            <Label for="adv-hdr-export" class="text-sm font-normal cursor-pointer">Include in Collection export</Label>
           </div>
         </div>
       </div>
@@ -366,7 +348,7 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
         @select="(row) => emit('select', { type: 'header-link', id: (row as HeaderLinkGroupRow).headerKey })"
       >
         <template #row="{ row }">
-          <TableCell class="overflow-hidden !py-2">
+          <TableCell class="min-w-0 overflow-hidden !py-2">
             <div
               class="text-sm font-mono truncate"
               :title="(row as HeaderLinkGroupRow).displayHeader"
@@ -394,7 +376,7 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
         @select="() => {}"
       >
         <template #row="{ row }">
-          <TableCell class="overflow-hidden !py-2">
+          <TableCell class="min-w-0 overflow-hidden !py-2">
             <div
               class="text-sm font-mono truncate"
               :title="(row as NetworkPinnedHeaderItem).name"
@@ -403,31 +385,12 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
             </div>
           </TableCell>
           <TableCell class="w-[100px] text-center !py-2">
-            <span class="text-xs text-muted-foreground">
+            <div class="text-xs text-muted-foreground">
               {{ (row as NetworkPinnedHeaderItem).scope === 'request' ? 'Request' : 'Response' }}
-            </span>
+            </div>
           </TableCell>
         </template>
       </SettingsTableSection>
-    </div>
-
-    <div class="space-y-3 border-t border-border pt-4">
-      <div class="flex items-start gap-3 max-w-xl">
-        <Checkbox
-          id="network-breakpoints-rules-enabled"
-          class="mt-0.5"
-          :model-value="settings.networkBreakpointsEnabled !== false"
-          @update:model-value="settings.networkBreakpointsEnabled = !!$event"
-        />
-        <div class="space-y-0.5 min-w-0">
-          <Label for="network-breakpoints-rules-enabled" class="text-sm font-normal cursor-pointer">
-            Enable breakpoint rules
-          </Label>
-          <p class="text-xs text-muted-foreground leading-relaxed">
-            When off, matching requests are not paused; rules stay listed below. Use the Network tab toolbar to toggle quickly.
-          </p>
-        </div>
-      </div>
     </div>
 
     <SettingsTableSection
@@ -442,6 +405,18 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
       :selected-item-id="selectedItemId"
       @select="(row) => emit('select', { type: 'breakpoint', id: (row as BreakpointRow).id })"
     >
+      <template #after-title>
+        <div class="flex items-center gap-2">
+          <Checkbox
+            id="network-breakpoints-rules-enabled"
+            :model-value="settings.networkBreakpointsEnabled !== false"
+            @update:model-value="settings.networkBreakpointsEnabled = !!$event"
+          />
+          <Label for="network-breakpoints-rules-enabled" class="text-sm font-normal cursor-pointer">
+            Enable breakpoint rules
+          </Label>
+        </div>
+      </template>
       <template #row="{ row }">
         <TableCell class="overflow-hidden !py-2">
           <div
@@ -460,25 +435,6 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
       </template>
     </SettingsTableSection>
 
-    <div class="space-y-3 border-t border-border pt-4">
-      <div class="flex items-start gap-3 max-w-xl">
-        <Checkbox
-          id="network-mocks-rules-enabled"
-          class="mt-0.5"
-          :model-value="settings.networkMocksEnabled !== false"
-          @update:model-value="settings.networkMocksEnabled = !!$event"
-        />
-        <div class="space-y-0.5 min-w-0">
-          <Label for="network-mocks-rules-enabled" class="text-sm font-normal cursor-pointer">
-            Enable mock responses
-          </Label>
-          <p class="text-xs text-muted-foreground leading-relaxed">
-            When off, real network requests are made; rules stay listed below. Use the Network tab toolbar to toggle quickly.
-          </p>
-        </div>
-      </div>
-    </div>
-
     <SettingsTableSection
       section-id="mocks-section"
       title="Mocks Responses"
@@ -491,6 +447,18 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
       :selected-item-id="selectedItemId"
       @select="(row) => emit('select', { type: 'mock', id: (row as MockRow).id })"
     >
+      <template #after-title>
+        <div class="flex items-center gap-2">
+          <Checkbox
+            id="network-mocks-rules-enabled"
+            :model-value="settings.networkMocksEnabled !== false"
+            @update:model-value="settings.networkMocksEnabled = !!$event"
+          />
+          <Label for="network-mocks-rules-enabled" class="text-sm font-normal cursor-pointer">
+            Enable mock responses
+          </Label>
+        </div>
+      </template>
       <template #row="{ row }">
         <TableCell class="overflow-hidden !py-2">
           <div
