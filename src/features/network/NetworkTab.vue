@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Trash2, Pause, Play, SearchIcon, Upload } from 'lucide-vue-next'
+import { Trash2, Pause, Play, SearchIcon, Upload, PauseCircle, Shuffle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -84,6 +84,19 @@ const activeMocks = computed<MockRule[]>(() =>
   settings.value?.mocks?.active ?? []
 )
 
+const breakpointsRulesActive = computed(() => settings.value?.networkBreakpointsEnabled !== false)
+const mocksRulesActive = computed(() => settings.value?.networkMocksEnabled !== false)
+
+function toggleBreakpointsRulesEnabled() {
+  if (!settings.value) return
+  settings.value.networkBreakpointsEnabled = !breakpointsRulesActive.value
+}
+
+function toggleMocksRulesEnabled() {
+  if (!settings.value) return
+  settings.value.networkMocksEnabled = !mocksRulesActive.value
+}
+
 const allBreakpointsWithStatus = computed(() => [
   ...(settings.value?.breakpoints?.active ?? []).map(bp => ({ ...bp, isActive: true })),
   ...(settings.value?.breakpoints?.inactive ?? []).map(bp => ({ ...bp, isActive: false })),
@@ -137,12 +150,12 @@ const {
 const breakpointState = useBreakpointState(
   () => activeBreakpoints.value,
   () => entries.value,
-  { sendCommand, getEntry }
+  { sendCommand, getEntry, rulesEnabled: () => breakpointsRulesActive.value }
 )
 
 const mockState = useMockState(
   () => activeMocks.value,
-  { sendCommand },
+  { sendCommand, rulesEnabled: () => mocksRulesActive.value },
   () => entries.value
 )
 
@@ -264,6 +277,16 @@ const {
   handleDraftUpdate,
 } = handlers
 
+const detailsPanelRingClass = computed(() => {
+  if (mockFormMode.value) {
+    return mocksRulesActive.value ? 'ring-2 ring-purple-500' : 'ring-2 ring-muted-foreground/40'
+  }
+  if (isShowingPendingBreakpoint.value || breakpointFormMode.value) {
+    return breakpointsRulesActive.value ? 'ring-2 ring-amber-500' : 'ring-2 ring-muted-foreground/40'
+  }
+  return ''
+})
+
 // ============================================================================
 // Header link editor (full right panel, same slot as details)
 // ============================================================================
@@ -320,6 +343,10 @@ watch([isReady, pendingBreakpointToProcess], ([ready, pending]) => {
 
 watch(activeBreakpoints, () => { breakpointState.syncBreakpoints() }, { deep: true })
 watch(activeMocks, () => { mockState.syncMocks() }, { deep: true })
+watch([breakpointsRulesActive, mocksRulesActive], () => {
+  breakpointState.syncBreakpoints()
+  mockState.syncMocks()
+})
 
 watch(pendingBreakpointIds, (newIds, oldIds) => {
   if (newIds.length > (oldIds?.length ?? 0)) {
@@ -341,6 +368,8 @@ watch(settings, (s) => {
   if (!s.mocks) {
     s.mocks = { active: [], inactive: [] }
   }
+  if (s.networkBreakpointsEnabled === undefined) s.networkBreakpointsEnabled = true
+  if (s.networkMocksEnabled === undefined) s.networkMocksEnabled = true
   setTimeout(() => {
     breakpointState.syncBreakpoints()
     mockState.syncMocks()
@@ -435,7 +464,10 @@ watch(settings, (s) => {
         <Badge 
           v-if="pendingBreakpointIds.length > 0" 
           variant="outline" 
-          class="whitespace-nowrap text-amber-500 border-amber-500/30 animate-pulse cursor-pointer hover:bg-amber-500/10 transition-colors"
+          class="whitespace-nowrap cursor-pointer transition-colors"
+          :class="breakpointsRulesActive
+            ? 'text-amber-500 border-amber-500/30 animate-pulse hover:bg-amber-500/10'
+            : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
           @click="selectFirstPendingBreakpoint"
         >
           {{ pendingBreakpointIds.length }}<span class="badge-label">bp</span>
@@ -443,7 +475,10 @@ watch(settings, (s) => {
         <Badge 
           v-if="activeBreakpoints.length > 0" 
           variant="outline" 
-          class="whitespace-nowrap text-amber-500 border-amber-500/30 cursor-pointer hover:bg-amber-500/10 transition-colors"
+          class="whitespace-nowrap cursor-pointer transition-colors"
+          :class="breakpointsRulesActive
+            ? 'text-amber-500 border-amber-500/30 hover:bg-amber-500/10'
+            : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
           @click="emit('navigateToOptions', 'breakpoints-section')"
         >
           {{ activeBreakpoints.length }}<span class="badge-label">bp</span>
@@ -451,7 +486,10 @@ watch(settings, (s) => {
         <Badge 
           v-if="activeMocks.length > 0" 
           variant="outline" 
-          class="whitespace-nowrap text-purple-500 border-purple-500/30 cursor-pointer hover:bg-purple-500/10 transition-colors"
+          class="whitespace-nowrap cursor-pointer transition-colors"
+          :class="mocksRulesActive
+            ? 'text-purple-500 border-purple-500/30 hover:bg-purple-500/10'
+            : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
           @click="emit('navigateToOptions', 'mocks-section')"
         >
           {{ activeMocks.length }}<span class="badge-label">mock</span>
@@ -459,6 +497,44 @@ watch(settings, (s) => {
         <Badge v-if="paused" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
           Paused
         </Badge>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-8 w-8"
+                :class="{ 'text-amber-500': breakpointsRulesActive }"
+                @click="toggleBreakpointsRulesEnabled"
+              >
+                <PauseCircle class="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {{ breakpointsRulesActive ? 'Breakpoints on (click to suspend)' : 'Breakpoints suspended (click to enable)' }}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-8 w-8"
+                :class="{ 'text-purple-500': mocksRulesActive }"
+                @click="toggleMocksRulesEnabled"
+              >
+                <Shuffle class="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {{ mocksRulesActive ? 'Mock responses on (click to suspend)' : 'Mock responses suspended (click to enable)' }}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         
         <TooltipProvider>
           <Tooltip>
@@ -511,6 +587,8 @@ watch(settings, (s) => {
           :breakpoint-entry-ids="breakpointState.breakpointEntryIds.value"
           :breakpoint-matching-ids="breakpointState.entriesMatchingBreakpoints.value"
           :mock-matching-ids="mockState.entriesMatchingMocks.value"
+          :breakpoints-rules-active="breakpointsRulesActive"
+          :mocks-rules-active="mocksRulesActive"
           :all-breakpoints="allBreakpointsWithStatus"
           :all-mocks="allMocksWithStatus"
           @select="selectEntry"
@@ -525,12 +603,13 @@ watch(settings, (s) => {
       </div>
       
       <!-- Right: Details / MockForm / BreakpointForm -->
-      <div class="h-full min-h-0 overflow-hidden border rounded-lg details-panel" :class="{ 
-        'ring-2 ring-amber-500': isShowingPendingBreakpoint || breakpointFormMode,
-        'ring-2 ring-purple-500': mockFormMode,
-        'ring-2 ring-sky-500/60': headerLinkEditor,
-        'details-active': selectedEntry || mockFormMode || breakpointFormMode || headerLinkEditor
-      }">
+      <div
+        class="h-full min-h-0 overflow-hidden border rounded-lg details-panel"
+        :class="[
+          detailsPanelRingClass,
+          { 'details-active': selectedEntry || mockFormMode || breakpointFormMode || headerLinkEditor },
+        ]"
+      >
         <MockForm
           v-if="mockFormMode && mockFormEntry"
           :entry="mockFormEntry"

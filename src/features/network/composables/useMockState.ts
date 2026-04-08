@@ -11,6 +11,8 @@ import { deepClone } from '../utils'
 
 export interface MockStateOptions {
   sendCommand: (type: string, data?: Record<string, any>) => void
+  /** When false, sync clears mocks in the injected script (global suspend). Default: always on. */
+  rulesEnabled?: () => boolean
 }
 
 /**
@@ -33,6 +35,12 @@ export function useMockState(
    * Sync mocks to injected script
    */
   function syncMocks() {
+    const rulesOn = options.rulesEnabled ? options.rulesEnabled() : true
+    if (!rulesOn) {
+      options.sendCommand('NETWORK_MOCKS_SYNC', { mocks: [] })
+      return
+    }
+
     const mocksToSync = activeMocks().map(m => ({
       id: m.id,
       enabled: m.enabled,

@@ -68,6 +68,8 @@ export const defaultInspectorSettings: InspectorSettings = {
     piniaFavorites: [],
     breakpoints: { active: [], inactive: [] },
     mocks: { active: [], inactive: [] },
+    networkBreakpointsEnabled: true,
+    networkMocksEnabled: true,
     networkTableColumns: { ...defaultNetworkTableColumns },
     propsTableColumns: { ...defaultPropsTableColumns },
     piniaTableColumns: { ...defaultPiniaTableColumns },

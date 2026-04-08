@@ -22,15 +22,25 @@ import type { BreakpointWithStatus, MockWithStatus } from '@/types/inspector'
 import { formatBytes, formatDuration } from '@/types/network'
 import { getStatusClass } from './utils'
 
-const props = defineProps<{
-  entries: NetworkEntry[]
-  selectedId: string | null
-  breakpointEntryIds?: Set<string>
-  breakpointMatchingIds?: Set<string>
-  mockMatchingIds?: Set<string>
-  allBreakpoints?: BreakpointWithStatus[]
-  allMocks?: MockWithStatus[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    entries: NetworkEntry[]
+    selectedId: string | null
+    breakpointEntryIds?: Set<string>
+    breakpointMatchingIds?: Set<string>
+    mockMatchingIds?: Set<string>
+    /** When false, breakpoint row borders use muted styling (rules suspended globally). */
+    breakpointsRulesActive?: boolean
+    /** When false, mock row borders use muted styling (rules suspended globally). */
+    mocksRulesActive?: boolean
+    allBreakpoints?: BreakpointWithStatus[]
+    allMocks?: MockWithStatus[]
+  }>(),
+  {
+    breakpointsRulesActive: true,
+    mocksRulesActive: true,
+  },
+)
 
 const emit = defineEmits<{
   (e: 'select', id: string): void
@@ -161,10 +171,14 @@ const ROW_HEIGHT = 40
                   :class="{
                     'network-row-selected': selectedId === entry.id && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
                     'network-row-pending': entry.pending,
-                    'network-row-breakpoint': hasBreakpoint(entry.id),
-                    'network-row-breakpoint-match': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id),
-                    'network-row-mock-selected': matchesMockPattern(entry.id) && selectedId === entry.id && !hasBreakpoint(entry.id),
-                    'network-row-mock-match': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id)
+                    'network-row-breakpoint': hasBreakpoint(entry.id) && props.breakpointsRulesActive,
+                    'network-row-breakpoint-muted': hasBreakpoint(entry.id) && !props.breakpointsRulesActive,
+                    'network-row-breakpoint-match': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id) && props.breakpointsRulesActive,
+                    'network-row-breakpoint-match-muted': matchesBreakpointPattern(entry.id) && !hasBreakpoint(entry.id) && !matchesMockPattern(entry.id) && !props.breakpointsRulesActive,
+                    'network-row-mock-selected': matchesMockPattern(entry.id) && selectedId === entry.id && !hasBreakpoint(entry.id) && props.mocksRulesActive,
+                    'network-row-mock-selected-muted': matchesMockPattern(entry.id) && selectedId === entry.id && !hasBreakpoint(entry.id) && !props.mocksRulesActive,
+                    'network-row-mock-match': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id) && props.mocksRulesActive,
+                    'network-row-mock-match-muted': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id) && !props.mocksRulesActive,
                   }"
                   @click="emit('select', entry.id)"
                 >
@@ -358,7 +372,31 @@ const ROW_HEIGHT = 40
   border-left: 2px solid hsl(262 83% 58% / 0.5);
 }
 
-.network-row:hover:not(.network-row-selected):not(.network-row-breakpoint):not(.network-row-mock-selected) {
+.network-row-breakpoint-muted {
+  background: hsl(var(--muted) / 0.45);
+}
+
+.network-row-breakpoint-muted:hover {
+  background: hsl(var(--muted) / 0.6);
+}
+
+.network-row-breakpoint-match-muted {
+  border-left: 2px solid hsl(var(--muted-foreground) / 0.35);
+}
+
+.network-row-mock-selected-muted {
+  background: hsl(var(--muted) / 0.45);
+}
+
+.network-row-mock-selected-muted:hover {
+  background: hsl(var(--muted) / 0.6);
+}
+
+.network-row-mock-match-muted {
+  border-left: 2px solid hsl(var(--muted-foreground) / 0.35);
+}
+
+.network-row:hover:not(.network-row-selected):not(.network-row-breakpoint):not(.network-row-mock-selected):not(.network-row-breakpoint-muted):not(.network-row-mock-selected-muted) {
   background: hsl(var(--accent));
 }
 </style>
