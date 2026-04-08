@@ -147,8 +147,11 @@ export function setupDevtoolsBridge(): void {
           }
           if (!settings || typeof settings !== 'object') return
 
+          const bpRulesOn = settings.networkBreakpointsEnabled !== false
+          const mockRulesOn = settings.networkMocksEnabled !== false
+
           const activeBps = settings.breakpoints?.active
-          if (Array.isArray(activeBps) && activeBps.length > 0) {
+          if (bpRulesOn && Array.isArray(activeBps) && activeBps.length > 0) {
             const bps = activeBps.map((bp: any) => ({
               id: bp.id, scheme: bp.scheme, host: bp.host,
               port: bp.port, path: bp.path, query: bp.query,
@@ -163,7 +166,7 @@ export function setupDevtoolsBridge(): void {
           }
 
           const activeMocks = settings.mocks?.active
-          if (Array.isArray(activeMocks) && activeMocks.length > 0) {
+          if (mockRulesOn && Array.isArray(activeMocks) && activeMocks.length > 0) {
             const mocks = activeMocks.map((m: any) => ({
               id: m.id, enabled: true, scheme: m.scheme,
               host: m.host, port: m.port, path: m.path,

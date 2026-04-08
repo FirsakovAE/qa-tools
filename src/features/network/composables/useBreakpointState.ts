@@ -80,6 +80,8 @@ interface PendingBreakpoint {
 export interface BreakpointStateOptions {
   sendCommand: (type: string, data?: Record<string, any>) => void
   getEntry: (id: string) => NetworkEntry | undefined
+  /** When false, sync clears breakpoints in the injected script (global suspend). Default: always on. */
+  rulesEnabled?: () => boolean
 }
 
 // ============================================================================
@@ -276,6 +278,12 @@ export function useBreakpointState(
    * Sync breakpoints to injected script
    */
   function syncBreakpoints() {
+    const rulesOn = options.rulesEnabled ? options.rulesEnabled() : true
+    if (!rulesOn) {
+      options.sendCommand('NETWORK_BREAKPOINTS_SYNC', { breakpoints: [] })
+      return
+    }
+
     const breakpointsToSync = activeBreakpoints().map(bp => ({
       id: bp.id,
       scheme: bp.scheme,

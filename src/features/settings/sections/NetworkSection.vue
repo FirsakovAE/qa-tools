@@ -411,6 +411,25 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
       </SettingsTableSection>
     </div>
 
+    <div class="space-y-3 border-t border-border pt-4">
+      <div class="flex items-start gap-3 max-w-xl">
+        <Checkbox
+          id="network-breakpoints-rules-enabled"
+          class="mt-0.5"
+          :model-value="settings.networkBreakpointsEnabled !== false"
+          @update:model-value="settings.networkBreakpointsEnabled = !!$event"
+        />
+        <div class="space-y-0.5 min-w-0">
+          <Label for="network-breakpoints-rules-enabled" class="text-sm font-normal cursor-pointer">
+            Enable breakpoint rules
+          </Label>
+          <p class="text-xs text-muted-foreground leading-relaxed">
+            When off, matching requests are not paused; rules stay listed below. Use the Network tab toolbar to toggle quickly.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <SettingsTableSection
       section-id="breakpoints-section"
       title="Breakpoints Requests"
@@ -440,6 +459,25 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
         </TableCell>
       </template>
     </SettingsTableSection>
+
+    <div class="space-y-3 border-t border-border pt-4">
+      <div class="flex items-start gap-3 max-w-xl">
+        <Checkbox
+          id="network-mocks-rules-enabled"
+          class="mt-0.5"
+          :model-value="settings.networkMocksEnabled !== false"
+          @update:model-value="settings.networkMocksEnabled = !!$event"
+        />
+        <div class="space-y-0.5 min-w-0">
+          <Label for="network-mocks-rules-enabled" class="text-sm font-normal cursor-pointer">
+            Enable mock responses
+          </Label>
+          <p class="text-xs text-muted-foreground leading-relaxed">
+            When off, real network requests are made; rules stay listed below. Use the Network tab toolbar to toggle quickly.
+          </p>
+        </div>
+      </div>
+    </div>
 
     <SettingsTableSection
       section-id="mocks-section"

@@ -296,6 +296,16 @@ export interface BaseInspectorSettings {
     breakpoints: { active: BreakpointItem[]; inactive: BreakpointItem[] }
     /** Mock rules for Map Local feature - intercept requests and return fake responses */
     mocks: { active: MockRule[]; inactive: MockRule[] }
+    /**
+     * When false, active breakpoint rules are not applied on the page (rules stay in settings).
+     * Default true.
+     */
+    networkBreakpointsEnabled: boolean
+    /**
+     * When false, active mock rules are not applied on the page (rules stay in settings).
+     * Default true.
+     */
+    networkMocksEnabled: boolean
     /** Network table column visibility */
     networkTableColumns?: NetworkTableColumnsSettings
     /** Props table column visibility */

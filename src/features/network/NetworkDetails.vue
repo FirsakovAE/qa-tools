@@ -84,6 +84,7 @@ import {
   type BreakpointEditData,
   type BreakpointDraftShape,
 } from './composables'
+import { useNetworkUIState, resolveNetworkDetailsSection } from './composables/useNetworkUIState'
 
 type BodyFormatMode = 'raw' | 'form-data'
 
@@ -165,6 +166,8 @@ const {
   handleFileSelected, getFileDisplayLabel,
   getFileOptions, getSelectedFileOption, selectFileOption,
 } = formData
+
+const { lastNetworkDetailsSection, networkHeadersCollapse } = useNetworkUIState()
 
 // ============================================================================
 // Local UI state
@@ -411,6 +414,22 @@ watch(
   },
 )
 
+watch(activeSection, (s) => {
+  lastNetworkDetailsSection.value = s
+})
+
+watch(
+  () => sections.value.map((s) => s.id),
+  (ids) => {
+    if (!ids.includes(activeSection.value)) {
+      activeSection.value = resolveNetworkDetailsSection(
+        lastNetworkDetailsSection.value,
+        ids.includes('url'),
+      )
+    }
+  },
+)
+
 function handleApplyBreakpoint() {
   if (!props.breakpointMode) return
   emit('applyBreakpoint', buildApplyData())
@@ -426,7 +445,10 @@ watch(
       copiedResponseHeaderIndex.value = null
       copiedHeaderKey.value = null
       if (!props.breakpointMode) {
-        activeSection.value = 'response'
+        activeSection.value = resolveNetworkDetailsSection(
+          lastNetworkDetailsSection.value,
+          !!canEditRequest.value,
+        )
       }
     }
   },
@@ -748,9 +770,9 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             <!-- Pinned Request Headers -->
             <Collapsible
               v-if="showPinnedRequestSection"
+              v-model:open="networkHeadersCollapse.pinnedRequest"
               v-slot="{ open }"
               class="space-y-2"
-              default-open
             >
               <CollapsibleTrigger as-child>
                 <button
@@ -864,9 +886,9 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             <!-- Pinned Response Headers -->
             <Collapsible
               v-if="showPinnedResponseSection"
+              v-model:open="networkHeadersCollapse.pinnedResponse"
               v-slot="{ open }"
               class="space-y-2"
-              default-open
             >
               <CollapsibleTrigger as-child>
                 <button
@@ -978,7 +1000,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             </Collapsible>
 
             <!-- Request Headers -->
-            <Collapsible v-slot="{ open }" class="space-y-2" default-open>
+            <Collapsible v-model:open="networkHeadersCollapse.request" v-slot="{ open }" class="space-y-2">
               <CollapsibleTrigger as-child>
                 <button
                   type="button"
@@ -1154,7 +1176,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             </Collapsible>
 
             <!-- Response Headers -->
-            <Collapsible v-slot="{ open }" class="space-y-2" default-open>
+            <Collapsible v-model:open="networkHeadersCollapse.response" v-slot="{ open }" class="space-y-2">
               <CollapsibleTrigger as-child>
                 <button
                   type="button"

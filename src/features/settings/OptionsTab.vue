@@ -347,16 +347,19 @@ function sendNetworkCommand(type: string, data: Record<string, any> = {}): void 
 
 function syncBreakpoints() {
   if (!settings.value?.breakpoints) return
-  const breakpointsToSync = settings.value.breakpoints.active.map(bp => ({
-    id: bp.id,
-    scheme: bp.scheme,
-    host: bp.host,
-    port: bp.port,
-    path: bp.path,
-    query: bp.query,
-    trigger: bp.trigger,
-    enabled: true
-  }))
+  const rulesOn = settings.value.networkBreakpointsEnabled !== false
+  const breakpointsToSync = rulesOn
+    ? settings.value.breakpoints.active.map(bp => ({
+        id: bp.id,
+        scheme: bp.scheme,
+        host: bp.host,
+        port: bp.port,
+        path: bp.path,
+        query: bp.query,
+        trigger: bp.trigger,
+        enabled: true
+      }))
+    : []
   sendNetworkCommand('NETWORK_BREAKPOINTS_SYNC', {
     breakpoints: JSON.parse(JSON.stringify(breakpointsToSync))
   })
@@ -364,21 +367,24 @@ function syncBreakpoints() {
 
 function syncMocks() {
   if (!settings.value?.mocks) return
-  const mocksToSync = settings.value.mocks.active.map(m => ({
-    id: m.id,
-    enabled: true,
-    scheme: m.scheme,
-    host: m.host,
-    port: m.port,
-    path: m.path,
-    query: m.query,
-    method: m.method,
-    status: m.status || 200,
-    statusText: m.statusText || 'OK',
-    headers: m.headers || [],
-    body: m.body === undefined ? undefined : (m.body || ''),
-    delay: m.delay
-  }))
+  const rulesOn = settings.value.networkMocksEnabled !== false
+  const mocksToSync = rulesOn
+    ? settings.value.mocks.active.map(m => ({
+        id: m.id,
+        enabled: true,
+        scheme: m.scheme,
+        host: m.host,
+        port: m.port,
+        path: m.path,
+        query: m.query,
+        method: m.method,
+        status: m.status || 200,
+        statusText: m.statusText || 'OK',
+        headers: m.headers || [],
+        body: m.body === undefined ? undefined : (m.body || ''),
+        delay: m.delay
+      }))
+    : []
   sendNetworkCommand('NETWORK_MOCKS_SYNC', {
     mocks: JSON.parse(JSON.stringify(mocksToSync))
   })
@@ -387,6 +393,13 @@ function syncMocks() {
 // Auto-sync when breakpoints/mocks change
 watch(() => settings.value?.breakpoints, () => syncBreakpoints(), { deep: true })
 watch(() => settings.value?.mocks, () => syncMocks(), { deep: true })
+watch(
+  () => [settings.value?.networkBreakpointsEnabled, settings.value?.networkMocksEnabled] as const,
+  () => {
+    syncBreakpoints()
+    syncMocks()
+  },
+)
 
 // -------------------- ALERT DIALOG --------------------
 const alertDialog = ref({
@@ -502,6 +515,16 @@ onMounted(async () => {
     if (loadedSettings && !loadedSettings.mocks) {
       loadedSettings.mocks = { active: [], inactive: [] }
     }
+    if (loadedSettings && loadedSettings.networkBreakpointsEnabled === undefined) {
+      loadedSettings.networkBreakpointsEnabled = true
+    }
+    if (loadedSettings && loadedSettings.networkMocksEnabled === undefined) {
+      loadedSettings.networkMocksEnabled = true
+    }
+    nextTick(() => {
+      syncBreakpoints()
+      syncMocks()
+    })
   } catch (error) {
     console.error('[settings/OptionsTab] useInspectorSettings failed:', error)
   } finally {
