@@ -332,7 +332,8 @@
   container-name: toolbar;
 }
 
-@container toolbar (max-width: 850px) {
+/* ~950px: room for Network toolbar rule toggles (Mock/Breakpoint) + badges + pause/clear before inline Export/Inspect crowds the row */
+@container toolbar (max-width: 950px) {
   .export-inline,
   .inspect-inline {
     display: none !important;
