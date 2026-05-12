@@ -1,0 +1,497 @@
+/*
+ * vanilla-jsoneditor → shadcn design-token bridge.
+ *
+ * The library ships generic "dark"/"default" themes that are noticeably
+ * brighter than the surrounding UI (lighter panels, #4f4f4f borders,
+ * #656565 navigation bar). Here we re-bind its CSS variables to the
+ * project's design tokens so the widget blends with the rest of the
+ * shadcn UI kit: same backgrounds, borders, hover/selection accents,
+ * button styles and radii.
+ *
+ * Selector specificity:
+ *   - `.ui-json-editor__host.jse-theme-dark`  → dark theme container
+ *   - `.ui-json-editor__host.jse-theme-default` → light theme container
+ * Both class names are added by `JsonEditor.vue` at runtime.
+ */
+
+/* ───────────────────────────── DARK ───────────────────────────── */
+.ui-json-editor__host.jse-theme-dark {
+  /* typography (default mono is 14px; +2px for better readability) */
+  --jse-font-size-mono: 16px;
+  --jse-font-size: 16px;
+
+  /* surfaces */
+  --jse-background-color: hsl(var(--background));
+  --jse-text-color: hsl(var(--foreground));
+  --jse-text-color-inverse: hsl(var(--background));
+
+  /* borders & panels */
+  --jse-main-border: 1px solid hsl(var(--border));
+  --jse-panel-background: hsl(var(--muted));
+  --jse-panel-background-border: 1px solid hsl(var(--border));
+  --jse-panel-color: hsl(var(--foreground));
+  --jse-panel-color-readonly: hsl(var(--muted-foreground));
+  --jse-panel-border: 1px solid hsl(var(--border));
+  --jse-panel-button-color-highlight: hsl(var(--foreground));
+  --jse-panel-button-background-highlight: hsl(var(--accent));
+
+  /* navigation breadcrumb (tree mode) */
+  --jse-navigation-bar-background: hsl(var(--muted));
+  --jse-navigation-bar-background-highlight: hsl(var(--accent));
+  --jse-navigation-bar-dropdown-color: hsl(var(--foreground));
+
+  /* context menu & dropdowns */
+  --jse-context-menu-background: hsl(var(--popover));
+  --jse-context-menu-background-highlight: hsl(var(--accent));
+  --jse-context-menu-separator-color: hsl(var(--border));
+  --jse-context-menu-color: hsl(var(--popover-foreground));
+  --jse-context-menu-pointer-background: hsl(var(--muted));
+  --jse-context-menu-pointer-background-highlight: hsl(var(--accent));
+  --jse-context-menu-pointer-color: hsl(var(--foreground));
+
+  /* selection / hover / active line */
+  --jse-selection-background-color: hsl(var(--accent));
+  --jse-selection-background-inactive-color: hsl(var(--muted));
+  --jse-hover-background-color: hsl(var(--accent) / 0.55);
+  --jse-active-line-background-color: hsl(var(--accent) / 0.45);
+  --jse-search-match-background-color: hsl(var(--muted));
+
+  /* collapsed array sections */
+  --jse-collapsed-items-background-color: hsl(var(--muted));
+  --jse-collapsed-items-selected-background-color: hsl(var(--accent));
+  --jse-collapsed-items-link-color: hsl(var(--muted-foreground));
+  --jse-collapsed-items-link-color-highlight: hsl(var(--foreground));
+
+  /* tooltips */
+  --jse-tooltip-background: hsl(var(--popover));
+  --jse-tooltip-color: hsl(var(--popover-foreground));
+  --jse-tooltip-border: 1px solid hsl(var(--border));
+  --jse-tooltip-action-button-background: hsl(var(--accent));
+  --jse-tooltip-action-button-color: hsl(var(--foreground));
+
+  /* modals */
+  --jse-modal-background: hsl(var(--popover));
+  --jse-modal-overlay-background: hsl(var(--background) / 0.7);
+  --jse-modal-code-background: hsl(var(--muted));
+
+  /* form controls inside modals */
+  --jse-input-background: hsl(var(--input));
+  --jse-input-border: 1px solid hsl(var(--border));
+  --jse-button-background: hsl(var(--accent));
+  --jse-button-background-highlight: hsl(var(--accent) / 0.85);
+  --jse-button-color: hsl(var(--foreground));
+  --jse-button-secondary-background: hsl(var(--muted));
+  --jse-button-secondary-background-highlight: hsl(var(--accent));
+  --jse-button-secondary-background-disabled: hsl(var(--muted) / 0.5);
+  --jse-button-secondary-color: hsl(var(--foreground));
+
+  /* inline tags */
+  --jse-tag-background: hsl(var(--muted));
+  --jse-tag-color: hsl(var(--muted-foreground));
+
+  /* tables */
+  --jse-table-header-background: hsl(var(--muted));
+  --jse-table-header-background-highlight: hsl(var(--accent));
+  --jse-table-row-odd-background: hsl(var(--accent) / 0.25);
+
+  /* svelte-select internals */
+  --jse-svelte-select-background: hsl(var(--input));
+  --jse-svelte-select-border: 1px solid hsl(var(--border));
+  --list-background: hsl(var(--popover));
+  --item-hover-bg: hsl(var(--accent));
+  --multi-item-bg: hsl(var(--muted));
+  --input-color: hsl(var(--foreground));
+  --multi-clear-bg: hsl(var(--muted-foreground));
+  --multi-item-clear-icon-color: hsl(var(--foreground));
+  --multi-item-outline: 1px solid hsl(var(--border));
+  --list-shadow: 0 2px 8px 0 hsl(var(--background) / 0.6);
+
+  /* layout polish */
+  --jse-input-radius: 0.375rem; /* rounded-md */
+  --jse-controls-box-shadow: none;
+}
+
+/* ──────────────────────────── LIGHT ──────────────────────────── */
+.ui-json-editor__host.jse-theme-default {
+  /* typography (default mono is 14px; +2px for better readability) */
+  --jse-font-size-mono: 16px;
+  --jse-font-size: 16px;
+
+  --jse-background-color: hsl(var(--background));
+  --jse-text-color: hsl(var(--foreground));
+  --jse-text-color-inverse: hsl(var(--background));
+
+  /* JSON content palette (original light scheme — package ships only dark) */
+  --jse-key-color: #1a1a1a;
+  --jse-value-color: #1a1a1a;
+  --jse-value-color-number: #ee422e;
+  --jse-value-color-boolean: #ff8c00;
+  --jse-value-color-null: #004ed0;
+  --jse-value-color-string: #008000;
+  --jse-value-color-url: #008000;
+  --jse-delimiter-color: rgba(0, 0, 0, 0.38);
+
+  --jse-main-border: 1px solid hsl(var(--border));
+  --jse-panel-background: hsl(var(--muted));
+  --jse-panel-background-border: 1px solid hsl(var(--border));
+  --jse-panel-color: hsl(var(--foreground));
+  --jse-panel-color-readonly: hsl(var(--muted-foreground));
+  --jse-panel-border: 1px solid hsl(var(--border));
+  --jse-panel-button-color-highlight: hsl(var(--foreground));
+  --jse-panel-button-background-highlight: hsl(var(--accent));
+
+  --jse-navigation-bar-background: hsl(var(--muted));
+  --jse-navigation-bar-background-highlight: hsl(var(--accent));
+  --jse-navigation-bar-dropdown-color: hsl(var(--foreground));
+
+  --jse-context-menu-background: hsl(var(--popover));
+  --jse-context-menu-background-highlight: hsl(var(--accent));
+  --jse-context-menu-separator-color: hsl(var(--border));
+  --jse-context-menu-color: hsl(var(--popover-foreground));
+  --jse-context-menu-pointer-background: hsl(var(--muted));
+  --jse-context-menu-pointer-background-highlight: hsl(var(--accent));
+  --jse-context-menu-pointer-color: hsl(var(--foreground));
+
+  --jse-selection-background-color: hsl(var(--accent));
+  --jse-selection-background-inactive-color: hsl(var(--muted));
+  --jse-hover-background-color: hsl(var(--accent) / 0.6);
+  --jse-active-line-background-color: hsl(var(--accent) / 0.4);
+  --jse-search-match-background-color: hsl(var(--muted));
+
+  --jse-collapsed-items-background-color: hsl(var(--muted));
+  --jse-collapsed-items-selected-background-color: hsl(var(--accent));
+  --jse-collapsed-items-link-color: hsl(var(--muted-foreground));
+  --jse-collapsed-items-link-color-highlight: hsl(var(--foreground));
+
+  --jse-tooltip-background: hsl(var(--popover));
+  --jse-tooltip-color: hsl(var(--popover-foreground));
+  --jse-tooltip-border: 1px solid hsl(var(--border));
+  --jse-tooltip-action-button-background: hsl(var(--accent));
+  --jse-tooltip-action-button-color: hsl(var(--foreground));
+
+  --jse-modal-background: hsl(var(--popover));
+  --jse-modal-overlay-background: hsl(var(--foreground) / 0.2);
+  --jse-modal-code-background: hsl(var(--muted));
+
+  --jse-input-background: hsl(var(--input));
+  --jse-input-border: 1px solid hsl(var(--border));
+  --jse-button-background: hsl(var(--accent));
+  --jse-button-background-highlight: hsl(var(--accent) / 0.85);
+  --jse-button-color: hsl(var(--foreground));
+  --jse-button-secondary-background: hsl(var(--muted));
+  --jse-button-secondary-background-highlight: hsl(var(--accent));
+  --jse-button-secondary-background-disabled: hsl(var(--muted) / 0.5);
+  --jse-button-secondary-color: hsl(var(--foreground));
+
+  --jse-tag-background: hsl(var(--muted));
+  --jse-tag-color: hsl(var(--muted-foreground));
+
+  --jse-table-header-background: hsl(var(--muted));
+  --jse-table-header-background-highlight: hsl(var(--accent));
+  --jse-table-row-odd-background: hsl(var(--accent) / 0.25);
+
+  --jse-svelte-select-background: hsl(var(--input));
+  --jse-svelte-select-border: 1px solid hsl(var(--border));
+  --list-background: hsl(var(--popover));
+  --item-hover-bg: hsl(var(--accent));
+  --multi-item-bg: hsl(var(--muted));
+  --input-color: hsl(var(--foreground));
+  --multi-clear-bg: hsl(var(--muted-foreground));
+  --multi-item-clear-icon-color: hsl(var(--foreground));
+  --multi-item-outline: 1px solid hsl(var(--border));
+  --list-shadow: 0 2px 8px 0 hsl(var(--foreground) / 0.1);
+
+  --jse-input-radius: 0.375rem;
+  --jse-controls-box-shadow: none;
+}
+
+/*
+ * ─────────────────── Internal control polish ───────────────────
+ *
+ * The editor's chrome elements (status bar, navigation bar, embedded
+ * buttons, validation messages) are styled below to match the rest of
+ * the shadcn UI kit. We avoid restyling JSON content itself (keys,
+ * values, gutter, etc.) — only the surrounding controls.
+ */
+
+/*
+ * Tree-mode search halo: the library uses `border: 50px solid` on
+ * `.jse-search-box-background` to blend with the modal colour — it creates an
+ * enormous gap above the JSON body. Keep a thin cushion instead.
+ */
+.ui-json-editor__host .jse-tree-mode .jse-search-box-background {
+  border-width: 6px !important;
+  border-style: solid !important;
+  border-color: hsl(var(--muted)) !important;
+}
+
+/* Outer border is provided by the wrapper; suppress the library's own. */
+.ui-json-editor__host .jse-main {
+  border: none !important;
+}
+
+/* Navigation breadcrumb (tree mode): mute the band and match the toolbar feel. */
+.ui-json-editor__host .jse-navigation-bar {
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-size: 12px;
+}
+
+.ui-json-editor__host .jse-navigation-bar .jse-navigation-bar-path-item:hover,
+.ui-json-editor__host .jse-navigation-bar .jse-navigation-bar-edit:hover {
+  background: hsl(var(--accent)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Status bar (bottom): blends with toolbar, no bright stripe. */
+.ui-json-editor__host .jse-status-bar {
+  background: hsl(var(--muted)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  border-top: 1px solid hsl(var(--border)) !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  font-size: 11px;
+}
+
+/* Gutter (line numbers in text mode): same surface as code area. */
+.ui-json-editor__host .cm-gutters {
+  background: hsl(var(--background)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  border-right: 1px solid hsl(var(--border)) !important;
+}
+
+/* All editor-chrome buttons: shadcn-like ghost button look. */
+.ui-json-editor__host .jse-button:not(.jse-primary):not(.jse-secondary),
+.ui-json-editor__host .jse-context-menu-button,
+.ui-json-editor__host .jse-navigation-bar-edit {
+  background: transparent !important;
+  color: hsl(var(--foreground)) !important;
+  border-radius: 0.375rem !important;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ui-json-editor__host .jse-button:not(.jse-primary):not(.jse-secondary):hover,
+.ui-json-editor__host .jse-context-menu-button:hover,
+.ui-json-editor__host .jse-navigation-bar-edit:hover {
+  background: hsl(var(--accent)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Modal primary / secondary buttons mirror the UIKit `Button` variants. */
+.ui-json-editor__host .jse-button.jse-primary {
+  background: hsl(var(--foreground)) !important;
+  color: hsl(var(--background)) !important;
+  border-radius: 0.375rem !important;
+}
+
+.ui-json-editor__host .jse-button.jse-primary:hover {
+  background: hsl(var(--foreground) / 0.9) !important;
+}
+
+.ui-json-editor__host .jse-button.jse-secondary {
+  background: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-radius: 0.375rem !important;
+}
+
+.ui-json-editor__host .jse-button.jse-secondary:hover {
+  background: hsl(var(--accent)) !important;
+}
+
+/* Validation / parse error messages — calmer surface, no bright pink card. */
+.ui-json-editor__host .jse-message,
+.ui-json-editor__host .jse-validation-errors-overview,
+.ui-json-editor__host .jse-parse-error {
+  background: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  box-shadow: none !important;
+}
+
+/* Context menu popups — shadcn popover look. */
+.ui-json-editor__host .jse-context-menu,
+.jse-context-menu.jse-svelte {
+  background: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 8px 24px hsl(var(--background) / 0.4) !important;
+}
+
+/* Tooltips — match shadcn tooltip styling. */
+.ui-json-editor__host .jse-tooltip {
+  background: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  box-shadow: 0 4px 12px hsl(var(--background) / 0.4) !important;
+}
+
+/* Inputs inside modals — pick up shadcn input look. */
+.ui-json-editor__host .jse-input,
+.ui-json-editor__host input[type='text'],
+.ui-json-editor__host input[type='search'],
+.ui-json-editor__host input[type='number'] {
+  border: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--input)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-radius: 0.375rem !important;
+}
+
+.ui-json-editor__host .jse-input:focus,
+.ui-json-editor__host input:focus-visible {
+  outline: 2px solid hsl(var(--ring)) !important;
+  outline-offset: 1px;
+  border-color: hsl(var(--ring)) !important;
+}
+
+/* CodeMirror cursor & active line in text mode — keep subtle. */
+.ui-json-editor__host .cm-content,
+.ui-json-editor__host .cm-line {
+  caret-color: hsl(var(--foreground));
+}
+
+.ui-json-editor__host .cm-activeLineGutter,
+.ui-json-editor__host .cm-activeLine {
+  background: hsl(var(--accent) / 0.35) !important;
+}
+
+/*
+ * ─────────────── CodeMirror JSON syntax highlighting (text mode) ───────────────
+ *
+ * vanilla-jsoneditor uses CodeMirror's `classHighlighter`, which only
+ * tags tokens with `.tok-*` CSS classes but ships no colors — so by
+ * default JSON in text mode renders in a single foreground colour and
+ * looks washed out. Mirror the palette the library already uses in
+ * tree mode (via `--jse-value-color-*`) so both modes look identical.
+ */
+
+/* Dark — VS Code-like palette matching jse-theme-dark.css tree colors. */
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-propertyName {
+  color: #9cdcfe;
+}
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-string,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-string2,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-url {
+  color: #ce9178;
+}
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-number {
+  color: #b5cea8;
+}
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-bool,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-atom,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-keyword {
+  color: #569cd6;
+}
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-null {
+  color: #569cd6;
+}
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-punctuation,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-operator,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-separator,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-brace,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-bracket,
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-paren {
+  color: #d4d4d4;
+}
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-comment {
+  color: #6a9955;
+  font-style: italic;
+}
+.ui-json-editor__host.jse-theme-dark .cm-content .tok-invalid {
+  color: #f48771;
+}
+
+/* Light — matches the explicit `--jse-value-color-*` set in this file. */
+.ui-json-editor__host.jse-theme-default .cm-content .tok-propertyName {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+.ui-json-editor__host.jse-theme-default .cm-content .tok-string,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-string2,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-url {
+  color: #008000;
+}
+.ui-json-editor__host.jse-theme-default .cm-content .tok-number {
+  color: #ee422e;
+}
+.ui-json-editor__host.jse-theme-default .cm-content .tok-bool,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-atom,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-keyword {
+  color: #ff8c00;
+}
+.ui-json-editor__host.jse-theme-default .cm-content .tok-null {
+  color: #004ed0;
+}
+.ui-json-editor__host.jse-theme-default .cm-content .tok-punctuation,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-operator,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-separator,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-brace,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-bracket,
+.ui-json-editor__host.jse-theme-default .cm-content .tok-paren {
+  color: rgba(0, 0, 0, 0.65);
+}
+.ui-json-editor__host.jse-theme-default .cm-content .tok-comment {
+  color: #5d7c3b;
+  font-style: italic;
+}
+.ui-json-editor__host.jse-theme-default .cm-content .tok-invalid {
+  color: #c00;
+}
+
+/* Remove the welcome banner accent line that bleeds light into the panel. */
+.ui-json-editor__host .jse-welcome {
+  border: none !important;
+  background: hsl(var(--background)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/*
+ * ─────────────────── Scrollbars match shadcn ScrollBar ───────────────────
+ *
+ * The editor manages its own viewport scroll (CodeMirror in text mode,
+ * virtual list in tree mode), so we can't reuse `<ScrollArea>` directly.
+ * Instead we restyle the native scrollbars to look identical to
+ * `src/components/ui/scroll-area/ScrollBar.vue`:
+ *   - 10px thin, no track, rounded `bg-border` thumb,
+ *   - subtle hover state via `--muted-foreground`.
+ */
+
+/* Firefox */
+.ui-json-editor__host,
+.ui-json-editor__host * {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+/* WebKit / Blink */
+.ui-json-editor__host ::-webkit-scrollbar,
+.ui-json-editor__host::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+
+.ui-json-editor__host ::-webkit-scrollbar-track,
+.ui-json-editor__host::-webkit-scrollbar-track,
+.ui-json-editor__host ::-webkit-scrollbar-corner,
+.ui-json-editor__host::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ui-json-editor__host ::-webkit-scrollbar-thumb,
+.ui-json-editor__host::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  background-clip: content-box;
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  transition: background-color 120ms ease;
+}
+
+.ui-json-editor__host ::-webkit-scrollbar-thumb:hover,
+.ui-json-editor__host::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.6);
+  background-clip: content-box;
+}

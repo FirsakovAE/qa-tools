@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import JsonTextEditor from './JsonTextEditor.vue'
-import JsonTreeEditor from './JsonTreeEditor.vue'
 import JsonEditorReadOnlyLarge from './JsonEditorReadOnlyLarge.vue'
+import { JsonEditor as UiJsonEditor } from '@/components/ui/JsonEditor'
 
-/** For read-only payloads larger than this, use lightweight view (no Prism, no tree) */
-const LARGE_READ_THRESHOLD = 500 * 1024
+/**
+ * Only fall back to the lightweight `<pre>` viewer for non-JSON content
+ * (XML/HTML/plain text) above this size — Prism-based highlighting is
+ * very slow on huge inputs. JSON of any size goes through
+ * vanilla-jsoneditor, which virtualises tree-mode rendering (only the
+ * first 100 items of each array are materialised) and supports docs
+ * up to ~512 MB per the library docs.
+ */
+const LARGE_NON_JSON_THRESHOLD = 500 * 1024
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -19,41 +26,57 @@ const props = withDefaults(defineProps<{
   language: 'json'
 })
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'edit'): void
   (e: 'cancel'): void
   (e: 'save'): void
 }>()
 
-const mode = computed(() => props.mode ?? 'text')
-const useTreeMode = computed(() => mode.value === 'tree' && props.language === 'json')
+const isJsonLanguage = computed(() => props.language === 'json')
+const valueLength = computed(() => props.modelValue?.length ?? 0)
 
-/** Use lightweight read-only view for large payloads to avoid DOM overload */
+const effectiveMode = computed<'text' | 'tree'>(() => props.mode ?? 'text')
+
+/** vanilla-jsoneditor handles only JSON; fall back to Prism-based editor for other content. */
+const useVanillaEditor = computed(() => isJsonLanguage.value)
+
+/** Lightweight read-only view only for *non-JSON* huge content. */
 const useLargeReadOnly = computed(
-  () => !props.editable && props.modelValue.length > LARGE_READ_THRESHOLD
+  () =>
+    !useVanillaEditor.value
+    && !props.editable
+    && valueLength.value > LARGE_NON_JSON_THRESHOLD,
 )
 </script>
 
 <template>
-  <div 
+  <div
     class="relative json-viewer-wrapper rounded"
     :class="fullHeight ? 'h-full flex flex-col' : 'min-h-[350px]'"
   >
+    <UiJsonEditor
+      v-if="useVanillaEditor"
+      :model-value="modelValue"
+      :editable="editable"
+      :show-copy="showCopy"
+      :mode="effectiveMode"
+      :full-height="fullHeight"
+      @update:model-value="$emit('update:modelValue', $event)"
+    />
     <JsonEditorReadOnlyLarge
-      v-if="useLargeReadOnly"
+      v-else-if="useLargeReadOnly"
       :model-value="modelValue"
       :full-height="fullHeight"
     />
-    <component
+    <JsonTextEditor
       v-else
-      :is="useTreeMode ? JsonTreeEditor : JsonTextEditor"
       :model-value="modelValue"
       :editable="editable"
       :show-copy="showCopy"
       :full-height="fullHeight"
       :language="language"
-      @update:modelValue="$emit('update:modelValue', $event)"
+      @update:model-value="$emit('update:modelValue', $event)"
     />
   </div>
 </template>

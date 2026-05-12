@@ -1,16 +1,29 @@
 /**
  * Connects DevTools panel Ctrl+F search to the panel content.
- * Uses only system APIs: panel.onSearch + window.find().
- * Highlight styling is provided by the browser natively.
+ *
+ * Chrome captures `Ctrl+F` inside DevTools panels at the browser level
+ * and exposes the typed query via `panel.onSearch` — the page's JS
+ * never sees the actual keydown. We relay those queries here.
+ *
+ * Routing:
+ *   1. If the user is currently working inside a `ui/JsonEditor`
+ *      instance (focused or visible), forward the query to that
+ *      editor's own built-in search panel so they see the JSON-aware
+ *      highlighting / find-next / find-previous flow.
+ *   2. Otherwise fall back to `window.find()` for everything else
+ *      (Network table rows, Pinia state values, plain text, …).
  *
  * Chrome API actions: performSearch, nextSearchResult, previousSearchResult, cancelSearch
  */
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
+import { resolveJsonEditorForBuiltInSearch } from './jsonEditorSearchRegistry'
 
 const SEARCH_PORT_NAME = 'vue-inspector-devtools-search'
 
 function setupSearchListener(port: chrome.runtime.Port) {
   let lastQuery = ''
+  /** True while the active JSON editor is handling the current search session. */
+  let routedToJsonEditor = false
 
   function clearSearchHighlight() {
     lastQuery = ''
@@ -22,6 +35,54 @@ function setupSearchListener(port: chrome.runtime.Port) {
 
     const action = msg.action ?? ''
     const query = (msg.query ?? '').trim()
+
+    // ── Route to JSON editor when one is currently active / visibly in tree mode. ──
+    const jsonEditor = resolveJsonEditorForBuiltInSearch()
+    if (jsonEditor) {
+      if (action === 'cancelSearch') {
+        if (routedToJsonEditor) jsonEditor.closeSearch()
+        routedToJsonEditor = false
+        clearSearchHighlight()
+        return
+      }
+      if (action === 'performSearch') {
+        // Chrome fires performSearch with an empty query when the user opens Find (Ctrl+F).
+        // Still open vanilla-jsoneditor's panel — previously we returned early and JSON search never appeared.
+        if (!query) {
+          clearSearchHighlight()
+          routedToJsonEditor = true
+          jsonEditor.openSearch()
+          return
+        }
+        lastQuery = query
+        routedToJsonEditor = true
+        jsonEditor.setQuery(query)
+        return
+      }
+      if (action === 'nextSearchResult') {
+        if (!routedToJsonEditor && lastQuery) {
+          routedToJsonEditor = true
+          jsonEditor.setQuery(lastQuery)
+        }
+        jsonEditor.findNext()
+        return
+      }
+      if (action === 'previousSearchResult') {
+        if (!routedToJsonEditor && lastQuery) {
+          routedToJsonEditor = true
+          jsonEditor.setQuery(lastQuery)
+        }
+        jsonEditor.findPrevious()
+        return
+      }
+    }
+
+    // ── Default: native window.find() for the rest of the panel. ──
+    if (routedToJsonEditor) {
+      // Re-entering the generic flow after the user left the editor —
+      // make sure we don't reuse stale routing state.
+      routedToJsonEditor = false
+    }
 
     if (action === 'cancelSearch') {
       clearSearchHighlight()
