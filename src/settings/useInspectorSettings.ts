@@ -184,9 +184,10 @@ async function loadFromStorage(): Promise<void> {
 }
 
 function migrateJsonMode(saved: any): void {
-    // Пользователей с включённым tree mode определяем как text
-    if (saved.json && typeof saved.json === 'object' && saved.json.mode === 'tree') {
-        saved.json.mode = 'text'
+    // Нормализуем устаревшие значения (например, 'table'), оставляем text/tree
+    if (saved.json && typeof saved.json === 'object') {
+        const m = saved.json.mode
+        if (m !== 'text' && m !== 'tree') saved.json.mode = 'text'
     }
 }
 

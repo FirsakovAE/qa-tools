@@ -1,0 +1,637 @@
+<script setup lang="ts">
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+  watch,
+} from 'vue'
+import { createJSONEditor, expandAll, expandNone, Mode } from 'vanilla-jsoneditor'
+import type { Content, JSONEditorPropsOptional } from 'vanilla-jsoneditor'
+import {
+  AlignLeft,
+  Check,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Copy,
+  Minimize2,
+  Search,
+} from 'lucide-vue-next'
+
+import { Button } from '@/components/ui/button'
+import { inspectorState } from '@/settings/useInspectorSettings'
+import { registerJsonEditor } from '@/composables/jsonEditorSearchRegistry'
+import type { JsonEditorSearchHandle } from '@/composables/jsonEditorSearchRegistry'
+
+import 'vanilla-jsoneditor/themes/jse-theme-dark.css'
+import './jse-theme.css'
+
+type JsonMode = 'text' | 'tree'
+
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    /** Toggle between code text editor and structured tree editor. */
+    mode?: JsonMode
+    /** Allow editing; otherwise editor is read-only. */
+    editable?: boolean
+    /** Show Copy action in the toolbar (read-only mode only). */
+    showCopy?: boolean
+    /** Stretch to fill parent flex container. */
+    fullHeight?: boolean
+    /** Render compact status bar at the bottom. */
+    statusBar?: boolean
+    /** Render breadcrumb navigation (tree mode only). */
+    navigationBar?: boolean
+    /** Render full main menu bar. */
+    mainMenuBar?: boolean
+    /** Show the slim action toolbar above the editor. */
+    toolbar?: boolean
+  }>(),
+  {
+    mode: 'text',
+    editable: false,
+    showCopy: false,
+    fullHeight: false,
+    statusBar: true,
+    navigationBar: undefined,
+    mainMenuBar: false,
+    toolbar: true,
+  },
+)
+
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: string): void
+}>()
+
+/** Editor handle returned by `createJSONEditor`. */
+type JSONEditorHandle = {
+  get: () => Content
+  set: (newContent: Content) => void
+  update: (updatedContent: Content) => void
+  updateProps: (partial: JSONEditorPropsOptional) => void
+  destroy: () => Promise<void> | void
+  expand: (path: Array<string | number>, callback?: (path: Array<string | number>) => boolean) => void
+  collapse: (path: Array<string | number>, recursive?: boolean) => void
+  focus?: () => void
+}
+
+const wrapperRef = ref<HTMLDivElement | null>(null)
+const containerRef = ref<HTMLDivElement | null>(null)
+const editorRef = shallowRef<JSONEditorHandle | null>(null)
+const copied = ref(false)
+
+const themeClass = computed(() =>
+  (inspectorState.theme ?? 'dark') === 'dark'
+    ? 'jse-theme-dark'
+    : 'jse-theme-default',
+)
+
+const navigationBarVisible = computed(() =>
+  props.navigationBar ?? props.mode === 'tree',
+)
+
+const isTreeMode = computed(() => props.mode === 'tree')
+const isTextMode = computed(() => props.mode === 'text')
+
+function stringToContent(s: string): Content {
+  // Always hand the editor raw text — it uses a memoised JSON.parse
+  // internally and only materialises the parsed value when the active
+  // mode actually needs it (e.g. tree mode). This avoids a multi-MB
+  // synchronous parse on every prop change and keeps mode switches
+  // and large-document loads snappy.
+  return { text: s ?? '' }
+}
+
+function contentToString(c: Content): string {
+  if ('json' in c && c.json !== undefined) {
+    try {
+      return JSON.stringify(c.json, null, 2)
+    } catch {
+      return ''
+    }
+  }
+  if ('text' in c && typeof c.text === 'string') return c.text
+  return ''
+}
+
+let syncingFromParent = false
+/**
+ * Last value we emitted upstream. Used to drop the inevitable echo
+ * `update:modelValue` -> parent re-renders -> `props.modelValue` watcher
+ * loop, which would otherwise call `editor.update()` on every keystroke
+ * or every parent re-render and reset tree-node expansion state.
+ */
+let lastEmittedValue: string | null = null
+
+function emitValue(text: string) {
+  lastEmittedValue = text
+  emit('update:modelValue', text)
+}
+
+function applyContent(next: Content) {
+  const editor = editorRef.value
+  if (!editor) return
+  syncingFromParent = true
+  editor.update(next)
+  emitValue(contentToString(next))
+  void nextTick(() => {
+    syncingFromParent = false
+  })
+}
+
+// ─────────────────────────── Toolbar actions ───────────────────────────
+
+/**
+ * Return focus to the editor after any toolbar button click so that the
+ * editor's own keyboard shortcuts (Ctrl+F, F3, Esc, …) keep working.
+ * Buttons receive focus on click by default, which otherwise breaks the
+ * widget's built-in keymap.
+ */
+function refocusEditor() {
+  void nextTick(() => {
+    editorRef.value?.focus?.()
+  })
+}
+
+function expandAllNodes() {
+  editorRef.value?.expand([], expandAll)
+  refocusEditor()
+}
+
+function collapseAllNodes() {
+  const editor = editorRef.value
+  if (!editor) return
+  editor.expand([], expandNone)
+  editor.collapse([], true)
+  refocusEditor()
+}
+
+function formatJson() {
+  const editor = editorRef.value
+  if (!editor) return
+  try {
+    const cur = editor.get()
+    const text = 'json' in cur && cur.json !== undefined
+      ? JSON.stringify(cur.json, null, 2)
+      : 'text' in cur && typeof cur.text === 'string'
+        ? JSON.stringify(JSON.parse(cur.text), null, 2)
+        : ''
+    if (!text) return
+    applyContent({ text })
+  } catch {
+    /* invalid JSON — ignore */
+  }
+  refocusEditor()
+}
+
+function compactJson() {
+  const editor = editorRef.value
+  if (!editor) return
+  try {
+    const cur = editor.get()
+    const text = 'json' in cur && cur.json !== undefined
+      ? JSON.stringify(cur.json)
+      : 'text' in cur && typeof cur.text === 'string'
+        ? JSON.stringify(JSON.parse(cur.text))
+        : ''
+    if (!text) return
+    applyContent({ text })
+  } catch {
+    /* invalid JSON — ignore */
+  }
+  refocusEditor()
+}
+
+function copyToClipboard() {
+  const editor = editorRef.value
+  if (!editor) return
+  const text = contentToString(editor.get())
+  void navigator.clipboard.writeText(text).then(() => {
+    copied.value = true
+    setTimeout(() => {
+      copied.value = false
+    }, 1500)
+  })
+  refocusEditor()
+}
+
+/** Opens vanilla-jsoneditor search — same path as Ctrl+F — then focuses its input. */
+function openSearchFromToolbar() {
+  openEditorSearch()
+  void nextTick(() => {
+    getSearchInput()?.focus({ preventScroll: true })
+  })
+}
+
+const showToolbar = computed(() => {
+  if (!props.toolbar) return false
+  // Tree mode → expand/collapse + optional Copy (always at least 2 actions).
+  if (isTreeMode.value) return true
+  // Text mode → Format/Compact only when editable; Copy when requested.
+  if (props.editable) return true
+  return props.showCopy
+})
+
+// ─────────────────────────── Lifecycle ───────────────────────────
+
+onMounted(() => {
+  const target = containerRef.value
+  if (!target) return
+
+  target.classList.add(themeClass.value)
+
+  const editorProps: JSONEditorPropsOptional = {
+    content: stringToContent(props.modelValue),
+    mode: props.mode === 'tree' ? Mode.tree : Mode.text,
+    readOnly: !props.editable,
+    mainMenuBar: props.mainMenuBar,
+    navigationBar: navigationBarVisible.value,
+    statusBar: props.statusBar,
+    // Suppress the library's "The document is compact, do you want
+    // to format it?" prompt — formatting is available manually via
+    // the toolbar in text mode and is not desired automatically.
+    askToFormat: false,
+    // Performance: in tree mode huge strings are truncated by default
+    // at 1000 chars. Bump the threshold so 99% of normal payloads aren't
+    // clipped but enormous blobs (e.g. base64 images) stay collapsed.
+    truncateTextSize: 10_000,
+    // Allow opening documents up to 32 MB in text mode without the
+    // built-in "may crash your browser" warning. Above this CodeMirror
+    // starts to feel sluggish; the library will then show its own
+    // warning.
+    maxDocumentSizeTextMode: 32 * 1024 * 1024,
+    onError(err: Error) {
+      console.error('[ui/JsonEditor]', err)
+    },
+    onChange(updated) {
+      if (syncingFromParent) return
+      if (!props.editable) return
+      emitValue(contentToString(updated))
+    },
+  }
+
+  editorRef.value = createJSONEditor({
+    target,
+    props: editorProps,
+  }) as unknown as JSONEditorHandle
+
+  // Register this editor so the shared registry can route Ctrl+F /
+  // Esc keystrokes (and DevTools-panel search queries) to the
+  // built-in vanilla-jsoneditor search panel. The registry installs
+  // shared window-level keydown listeners for the whole app and
+  // picks the active editor on every event — see
+  // `jsonEditorSearchRegistry.ts` for the routing rules.
+  const wrapper = wrapperRef.value
+  if (wrapper) {
+    const handle: JsonEditorSearchHandle = {
+      wrapperEl: wrapper,
+      openSearch: openEditorSearch,
+      setQuery: setSearchQuery,
+      closeSearch,
+      findNext,
+      findPrevious,
+      isSearchOpen,
+    }
+    unregisterSearchHandle = registerJsonEditor(handle)
+  }
+})
+
+onBeforeUnmount(async () => {
+  unregisterSearchHandle?.()
+  unregisterSearchHandle = null
+  const inst = editorRef.value
+  editorRef.value = null
+  if (inst) await inst.destroy()
+})
+
+watch(themeClass, (cls, prev) => {
+  const root = containerRef.value
+  if (!root) return
+  if (prev) root.classList.remove(prev)
+  root.classList.add(cls)
+})
+
+watch(
+  () => props.mode,
+  (m) => {
+    editorRef.value?.updateProps({
+      mode: m === 'tree' ? Mode.tree : Mode.text,
+      navigationBar: props.navigationBar ?? m === 'tree',
+    })
+  },
+)
+
+watch(
+  () => props.editable,
+  (ed) => {
+    editorRef.value?.updateProps({ readOnly: !ed })
+  },
+)
+
+watch(
+  () => props.modelValue,
+  (next) => {
+    const editor = editorRef.value
+    if (!editor) return
+    // Cheap echo guard — skip the watcher when the parent is simply
+    // mirroring back the value we just emitted. This avoids calling
+    // `editor.update()` (which rebuilds the tree and loses node expansion
+    // state) on every keystroke or parent re-render.
+    if (next === lastEmittedValue) return
+
+    const current = contentToString(editor.get())
+    if (current === next) {
+      lastEmittedValue = next
+      return
+    }
+    syncingFromParent = true
+    editor.update(stringToContent(next))
+    lastEmittedValue = next
+    void nextTick(() => {
+      syncingFromParent = false
+    })
+  },
+)
+
+// ─────────── Editor remote-control: search panel open/close/find ───────────
+//
+// All keyboard interception (Ctrl+F, Esc) and DevTools-panel search
+// routing are handled centrally by `jsonEditorSearchRegistry`. The
+// functions below are the implementation each registered editor
+// exposes through its `JsonEditorSearchHandle`.
+
+function isSearchOpen(): boolean {
+  const root = containerRef.value
+  if (!root) return false
+  return !!root.querySelector('.jse-search-box')
+}
+
+function primaryShortcutModifiers(): Pick<
+  KeyboardEventInit,
+  'ctrlKey' | 'metaKey'
+> {
+  if (typeof navigator === 'undefined')
+    return { ctrlKey: true, metaKey: false }
+  const ua = navigator.userAgent ?? ''
+  const ud = navigator.userAgentData
+  const platform =
+    (typeof ud?.platform === 'string' ? ud.platform : '')
+    || navigator.platform
+    || ''
+  const apple =
+    /Mac|iPhone|iPod|iPad/i.test(platform)
+    || ua.includes('Mac OS')
+  return apple ? { ctrlKey: false, metaKey: true } : { ctrlKey: true, metaKey: false }
+}
+
+/**
+ * Prefer the embedded toolbar control (`button.jse-search`) — a real click runs the same
+ * Svelte handler as the UI and works where synthetic KeyboardEvent is ignored (iframes / DevTools).
+ * Fallback: synthetic Mod+F on tree hidden input / CodeMirror, etc.
+ */
+function openEditorSearch() {
+  const root = containerRef.value
+  if (!root) return
+
+  const toolbarBtn = root.querySelector<HTMLButtonElement>('button.jse-search')
+  if (toolbarBtn && !toolbarBtn.disabled) {
+    toolbarBtn.click()
+    if (isSearchOpen()) return
+  }
+
+  const candidates: Array<{ target: HTMLElement; focus: boolean }> = []
+  const tree = root.querySelector<HTMLElement>('.jse-tree-mode')
+  const hiddenInput = tree?.querySelector<HTMLInputElement>('.jse-hidden-input')
+  // Keyboard shortcuts for tree mode are handled while focus is on the invisible sink.
+  if (hiddenInput) {
+    candidates.push({ target: hiddenInput, focus: true })
+  }
+  if (tree) {
+    candidates.push({ target: tree, focus: false })
+  }
+  const table = root.querySelector<HTMLElement>('.jse-table-mode')
+  if (table) candidates.push({ target: table, focus: false })
+  const cmContent = root.querySelector<HTMLElement>('.cm-content')
+  if (cmContent) candidates.push({ target: cmContent, focus: true })
+  const textMode = root.querySelector<HTMLElement>('.jse-text-mode')
+  if (textMode) candidates.push({ target: textMode, focus: false })
+
+  for (const { target, focus } of candidates) {
+    if (focus && typeof target.focus === 'function') {
+      target.focus({ preventScroll: true })
+    }
+    target.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'f',
+        code: 'KeyF',
+        ...primaryShortcutModifiers(),
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: typeof window !== 'undefined' ? window : undefined,
+      }),
+    )
+    // As soon as the editor opens its own search panel, we're done.
+    if (isSearchOpen()) break
+  }
+}
+
+// ─────────────── Remote-control handle for DevTools search relay ───────────────
+
+/**
+ * Locate the editor's built-in search `<input>` (rendered inside
+ * `.jse-search-box` whenever the panel is open).
+ */
+function getSearchInput(): HTMLInputElement | null {
+  return containerRef.value?.querySelector<HTMLInputElement>(
+    '.jse-search-box .jse-search-input',
+  ) ?? null
+}
+
+/**
+ * Set a value on a Svelte-bound input the same way a real user would,
+ * using the native `value` setter and a bubbling `input` event so the
+ * editor's reactive system picks up the change.
+ */
+function programmaticallyTypeInto(input: HTMLInputElement, value: string) {
+  const proto = window.HTMLInputElement.prototype
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+  if (setter) setter.call(input, value)
+  else input.value = value
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+async function ensureSearchOpen(): Promise<HTMLInputElement | null> {
+  let input = getSearchInput()
+  if (input) return input
+  openEditorSearch()
+  // The search box is rendered reactively — wait one frame so the
+  // input is in the DOM before we touch it.
+  await new Promise<void>((r) => requestAnimationFrame(() => r()))
+  input = getSearchInput()
+  if (input) return input
+  await nextTick()
+  return getSearchInput()
+}
+
+function setSearchQuery(query: string) {
+  void ensureSearchOpen().then((input) => {
+    if (!input) return
+    programmaticallyTypeInto(input, query)
+    if (typeof input.focus === 'function') {
+      input.focus({ preventScroll: true })
+    }
+  })
+}
+
+function dispatchSearchKey(key: 'Enter', shift = false) {
+  const input = getSearchInput()
+  if (!input) return
+  input.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key,
+      code: key === 'Enter' ? 'Enter' : key,
+      shiftKey: shift,
+      bubbles: true,
+      cancelable: true,
+    }),
+  )
+}
+
+function findNext() {
+  dispatchSearchKey('Enter', false)
+}
+
+function findPrevious() {
+  dispatchSearchKey('Enter', true)
+}
+
+function closeSearch() {
+  const root = containerRef.value
+  if (!root) return
+  const clearBtn = root.querySelector<HTMLButtonElement>(
+    '.jse-search-box .jse-search-clear',
+  )
+  if (clearBtn) {
+    clearBtn.click()
+    return
+  }
+  const input = getSearchInput()
+  if (!input) return
+  input.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Escape',
+      code: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    }),
+  )
+}
+
+let unregisterSearchHandle: (() => void) | null = null
+</script>
+
+<template>
+  <div
+    ref="wrapperRef"
+    class="ui-json-editor relative flex flex-col"
+    :class="fullHeight ? 'h-full min-h-0' : ''"
+  >
+    <!-- Action toolbar — uses UIKit Button for design-system consistency. -->
+    <div
+      v-if="showToolbar"
+      class="ui-json-editor__toolbar shrink-0 flex items-center justify-end gap-1 px-1 py-1 border border-b-0 rounded-t-md bg-muted/40"
+    >
+      <template v-if="isTreeMode">
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-7 gap-1 px-2 text-xs"
+          title="Expand all"
+          @click="expandAllNodes"
+        >
+          <ChevronsUpDown class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">Expand all</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-7 gap-1 px-2 text-xs"
+          title="Collapse all"
+          @click="collapseAllNodes"
+        >
+          <ChevronsDownUp class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">Collapse all</span>
+        </Button>
+      </template>
+
+      <template v-if="isTextMode && editable">
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-7 gap-1 px-2 text-xs"
+          title="Format JSON"
+          @click="formatJson"
+        >
+          <AlignLeft class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">Format</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-7 gap-1 px-2 text-xs"
+          title="Compact JSON"
+          @click="compactJson"
+        >
+          <Minimize2 class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">Compact</span>
+        </Button>
+      </template>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        class="h-7 gap-1 px-2 text-xs"
+        title="Search (Ctrl+F)"
+        @click="openSearchFromToolbar"
+      >
+        <Search class="w-3.5 h-3.5" />
+        <span class="hidden sm:inline">Search</span>
+      </Button>
+
+      <Button
+        v-if="showCopy"
+        variant="ghost"
+        size="sm"
+        class="h-7 gap-1 px-2 text-xs"
+        :title="copied ? 'Copied' : 'Copy to clipboard'"
+        @click="copyToClipboard"
+      >
+        <component :is="copied ? Check : Copy" class="w-3.5 h-3.5" />
+        <span class="hidden sm:inline">{{ copied ? 'Copied' : 'Copy' }}</span>
+      </Button>
+    </div>
+
+    <div
+      ref="containerRef"
+      class="ui-json-editor__host overflow-hidden bg-background"
+      :class="[
+        showToolbar ? 'rounded-b-md border border-t-0' : 'rounded-md border',
+        fullHeight
+          ? 'flex-1 min-h-[260px] min-w-0'
+          : 'min-h-[300px] w-full',
+      ]"
+    />
+  </div>
+</template>
+
+<style scoped>
+.ui-json-editor__host :deep(.jse-main),
+.ui-json-editor__host :deep(.jse-root) {
+  height: 100%;
+  min-height: 260px;
+}
+</style>

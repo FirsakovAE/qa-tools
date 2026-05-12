@@ -146,11 +146,13 @@ const minLengthValue = ref(props.settings.searchParams.minLength ?? 2)
 watch(debounceValue, (val) => { props.settings.searchParams.debounce = val })
 watch(minLengthValue, (val) => { props.settings.searchParams.minLength = val })
 
-// jsonMode — закомментировано вместе с JSON Editor Mode
-// const jsonMode = computed({
-//   get: () => props.settings.json?.mode ?? 'text',
-//   set: (val: 'text' | 'tree') => { props.settings.json.mode = val }
-// })
+const jsonMode = computed({
+  get: () => props.settings.json?.mode ?? 'text',
+  set: (val: 'text' | 'tree') => {
+    if (!props.settings.json) props.settings.json = { mode: val }
+    else props.settings.json.mode = val
+  }
+})
 
 const refreshIntervals = [
   { value: 1000, label: '1 second' },
@@ -983,7 +985,7 @@ const siteWhitelistTableHeight = computed(() =>
       </div>
     </div>
 
-    <!-- JSON EDITOR MODE (закомментировано)
+    <!-- JSON EDITOR MODE -->
     <div class="space-y-4 border-t pt-4">
       <h4 class="text-sm font-semibold">JSON Editor Mode</h4>
 
@@ -994,19 +996,18 @@ const siteWhitelistTableHeight = computed(() =>
         </TabsList>
 
         <TabsContent value="text" class="mt-4">
-          <div class="text-sm text-muted-foreground">
-            Traditional JSON text editor with syntax highlighting
-          </div>
+          <p class="text-xs text-muted-foreground">
+            Traditional JSON text editor with syntax highlighting.
+          </p>
         </TabsContent>
 
         <TabsContent value="tree" class="mt-4">
-          <div class="text-sm text-muted-foreground">
-            Visual tree editor for inline editing of values
-          </div>
+          <p class="text-xs text-muted-foreground">
+            Visual tree editor for inline editing of values.
+          </p>
         </TabsContent>
       </Tabs>
     </div>
-    -->
 
     <!-- SAVED FILES -->
     <div id="saved-files-section" class="space-y-2 border-t pt-4">
