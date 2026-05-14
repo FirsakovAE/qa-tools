@@ -39,10 +39,22 @@ const emit = defineEmits<{ (e: 'back'): void; (e: 'refresh'): void }>()
 // --- Settings ---
 const settings = useInspectorSettingsSync()
 const jsonMode = ref<'text' | 'tree'>('text')
+const jsonEditorImpl = ref<'classic' | 'jsoneditor'>('jsoneditor')
 
 watch(settings, (s) => {
-  if (s) jsonMode.value = s.json?.mode ?? 'text'
+  if (!s) return
+  jsonMode.value = s.json?.mode ?? 'text'
+  jsonEditorImpl.value = s.json?.editor ?? 'jsoneditor'
 }, { immediate: true })
+
+function persistJsonVanillaMode(m: 'text' | 'tree') {
+  jsonMode.value = m
+  const s = settings.value
+  if (s) {
+    if (!s.json) s.json = { editor: jsonEditorImpl.value, mode: m }
+    else s.json.mode = m
+  }
+}
 
 // --- Favorites (same resolution as PropsTab.updateFavoriteFlags when allRows is provided) ---
 const isFavorite = computed(() => {
@@ -395,7 +407,9 @@ async function saveChanges() {
               v-model="editedJson"
               :editable="isEditing"
               :show-copy="true"
+              :editor="jsonEditorImpl"
               :mode="jsonMode"
+              @update:mode="persistJsonVanillaMode"
               :full-height="true"
               class="h-full"
             />
@@ -409,7 +423,9 @@ async function saveChanges() {
               :model-value="rawPropsJson"
               :editable="false"
               :show-copy="true"
+              :editor="jsonEditorImpl"
               :mode="jsonMode"
+              @update:mode="persistJsonVanillaMode"
               :full-height="true"
               class="h-full"
             />

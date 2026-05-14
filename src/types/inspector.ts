@@ -335,7 +335,12 @@ export interface BaseInspectorSettings {
     piniaSearch: PiniaSearchSettings
     /** Global search parameters (debounce, minLength) shared across all modules */
     searchParams: GlobalSearchSettings
+    /**
+     * JSON payload editing: Classic = Prism text (`JsonTextEditor`);
+     * JSONEditor = vanilla-jsoneditor (`text`/`tree` modes in that library).
+     */
     json: {
+        editor: 'classic' | 'jsoneditor'
         mode: 'text' | 'tree'
     }
     updates?: { refreshIntervalMs?: number; autoRefresh?: boolean; autoRefreshInterval?: number }

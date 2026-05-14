@@ -146,11 +146,11 @@ const minLengthValue = ref(props.settings.searchParams.minLength ?? 2)
 watch(debounceValue, (val) => { props.settings.searchParams.debounce = val })
 watch(minLengthValue, (val) => { props.settings.searchParams.minLength = val })
 
-const jsonMode = computed({
-  get: () => props.settings.json?.mode ?? 'text',
-  set: (val: 'text' | 'tree') => {
-    if (!props.settings.json) props.settings.json = { mode: val }
-    else props.settings.json.mode = val
+const jsonEditorImplementation = computed({
+  get: () => props.settings.json?.editor ?? 'jsoneditor',
+  set: (val: 'classic' | 'jsoneditor') => {
+    if (!props.settings.json) props.settings.json = { editor: val, mode: 'text' }
+    else props.settings.json.editor = val
   }
 })
 
@@ -985,25 +985,25 @@ const siteWhitelistTableHeight = computed(() =>
       </div>
     </div>
 
-    <!-- JSON EDITOR MODE -->
+    <!-- JSON VIEWER IMPLEMENTATION -->
     <div class="space-y-4 border-t pt-4">
       <h4 class="text-sm font-semibold">JSON Editor Mode</h4>
 
-      <Tabs v-model="jsonMode">
+      <Tabs v-model="jsonEditorImplementation">
         <TabsList class="grid w-full grid-cols-2">
-          <TabsTrigger value="text">Text</TabsTrigger>
-          <TabsTrigger value="tree">Tree</TabsTrigger>
+          <TabsTrigger value="classic">Classic</TabsTrigger>
+          <TabsTrigger value="jsoneditor">JSONEditor</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="text" class="mt-4">
+        <TabsContent value="classic" class="mt-4">
           <p class="text-xs text-muted-foreground">
-            Traditional JSON text editor with syntax highlighting.
+            Built-in Prism text highlighting (traditional single-pane editor).
           </p>
         </TabsContent>
 
-        <TabsContent value="tree" class="mt-4">
+        <TabsContent value="jsoneditor" class="mt-4">
           <p class="text-xs text-muted-foreground">
-            Visual tree editor for inline editing of values.
+            vanilla-jsoneditor: switch between Text and Tree in the editor toolbar next to Search and Copy.
           </p>
         </TabsContent>
       </Tabs>

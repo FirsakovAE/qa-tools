@@ -184,11 +184,14 @@ async function loadFromStorage(): Promise<void> {
 }
 
 function migrateJsonMode(saved: any): void {
-    // Нормализуем устаревшие значения (например, 'table'), оставляем text/tree
-    if (saved.json && typeof saved.json === 'object') {
-        const m = saved.json.mode
-        if (m !== 'text' && m !== 'tree') saved.json.mode = 'text'
-    }
+    if (!saved.json || typeof saved.json !== 'object') return
+    const j = saved.json
+    // До добавления поля editor переключатель Text/Tree относился только к vanilla-jsoneditor
+    if (j.editor !== 'classic' && j.editor !== 'jsoneditor')
+        j.editor = 'jsoneditor'
+    const m = j.mode
+    if (m !== 'text' && m !== 'tree')
+        j.mode = 'text'
 }
 
 function migrateFavoriteIds(saved: any): void {

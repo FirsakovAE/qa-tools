@@ -5,12 +5,10 @@ import JsonEditorReadOnlyLarge from './JsonEditorReadOnlyLarge.vue'
 import { JsonEditor as UiJsonEditor } from '@/components/ui/JsonEditor'
 
 /**
- * Only fall back to the lightweight `<pre>` viewer for non-JSON content
- * (XML/HTML/plain text) above this size — Prism-based highlighting is
- * very slow on huge inputs. JSON of any size goes through
- * vanilla-jsoneditor, which virtualises tree-mode rendering (only the
- * first 100 items of each array are materialised) and supports docs
- * up to ~512 MB per the library docs.
+ * JSON: either Prism `JsonTextEditor` (Classic) or vanilla-jsoneditor
+ * (JSONEditor), per settings. Tree/text for the library is toggled in its
+ * toolbar. Non-JSON uses `JsonTextEditor` or, for huge read-only payloads,
+ * `JsonEditorReadOnlyLarge` — Prism is slow on very large fragments.
  */
 const LARGE_NON_JSON_THRESHOLD = 500 * 1024
 
@@ -18,16 +16,21 @@ const props = withDefaults(defineProps<{
   modelValue: string
   editable?: boolean
   showCopy?: boolean
+  /** Only for JSON + JSONEditor backend: vanilla-jsoneditor text vs tree. */
   mode?: 'text' | 'tree'
+  /** Classic = Prism `JsonTextEditor`; JSONEditor = vanilla-jsoneditor. */
+  editor?: 'classic' | 'jsoneditor'
   fullHeight?: boolean
   language?: string
 }>(), {
   fullHeight: false,
+  editor: 'jsoneditor',
   language: 'json'
 })
 
 defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'update:mode', value: 'text' | 'tree'): void
   (e: 'edit'): void
   (e: 'cancel'): void
   (e: 'save'): void
@@ -38,8 +41,10 @@ const valueLength = computed(() => props.modelValue?.length ?? 0)
 
 const effectiveMode = computed<'text' | 'tree'>(() => props.mode ?? 'text')
 
-/** vanilla-jsoneditor handles only JSON; fall back to Prism-based editor for other content. */
-const useVanillaEditor = computed(() => isJsonLanguage.value)
+/** vanilla-jsoneditor only for JSON when JSONEditor backend is chosen. */
+const useVanillaEditor = computed(
+  () => isJsonLanguage.value && props.editor !== 'classic',
+)
 
 /** Lightweight read-only view only for *non-JSON* huge content. */
 const useLargeReadOnly = computed(
@@ -63,6 +68,7 @@ const useLargeReadOnly = computed(
       :mode="effectiveMode"
       :full-height="fullHeight"
       @update:model-value="$emit('update:modelValue', $event)"
+      @update:mode="$emit('update:mode', $event)"
     />
     <JsonEditorReadOnlyLarge
       v-else-if="useLargeReadOnly"

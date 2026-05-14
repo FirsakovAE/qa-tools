@@ -42,6 +42,8 @@ useEscapeClose(computed(() => true), () => emit('back'))
 const {
   activeSection,
   jsonMode,
+  jsonEditorImpl,
+  persistJsonVanillaMode,
   isRewrite,
   scheme,
   host,
@@ -285,7 +287,9 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
               v-model="responseBody"
               :editable="true"
               :show-copy="true"
+              :editor="jsonEditorImpl"
               :mode="jsonMode"
+              @update:mode="persistJsonVanillaMode"
               :language="bodyLanguage"
               :full-height="true"
               class="h-full"

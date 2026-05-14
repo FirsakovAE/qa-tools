@@ -25,6 +25,19 @@
   --jse-text-color: hsl(var(--foreground));
   --jse-text-color-inverse: hsl(var(--background));
 
+  /*
+   * JSON value colors — Classic Prism viewer (`src/assets/json.css`, .dark .json-viewer .token.*).
+   * Overrides vanilla-jsoneditor `jse-theme-dark.css` so tree + text match JsonTextEditor.
+   */
+  --jse-key-color: #a78bfa;
+  --jse-value-color: hsl(var(--foreground));
+  --jse-value-color-number: #60a5fa;
+  --jse-value-color-boolean: #fbbf24;
+  --jse-value-color-null: #f87171;
+  --jse-value-color-string: #34d399;
+  --jse-value-color-url: #34d399;
+  --jse-delimiter-color: #9ca3af;
+
   /* borders & panels */
   --jse-main-border: 1px solid hsl(var(--border));
   --jse-panel-background: hsl(var(--muted));
@@ -45,11 +58,12 @@
   --jse-context-menu-background-highlight: hsl(var(--accent));
   --jse-context-menu-separator-color: hsl(var(--border));
   --jse-context-menu-color: hsl(var(--popover-foreground));
+  --jse-context-menu-color-disabled: hsl(var(--muted-foreground));
   --jse-context-menu-pointer-background: hsl(var(--muted));
   --jse-context-menu-pointer-background-highlight: hsl(var(--accent));
   --jse-context-menu-pointer-color: hsl(var(--foreground));
 
-  /* selection / hover / active line */
+  /* selection / hover / active line (tree: accent/muted; text mode strengthens in `.jse-text-mode` below) */
   --jse-selection-background-color: hsl(var(--accent));
   --jse-selection-background-inactive-color: hsl(var(--muted));
   --jse-hover-background-color: hsl(var(--accent) / 0.55);
@@ -121,15 +135,15 @@
   --jse-text-color: hsl(var(--foreground));
   --jse-text-color-inverse: hsl(var(--background));
 
-  /* JSON content palette (original light scheme — package ships only dark) */
-  --jse-key-color: #1a1a1a;
-  --jse-value-color: #1a1a1a;
-  --jse-value-color-number: #ee422e;
-  --jse-value-color-boolean: #ff8c00;
-  --jse-value-color-null: #004ed0;
-  --jse-value-color-string: #008000;
-  --jse-value-color-url: #008000;
-  --jse-delimiter-color: rgba(0, 0, 0, 0.38);
+  /* JSON palette — Classic Prism viewer (`src/assets/json.css`, .json-viewer .token.*) */
+  --jse-key-color: #8b5cf6;
+  --jse-value-color: hsl(var(--foreground));
+  --jse-value-color-number: #3b82f6;
+  --jse-value-color-boolean: #f59e0b;
+  --jse-value-color-null: #f43f5e;
+  --jse-value-color-string: #10b981;
+  --jse-value-color-url: #10b981;
+  --jse-delimiter-color: #6b7280;
 
   --jse-main-border: 1px solid hsl(var(--border));
   --jse-panel-background: hsl(var(--muted));
@@ -148,6 +162,7 @@
   --jse-context-menu-background-highlight: hsl(var(--accent));
   --jse-context-menu-separator-color: hsl(var(--border));
   --jse-context-menu-color: hsl(var(--popover-foreground));
+  --jse-context-menu-color-disabled: hsl(var(--muted-foreground));
   --jse-context-menu-pointer-background: hsl(var(--muted));
   --jse-context-menu-pointer-background-highlight: hsl(var(--accent));
   --jse-context-menu-pointer-color: hsl(var(--foreground));
@@ -203,6 +218,17 @@
 
   --jse-input-radius: 0.375rem;
   --jse-controls-box-shadow: none;
+}
+
+/* Text mode only: stronger selection wash vs `.app-shell ::selection` (tree keeps host accent/muted). */
+.ui-json-editor__host.jse-theme-dark .jse-text-mode {
+  --jse-selection-background-color: hsl(var(--foreground) / 0.6);
+  --jse-selection-background-inactive-color: hsl(var(--foreground) / 0.33);
+}
+
+.ui-json-editor__host.jse-theme-default .jse-text-mode {
+  --jse-selection-background-color: hsl(var(--foreground) / 0.45);
+  --jse-selection-background-inactive-color: hsl(var(--foreground) / 0.25);
 }
 
 /*
@@ -264,7 +290,6 @@
 
 /* All editor-chrome buttons: shadcn-like ghost button look. */
 .ui-json-editor__host .jse-button:not(.jse-primary):not(.jse-secondary),
-.ui-json-editor__host .jse-context-menu-button,
 .ui-json-editor__host .jse-navigation-bar-edit {
   background: transparent !important;
   color: hsl(var(--foreground)) !important;
@@ -272,8 +297,29 @@
   transition: background-color 120ms ease, color 120ms ease;
 }
 
+/* Context menu rows: use popover text colour; disabled must stay visually distinct (see below). */
+.ui-json-editor__host .jse-context-menu-button:not(:disabled) {
+  background: transparent !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border-radius: 0.375rem !important;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ui-json-editor__host .jse-context-menu-button:disabled,
+.ui-json-editor__host .jse-context-menu button.jse-context-menu-button:disabled {
+  color: hsl(var(--muted-foreground)) !important;
+  background: transparent !important;
+  cursor: not-allowed !important;
+}
+
+.ui-json-editor__host .jse-context-menu-button:disabled:focus,
+.ui-json-editor__host .jse-context-menu button.jse-context-menu-button:disabled:focus {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .ui-json-editor__host .jse-button:not(.jse-primary):not(.jse-secondary):hover,
-.ui-json-editor__host .jse-context-menu-button:hover,
+.ui-json-editor__host .jse-context-menu-button:hover:not(:disabled),
 .ui-json-editor__host .jse-navigation-bar-edit:hover {
   background: hsl(var(--accent)) !important;
   color: hsl(var(--foreground)) !important;
@@ -320,6 +366,14 @@
   box-shadow: 0 8px 24px hsl(var(--background) / 0.4) !important;
 }
 
+/*
+ * Context menu shortcut tip (“Tip: … right-click … Ctrl+Q”).
+ * Renders as `.jse-tip` inside `.jse-contextmenu`; popup may be portaled outside `.ui-json-editor__host`.
+ */
+.jse-contextmenu .jse-row:has(.jse-tip) {
+  display: none !important;
+}
+
 /* Tooltips — match shadcn tooltip styling. */
 .ui-json-editor__host .jse-tooltip {
   background: hsl(var(--popover)) !important;
@@ -359,34 +413,27 @@
 }
 
 /*
- * ─────────────── CodeMirror JSON syntax highlighting (text mode) ───────────────
- *
- * vanilla-jsoneditor uses CodeMirror's `classHighlighter`, which only
- * tags tokens with `.tok-*` CSS classes but ships no colors — so by
- * default JSON in text mode renders in a single foreground colour and
- * looks washed out. Mirror the palette the library already uses in
- * tree mode (via `--jse-value-color-*`) so both modes look identical.
+ * ─────────────── CodeMirror JSON syntax (text mode) ───────────────
+ * Same token colors as Classic `JsonTextEditor` + `json.css` (.json-viewer / .dark .json-viewer).
  */
-
-/* Dark — VS Code-like palette matching jse-theme-dark.css tree colors. */
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-propertyName {
-  color: #9cdcfe;
+  color: #a78bfa;
 }
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-string,
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-string2,
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-url {
-  color: #ce9178;
+  color: #34d399;
 }
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-number {
-  color: #b5cea8;
+  color: #60a5fa;
 }
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-bool,
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-atom,
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-keyword {
-  color: #569cd6;
+  color: #fbbf24;
 }
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-null {
-  color: #569cd6;
+  color: #f87171;
 }
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-punctuation,
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-operator,
@@ -394,36 +441,35 @@
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-brace,
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-bracket,
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-paren {
-  color: #d4d4d4;
+  color: #9ca3af;
 }
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-comment {
-  color: #6a9955;
+  color: #9ca3af;
   font-style: italic;
 }
 .ui-json-editor__host.jse-theme-dark .cm-content .tok-invalid {
-  color: #f48771;
+  color: #f87171;
 }
 
-/* Light — matches the explicit `--jse-value-color-*` set in this file. */
 .ui-json-editor__host.jse-theme-default .cm-content .tok-propertyName {
-  color: #1a1a1a;
+  color: #8b5cf6;
   font-weight: 600;
 }
 .ui-json-editor__host.jse-theme-default .cm-content .tok-string,
 .ui-json-editor__host.jse-theme-default .cm-content .tok-string2,
 .ui-json-editor__host.jse-theme-default .cm-content .tok-url {
-  color: #008000;
+  color: #10b981;
 }
 .ui-json-editor__host.jse-theme-default .cm-content .tok-number {
-  color: #ee422e;
+  color: #3b82f6;
 }
 .ui-json-editor__host.jse-theme-default .cm-content .tok-bool,
 .ui-json-editor__host.jse-theme-default .cm-content .tok-atom,
 .ui-json-editor__host.jse-theme-default .cm-content .tok-keyword {
-  color: #ff8c00;
+  color: #f59e0b;
 }
 .ui-json-editor__host.jse-theme-default .cm-content .tok-null {
-  color: #004ed0;
+  color: #f43f5e;
 }
 .ui-json-editor__host.jse-theme-default .cm-content .tok-punctuation,
 .ui-json-editor__host.jse-theme-default .cm-content .tok-operator,
@@ -431,14 +477,35 @@
 .ui-json-editor__host.jse-theme-default .cm-content .tok-brace,
 .ui-json-editor__host.jse-theme-default .cm-content .tok-bracket,
 .ui-json-editor__host.jse-theme-default .cm-content .tok-paren {
-  color: rgba(0, 0, 0, 0.65);
+  color: #6b7280;
 }
 .ui-json-editor__host.jse-theme-default .cm-content .tok-comment {
-  color: #5d7c3b;
+  color: #6b7280;
   font-style: italic;
 }
 .ui-json-editor__host.jse-theme-default .cm-content .tok-invalid {
-  color: #c00;
+  color: #f43f5e;
+}
+
+/*
+ * Native `::selection` — only in text mode. Tree stays on default `.app-shell ::selection`
+ * (`src/assets/index.css`).
+ */
+.app-shell .ui-json-editor__host.jse-theme-dark .jse-text-mode ::selection,
+.app-shell .ui-json-editor__host.jse-theme-dark .jse-text-mode *::selection {
+  background-color: hsl(var(--foreground) / 0.6);
+}
+.app-shell .ui-json-editor__host.jse-theme-dark .jse-text-mode ::-moz-selection,
+.app-shell .ui-json-editor__host.jse-theme-dark .jse-text-mode *::-moz-selection {
+  background-color: hsl(var(--foreground) / 0.6);
+}
+.app-shell .ui-json-editor__host.jse-theme-default .jse-text-mode ::selection,
+.app-shell .ui-json-editor__host.jse-theme-default .jse-text-mode *::selection {
+  background-color: hsl(var(--foreground) / 0.45);
+}
+.app-shell .ui-json-editor__host.jse-theme-default .jse-text-mode ::-moz-selection,
+.app-shell .ui-json-editor__host.jse-theme-default .jse-text-mode *::-moz-selection {
+  background-color: hsl(var(--foreground) / 0.45);
 }
 
 /* Remove the welcome banner accent line that bleeds light into the panel. */

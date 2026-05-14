@@ -86,7 +86,7 @@ export const defaultInspectorSettings: InspectorSettings = {
     collapseOverlayOnPropsInspect: true,
     piniaSearch: { ...defaultPiniaSearchSettings },
     searchParams: { ...defaultSearchParams },
-    json: { mode: 'text' },
+    json: { editor: 'jsoneditor', mode: 'text' },
     updates: { refreshIntervalMs: 1000, autoRefresh: false, autoRefreshInterval: 5000 },
     data: { maxComponents: 100000, preserveState: true },
     savedFiles: [],

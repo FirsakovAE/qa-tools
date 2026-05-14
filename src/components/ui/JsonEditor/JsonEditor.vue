@@ -64,6 +64,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'update:mode', value: JsonMode): void
 }>()
 
 /** Editor handle returned by `createJSONEditor`. */
@@ -324,6 +325,11 @@ watch(
   },
 )
 
+function setMode(next: JsonMode) {
+  if (next === props.mode) return
+  emit('update:mode', next)
+}
+
 watch(
   () => props.editable,
   (ed) => {
@@ -363,10 +369,24 @@ watch(
 // functions below are the implementation each registered editor
 // exposes through its `JsonEditorSearchHandle`.
 
-function isSearchOpen(): boolean {
+function isSearchPanelVisiblyOpen(): boolean {
   const root = containerRef.value
   if (!root) return false
-  return !!root.querySelector('.jse-search-box')
+  // The widget may mount `.jse-search-box` markup while closed; trusting the bare
+  // selector made `Ctrl+F` a no-op (registry skips `openSearch` when “open”).
+  const input =
+    root.querySelector<HTMLElement>('.jse-search-box .jse-search-input')
+    ?? root.querySelector<HTMLElement>('.jse-search-input')
+  if (!input) return false
+  const style = window.getComputedStyle(input)
+  if (style.visibility === 'hidden' || style.display === 'none')
+    return false
+  const r = input.getBoundingClientRect()
+  return r.width > 0 && r.height > 0
+}
+
+function isSearchOpen(): boolean {
+  return isSearchPanelVisiblyOpen()
 }
 
 function primaryShortcutModifiers(): Pick<
@@ -398,8 +418,12 @@ function openEditorSearch() {
 
   const toolbarBtn = root.querySelector<HTMLButtonElement>('button.jse-search')
   if (toolbarBtn && !toolbarBtn.disabled) {
+    const treeEarly = root.querySelector<HTMLElement>('.jse-tree-mode')
+    const hiddenEarly =
+      treeEarly?.querySelector<HTMLInputElement>('.jse-hidden-input')
+    hiddenEarly?.focus({ preventScroll: true })
     toolbarBtn.click()
-    if (isSearchOpen()) return
+    if (isSearchPanelVisiblyOpen()) return
   }
 
   const candidates: Array<{ target: HTMLElement; focus: boolean }> = []
@@ -435,7 +459,7 @@ function openEditorSearch() {
       }),
     )
     // As soon as the editor opens its own search panel, we're done.
-    if (isSearchOpen()) break
+    if (isSearchPanelVisiblyOpen()) break
   }
 }
 
@@ -448,7 +472,9 @@ function openEditorSearch() {
 function getSearchInput(): HTMLInputElement | null {
   return containerRef.value?.querySelector<HTMLInputElement>(
     '.jse-search-box .jse-search-input',
-  ) ?? null
+  )
+    ?? containerRef.value?.querySelector<HTMLInputElement>('.jse-search-input')
+    ?? null
 }
 
 /**
@@ -543,76 +569,107 @@ let unregisterSearchHandle: (() => void) | null = null
     <!-- Action toolbar — uses UIKit Button for design-system consistency. -->
     <div
       v-if="showToolbar"
-      class="ui-json-editor__toolbar shrink-0 flex items-center justify-end gap-1 px-1 py-1 border border-b-0 rounded-t-md bg-muted/40"
+      class="ui-json-editor__toolbar shrink-0 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1 py-1 border border-b-0 rounded-t-md bg-muted/40"
     >
-      <template v-if="isTreeMode">
-        <Button
-          variant="ghost"
-          size="sm"
-          class="h-7 gap-1 px-2 text-xs"
-          title="Expand all"
-          @click="expandAllNodes"
+      <div class="flex flex-wrap items-center gap-1 min-w-0">
+        <div
+          class="inline-flex rounded-md border border-border/80 bg-muted/40 p-0.5 gap-0.5"
+          role="group"
+          aria-label="Editor mode"
         >
-          <ChevronsUpDown class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">Expand all</span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          class="h-7 gap-1 px-2 text-xs"
-          title="Collapse all"
-          @click="collapseAllNodes"
-        >
-          <ChevronsDownUp class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">Collapse all</span>
-        </Button>
-      </template>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 px-2 text-xs rounded-sm"
+            :class="isTextMode ? 'bg-background shadow-sm' : ''"
+            title="Text mode"
+            @click="setMode('text')"
+          >
+            Text
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 px-2 text-xs rounded-sm"
+            :class="isTreeMode ? 'bg-background shadow-sm' : ''"
+            title="Tree mode"
+            @click="setMode('tree')"
+          >
+            Tree
+          </Button>
+        </div>
 
-      <template v-if="isTextMode && editable">
+        <template v-if="isTreeMode">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            title="Expand all"
+            @click="expandAllNodes"
+          >
+            <ChevronsUpDown class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Expand all</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            title="Collapse all"
+            @click="collapseAllNodes"
+          >
+            <ChevronsDownUp class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Collapse all</span>
+          </Button>
+        </template>
+
+        <template v-if="isTextMode && editable">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            title="Format JSON"
+            @click="formatJson"
+          >
+            <AlignLeft class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Format</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            title="Compact JSON"
+            @click="compactJson"
+          >
+            <Minimize2 class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Compact</span>
+          </Button>
+        </template>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1 shrink-0">
         <Button
           variant="ghost"
           size="sm"
           class="h-7 gap-1 px-2 text-xs"
-          title="Format JSON"
-          @click="formatJson"
+          title="Search (Ctrl+F)"
+          @click="openSearchFromToolbar"
         >
-          <AlignLeft class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">Format</span>
+          <Search class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">Search</span>
         </Button>
+
         <Button
+          v-if="showCopy"
           variant="ghost"
           size="sm"
           class="h-7 gap-1 px-2 text-xs"
-          title="Compact JSON"
-          @click="compactJson"
+          :title="copied ? 'Copied' : 'Copy to clipboard'"
+          @click="copyToClipboard"
         >
-          <Minimize2 class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">Compact</span>
+          <component :is="copied ? Check : Copy" class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">{{ copied ? 'Copied' : 'Copy' }}</span>
         </Button>
-      </template>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        class="h-7 gap-1 px-2 text-xs"
-        title="Search (Ctrl+F)"
-        @click="openSearchFromToolbar"
-      >
-        <Search class="w-3.5 h-3.5" />
-        <span class="hidden sm:inline">Search</span>
-      </Button>
-
-      <Button
-        v-if="showCopy"
-        variant="ghost"
-        size="sm"
-        class="h-7 gap-1 px-2 text-xs"
-        :title="copied ? 'Copied' : 'Copy to clipboard'"
-        @click="copyToClipboard"
-      >
-        <component :is="copied ? Check : Copy" class="w-3.5 h-3.5" />
-        <span class="hidden sm:inline">{{ copied ? 'Copied' : 'Copy' }}</span>
-      </Button>
+      </div>
     </div>
 
     <div
