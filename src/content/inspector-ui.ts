@@ -79,8 +79,6 @@ export function injectInspectorUI(): void {
     background: transparent;
     pointer-events: auto;
     display: none;
-    user-select: none;
-    -webkit-user-select: none;
   `
 
   // ═══════════════════════════════════════════════════════════

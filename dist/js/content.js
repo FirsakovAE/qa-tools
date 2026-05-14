@@ -18,8 +18,6 @@ function o(n){const e=String(n?.message??"");return e.includes("Receiving end do
     background: transparent;
     pointer-events: auto;
     display: none;
-    user-select: none;
-    -webkit-user-select: none;
   `;const q=document.createElement("div");q.id="vue-inspector-snap-highlight",q.style.cssText=`
     position: fixed;
     z-index: 2147483646;
