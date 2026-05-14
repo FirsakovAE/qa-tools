@@ -31,6 +31,8 @@
  *    still resolve when focus lands inside shadow-attached subtrees.
  */
 
+import { consumeEscapeIfClipboardHelpOpen } from '@/utils/clipboardHelpEscGate'
+
 export interface JsonEditorSearchHandle {
   /** Outer wrapper element of the editor (used for focus relevance checks). */
   wrapperEl: HTMLElement
@@ -249,13 +251,97 @@ let isDispatchingCtrlF = false
  */
 let escWasForSearch = false
 
+/**
+ * Use `e.code` (physical key) so Ctrl+F works with non‑Latin keyboard layouts.
+ * With Russian (and similar) layouts, `e.key` is often a Cyrillic character, not "f".
+ */
 function isCtrlOrCmdF(e: KeyboardEvent): boolean {
   return (
     (e.ctrlKey || e.metaKey)
     && !e.shiftKey
     && !e.altKey
-    && (e.key === 'f' || e.key === 'F')
+    && (e.code === 'KeyF' || e.key === 'f' || e.key === 'F')
   )
+}
+
+const CLIPBOARD_LETTER_BY_CODE: Readonly<Record<string, 'c' | 'v' | 'x'>> = {
+  KeyC: 'c',
+  KeyV: 'v',
+  KeyX: 'x',
+}
+
+/**
+ * When the OS layout maps Latin shortcuts to non‑Latin `e.key`, vanilla-jsoneditor
+ * never matches its Ctrl+C/V/X handlers — same root cause as Ctrl+F. Re-dispatch a
+ * Latin `key` to the active tree hidden input (or CodeMirror surface).
+ */
+function maybeRewriteNonLatinCtrlClipboard(e: KeyboardEvent): boolean {
+  if (!e.ctrlKey && !e.metaKey)
+    return false
+  if (e.shiftKey || e.altKey)
+    return false
+
+  const latin = CLIPBOARD_LETTER_BY_CODE[e.code]
+  if (!latin)
+    return false
+
+  if (e.key === latin || e.key === latin.toUpperCase())
+    return false
+
+  const handle = resolveJsonEditorForBuiltInSearch(e)
+  if (!handle)
+    return false
+
+  const sink = pickClipboardKeyboardSink(handle)
+  if (!sink)
+    return false
+
+  e.preventDefault()
+  e.stopPropagation()
+  e.stopImmediatePropagation()
+
+  sink.focus({ preventScroll: true })
+  sink.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: latin,
+      code: e.code,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
+      shiftKey: false,
+      altKey: false,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: e.view ?? (typeof window !== 'undefined' ? window : undefined),
+    }),
+  )
+  return true
+}
+
+function pickClipboardKeyboardSink(
+  handle: JsonEditorSearchHandle,
+): HTMLElement | null {
+  const w = handle.wrapperEl
+  const active = document.activeElement
+  if (
+    active instanceof HTMLElement
+    && active !== document.body
+    && deepContains(w, active)
+  ) {
+    return active
+  }
+
+  const hidden = w.querySelector<HTMLInputElement>(
+    '.jse-tree-mode .jse-hidden-input',
+  )
+  if (hidden)
+    return hidden
+
+  const cm = w.querySelector<HTMLElement>('.cm-content')
+  if (cm)
+    return cm
+
+  return null
 }
 
 function onGlobalKeydownCapture(e: KeyboardEvent) {
@@ -264,13 +350,23 @@ function onGlobalKeydownCapture(e: KeyboardEvent) {
   // internal handler.
   if (isDispatchingCtrlF) return
 
+  if (maybeRewriteNonLatinCtrlClipboard(e))
+    return
+
+  if (consumeEscapeIfClipboardHelpOpen(e)) {
+    escWasForSearch = false
+    return
+  }
+
   if (isCtrlOrCmdF(e)) {
     const handle = resolveJsonEditorForBuiltInSearch(e)
     if (!handle) return
-    e.preventDefault()
-    e.stopPropagation()
-    e.stopImmediatePropagation()
+
+    /* Only swallow Ctrl/Cmd+F when we're opening search — panel already visible must reach the widget. */
     if (!handle.isSearchOpen()) {
+      e.preventDefault()
+      e.stopPropagation()
+      e.stopImmediatePropagation()
       isDispatchingCtrlF = true
       try {
         handle.openSearch()
@@ -281,7 +377,7 @@ function onGlobalKeydownCapture(e: KeyboardEvent) {
     return
   }
 
-  if (e.key === 'Escape') {
+  if (e.code === 'Escape' || e.key === 'Escape') {
     // Record the search-visibility BEFORE the editor's internal
     // handler closes it, so the bubble-phase handler can decide
     // whether to stop further propagation. Always overwrite the
@@ -294,7 +390,7 @@ function onGlobalKeydownCapture(e: KeyboardEvent) {
 }
 
 function onGlobalKeydownBubble(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
+  if (e.code !== 'Escape' && e.key !== 'Escape') return
   if (escWasForSearch) {
     // Search was just closed by the editor; prevent the same Esc
     // from also closing the wrapping Details panel.

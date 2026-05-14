@@ -101,10 +101,20 @@
 
   onMounted(() => document.addEventListener('keydown', handleSelectAll, true))
   onUnmounted(() => document.removeEventListener('keydown', handleSelectAll, true))
+
+  /** Suppress the browser menu on the chrome/wallpaper only — not on vanilla-jsoneditor (.jse-main). */
+  function onAppRootContextMenu(e: MouseEvent) {
+    const el = e.target as HTMLElement | null
+    if (!el) return
+    if (el.closest('.jse-main')) return
+    if (el.closest('[data-radix-popper-content-wrapper]')) return
+    if (el.closest('[role="menu"]')) return
+    e.preventDefault()
+  }
   </script>
 
   <template>
-    <div class="relative h-screen overflow-hidden" @contextmenu.prevent>
+    <div class="relative h-screen overflow-hidden" @contextmenu="onAppRootContextMenu">
       <Infusion
       :src="infusionSrc"
       :opacity="customize.imageOpacity"

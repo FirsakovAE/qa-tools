@@ -238,23 +238,75 @@ export function downloadPostmanCollection(entries: NetworkEntry[], name?: string
 }
 
 /**
+ * Restore keyboard focus after a temporary `textarea` hijack — without this, CodeMirror / JSONEditor
+ * lose `activeElement` and shortcuts (Ctrl+Z, typing, paste) appear “dead”.
+ */
+function restorePriorFocus(prev: Element | null): void {
+  if (!(prev instanceof HTMLElement))
+    return
+  if (!prev.isConnected)
+    return
+  try {
+    prev.focus({ preventScroll: true })
+  } catch {
+    try {
+      prev.focus()
+    } catch {
+      /* ignore — host may refuse programmatic focus */
+    }
+  }
+}
+
+/**
+ * Same `execCommand('copy')` strategy as {@link copyToClipboard}, but synchronous and with
+ * focus restore — required inside `navigator.clipboard.writeText` shims invoked from Ctrl+C/X/Cut
+ * (user activation); an async/deferred helper drops the gesture and steals focus permanently.
+ */
+export function copyTextWithExecCommandSync(text: string): boolean {
+  const prev = document.activeElement
+  try {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.setAttribute('readonly', '')
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-9999px'
+    textArea.style.top = '0'
+    textArea.style.opacity = '0'
+    textArea.style.pointerEvents = 'none'
+    document.body.appendChild(textArea)
+    textArea.focus({ preventScroll: true })
+    textArea.select()
+    const success = document.execCommand('copy')
+    document.body.removeChild(textArea)
+    return success
+  } catch {
+    return false
+  } finally {
+    restorePriorFocus(prev)
+  }
+}
+
+/**
  * Copy text to clipboard with fallback for permission issues
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
   // Use setTimeout to break out of current execution context (important for portals/dropdowns)
+  const prev = document.activeElement
   return new Promise((resolve) => {
-    setTimeout(async () => {
+    setTimeout(() => {
       // Try execCommand first (works in iframes without permissions and dropdown contexts)
       try {
         const textArea = document.createElement('textarea')
         textArea.value = text
+        textArea.setAttribute('readonly', '')
         textArea.style.position = 'fixed'
-        textArea.style.left = '-999999px'
-        textArea.style.top = '-999999px'
+        textArea.style.left = '-9999px'
+        textArea.style.top = '0'
         textArea.style.opacity = '0'
+        textArea.style.pointerEvents = 'none'
         // Ensure textarea is properly attached to document body
         document.body.appendChild(textArea)
-        textArea.focus()
+        textArea.focus({ preventScroll: true })
         textArea.select()
         const success = document.execCommand('copy')
         document.body.removeChild(textArea)
@@ -262,6 +314,8 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       } catch (error) {
         console.error('[utils/networkUtils] copyToClipboard failed:', error)
         resolve(false)
+      } finally {
+        restorePriorFocus(prev)
       }
     }, 0)
   })

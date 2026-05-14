@@ -21,7 +21,8 @@
     "scripting",
     "activeTab",
     "storage",
-    "webRequest"
+    "webRequest",
+    "clipboardWrite"
   ],
   "host_permissions": ["<all_urls>"],
   "devtools_page": "devtools/devtools.html",
