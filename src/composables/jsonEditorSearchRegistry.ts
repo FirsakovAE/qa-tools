@@ -97,6 +97,19 @@ function pickEditorContainingNode(node: Node | null): JsonEditorSearchHandle | n
   return null
 }
 
+/** Tree/CodeMirror may keep the selection inside the editor while `activeElement` is elsewhere. */
+function pickEditorContainingCaret(): JsonEditorSearchHandle | null {
+  if (typeof document === 'undefined') return null
+  try {
+    const sel = document.getSelection?.()
+    if (!sel || sel.rangeCount <= 0) return null
+    const anchor = sel.anchorNode
+    return anchor ? pickEditorContainingNode(anchor) : null
+  } catch {
+    return null
+  }
+}
+
 function editorFromComposedPath(event: Event): JsonEditorSearchHandle | null {
   const path =
     typeof event.composedPath === 'function' ? event.composedPath() : []
@@ -114,11 +127,12 @@ function editorFromComposedPath(event: Event): JsonEditorSearchHandle | null {
  *   1. Editor enclosing a node from `event.composedPath()` / `event.target`
  *      (keyboard handlers).
  *   2. Editor enclosing `document.activeElement`.
- *   3. Editor last focused (`focusin`) — helps DevTools relay (`panel.onSearch`)
+ *   3. Editor enclosing the current selection anchor (caret).
+ *   4. Editor last focused (`focusin`) — helps DevTools relay (`panel.onSearch`)
  *      where no key event reaches the page.
- *   4. Editor last interacted via pointer (`pointerdown`).
- *   5. The only registered editor (if there's just one).
- *   6. The first editor whose wrapper is visible (non-zero bounding box).
+ *   5. Editor last interacted via pointer (`pointerdown`).
+ *   6. The only registered editor (if there's just one).
+ *   7. The first editor whose wrapper is visible (non-zero bounding box).
  */
 export function findActiveJsonEditor(
   event?: Event,
@@ -138,18 +152,15 @@ export function findActiveJsonEditor(
     active instanceof Node ? pickEditorContainingNode(active) : null
   if (fromActive) return fromActive
 
-  if (
-    lastFocusedHandle
-    && lastFocusedHandle.wrapperEl.isConnected
-    && isWrapperVisible(lastFocusedHandle.wrapperEl)
-  ) {
+  const fromCaret = pickEditorContainingCaret()
+  if (fromCaret) return fromCaret
+
+  if (lastFocusedHandle && lastFocusedHandle.wrapperEl.isConnected) {
     return lastFocusedHandle
   }
 
   if (lastInteractedHandle && lastInteractedHandle.wrapperEl.isConnected) {
-    if (isWrapperVisible(lastInteractedHandle.wrapperEl)) {
-      return lastInteractedHandle
-    }
+    return lastInteractedHandle
   }
 
   if (editors.size === 1) {
@@ -171,7 +182,7 @@ function isWrapperVisible(el: HTMLElement): boolean {
 }
 
 function pickSingleVisibleJsonEditorWithSearchUi(): JsonEditorSearchHandle | null {
-  let candidate: JsonEditorSearchHandle | null = null
+  const candidates: JsonEditorSearchHandle[] = []
   for (const editor of editors) {
     if (!editor.wrapperEl.isConnected || !isWrapperVisible(editor.wrapperEl)) continue
     const root = editor.wrapperEl
@@ -180,10 +191,30 @@ function pickSingleVisibleJsonEditorWithSearchUi(): JsonEditorSearchHandle | nul
     const hasLiveSearchBtn =
       btn instanceof HTMLButtonElement && !btn.disabled && btn.offsetParent !== null
     if (!hasTree && !hasLiveSearchBtn) continue
-    if (candidate) return null
-    candidate = editor
+    candidates.push(editor)
   }
-  return candidate
+  if (candidates.length <= 1) return candidates[0] ?? null
+  return (
+    candidates.find(e => lastFocusedHandle === e)
+    ?? candidates.find(e => lastInteractedHandle === e)
+    ?? candidates[0]
+    ?? null
+  )
+}
+
+function pickFallbackAnyVisibleEditor(): JsonEditorSearchHandle | null {
+  const vis: JsonEditorSearchHandle[] = []
+  for (const ed of editors) {
+    if (!ed.wrapperEl.isConnected || !isWrapperVisible(ed.wrapperEl)) continue
+    vis.push(ed)
+  }
+  if (vis.length === 0) return null
+  if (vis.length === 1) return vis[0]!
+  const prefer =
+    (lastFocusedHandle && vis.includes(lastFocusedHandle)) ? lastFocusedHandle
+      : (lastInteractedHandle && vis.includes(lastInteractedHandle)) ? lastInteractedHandle
+      : vis[0]
+  return prefer ?? vis[0]!
 }
 
 /**
@@ -195,7 +226,9 @@ export function resolveJsonEditorForBuiltInSearch(
 ): JsonEditorSearchHandle | null {
   const primary = findActiveJsonEditor(event)
   if (primary) return primary
-  return pickSingleVisibleJsonEditorWithSearchUi()
+  const withSearchChrome = pickSingleVisibleJsonEditorWithSearchUi()
+  if (withSearchChrome) return withSearchChrome
+  return pickFallbackAnyVisibleEditor()
 }
 
 // ───────────────────── Global keyboard interception ─────────────────────

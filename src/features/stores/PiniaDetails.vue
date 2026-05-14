@@ -62,6 +62,7 @@ const isGettersJsonValid = computed(() => {
 
 // JSON Mode
 const jsonMode = ref<'text' | 'tree'>('text')
+const jsonEditorImpl = ref<'classic' | 'jsoneditor'>('jsoneditor')
 
 // --- Favorites (by store name) ---
 const settings = useInspectorSettingsSync()
@@ -311,8 +312,19 @@ async function saveGettersChanges() {
 let unsubscribeMessage: (() => void) | null = null
 
 watch(settings, (s: BaseInspectorSettings | null) => {
-  if (s) jsonMode.value = s.json?.mode ?? 'text'
+  if (!s) return
+  jsonMode.value = s.json?.mode ?? 'text'
+  jsonEditorImpl.value = s.json?.editor ?? 'jsoneditor'
 }, { immediate: true })
+
+function persistJsonVanillaMode(m: 'text' | 'tree') {
+  jsonMode.value = m
+  const bs = settings.value
+  if (bs) {
+    if (!bs.json) bs.json = { editor: jsonEditorImpl.value, mode: m }
+    else bs.json.mode = m
+  }
+}
 
 // Mount - load data once
 onMounted(() => {
@@ -473,7 +485,9 @@ onUnmounted(() => {
                 v-model="editedStateJson"
                 :editable="isEditingState"
                 :show-copy="true"
+                :editor="jsonEditorImpl"
                 :mode="jsonMode"
+                @update:mode="persistJsonVanillaMode"
                 :full-height="true"
                 class="h-full"
               />
@@ -492,7 +506,9 @@ onUnmounted(() => {
                 v-model="editedGettersJson"
                 :editable="isEditingGetters"
                 :show-copy="true"
+                :editor="jsonEditorImpl"
                 :mode="jsonMode"
+                @update:mode="persistJsonVanillaMode"
                 :full-height="true"
                 class="h-full"
               />
