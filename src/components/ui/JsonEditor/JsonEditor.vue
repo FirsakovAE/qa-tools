@@ -8,16 +8,17 @@ import {
   shallowRef,
   watch,
 } from 'vue'
-import { createJSONEditor, expandAll, expandNone, Mode } from 'vanilla-jsoneditor'
+import { createJSONEditor, expandAll, expandNone, Mode, createMultiSelection, getFocusPath, SelectionType } from 'vanilla-jsoneditor'
 import type {
   Content,
   ContextMenuItem,
   JSONEditorPropsOptional,
+  JSONEditorSelection,
   MenuItem,
   RenderContextMenuContext,
   RenderMenuContext,
 } from 'vanilla-jsoneditor'
-import type { JSONPatchDocument } from 'immutable-json-patch'
+import { existsIn, type JSONPath, type JSONPatchDocument } from 'immutable-json-patch'
 import {
   AlignLeft,
   Check,
@@ -25,11 +26,14 @@ import {
   ChevronsUpDown,
   Copy,
   Minimize2,
+  Redo,
   Search,
+  Undo,
 } from 'lucide-vue-next'
 
 import { Button } from '@/components/ui/button'
 import JsonClipboardHelpDialog from '@/components/ui/JsonEditor/JsonClipboardHelpDialog.vue'
+import JsonTreeNavigationBar from '@/components/ui/JsonEditor/JsonTreeNavigationBar.vue'
 import JsonTreeContextMenu from '@/components/ui/JsonEditor/JsonTreeContextMenu.vue'
 import {
   findSortRootPath,
@@ -45,6 +49,7 @@ import {
 import { inspectorState } from '@/settings/useInspectorSettings'
 import { registerJsonEditor } from '@/composables/jsonEditorSearchRegistry'
 import type { JsonEditorSearchHandle } from '@/composables/jsonEditorSearchRegistry'
+import { createSyntheticFindKeydown, PhysicalKey, primaryShortcutModifiers } from '@/utils/keyboardLayoutShortcuts'
 
 import 'vanilla-jsoneditor/themes/jse-theme-dark.css'
 import './jse-theme.css'
@@ -99,6 +104,8 @@ type JSONEditorHandle = {
   collapse: (path: Array<string | number>, recursive?: boolean) => void
   patch: (operations: JSONPatchDocument) => unknown
   focus?: () => void
+  select?: (newSelection: JSONEditorSelection | undefined) => void
+  scrollTo?: (path: JSONPath) => Promise<void>
 }
 
 const wrapperRef = ref<HTMLDivElement | null>(null)
@@ -366,6 +373,32 @@ const navigationBarVisible = computed(() =>
 const isTreeMode = computed(() => props.mode === 'tree')
 const isTextMode = computed(() => props.mode === 'text')
 
+/**
+ * Tree mode shows {@link JsonTreeNavigationBar} instead of the Svelte
+ * `.jse-navigation-bar`; the library must not render its own.
+ */
+const libraryNavigationBar = computed(() => {
+  if (isTreeMode.value && navigationBarVisible.value)
+    return false
+  return navigationBarVisible.value
+})
+
+const showVueTreeNavigationBar = computed(
+  () => isTreeMode.value && navigationBarVisible.value,
+)
+
+const treeSelection = shallowRef<JSONEditorSelection | undefined>(undefined)
+
+const treeFocusPath = computed((): JSONPath => {
+  const sel = treeSelection.value
+  if (!sel || sel.type === SelectionType.text) return []
+  try {
+    return getFocusPath(sel)
+  } catch {
+    return []
+  }
+})
+
 function stringToContent(s: string): Content {
   // Always hand the editor raw text — it uses a memoised JSON.parse
   // internally and only materialises the parsed value when the active
@@ -424,6 +457,50 @@ function refocusEditor() {
   void nextTick(() => {
     editorRef.value?.focus?.()
   })
+}
+
+function onEditorSelect(selection: JSONEditorSelection | undefined) {
+  if (!isTreeMode.value) return
+  treeSelection.value = selection
+}
+
+function getTreeJson(): unknown | undefined {
+  const editor = editorRef.value
+  if (!editor) return undefined
+  const c = editor.get()
+  if ('json' in c && c.json !== undefined) return c.json
+  if ('text' in c && typeof c.text === 'string') {
+    try {
+      return JSON.parse(c.text)
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+function isTreePathReachable(path: JSONPath): boolean {
+  const json = getTreeJson()
+  if (json === undefined) return path.length === 0
+  return existsIn(json as object, path)
+}
+
+async function onTreeBreadcrumbNavigate(path: JSONPath) {
+  const editor = editorRef.value
+  if (!editor?.select) return
+  if (!isTreePathReachable(path)) return
+
+  try {
+    const sel = createMultiSelection(path, path)
+    editor.select(sel)
+    if (isTreeMode.value)
+      treeSelection.value = sel
+    await editor.scrollTo?.(path)
+  } catch {
+    /* stale path / editor state — avoid throwing to console */
+  } finally {
+    refocusEditor()
+  }
 }
 
 function expandAllNodes() {
@@ -489,6 +566,55 @@ async function copyJsonToolbar() {
   refocusEditor()
 }
 
+/** Synthetic Mod+Z / Mod+Shift+Z for vanilla-jsoneditor (same as built-in history). */
+function createToolbarUndoRedoKeydown(kind: 'undo' | 'redo'): KeyboardEvent {
+  const shift = kind === 'redo'
+  return new KeyboardEvent('keydown', {
+    ...primaryShortcutModifiers(),
+    key: shift ? 'Z' : 'z',
+    code: PhysicalKey.Z,
+    shiftKey: shift,
+    altKey: false,
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    view: typeof window !== 'undefined' ? window : undefined,
+  })
+}
+
+function dispatchUndoRedoToEditor(kind: 'undo' | 'redo') {
+  const root = containerRef.value
+  if (!root) return
+  const ev = createToolbarUndoRedoKeydown(kind)
+  if (isTreeMode.value) {
+    const tree = root.querySelector<HTMLElement>('.jse-tree-mode')
+    const hiddenInput = tree?.querySelector<HTMLInputElement>('.jse-hidden-input')
+    if (hiddenInput) {
+      hiddenInput.focus({ preventScroll: true })
+      hiddenInput.dispatchEvent(ev)
+      return
+    }
+  }
+  if (isTextMode.value) {
+    const cmContent = root.querySelector<HTMLElement>('.cm-content')
+    if (cmContent) {
+      cmContent.focus({ preventScroll: true })
+      cmContent.dispatchEvent(ev)
+      return
+    }
+  }
+}
+
+function editorUndo() {
+  dispatchUndoRedoToEditor('undo')
+  refocusEditor()
+}
+
+function editorRedo() {
+  dispatchUndoRedoToEditor('redo')
+  refocusEditor()
+}
+
 /** Opens vanilla-jsoneditor search — same path as Ctrl+F — then focuses its input. */
 function openSearchFromToolbar() {
   openEditorSearch()
@@ -519,7 +645,7 @@ onMounted(() => {
     mode: props.mode === 'tree' ? Mode.tree : Mode.text,
     readOnly: !props.editable,
     mainMenuBar: props.mainMenuBar,
-    navigationBar: navigationBarVisible.value,
+    navigationBar: libraryNavigationBar.value,
     statusBar: props.statusBar,
     // Suppress the library's "The document is compact, do you want
     // to format it?" prompt — formatting is available manually via
@@ -535,6 +661,8 @@ onMounted(() => {
     // warning.
     maxDocumentSizeTextMode: 32 * 1024 * 1024,
     onError(err: Error) {
+      // Built-in search / navigation can hit stale paths; library reports via onError.
+      if (err.message?.includes('Cannot convert path')) return
       console.error('[ui/JsonEditor]', err)
     },
     onChange(updated: Content) {
@@ -542,6 +670,7 @@ onMounted(() => {
       if (!props.editable) return
       emitValue(contentToString(updated))
     },
+    onSelect: onEditorSelect,
     onRenderMenu: onRenderMenuForSort,
     onRenderContextMenu: onRenderContextMenuForVue,
   }
@@ -601,12 +730,17 @@ watch(themeClass, (cls, prev) => {
 watch(
   () => props.mode,
   (m) => {
+    if (m !== 'tree') treeSelection.value = undefined
     editorRef.value?.updateProps({
       mode: m === 'tree' ? Mode.tree : Mode.text,
-      navigationBar: props.navigationBar ?? m === 'tree',
+      navigationBar: libraryNavigationBar.value,
     })
   },
 )
+
+watch(libraryNavigationBar, (navigationBar) => {
+  editorRef.value?.updateProps({ navigationBar })
+})
 
 function setMode(next: JsonMode) {
   if (next === props.mode) return
@@ -672,24 +806,6 @@ function isSearchOpen(): boolean {
   return isSearchPanelVisiblyOpen()
 }
 
-function primaryShortcutModifiers(): Pick<
-  KeyboardEventInit,
-  'ctrlKey' | 'metaKey'
-> {
-  if (typeof navigator === 'undefined')
-    return { ctrlKey: true, metaKey: false }
-  const ua = navigator.userAgent ?? ''
-  const ud = navigator.userAgentData
-  const platform =
-    (typeof ud?.platform === 'string' ? ud.platform : '')
-    || navigator.platform
-    || ''
-  const apple =
-    /Mac|iPhone|iPod|iPad/i.test(platform)
-    || ua.includes('Mac OS')
-  return apple ? { ctrlKey: false, metaKey: true } : { ctrlKey: true, metaKey: false }
-}
-
 /**
  * Prefer the embedded toolbar control (`button.jse-search`) — a real click runs the same
  * Svelte handler as the UI and works where synthetic KeyboardEvent is ignored (iframes / DevTools).
@@ -730,17 +846,7 @@ function openEditorSearch() {
     if (focus && typeof target.focus === 'function') {
       target.focus({ preventScroll: true })
     }
-    target.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'f',
-        code: 'KeyF',
-        ...primaryShortcutModifiers(),
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        view: typeof window !== 'undefined' ? window : undefined,
-      }),
-    )
+    target.dispatchEvent(createSyntheticFindKeydown())
     // As soon as the editor opens its own search panel, we're done.
     if (isSearchPanelVisiblyOpen()) break
   }
@@ -905,6 +1011,29 @@ let unregisterSearchHandle: (() => void) | null = null
           </Button>
         </template>
 
+        <template v-if="isTreeMode || (isTextMode && editable)">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            title="Undo (Ctrl+Z)"
+            @click="editorUndo"
+          >
+            <Undo class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Undo</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            title="Redo (Ctrl+Shift+Z)"
+            @click="editorRedo"
+          >
+            <Redo class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Redo</span>
+          </Button>
+        </template>
+
         <template v-if="isTextMode && editable">
           <Button
             variant="ghost"
@@ -955,11 +1084,21 @@ let unregisterSearchHandle: (() => void) | null = null
       </div>
     </div>
 
+    <JsonTreeNavigationBar
+      v-if="showVueTreeNavigationBar"
+      :focus-path="treeFocusPath"
+      :validate-path="isTreePathReachable"
+      :class="showToolbar ? 'border-t-0' : 'rounded-t-md border border-border border-b-0'"
+      @navigate="onTreeBreadcrumbNavigate"
+    />
+
     <div
       ref="containerRef"
       class="ui-json-editor__host overflow-hidden bg-background"
       :class="[
-        showToolbar ? 'rounded-b-md border border-t-0' : 'rounded-md border',
+        showToolbar || showVueTreeNavigationBar
+          ? 'rounded-b-md border border-t-0'
+          : 'rounded-md border',
         fullHeight
           ? 'flex-1 min-h-[260px] min-w-0'
           : 'min-h-[300px] w-full',
@@ -977,8 +1116,12 @@ let unregisterSearchHandle: (() => void) | null = null
 </template>
 
 <style scoped>
-.ui-json-editor__host :deep(.jse-main),
-.ui-json-editor__host :deep(.jse-root) {
+/*
+ * Only `.jse-main` is the editor shell — do not target `.jse-root`: in tree mode
+ * that class is on the root JSON object's row, so min-height here blew that row
+ * up to ~260px when selected/focused.
+ */
+.ui-json-editor__host :deep(.jse-main) {
   height: 100%;
   min-height: 260px;
 }

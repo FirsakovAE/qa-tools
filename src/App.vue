@@ -8,6 +8,7 @@
   import { wallpapers, defaultWallpaperUrl } from '@/assets/wallpapers'
   import Navigation from '@/features/Navigation.vue'
   import { Toaster } from '@/components/ui/Toaster'
+  import { PhysicalKey } from '@/utils/keyboardLayoutShortcuts'
 
   useAutoUnhighlight()
   useUpdateChecker()
@@ -65,7 +66,7 @@
   }
 
   function handleSelectAll(e: KeyboardEvent) {
-    if (!(e.ctrlKey || e.metaKey) || e.code !== 'KeyA') return
+    if (!(e.ctrlKey || e.metaKey) || e.code !== PhysicalKey.A) return
 
     const target = e.target as HTMLElement | null
     if (!target) return
