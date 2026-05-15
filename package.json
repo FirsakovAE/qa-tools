@@ -15,6 +15,9 @@
     "serve:standalone": "node scripts/serve-docs-github-pages.mjs"
   },
   "dependencies": {
+    "@codemirror/commands": "6.10.3",
+    "@codemirror/state": "6.6.0",
+    "@codemirror/view": "6.42.1",
     "@vueuse/core": "^14.1.0",
     "autoprefixer": "^10.4.23",
     "class-variance-authority": "^0.7.1",

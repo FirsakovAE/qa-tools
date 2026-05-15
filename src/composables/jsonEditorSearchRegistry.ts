@@ -29,9 +29,21 @@
  *    Additionally, `HTMLElement.contains()` ignores nodes inside nested
  *    shadow roots; `deepContains()` + `composedPath()` lets routing
  *    still resolve when focus lands inside shadow-attached subtrees.
+ *
+ * Physical-key (layout-safe) Mod+F and clipboard shortcut helpers live in
+ * `@/utils/keyboardLayoutShortcuts` — this module wires them into the editor.
+ * Clipboard rewrite runs only when the key event belongs to a registered
+ * JsonEditor (not when focus is in other Details UI), so Network / Props /
+ * Pinia fields keep native Mod+C/V/X on RU layouts.
  */
 
 import { consumeEscapeIfClipboardHelpOpen } from '@/utils/clipboardHelpEscGate'
+import { dispatchRuLayoutClipboardInJsonEditor, dispatchRuLayoutUndoRedoInJsonEditor } from '@/utils/jsonEditorRuClipboard'
+import {
+  clipboardLatinKeyForRewrite,
+  isPhysicalModFind,
+  nonLatinUndoRedoKind,
+} from '@/utils/keyboardLayoutShortcuts'
 
 export interface JsonEditorSearchHandle {
   /** Outer wrapper element of the editor (used for focus relevance checks). */
@@ -220,6 +232,58 @@ function pickFallbackAnyVisibleEditor(): JsonEditorSearchHandle | null {
 }
 
 /**
+ * JsonEditor that should receive RU/ non‑Latin Mod+C/V/X rewrite.
+ *
+ * Unlike {@link resolveJsonEditorForBuiltInSearch}, this must **not** fall back
+ * to “last focused” or “first visible” editor: Details panels (Network, Props,
+ * Pinia) mount their own inputs; a visible JsonEditor elsewhere would steal
+ * clipboard shortcuts and break native copy/paste there.
+ */
+function findJsonEditorForClipboardRewrite(
+  event: KeyboardEvent,
+): JsonEditorSearchHandle | null {
+  if (editors.size === 0) return null
+
+  const fromPath = editorFromComposedPath(event)
+  if (fromPath) return fromPath
+
+  const target = event.target as Node | null
+  const fromTarget = pickEditorContainingNode(target)
+  if (fromTarget) return fromTarget
+
+  const active = document.activeElement
+  const fromActive =
+    active instanceof Node ? pickEditorContainingNode(active) : null
+  if (fromActive) return fromActive
+
+  return null
+}
+
+const NON_TEXTUAL_INPUT_TYPES = new Set([
+  'checkbox',
+  'radio',
+  'file',
+  'button',
+  'submit',
+  'reset',
+  'hidden',
+  'image',
+])
+
+/** Any real `<input>` / `<textarea>` **outside** JsonEditor wrappers (Details, settings, …). */
+function isNativeFormTextFieldOutsideAnyJsonEditor(el: Element | null): boolean {
+  let field: HTMLInputElement | HTMLTextAreaElement | null = null
+  if (el instanceof HTMLTextAreaElement) {
+    field = el
+  } else if (el instanceof HTMLInputElement) {
+    if (NON_TEXTUAL_INPUT_TYPES.has(el.type)) return false
+    field = el
+  }
+  if (!field) return false
+  return pickEditorContainingNode(field) === null
+}
+
+/**
  * Resolve which editor should receive built-in JSON search (global Ctrl+F or DevTools relay).
  * Falls back to the lone visible editor that exposes tree UI or the embedded Search toolbar button.
  */
@@ -252,22 +316,49 @@ let isDispatchingCtrlF = false
 let escWasForSearch = false
 
 /**
- * Use `e.code` (physical key) so Ctrl+F works with non‑Latin keyboard layouts.
- * With Russian (and similar) layouts, `e.key` is often a Cyrillic character, not "f".
+ * `<input>` / `<textarea>` inside the editor (search box, inline keys, …) rely on
+ * the browser for Ctrl+C/V/X; those shortcuts are layout‑independent at the OS
+ * level. Our `maybeRewriteNonLatinCtrlClipboard` path calls `preventDefault`
+ * and dispatches a synthetic keydown — untrusted events never run the default
+ * paste action, so we must not intercept when a native text control is
+ * focused.
+ *
+ * CodeMirror’s `.cm-editor` stack (including its helper `<textarea>`) uses a
+ * Mod+letter keymap on `KeyboardEvent.key`, not OS default paste — exclude it
+ * here so RU layout still gets the latin-key rewrite.
  */
-function isCtrlOrCmdF(e: KeyboardEvent): boolean {
-  return (
-    (e.ctrlKey || e.metaKey)
-    && !e.shiftKey
-    && !e.altKey
-    && (e.code === 'KeyF' || e.key === 'f' || e.key === 'F')
-  )
-}
+function isJsonEditorNativeTextField(el: Element | null): boolean {
+  if (!el) return false
 
-const CLIPBOARD_LETTER_BY_CODE: Readonly<Record<string, 'c' | 'v' | 'x'>> = {
-  KeyC: 'c',
-  KeyV: 'v',
-  KeyX: 'x',
+  let field: HTMLInputElement | HTMLTextAreaElement | null = null
+  if (el instanceof HTMLTextAreaElement) {
+    field = el
+  } else if (el instanceof HTMLInputElement) {
+    // Tree/table mode keyboard sink (`<input class="jse-hidden-input">`) is still a
+    // text input but vanilla-jsoneditor handles Mod+C/V/X by key — RU layout
+    // needs the latin-key rewrite like CodeMirror, not OS-native paste on this node.
+    if (el.classList.contains('jse-hidden-input'))
+      return false
+
+    if (NON_TEXTUAL_INPUT_TYPES.has(el.type))
+      return false
+    field = el
+  }
+  if (!field) return false
+
+  if (field.closest('.cm-editor')) {
+    for (const editor of editors) {
+      if (!editor.wrapperEl.isConnected) continue
+      if (deepContains(editor.wrapperEl, field))
+        return false
+    }
+  }
+
+  for (const editor of editors) {
+    if (!editor.wrapperEl.isConnected) continue
+    if (deepContains(editor.wrapperEl, field)) return true
+  }
+  return false
 }
 
 /**
@@ -276,19 +367,17 @@ const CLIPBOARD_LETTER_BY_CODE: Readonly<Record<string, 'c' | 'v' | 'x'>> = {
  * Latin `key` to the active tree hidden input (or CodeMirror surface).
  */
 function maybeRewriteNonLatinCtrlClipboard(e: KeyboardEvent): boolean {
-  if (!e.ctrlKey && !e.metaKey)
-    return false
-  if (e.shiftKey || e.altKey)
+  if (isNativeFormTextFieldOutsideAnyJsonEditor(document.activeElement))
     return false
 
-  const latin = CLIPBOARD_LETTER_BY_CODE[e.code]
+  if (isJsonEditorNativeTextField(document.activeElement))
+    return false
+
+  const latin = clipboardLatinKeyForRewrite(e)
   if (!latin)
     return false
 
-  if (e.key === latin || e.key === latin.toUpperCase())
-    return false
-
-  const handle = resolveJsonEditorForBuiltInSearch(e)
+  const handle = findJsonEditorForClipboardRewrite(e)
   if (!handle)
     return false
 
@@ -300,21 +389,34 @@ function maybeRewriteNonLatinCtrlClipboard(e: KeyboardEvent): boolean {
   e.stopPropagation()
   e.stopImmediatePropagation()
 
-  sink.focus({ preventScroll: true })
-  sink.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key: latin,
-      code: e.code,
-      ctrlKey: e.ctrlKey,
-      metaKey: e.metaKey,
-      shiftKey: false,
-      altKey: false,
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      view: e.view ?? (typeof window !== 'undefined' ? window : undefined),
-    }),
-  )
+  dispatchRuLayoutClipboardInJsonEditor(e, sink, latin)
+  return true
+}
+
+function maybeRewriteNonLatinUndoRedo(e: KeyboardEvent): boolean {
+  const kind = nonLatinUndoRedoKind(e)
+  if (!kind)
+    return false
+
+  if (isNativeFormTextFieldOutsideAnyJsonEditor(document.activeElement))
+    return false
+
+  if (isJsonEditorNativeTextField(document.activeElement))
+    return false
+
+  const handle = findJsonEditorForClipboardRewrite(e)
+  if (!handle)
+    return false
+
+  const sink = pickClipboardKeyboardSink(handle)
+  if (!sink)
+    return false
+
+  e.preventDefault()
+  e.stopPropagation()
+  e.stopImmediatePropagation()
+
+  dispatchRuLayoutUndoRedoInJsonEditor(e, sink, kind)
   return true
 }
 
@@ -331,9 +433,9 @@ function pickClipboardKeyboardSink(
     return active
   }
 
-  const hidden = w.querySelector<HTMLInputElement>(
-    '.jse-tree-mode .jse-hidden-input',
-  )
+  const hidden =
+    w.querySelector<HTMLInputElement>('.jse-tree-mode .jse-hidden-input')
+    ?? w.querySelector<HTMLInputElement>('.jse-table-mode .jse-hidden-input')
   if (hidden)
     return hidden
 
@@ -353,12 +455,15 @@ function onGlobalKeydownCapture(e: KeyboardEvent) {
   if (maybeRewriteNonLatinCtrlClipboard(e))
     return
 
+  if (maybeRewriteNonLatinUndoRedo(e))
+    return
+
   if (consumeEscapeIfClipboardHelpOpen(e)) {
     escWasForSearch = false
     return
   }
 
-  if (isCtrlOrCmdF(e)) {
+  if (isPhysicalModFind(e)) {
     const handle = resolveJsonEditorForBuiltInSearch(e)
     if (!handle) return
 
