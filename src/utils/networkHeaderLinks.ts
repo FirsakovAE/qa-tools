@@ -4,6 +4,7 @@ import type {
   NetworkPinnedHeaderItem,
   NetworkPinnedHeaderScope,
 } from '@/types/inspector'
+import { buildHeaderLinkUrlFromPipeline } from '@/utils/headerLinkValuePipeline'
 
 export function normalizeNetworkHeaderHost(host: string): string {
   return String(host || '')
@@ -34,9 +35,15 @@ export function findHeaderLinkRule(
   )
 }
 
-/** Replace {value} placeholders (all occurrences) with the raw header value. */
-export function buildHeaderLinkUrl(template: string, headerValue: string): string {
-  return template.split('{value}').join(headerValue)
+/**
+ * Fill `{value}` / `{value|...}` placeholders in a header link URL template.
+ * Pipelines are applied left → right (see `headerLinkValuePipeline.ts`).
+ */
+export function buildHeaderLinkUrl(
+  template: string,
+  headerValue: string,
+): Promise<string> {
+  return buildHeaderLinkUrlFromPipeline(template, headerValue)
 }
 
 /** Pinned headers that exist in `headers`, in `pinnedLowercase` order (one row per pinned name from map). */

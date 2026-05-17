@@ -204,7 +204,7 @@ export interface NetworkHeaderLinkRule {
     headerName: string
     /** Request URL host this rule applies to (e.g. api.example.com) */
     host: string
-    /** URL template; use {value} for the header value */
+    /** URL template; use `{value}` or `{value|op|...}` for the header value (see value pipeline in app) */
     urlTemplate: string
     /** ISO timestamp */
     addedAt: string

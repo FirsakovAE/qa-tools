@@ -11,6 +11,8 @@ The **Network** tab and **Options → Network** provide two interception mechani
 
 Both apply only to **`fetch`** and **`XMLHttpRequest`** on the current page.
 
+You can **suspend all breakpoint rules** or **all mock rules** globally from the **Network** toolbar or via **Enable breakpoint rules** / **Enable mock responses** in **Options → Network** — rules remain saved but are not applied until re-enabled. See [Working with requests](/network/general#breakpoint-rules-and-mock-responses-global).
+
 General interception limits (page context, CORS, scope) are described in [Working with requests](/network/general).
 
 ---
@@ -104,6 +106,7 @@ To avoid that, pick the file again with **Browse** or select a saved file from t
 
 * **Network** — create or adjust a breakpoint from a captured request.
 * **Options → Network → Breakpoints Requests** — manage the rule list.
+* **Network toolbar** (breakpoint icon) or **Enable breakpoint rules** in **Options** — turn **all** breakpoint handling on or off without deleting rules (see [Working with requests](/network/general#breakpoint-rules-and-mock-responses-global)).
 
 ### Behavior
 
@@ -140,6 +143,7 @@ When a rule matches:
 
 * **Network** — create or adjust from a request row.
 * **Options → Network → Mock Responses** — manage rules.
+* **Network toolbar** (mock icon) or **Enable mock responses** in **Options** — turn **all** mock handling on or off without deleting rules (see [Working with requests](/network/general#breakpoint-rules-and-mock-responses-global)).
 
 ### Behavior
 

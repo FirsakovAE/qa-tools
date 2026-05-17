@@ -43,7 +43,22 @@ The right side of the **Network** toolbar shows status chips. Some are **clickab
 | **mock** | Active mock response rules. Click opens **Options → Network → Mock Responses**. |
 | **Paused** | Traffic logging to the list is paused. |
 
+When **breakpoint rules** or **mock response rules** are **suspended** globally (see below), the **bp** and **mock** chips keep their counts but use a **muted** style to show that those rules are **not** applied until you turn them back on.
+
 ## Log controls
+
+### Breakpoint rules and mock responses (global) {#breakpoint-rules-and-mock-responses-global}
+
+Next to **Pause recording** and **Clear**, the toolbar has two **icon** controls that apply to **all** configured rules of each type (without deleting them):
+
+| Control | Icon (when active) | Meaning |
+| ------- | ------------------ | ------- |
+| **Breakpoint rules** | Pause / stop circle (**amber** when rules are on) | **On:** active breakpoint rules can pause matching requests. **Click:** **suspend** breakpoints — rules stay in **Options → Network → Breakpoints**, but no request is held until you enable again. Tooltip: *Breakpoints on (click to suspend)* / *Breakpoints suspended (click to enable)*. |
+| **Mock responses** | Shuffle (**purple** when mocks are on) | **On:** active mock rules can short-circuit matching requests. **Click:** **suspend** mocks — rules stay in **Options → Network → Mock Responses**, but the real network runs until you enable again. Tooltip: *Mock responses on (click to suspend)* / *Mock responses suspended (click to enable)*. |
+
+The same switches exist as **Enable breakpoint rules** and **Enable mock responses** next to the corresponding lists in **Options → Network**; changing either place updates the other.
+
+**Note:** Suspending rules is **not** the same as **Pause recording**. Pause removes the interceptor from the page and stops logging; the global switches only disable **breakpoint** or **mock** handling while the interceptor remains (unless you also pause recording). Details: [Traffic interception](./traffic.md).
 
 ### Pause
 

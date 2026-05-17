@@ -987,23 +987,23 @@ const siteWhitelistTableHeight = computed(() =>
 
     <!-- JSON VIEWER IMPLEMENTATION -->
     <div class="space-y-4 border-t pt-4">
-      <h4 class="text-sm font-semibold">JSON Editor Mode</h4>
+      <h4 class="text-sm font-semibold">JSON Mode</h4>
 
       <Tabs v-model="jsonEditorImplementation">
         <TabsList class="grid w-full grid-cols-2">
           <TabsTrigger value="classic">Classic</TabsTrigger>
-          <TabsTrigger value="jsoneditor">JSONEditor</TabsTrigger>
+          <TabsTrigger value="jsoneditor">Advanced</TabsTrigger>
         </TabsList>
 
         <TabsContent value="classic" class="mt-4">
           <p class="text-xs text-muted-foreground">
-            Built-in Prism text highlighting (traditional single-pane editor).
+            JSON in text format with syntax highlighting
           </p>
         </TabsContent>
 
         <TabsContent value="jsoneditor" class="mt-4">
           <p class="text-xs text-muted-foreground">
-            vanilla-jsoneditor: switch between Text and Tree in the editor toolbar next to Search and Copy.
+            Advanced mode with support for tree mode.
           </p>
         </TabsContent>
       </Tabs>
