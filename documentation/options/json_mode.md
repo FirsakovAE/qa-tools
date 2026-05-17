@@ -15,7 +15,7 @@ Non-JSON bodies (XML, plain text, etc.) still use a **single text view** with Pr
 **Classic** uses the built-in **text editor with Prism syntax highlighting** (`JsonTextEditor`):
 
 - One **plain text** surface — there is **no separate tree UI**.
-- **Read-only** views get highlighted JSON (and other supported languages); **editable** mode is still text-based with validation feedback for JSON.
+- **Read-only** views get highlighted JSON (and other supported languages).
 - Tuned for **large fragments**: above a size threshold, highlighting is reduced so the UI stays responsive (very large **non-JSON** read-only payloads may use a lightweight viewer instead).
 
 Choose Classic when you want a **minimal, fast text-only** experience.
@@ -31,16 +31,6 @@ Choose Classic when you want a **minimal, fast text-only** experience.
 - **Tree mode**: expand/collapse, **breadcrumb / path** navigation, context menus on nodes, and integrated sorting / editing flows provided by the app on top of the tree.
 
 Choose Advanced when you need **tree navigation**, **history**, **search**, and richer editing around JSON.
-
----
-
-## Summary
-
-| | **Classic** | **Advanced** |
-|---|-------------|--------------|
-| **Engine** | Prism text (`JsonTextEditor`) | vanilla-jsoneditor |
-| **Tree view** | No | Yes (Text + Tree) |
-| **Typical use** | Lightweight text + highlighting | Structured editing + toolbar features |
 
 ---
 
