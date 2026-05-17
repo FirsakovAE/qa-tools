@@ -137,8 +137,16 @@ function removeAllRows() {
           </TableRow>
         </TableBody>
       </Table>
-      <p class="text-xs text-muted-foreground">
-        Use <code class="text-[11px]">{{ '{value}' }}</code> where the header value should go.
+      <p class="text-xs text-muted-foreground space-y-1">
+        <span class="block">
+          Placeholder <code class="text-[11px]">{{ '{value}' }}</code> — raw header value. Optional pipeline left→right:
+          <code class="text-[11px] block mt-1 break-all">{{ '{value|trim|lower|urlencode}' }}</code>
+        </span>
+        <span class="block mt-1">
+          Examples:
+          <code class="text-[11px] block break-all">{{ '{value|regex:^Bearer\\s+(.+)$|replace:$1}' }}</code>
+          <code class="text-[11px] block break-all">{{ '{value|default:unknown}' }}</code>
+        </span>
       </p>
     </template>
   </div>

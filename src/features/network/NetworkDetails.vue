@@ -361,8 +361,8 @@ function deleteHeaderLinkById(id: string) {
   if (i !== -1) settings.value.networkHeaderLinks.splice(i, 1)
 }
 
-function openHeaderLinkUrl(rule: NetworkHeaderLinkRule, headerValue: string) {
-  const url = buildHeaderLinkUrl(rule.urlTemplate, headerValue)
+async function openHeaderLinkUrl(rule: NetworkHeaderLinkRule, headerValue: string) {
+  const url = await buildHeaderLinkUrl(rule.urlTemplate, headerValue)
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 

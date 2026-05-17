@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computedAsync } from '@vueuse/core'
 import type { NetworkHeaderLinkRule } from '@/types/inspector'
 import { buildHeaderLinkUrl } from '@/utils/networkHeaderLinks'
 
@@ -8,10 +8,13 @@ const props = defineProps<{
   linkRule?: NetworkHeaderLinkRule | null
 }>()
 
-const href = computed(() => {
-  if (!props.linkRule || !String(props.value ?? '').trim()) return null
-  return buildHeaderLinkUrl(props.linkRule.urlTemplate, props.value)
-})
+const href = computedAsync(
+  async () => {
+    if (!props.linkRule || !String(props.value ?? '').trim()) return null
+    return buildHeaderLinkUrl(props.linkRule.urlTemplate, props.value)
+  },
+  null,
+)
 </script>
 
 <template>

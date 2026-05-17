@@ -281,6 +281,16 @@
   font-size: 11px;
 }
 
+/* Text mode: hide cursor Line / Column strip (library status bar under the editor). */
+.ui-json-editor__host .jse-text-mode .jse-status-bar {
+  display: none !important;
+}
+
+/* Text mode: remove CodeMirror lint gutter (extra left margin). */
+.ui-json-editor__host .jse-text-mode .cm-gutter.cm-gutter-lint {
+  display: none !important;
+}
+
 /* Gutter (line numbers in text mode): same surface as code area. */
 .ui-json-editor__host .cm-gutters {
   background: hsl(var(--background)) !important;

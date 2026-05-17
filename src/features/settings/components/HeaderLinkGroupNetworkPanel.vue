@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import type { HeaderLinkRuleRowDraft } from '@/types/inspector'
 import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import {
+  normalizeNetworkHeaderHost,
   replaceHeaderLinkRulesForHeaderName,
 } from '@/utils/networkHeaderLinks'
 import HeaderLinkGroupBody from '@/features/settings/components/HeaderLinkGroupBody.vue'
@@ -39,21 +40,39 @@ const lastUpdated = computed(() => {
   return rs.reduce((latest, r) => (r.addedAt > latest ? r.addedAt : latest), rs[0]!.addedAt)
 })
 
+function mapRulesToDrafts(list: typeof rulesForHeader.value): HeaderLinkRuleRowDraft[] {
+  return list.map((r) => ({
+    id: r.id,
+    host: r.host,
+    urlTemplate: r.urlTemplate,
+    addedAt: r.addedAt,
+  }))
+}
+
 function loadRowsFromSettings() {
+  const existing = rulesForHeader.value
+  const entryNorm = normalizeNetworkHeaderHost(props.entryHost)
+
   if (props.mode === 'create') {
-    rows.value = [
-      { id: null, host: props.entryHost, urlTemplate: '', addedAt: null },
-    ]
+    if (!existing.length) {
+      rows.value = [{ id: null, host: props.entryHost, urlTemplate: '', addedAt: null }]
+      return
+    }
+    const mapped = mapRulesToDrafts(existing)
+    const hasEntryHostRow = mapped.some(
+      (row) => normalizeNetworkHeaderHost(row.host) === entryNorm,
+    )
+    rows.value = hasEntryHostRow
+      ? mapped
+      : [
+          { id: null, host: props.entryHost, urlTemplate: '', addedAt: null },
+          ...mapped,
+        ]
     return
   }
-  const existing = rulesForHeader.value
+
   rows.value = existing.length
-    ? existing.map((r) => ({
-        id: r.id,
-        host: r.host,
-        urlTemplate: r.urlTemplate,
-        addedAt: r.addedAt,
-      }))
+    ? mapRulesToDrafts(existing)
     : [{ id: null, host: props.entryHost, urlTemplate: '', addedAt: null }]
 }
 

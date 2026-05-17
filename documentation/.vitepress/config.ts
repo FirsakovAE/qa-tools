@@ -77,6 +77,7 @@ const sidebarEn = [
     text: 'Options',
     items: [
       { text: 'Display modes', link: '/options/display_mode' },
+      { text: 'JSON Mode', link: '/options/json_mode' },
       { text: 'Customize', link: '/options/customize' },
       { text: 'Update settings', link: '/options/update_settings' },
       { text: 'Auto run', link: '/options/auto_run' },
@@ -215,6 +216,7 @@ export default defineConfig({
             text: 'Options',
             items: [
               { text: 'Режимы отображения', link: '/ru/options/display_mode' },
+              { text: 'Режим JSON', link: '/ru/options/json_mode' },
               { text: 'Персонализация', link: '/ru/options/customize' },
               { text: 'Параметры обновления', link: '/ru/options/update_settings' },
               { text: 'Автозапуск', link: '/ru/options/auto_run' },

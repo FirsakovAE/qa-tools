@@ -107,4 +107,5 @@ Details: [Traffic interception](/network/traffic).
 ## See also
 
 * [Display modes](/options/display_mode)
+* [JSON Mode](/options/json_mode) — Classic vs Advanced JSON editor (also under **General**).
 * [Settings management](/options/settings_management)

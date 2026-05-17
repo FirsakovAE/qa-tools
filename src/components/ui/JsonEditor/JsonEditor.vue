@@ -1009,9 +1009,6 @@ let unregisterSearchHandle: (() => void) | null = null
             <ChevronsDownUp class="w-3.5 h-3.5" />
             <span class="hidden sm:inline">Collapse all</span>
           </Button>
-        </template>
-
-        <template v-if="isTreeMode || (isTextMode && editable)">
           <Button
             variant="ghost"
             size="sm"
@@ -1054,6 +1051,26 @@ let unregisterSearchHandle: (() => void) | null = null
           >
             <Minimize2 class="w-3.5 h-3.5" />
             <span class="hidden sm:inline">Compact</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            title="Undo (Ctrl+Z)"
+            @click="editorUndo"
+          >
+            <Undo class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Undo</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            title="Redo (Ctrl+Shift+Z)"
+            @click="editorRedo"
+          >
+            <Redo class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Redo</span>
           </Button>
         </template>
       </div>
