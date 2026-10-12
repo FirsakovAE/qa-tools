@@ -129,7 +129,8 @@ export const handlePiniaReplaceState: RuntimeHandler = (message, sender, sendRes
   requestWindow({
     type: 'PINIA_REPLACE_STATE',
     storeId: message.storeId,
-    newState: message.newState
+    newState: message.newState,
+    removedPaths: message.removedPaths
   }, 'PINIA_REPLACE_STATE_RESULT', 2000)
     .then((response: any) => {
       const result = {
@@ -156,7 +157,8 @@ export const handlePiniaPatchGetters: RuntimeHandler = (message, sender, sendRes
   requestWindow({
     type: 'PINIA_PATCH_GETTERS',
     storeId: message.storeId,
-    newGetters: message.newGetters
+    newGetters: message.newGetters,
+    removedPaths: message.removedPaths
   }, 'PINIA_PATCH_GETTERS_RESULT', 2000)
     .then((response: any) => {
       const result = {

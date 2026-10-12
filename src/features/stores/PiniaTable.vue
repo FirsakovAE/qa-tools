@@ -277,11 +277,11 @@ const skeletonRowCount = computed(() => {
   background-clip: padding-box;
 }
 
-/* Star column - align like Props (8px padding to match header/row) */
+/* Star column - 8px + 40px box, same icon position as Props / Network / Logs first column */
 .pinia-cell-star {
-  width: 40px;
+  width: 48px;
   padding-left: 8px !important;
-  padding-right: 4px !important;
+  padding-right: 0 !important;
 }
 
 .star-cell {
@@ -321,7 +321,6 @@ const skeletonRowCount = computed(() => {
   padding-right: 8px;
 }
 
-.pinia-table :deep(.pinia-cell-star),
 .pinia-table :deep(.pinia-cell-actions) {
   padding-right: 18px;
 }

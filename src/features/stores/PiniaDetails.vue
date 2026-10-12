@@ -16,6 +16,7 @@ import { useRuntime } from '@/runtime'
 import type { BaseInspectorSettings, PiniaFavoriteItem } from '@/types/inspector'
 import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavoritesMatcher'
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
+import { findRemovedPaths } from '@/utils/removedPaths'
 
 const runtime = useRuntime()
 
@@ -261,7 +262,8 @@ async function saveStateChanges() {
     const response = await runtime.sendMessage<{ success?: boolean; error?: string }>({
       type: 'PINIA_REPLACE_STATE',
       storeId: storeId,
-      newState
+      newState,
+      removedPaths: findRemovedPaths(stateData.value, newState)
     })
     
     if (response?.success) {
@@ -288,7 +290,8 @@ async function saveGettersChanges() {
     const response = await runtime.sendMessage<{ success?: boolean; error?: string }>({
       type: 'PINIA_PATCH_GETTERS',
       storeId: storeId,
-      newGetters
+      newGetters,
+      removedPaths: findRemovedPaths(gettersData.value, newGetters)
     })
     
     if (response?.success) {

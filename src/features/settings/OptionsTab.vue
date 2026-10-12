@@ -21,12 +21,14 @@ import {
   Database,
   Info,
   MenuIcon,
+  FileText,
 } from 'lucide-vue-next'
 
 import GeneralSection from './sections/GeneralSection.vue'
 import NetworkSection from './sections/NetworkSection.vue'
 import PropsSection from './sections/PropsSection.vue'
 import PiniaSection from './sections/PiniaSection.vue'
+import LogsSection from './sections/LogsSection.vue'
 import AboutSection from './sections/AboutSection.vue'
 import SettingsDetails from './SettingsDetails.vue'
 import BreakpointForm from '@/features/network/BreakpointForm.vue'
@@ -59,7 +61,7 @@ const settings = ref<InspectorSettings | null>(null)
 const isLoading = ref(true)
 
 // -------------------- SECTIONS --------------------
-type SettingsSection = 'general' | 'network' | 'props' | 'pinia' | 'about'
+type SettingsSection = 'general' | 'network' | 'props' | 'pinia' | 'logs' | 'about'
 const activeSection = ref<SettingsSection>('general')
 const sheetOpen = ref(false)
 
@@ -73,6 +75,7 @@ const sections = [
   { id: 'network' as const, label: 'Network', icon: Globe },
   { id: 'props' as const, label: 'Props', icon: Box },
   { id: 'pinia' as const, label: 'Pinia Store', icon: Database },
+  { id: 'logs' as const, label: 'Logs', icon: FileText },
   { id: 'about' as const, label: 'About', icon: Info },
 ]
 
@@ -654,6 +657,10 @@ onMounted(async () => {
               :selected-item-id="selectedItem?.type === 'pinia-favorite' ? selectedItem.id : null"
               @select="onSelectItem"
               @edit="handleEditPiniaFavorite"
+            />
+            <LogsSection
+              v-else-if="activeSection === 'logs'"
+              :settings="settings"
             />
             <AboutSection
               v-else-if="activeSection === 'about'"

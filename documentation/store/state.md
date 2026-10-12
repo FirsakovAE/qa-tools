@@ -115,6 +115,27 @@ function replaceState(storeId, newState) {
 
 Success replies with `PINIA_REPLACE_STATE_RESULT`; the card may re-fetch `PINIA_GET_STORE_STATE` to resync.
 
+### Removing keys
+
+The merge above never deletes keys on its own, so keys removed in the editor are sent explicitly: before saving, the UI compares the loaded snapshot with the edited JSON and adds `removedPaths` — the paths of deleted keys (arrays are replaced as a whole and are not compared inside).
+
+```ts
+const response = await runtime.sendMessage({
+  type: 'PINIA_REPLACE_STATE',
+  storeId,
+  newState,
+  removedPaths: findRemovedPaths(stateData.value, newState) // e.g. [['user', 'middleName'], ['discount']]
+})
+```
+
+Inside the same `store.$patch`, after the merge:
+
+* **nested keys** are deleted from their object — getters and watchers react as to a missing field;
+* **top-level keys** of an options store are deleted from `$state`;
+* **top-level keys** of a setup store are set to `undefined`: deleting the ref would detach it from the store, so later writes would no longer reach the state.
+
+Only the keys you removed are deleted; everything else keeps the merge behavior.
+
 ---
 
 ## Path patch (`PINIA_PATCH_STATE`)

@@ -21,10 +21,10 @@ const SERIALIZE_TIME_BUDGET_MS = 8
 const MAX_DEPTH = 12
 
 /** Maximum array length to serialize */
-const MAX_ARRAY_LENGTH = 50
+const MAX_ARRAY_LENGTH = 500
 
 /** Maximum object keys to serialize */
-const MAX_OBJECT_KEYS = 30
+const MAX_OBJECT_KEYS = 300
 
 /** Maximum string length for values */
 const MAX_STRING_LENGTH = 500

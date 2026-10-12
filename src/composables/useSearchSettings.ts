@@ -9,8 +9,8 @@ import type { InspectorSettings } from '@/settings/inspectorSettings'
 export interface UseSearchSettingsConfig<T extends string> {
   /** Settings ref from useInspectorSettingsSync() */
   settings: Ref<InspectorSettings | null>
-  /** Key in settings: 'propsSearch' | 'piniaSearch' | 'networkSearch' */
-  searchKey: 'propsSearch' | 'piniaSearch' | 'networkSearch'
+  /** Key in settings: 'propsSearch' | 'piniaSearch' | 'networkSearch' | 'logsSearch' */
+  searchKey: 'propsSearch' | 'piniaSearch' | 'networkSearch' | 'logsSearch'
   /** Map display label -> settings key, e.g. { 'Name': 'byName', 'Key': 'byKey' } */
   typeMap: Record<string, T>
 }

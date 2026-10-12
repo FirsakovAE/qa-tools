@@ -110,6 +110,17 @@ function processMessage(msg: any): void {
       }
       break
 
+    // Request breakpoint applied: the request is still in flight with the edited data
+    case 'NETWORK_ENTRY_MODIFIED':
+      if (msg.entry) {
+        const idx = idIndex.get(msg.entry.id)
+        if (idx !== undefined) {
+          entries.value[idx] = { ...normalizeEntry(msg.entry), pending: true }
+          entriesVersion.value++
+        }
+      }
+      break
+
     case 'NETWORK_BREAKPOINT_HIT':
       if (msg.requestId && msg.trigger) {
         if (msg.entry) {

@@ -38,6 +38,17 @@ export function routeRequest(
     return
   }
 
+  // Logs commands → forward to injected script, ack immediately
+  if (message.__LOGS_CMD__) {
+    window.postMessage({
+      ...message,
+      __VUE_INSPECTOR__: true,
+      __LOGS_CMD__: true
+    }, '*')
+    sendResponse({ success: true })
+    return
+  }
+
   const handler = runtimeHandlers[message.type]
 
   if (handler) {
@@ -61,8 +72,8 @@ export type SendBroadcast = (msg: { broadcast: boolean; message: any }) => void
 
 /**
  * Handle broadcast messages from injected script.
- * For DevTools: forwards network, detection, props/pinia to the target.
- * For UI iframe: only network is forwarded here (detection is handled by detection.ts → sendFlagsToUI).
+ * For DevTools: forwards network, logs, detection, props/pinia to the target.
+ * For UI iframe: only network and logs are forwarded here (detection is handled by detection.ts → sendFlagsToUI).
  */
 export function forwardInjectedBroadcast(
   data: any,
@@ -73,6 +84,11 @@ export function forwardInjectedBroadcast(
 
   if (data.__NETWORK__) {
     enrichNetworkBroadcastIfNeeded(data, sendToTarget)
+    return true
+  }
+
+  if (data.__LOGS__) {
+    sendToTarget({ broadcast: true, message: data })
     return true
   }
 

@@ -189,6 +189,7 @@ export interface NetworkState {
 export type NetworkMessageType =
   | 'NETWORK_ENTRY_CAPTURED'
   | 'NETWORK_ENTRY_UPDATED'
+  | 'NETWORK_ENTRY_MODIFIED'
   | 'NETWORK_CLEAR'
   | 'NETWORK_PAUSE'
   | 'NETWORK_RESUME'

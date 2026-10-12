@@ -99,6 +99,8 @@ function patchGetters(storeId, newGetters) {
 
 Response: `PINIA_PATCH_GETTERS_RESULT` (`success`, `updated`). **Refresh** afterward to confirm displayed getters match the app.
 
+**Removing keys.** As for [State](./state.md#removing-keys), keys deleted in the editor are sent as `removedPaths`. A getter itself cannot be removed, so only keys **inside** a getter value are deleted — this works when the getter returns an object from state.
+
 ---
 
 ## Notes

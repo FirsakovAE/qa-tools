@@ -115,6 +115,18 @@ const emit = defineEmits<{
   padding: 0;
 }
 
+/* Shared: leading checkbox column, same box as the Props / Pinia favorites column */
+:deep(.virtual-table__cell-check) {
+  width: 40px;
+  height: 100%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
 /* Rows must use padding-right: 0 to align with header */
 :deep(.virtual-table__row) {
   padding-right: 0;

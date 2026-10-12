@@ -321,7 +321,8 @@ function buildModifiedUrl(
   modifications: BreakpointModifiedRequest
 ): string {
   try {
-    const url = new URL(originalUrl)
+    // Relative request URLs ("/api/x") resolve against the page like the browser does
+    const url = new URL(originalUrl, window.location.href)
     
     // Apply scheme change
     if (modifications.scheme) {
@@ -774,6 +775,8 @@ function interceptFetch(): void {
     // ========================================
     let effectiveInput: RequestInfo | URL = input
     let effectiveInit: RequestInit | undefined = init
+    let effectiveUrl = url
+    let effectiveMethod = method.toUpperCase()
         
     if (callbacks?.onBreakpointCheck) {
       const match = callbacks.onBreakpointCheck(url, 'request', method.toUpperCase())
@@ -798,6 +801,7 @@ function interceptFetch(): void {
           
           if (hasUrlMods) {
             const modifiedUrl = buildModifiedUrl(url, modifications)
+            effectiveUrl = modifiedUrl
             
             // If input is a Request object, we need to create a new one with new URL
             if (input instanceof Request) {
@@ -818,11 +822,27 @@ function interceptFetch(): void {
           }
           
           // Update captured data with modifications
+          if (modifications.method) {
+            effectiveMethod = modifications.method.toUpperCase()
+          }
           if (modifications.requestHeaders) {
             requestHeaders = modifications.requestHeaders
           }
-          if (modifications.requestBody !== undefined) {
+          if (!methodAllowsBody(effectiveMethod)) {
+            requestBody = null
+          } else if (modifications.requestBody !== undefined) {
             requestBody = modifications.requestBody
+          }
+
+          if (callbacks?.onRequestModified) {
+            callbacks.onRequestModified({
+              id: requestId,
+              startTime,
+              method: effectiveMethod,
+              url: effectiveUrl,
+              requestHeaders,
+              requestBody
+            })
           }
         }
       }
@@ -850,7 +870,7 @@ function interceptFetch(): void {
       let finalResponse = response
 
       if (callbacks?.onBreakpointCheck) {
-        const match = callbacks.onBreakpointCheck(url, 'response', method.toUpperCase())
+        const match = callbacks.onBreakpointCheck(effectiveUrl, 'response', effectiveMethod)
 
         if (match) {
           
@@ -1394,15 +1414,15 @@ function interceptXHR(): void {
               finalBody = null
             }
             
-            // Check if URL modifications require re-opening
+            // URL, method or header changes require re-opening (open() resets headers)
             // Note: empty params array also counts as URL modification (clears query string)
             const hasUrlMods = reqMods && (reqMods.scheme || reqMods.host || 
-                              reqMods.path || reqMods.method || 
-                              Array.isArray(reqMods.params))
+                              reqMods.path || Array.isArray(reqMods.params))
+            const needsReopen = reqMods && (hasUrlMods || reqMods.method || reqMods.requestHeaders)
             
-            if (hasUrlMods && reqMods) {
+            if (needsReopen && reqMods) {
               // Build modified URL
-              const modifiedUrl = buildModifiedUrl(data.url, reqMods)
+              const modifiedUrl = hasUrlMods ? buildModifiedUrl(data.url, reqMods) : data.url
               const modifiedMethod = reqMods.method || data.method
                             
               // Re-open XHR with new URL (this resets headers)
@@ -1427,10 +1447,24 @@ function interceptXHR(): void {
               if (reqMods.requestHeaders) {
                 data.requestHeaders = reqMods.requestHeaders
               }
-            } else if (reqMods?.requestHeaders) {
-              // Only header modifications - can't easily re-apply without re-open
-              // For now, log a warning - full solution would require re-opening
-              console.warn('[VueInspector Interceptor] XHR header modifications require URL mods to take effect')
+            }
+
+            if (reqMods) {
+              if (!methodAllowsBody(effectiveMethod)) {
+                data.requestBody = null
+              } else if (reqMods.requestBody !== undefined) {
+                data.requestBody = reqMods.requestBody
+              }
+              if (callbacks?.onRequestModified) {
+                callbacks.onRequestModified({
+                  id: data.id,
+                  startTime: data.startTime,
+                  method: data.method,
+                  url: data.url,
+                  requestHeaders: data.requestHeaders,
+                  requestBody: data.requestBody
+                })
+              }
             }
 
             // Remove from pending

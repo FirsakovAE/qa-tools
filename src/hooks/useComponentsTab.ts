@@ -19,7 +19,7 @@ interface ComponentsTabReturn {
     searchTerm: Ref<string>
     propsOnly: Ref<boolean>
     startEditingProps?: (uid: string) => void
-    saveEditedProps?: () => Promise<boolean>
+    saveEditedProps?: (removedKeys?: string[]) => Promise<boolean>
     cancelEditing?: () => void
     updateEditedProp?: (key: string, value: any) => void
     editingComponent?: Ref<string | null>
@@ -116,16 +116,18 @@ export function useComponentsTab(
         editedProps.value[key] = value
     }
 
-    const saveEditedProps = async (): Promise<boolean> => {
+    const saveEditedProps = async (removedKeys: string[] = []): Promise<boolean> => {
         if (!editingComponent.value) {
             return false
         }
+        for (const key of removedKeys) delete editedProps.value[key]
 
         try {
             
             const success = await propsEditorService.value.updateComponentProps(
                 editingComponent.value,
-                editedProps.value
+                editedProps.value,
+                { removedKeys }
             )
 
             if (success) {

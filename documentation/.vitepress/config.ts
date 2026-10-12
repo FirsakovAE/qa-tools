@@ -74,6 +74,14 @@ const sidebarEn = [
     ],
   },
   {
+    text: 'Logs',
+    items: [
+      { text: 'Working with logs', link: '/logs/general' },
+      { text: 'Export and import', link: '/logs/export' },
+      { text: 'Logs settings', link: '/logs/settings' },
+    ],
+  },
+  {
     text: 'Options',
     items: [
       { text: 'Display modes', link: '/options/display_mode' },
@@ -210,6 +218,14 @@ export default defineConfig({
               { text: 'Работа со State', link: '/ru/store/state' },
               { text: 'Работа с Getters', link: '/ru/store/getters' },
               { text: 'Избранное', link: '/ru/store/favorite' },
+            ],
+          },
+          {
+            text: 'Logs',
+            items: [
+              { text: 'Работа с логами', link: '/ru/logs/general' },
+              { text: 'Экспорт и импорт', link: '/ru/logs/export' },
+              { text: 'Настройки логов', link: '/ru/logs/settings' },
             ],
           },
           {

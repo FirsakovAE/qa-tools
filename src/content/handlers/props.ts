@@ -105,7 +105,8 @@ export const handleUpdateComponentProps: RuntimeHandler = (message, sender, send
   requestWindow({
     type: 'VUE_INSPECTOR_UPDATE_PROPS',
     componentPath: message.componentUid,
-    props: message.props
+    props: message.props,
+    removedKeys: message.removedKeys
   }, 'VUE_INSPECTOR_UPDATE_PROPS_RESULT', 5000)
     .then((response: any) => {
       sendResponse({ success: response.success || false, error: response.error })

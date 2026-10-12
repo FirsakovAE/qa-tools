@@ -26,6 +26,8 @@ The button remains **disabled** while the filtered list is empty.
 
 The file contains **only rows currently visible** in the table with **Search** and active search modes applied (path, method, status code, keys and values inside bodies, and so on). This is not necessarily the full request history: active filters restrict what enters the collection.
 
+If requests are ticked in the checkbox column, only the selected requests are exported; the button then shows **Export Collection (n)**.
+
 For each included row, a separate request is created in the collection with:
 
 * **method** and **URL** (including address components and query string when present);

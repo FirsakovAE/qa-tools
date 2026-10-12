@@ -1,5 +1,7 @@
 import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
 
+import { DEFAULT_LOGS_LIMITS, DEFAULT_LOGS_MASKING } from '@/injected/logs/config'
+
 export type InspectorSettings = BaseInspectorSettings
 export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope }
 
@@ -104,6 +106,11 @@ export const defaultInspectorSettings: InspectorSettings = {
         siteBlacklist: [],
         siteWhitelist: [],
     },
+    logsIgnoreRules: [],
+    logsSearch: { byName: true, byKey: false, byValue: false },
+    logsLimits: structuredClone(DEFAULT_LOGS_LIMITS),
+    logsMasking: structuredClone(DEFAULT_LOGS_MASKING),
+    logsExportFormat: 'html',
 }
 
 export const defaultCustomizeSettings: CustomizeSettings = defaultInspectorSettings.customize

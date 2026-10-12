@@ -25,6 +25,7 @@ Main capabilities:
 * Inspect received and declared props;
 * Access store data without manually searching runtime structures;
 * Browse network requests in a structured format;
+* Keep a single journal of requests, props, emits, store changes, navigation and errors, and export it as an HTML report;
 * Jump quickly to related data inside the application;
 * Select components directly on the page using Inspect mode;
 * Filter and locate required data without manually traversing the DOM structure;

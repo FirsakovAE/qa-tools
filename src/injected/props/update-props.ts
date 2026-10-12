@@ -70,6 +70,27 @@ function updateModelProp(instance: any, key: string, value: any): boolean {
 }
 
 /**
+ * Value Vue resolves for a prop the parent does not pass: its default, false for
+ * Boolean props without a default, otherwise undefined
+ */
+function resolveOmittedPropValue(instance: any, key: string): any {
+  const options =
+    instance?.propsOptions?.[0]?.[key] ??
+    instance?.$options?.props?.[key] ??
+    instance?.type?.props?.[key]
+  if (!options || typeof options !== 'object') return undefined
+  const types = Array.isArray(options.type) ? options.type : [options.type]
+  if (Object.prototype.hasOwnProperty.call(options, 'default')) {
+    const value = options.default
+    if (typeof value === 'function' && !types.includes(Function)) {
+      return value.call(instance?.proxy ?? null, { ...(instance?.props ?? {}) })
+    }
+    return value
+  }
+  return types.includes(Boolean) ? false : undefined
+}
+
+/**
  * Найти instance по UID через meta store
  */
 function findInstanceByUid(uid: number): any | null {
@@ -101,7 +122,8 @@ function getPropsFromInstance(instance: any): any | null {
  */
 export function updateComponentProps(
   path: string,
-  newProps: Record<string, any>
+  newProps: Record<string, any>,
+  removedKeys: string[] = []
 ): boolean {
   let instance: any = null
   let props: any = null
@@ -130,6 +152,12 @@ export function updateComponentProps(
   }
 
   let success = false
+
+  const omitted: Record<string, any> = {}
+  for (const key of removedKeys) {
+    if (key in props && !(key in newProps)) omitted[key] = resolveOmittedPropValue(instance, key)
+  }
+  newProps = { ...newProps, ...omitted }
 
   for (const key in newProps) {
     if (!(key in props)) continue

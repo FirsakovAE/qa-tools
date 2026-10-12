@@ -236,8 +236,11 @@ async function saveChanges() {
       updateEditedProp?.(key, value)
     })
 
-    // Save via service
-    const saveResult = await saveEditedProps?.()
+    const original = props.node.props ?? (() => {
+      try { return JSON.parse(props.node.jsonProps ?? '{}') } catch { return {} }
+    })()
+    const removedKeys = Object.keys(original ?? {}).filter(key => !(key in parsed))
+    const saveResult = await saveEditedProps?.(removedKeys)
     
     if (saveResult === true) {
       // Update local state

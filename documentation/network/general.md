@@ -80,7 +80,7 @@ Clears accumulated rows next to **Pause**.
 
 ### Export Collection
 
-**Export Collection** saves the current **filtered** request list (see [Export collections](./export.md)).
+**Export Collection** saves the current **filtered** request list, or only the selected requests when rows are ticked (see [Export collections](./export.md)).
 
 ## Work area
 
@@ -98,6 +98,16 @@ Per request you typically see:
 * **Size** — payload size;
 
 Column visibility is configurable.
+
+The first column contains checkboxes for choosing requests to export:
+
+| Action | Result |
+| ------ | ------ |
+| Click a checkbox | Select / unselect a request |
+| **Shift** + click | Select a range from the last clicked row |
+| **Ctrl / Cmd** + click on a row | Toggle a row without opening details |
+| **Ctrl / Cmd** + **A** (table focused) | Select all filtered requests |
+| Header checkbox | Select all / clear selection |
 
 ### Request details
 

@@ -117,6 +117,14 @@ When editing, **Refresh** and **Edit** become **Cancel** and **Save**. **Star** 
 * changes apply only after **Save**;
 * if save fails, edit mode may remain—watch UI messages and the console.
 
+**Removing keys.** A prop deleted from the JSON gets the value Vue uses when the parent does not pass that prop:
+
+* the prop's **default** (a factory function is called);
+* `false` for **Boolean** props without a default;
+* otherwise `undefined`.
+
+Keys deleted inside an object prop are removed from the object. This lets you check how a component behaves when optional data is missing. After saving, the card shows the edited JSON; use **Refresh** to see the resolved values.
+
 The **favorite** star in this panel and in the table is described on [Favorites](/props/favorite).
 
 Card data reflects the **last successful** update for the selected node—use **Refresh** in the detail header to re-query props from the page, or toolbar **Refresh** on **Props** for a full snapshot refresh.

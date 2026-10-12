@@ -281,8 +281,8 @@ function handleMessage(event: MessageEvent) {
   // Handle UPDATE_PROPS message
   if (event.data.type === MESSAGE_TYPES.UPDATE_PROPS) {
     try {
-      const { componentPath, props } = event.data
-      const success = updateComponentProps(componentPath, props)
+      const { componentPath, props, removedKeys } = event.data
+      const success = updateComponentProps(componentPath, props, Array.isArray(removedKeys) ? removedKeys : [])
 
       window.postMessage({
         __FROM_VUE_INSPECTOR__: true,

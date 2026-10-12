@@ -15,7 +15,7 @@ function uiBridgeMessageHandler(event: MessageEvent): void {
   const data = event.data
   if (!data || typeof data !== 'object') return
 
-  // Handle messages from injected script (network events) — detection/props/pinia handled by detection.ts
+  // Handle messages from injected script (network + logs events) — detection/props/pinia handled by detection.ts
   if (data.__FROM_VUE_INSPECTOR__) {
     forwardInjectedBroadcast(data, (msg) => broadcastToUI(msg.message), { onlyNetwork: true })
     return

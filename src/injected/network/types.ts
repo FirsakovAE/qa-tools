@@ -13,6 +13,8 @@ export interface PendingRequest {
 
 export interface InterceptorCallbacks {
   onRequest: (request: PendingRequest) => void
+  /** Called after a request breakpoint is applied, with the data actually sent */
+  onRequestModified?: (request: PendingRequest) => void
   onResponse: (id: string, response: ResponseData) => void
   onError: (id: string, error: string) => void
   /** Called to check if a breakpoint should trigger */

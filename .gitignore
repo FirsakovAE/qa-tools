@@ -30,7 +30,7 @@ build/
 Thumbs.db
 
 # Logs
-logs
+/logs/
 *.log
 
 # Coverage

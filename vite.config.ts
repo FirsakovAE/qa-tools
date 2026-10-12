@@ -233,6 +233,7 @@ export default defineConfig({
           // Extension content/background scripts can't use ES `import` statements.
           // If Rollup splits a shared helper into a separate chunk, inline it back.
           const scriptEntries = ['js/content.js', 'js/background.js', 'js/injected.js', 'js/devtools.js']
+          let inlinedCount = 0
 
           for (const entryName of scriptEntries) {
             const entry = bundle[entryName]
@@ -261,11 +262,11 @@ export default defineConfig({
                   })
                 }
 
-                let code = chunk.code.replace(/\bexport\s*\{[^}]*\}\s*;?\s*$/, '')
+                const code = chunk.code.replace(/\bexport\s*\{[^}]*\}\s*;?\s*$/, '')
 
                 // Compose import aliases through the export map:
-                // import { g as Jo } + export { l as g } → var Jo = l;
-                const aliases = namedImportsStr.split(',').map((s: string) => {
+                // import { g as Jo } + export { l as g } → Jo = l
+                const aliases = namedImportsStr.split(',').filter((s: string) => s.trim()).map((s: string) => {
                   const m = s.trim().match(/^(\S+)\s+as\s+(\S+)$/)
                   const exportedName = m ? m[1] : s.trim()
                   const localAlias = m ? m[2] : s.trim()
@@ -273,14 +274,21 @@ export default defineConfig({
                   return { chunkLocal, localAlias }
                 })
 
-                const aliasCode = aliases
-                  .filter(a => a.chunkLocal !== a.localAlias)
-                  .map(a => `var ${a.localAlias}=${a.chunkLocal};`)
-                  .join('')
-
-                return code + aliasCode
+                // The chunk runs in its own scope: its minified top-level names would otherwise
+                // collide with the entry's own top-level names.
+                const scopeVar = `__inlinedChunk${inlinedCount++}`
+                const returned = aliases.map((a, i) => `_${i}:${a.chunkLocal}`).join(',')
+                const aliasCode = aliases.map((a, i) => `var ${a.localAlias}=${scopeVar}._${i};`).join('')
+                return `var ${scopeVar}=(()=>{${code}\nreturn{${returned}}})();${aliasCode}\n`
               }
             )
+
+            // These run as classic scripts (injected into the page / loaded by the bookmarklet):
+            // top-level minified names would share the page's global scope and clash with its
+            // own globals (e.g. `const { h } = Vue` → "Identifier 'h' has already been declared").
+            if (!/\b(import|export)\s*[{*]/.test(entry.code)) {
+              entry.code = `(()=>{${entry.code}\n})();\n`
+            }
           }
         }
       }]

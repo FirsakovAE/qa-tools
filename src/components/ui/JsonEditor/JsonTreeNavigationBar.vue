@@ -7,9 +7,11 @@
 import type { JSONPath } from 'immutable-json-patch'
 import { ChevronRight, Copy, Pencil, X } from 'lucide-vue-next'
 import { computed, nextTick, ref, watch } from 'vue'
+import { ScrollAreaRoot, ScrollAreaViewport } from 'reka-ui'
 import { parseJSONPath, stringifyJSONPath } from 'vanilla-jsoneditor'
 
 import { Button } from '@/components/ui/button'
+import ScrollBar from '@/components/ui/scroll-area/ScrollBar.vue'
 import { copyToClipboard } from '@/utils/networkUtils'
 
 const props = withDefaults(
@@ -104,30 +106,31 @@ async function copyPathToClipboard() {
     aria-label="JSON path"
   >
     <template v-if="!editingPath">
-      <div
-        class="flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden [scrollbar-width:thin]"
-      >
-        <div class="flex w-max min-w-full flex-nowrap items-center gap-0.5">
-          <template v-for="(item, i) in segments" :key="`${i}:${item.label}`">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="h-7 shrink-0 whitespace-nowrap px-2 font-normal text-foreground text-xs"
-              :class="i === segments.length - 1 ? 'font-medium' : ''"
-              :title="stringifyJSONPath(item.prefix)"
-              @click="emit('navigate', item.prefix)"
-            >
-              {{ item.label }}
-            </Button>
-            <ChevronRight
-              v-if="i < segments.length - 1"
-              class="size-3.5 shrink-0 text-muted-foreground opacity-70"
-              aria-hidden="true"
-            />
-          </template>
-        </div>
-      </div>
+      <ScrollAreaRoot class="relative min-h-7 h-7 min-w-0 flex-1 overflow-hidden">
+        <ScrollAreaViewport class="h-full w-full rounded-[inherit]">
+          <div class="flex w-max flex-nowrap items-center gap-0.5 py-px">
+            <template v-for="(item, i) in segments" :key="`${i}:${item.label}`">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="h-7 shrink-0 whitespace-nowrap px-2 font-normal text-foreground text-xs"
+                :class="i === segments.length - 1 ? 'font-medium' : ''"
+                :title="stringifyJSONPath(item.prefix)"
+                @click="emit('navigate', item.prefix)"
+              >
+                {{ item.label }}
+              </Button>
+              <ChevronRight
+                v-if="i < segments.length - 1"
+                class="size-3.5 shrink-0 text-muted-foreground opacity-70"
+                aria-hidden="true"
+              />
+            </template>
+          </div>
+        </ScrollAreaViewport>
+        <ScrollBar orientation="horizontal" />
+      </ScrollAreaRoot>
 
       <Button
         v-if="pathEditable"

@@ -5,6 +5,7 @@ import { cn } from '@/components/ui/utils';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { Separator } from '@/components/ui/Separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator,
 } from '@/components/ui/Command';
@@ -16,6 +17,8 @@ const props = withDefaults(defineProps<{
   maxBadges?: number;
   allowCreate?: boolean;
   minWidth?: number;
+  /** Single badge shown instead of the list when every option is selected */
+  allLabel?: string;
 }>(), {
   maxBadges: 2,
   allowCreate: false,
@@ -45,6 +48,10 @@ const canCreate = computed(() => {
   const normalizedValue = value.toLowerCase();
   return !props.options.some(option => option.toLowerCase() === normalizedValue);
 });
+
+const allSelected = computed(() =>
+  !!props.allLabel && props.options.length > 0 && props.options.every(option => selectedValues.value.has(option)),
+);
 
 const selectedBadges = computed(() => {
   return props.options.filter(option => selectedValues.value.has(option)).slice(0, props.maxBadges);
@@ -82,7 +89,16 @@ function clearSearch() {
       >
         <CirclePlusIcon class="size-3.5" />
         {{ props.title }}
-        <template v-if="selectedValues.size > 0">
+        <template v-if="allSelected">
+          <Separator
+            orientation="vertical"
+            class="mx-1.5 h-3.5"
+          />
+          <span class="inline-flex h-4 items-center justify-center rounded-md bg-secondary px-1.5 text-[11px] text-secondary-foreground">
+            {{ props.allLabel }}
+          </span>
+        </template>
+        <template v-else-if="selectedValues.size > 0">
           <Separator
             orientation="vertical"
             class="mx-1.5 h-3.5"
@@ -122,7 +138,8 @@ function clearSearch() {
           :placeholder="props.title"
           @keydown.esc="clearSearch"
         />
-        <CommandList>
+        <CommandList class="max-h-none overflow-visible">
+          <ScrollArea class="[&>[data-reka-scroll-area-viewport]]:max-h-[300px]">
           <CommandEmpty v-if="filteredOptions.length === 0 && !canCreate">
             No results found.
           </CommandEmpty>
@@ -163,6 +180,7 @@ function clearSearch() {
               <span class="truncate select-text">{{ option }}</span>
             </CommandItem>
           </CommandGroup>
+          </ScrollArea>
           <CommandSeparator v-if="$slots.footer" />
           <div
             v-if="$slots.footer"

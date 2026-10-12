@@ -18,6 +18,7 @@ import {
 import { initPropsModule, cleanupPropsModule } from './props/index'
 import { initPiniaModule } from './pinia/index'
 import { initNetworkModule, cleanupNetworkModule } from './network/index'
+import { initLogsModule, initPiniaLogs, initPropsLogs, cleanupPropsLogs } from './logs/index'
 
 // Module state
 let propsModuleLoaded = false
@@ -57,6 +58,7 @@ function loadPropsModule() {
   try {
     propsModuleLoaded = true
     initPropsModule()
+    initPropsLogs()
 
     window.postMessage({
       type: 'VUE_INSPECTOR_PROPS_READY',
@@ -76,6 +78,7 @@ function loadPiniaModule() {
   try {
     piniaModuleLoaded = true
     initPiniaModule()
+    initPiniaLogs()
 
     window.postMessage({
       type: 'VUE_INSPECTOR_PINIA_READY',
@@ -157,6 +160,7 @@ function initialize() {
   try {
     window.addEventListener('message', handleMessage)
 
+    initLogsModule()
     loadNetworkModule()
 
     cleanupDetection = setupReactiveDetection({
@@ -203,6 +207,7 @@ function cleanup() {
     window.removeEventListener('message', handleMessage)
     cleanupDetection?.()
     cleanupPropsModule()
+    cleanupPropsLogs()
     cleanupNetworkModule()
   } catch (e) {
     console.error('[injected/main] cleanup failed:', e)

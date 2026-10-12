@@ -34,12 +34,14 @@ interface ReplaceStateMessage extends PiniaMessage {
   type: 'PINIA_REPLACE_STATE'
   storeId: string
   newState: Record<string, any>
+  removedPaths?: string[][]
 }
 
 interface PatchGettersMessage extends PiniaMessage {
   type: 'PINIA_PATCH_GETTERS'
   storeId: string
   newGetters: Record<string, any>
+  removedPaths?: string[][]
 }
 
 interface CallActionMessage extends PiniaMessage {
@@ -195,7 +197,7 @@ function handlePatchState(data: PatchStateMessage) {
 
 function handleReplaceState(data: ReplaceStateMessage) {
   try {
-    const success = replaceState(data.storeId, data.newState)
+    const success = replaceState(data.storeId, data.newState, data.removedPaths)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_REPLACE_STATE_RESULT',
@@ -218,7 +220,7 @@ function handleReplaceState(data: ReplaceStateMessage) {
 
 function handlePatchGetters(data: PatchGettersMessage) {
   try {
-    const result = patchGetters(data.storeId, data.newGetters)
+    const result = patchGetters(data.storeId, data.newGetters, data.removedPaths)
     window.postMessage({
       __FROM_VUE_INSPECTOR__: true,
       type: 'PINIA_PATCH_GETTERS_RESULT',

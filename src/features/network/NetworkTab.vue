@@ -20,6 +20,7 @@ import type { BreakpointItem, MockRule } from '@/types/inspector'
 import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useSearchSettings } from '@/composables/useSearchSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
+import { useRowSelection } from '@/composables/useRowSelection'
 import { downloadPostmanCollection } from '@/utils/networkUtils'
 import { mapEntriesForPostmanExport } from '@/utils/networkAdvancedHeaders'
 import { 
@@ -219,8 +220,27 @@ const selectedEntry = computed(() => {
 
 const entriesCount = computed(() => filteredEntries.value.length)
 
+const rowSelection = useRowSelection(() => filteredEntries.value.map(e => e.id))
+
+/** Ticked rows when there are any, otherwise everything that passes the search */
+const entriesToExport = computed(() => {
+  if (rowSelection.count.value === 0) return filteredEntries.value
+  const ids = new Set(rowSelection.checkedIds.value)
+  return filteredEntries.value.filter(e => ids.has(e.id))
+})
+
+const exportLabel = computed(() =>
+  rowSelection.count.value ? `Export Collection (${rowSelection.count.value})` : 'Export Collection',
+)
+
+const exportTooltip = computed(() =>
+  rowSelection.count.value
+    ? `Export ${rowSelection.count.value} selected requests as Postman collection`
+    : 'Export filtered requests as Postman collection (tick rows to export only them)',
+)
+
 const entriesForPostmanExport = computed(() =>
-  mapEntriesForPostmanExport(filteredEntries.value, settings.value ?? undefined),
+  mapEntriesForPostmanExport(entriesToExport.value, settings.value ?? undefined),
 )
 
 const currentBreakpointDraft = computed<BreakpointDraft | null>(() => {
@@ -417,11 +437,11 @@ watch(settings, (s) => {
                   @click="downloadPostmanCollection(entriesForPostmanExport)"
                 >
                   <Upload class="h-3.5 w-3.5" />
-                  <span class="text-xs font-medium">Export Collection</span>
+                  <span class="text-xs font-medium">{{ exportLabel }}</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Export filtered requests as Postman collection
+                {{ exportTooltip }}
               </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -444,11 +464,11 @@ watch(settings, (s) => {
                   @click="downloadPostmanCollection(entriesForPostmanExport)"
                 >
                   <Upload class="h-3.5 w-3.5" />
-                  <span class="text-xs font-medium">Export Collection</span>
+                  <span class="text-xs font-medium">{{ exportLabel }}</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Export filtered requests as Postman collection
+                {{ exportTooltip }}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -564,7 +584,7 @@ watch(settings, (s) => {
                 size="icon"
                 class="h-8 w-8"
                 :disabled="totalCount === 0"
-                @click="clearEntries"
+                @click="clearEntries(); rowSelection.clear()"
               >
                 <Trash2 class="h-4 w-4" />
               </Button>
@@ -580,10 +600,14 @@ watch(settings, (s) => {
     <!-- Content -->
     <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden responsive-panels">
       <!-- Left: Table -->
-      <div class="h-full min-h-0 overflow-hidden">
+      <div class="h-full min-h-0 overflow-hidden outline-none" tabindex="-1" @keydown="rowSelection.handleKeydown">
         <NetworkTable
           :entries="filteredEntries"
           :selected-id="selectedEntryId"
+          :checked-ids="rowSelection.checked.value"
+          :header-check-state="rowSelection.headerState.value"
+          @check="rowSelection.toggle"
+          @check-all="rowSelection.toggleAll"
           :breakpoint-entry-ids="breakpointState.breakpointEntryIds.value"
           :breakpoint-matching-ids="breakpointState.entriesMatchingBreakpoints.value"
           :mock-matching-ids="mockState.entriesMatchingMocks.value"

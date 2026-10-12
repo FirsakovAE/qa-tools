@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import VirtualTable from '@/components/VirtualTable.vue'
+import RowCheckCell from '@/components/RowCheckCell.vue'
+import type { RowCheckState } from '@/composables/useRowSelection'
 import { Badge } from '@/components/ui/badge'
 import {
   ContextMenu,
@@ -35,6 +37,9 @@ const props = withDefaults(
     mocksRulesActive?: boolean
     allBreakpoints?: BreakpointWithStatus[]
     allMocks?: MockWithStatus[]
+    /** Rows ticked for export */
+    checkedIds: ReadonlySet<string>
+    headerCheckState: RowCheckState
   }>(),
   {
     breakpointsRulesActive: true,
@@ -44,6 +49,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'select', id: string): void
+  /** Checkbox click or Shift/Ctrl/Cmd+click on a row */
+  (e: 'check', id: string, event: MouseEvent): void
+  (e: 'checkAll'): void
   (e: 'setBreakpoint', entry: NetworkEntry): void
   (e: 'copyCurl', entry: NetworkEntry): void
   (e: 'mockResponse', entry: NetworkEntry): void
@@ -135,6 +143,15 @@ function matchesMockPattern(entryId: string): boolean {
   return props.mockMatchingIds?.has(entryId) ?? false
 }
 
+function onRowClick(id: string, event: MouseEvent) {
+  if (event.shiftKey || event.ctrlKey || event.metaKey) emit('check', id, event)
+  else emit('select', id)
+}
+
+function onRowMousedown(event: MouseEvent) {
+  if (event.shiftKey) event.preventDefault()
+}
+
 const ROW_HEIGHT = 40
 </script>
 
@@ -147,6 +164,11 @@ const ROW_HEIGHT = 40
     empty-message="No network requests captured yet"
   >
     <template #header>
+      <RowCheckCell
+        :state="headerCheckState"
+        :title="headerCheckState === true ? 'Unselect all' : 'Select all for export (Ctrl+A)'"
+        @toggle="emit('checkAll')"
+      />
       <div v-if="columns.status" class="network-cell network-cell-status">Status</div>
       <div v-if="columns.method" class="network-cell network-cell-method">Method</div>
       <div v-if="columns.name" :class="['network-cell network-cell-name', columns.path ? 'network-cell-name-with-path' : '']">Name</div>
@@ -180,8 +202,14 @@ const ROW_HEIGHT = 40
                     'network-row-mock-match': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id) && props.mocksRulesActive,
                     'network-row-mock-match-muted': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id) && !props.mocksRulesActive,
                   }"
-                  @click="emit('select', entry.id)"
+                  @mousedown="onRowMousedown"
+                  @click="onRowClick(entry.id, $event)"
                 >
+                  <RowCheckCell
+                    :state="checkedIds.has(entry.id)"
+                    title="Select for export (Shift — range, Ctrl/Cmd+click on row — toggle)"
+                    @toggle="emit('check', entry.id, $event)"
+                  />
                   <div v-if="columns.status" class="network-cell network-cell-status">
                     <Badge
                       variant="outline"
@@ -357,7 +385,7 @@ const ROW_HEIGHT = 40
 }
 
 .network-row-breakpoint-match {
-  border-left: 2px solid hsl(48 97% 47% / 0.5);
+  box-shadow: inset 2px 0 0 hsl(48 97% 47% / 0.5);
 }
 
 .network-row-mock-selected {
@@ -369,7 +397,7 @@ const ROW_HEIGHT = 40
 }
 
 .network-row-mock-match {
-  border-left: 2px solid hsl(262 83% 58% / 0.5);
+  box-shadow: inset 2px 0 0 hsl(262 83% 58% / 0.5);
 }
 
 .network-row-breakpoint-muted {
@@ -381,7 +409,7 @@ const ROW_HEIGHT = 40
 }
 
 .network-row-breakpoint-match-muted {
-  border-left: 2px solid hsl(var(--muted-foreground) / 0.35);
+  box-shadow: inset 2px 0 0 hsl(var(--muted-foreground) / 0.35);
 }
 
 .network-row-mock-selected-muted {
@@ -393,7 +421,7 @@ const ROW_HEIGHT = 40
 }
 
 .network-row-mock-match-muted {
-  border-left: 2px solid hsl(var(--muted-foreground) / 0.35);
+  box-shadow: inset 2px 0 0 hsl(var(--muted-foreground) / 0.35);
 }
 
 .network-row:hover:not(.network-row-selected):not(.network-row-breakpoint):not(.network-row-mock-selected):not(.network-row-breakpoint-muted):not(.network-row-mock-selected-muted) {

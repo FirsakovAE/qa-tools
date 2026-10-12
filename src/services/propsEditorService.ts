@@ -21,6 +21,8 @@ export interface PropsEditorService {
 export interface UpdateOptions {
     silent?: boolean // Не показывать уведомления
     deepUpdate?: boolean // Попытаться обновить вложенные объекты
+    /** Props deleted in the editor: they get the value Vue resolves for an omitted prop */
+    removedKeys?: string[]
 }
 
 // Реализация для реальных данных (работает через runtime adapter)
@@ -66,6 +68,7 @@ export class RealPropsEditorService implements PropsEditorService {
                 type: 'UPDATE_COMPONENT_PROPS',
                 componentUid,
                 props: serializedProps,
+                removedKeys: options?.removedKeys ?? [],
                 options
             })
 

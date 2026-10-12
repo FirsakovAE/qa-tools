@@ -1,3 +1,6 @@
+import type { LogIgnoreRule, LogsExportFormat } from './logs'
+import type { LogsLimits, LogsMasking } from '@/injected/logs/config'
+
 export interface FavoriteItem {
     id: string
     /** Session-specific node uid for exact same-session matching */
@@ -169,6 +172,15 @@ export interface PropsSearchSettings {
 export interface PiniaSearchSettings {
     byName: boolean
     byKey: boolean
+    byValue: boolean
+}
+
+export interface LogsSearchSettings {
+    /** Event title, subtitle, group key and request URL */
+    byName: boolean
+    /** Keys and change paths inside the event payload */
+    byKey: boolean
+    /** Values inside the event payload */
     byValue: boolean
 }
 
@@ -350,4 +362,14 @@ export interface BaseInspectorSettings {
     customize: CustomizeSettings
     /** Auto Run: site whitelist/blacklist to control overlay pill visibility */
     autoRun?: AutoRunSettings
+    /** Logs tab: event groups excluded from logging */
+    logsIgnoreRules: LogIgnoreRule[]
+    /** Logs tab search settings */
+    logsSearch: LogsSearchSettings
+    /** Logs ring buffer sizes, memory budget and per-event size limit */
+    logsLimits: LogsLimits
+    /** Masking of sensitive data in logged payloads (applied at capture, so also in exports) */
+    logsMasking: LogsMasking
+    /** Format of Export Logs and of single-event exports */
+    logsExportFormat: LogsExportFormat
 }

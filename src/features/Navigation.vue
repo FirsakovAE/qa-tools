@@ -5,6 +5,7 @@
     Box,
     DatabaseIcon,
     GlobeIcon,
+    FileTextIcon,
     SettingsIcon,
   } from 'lucide-vue-next'
   
@@ -20,7 +21,11 @@ import { PropsTab } from '@/features/props'
 import { StoresTab, usePiniaStores } from '@/features/stores'
 import { OptionsTab } from '@/features/settings'
 import { NetworkTab } from '@/features/network'
+import { LogsTab, initLogsCollector } from '@/features/logs'
 import { postToContentScript } from '@/utils/postToContentScript'
+
+  // Collect logs from app start, independent of the active tab
+  initLogsCollector()
   
   /* ============================================================================
    * Pinia
@@ -55,6 +60,7 @@ import { postToContentScript } from '@/utils/postToContentScript'
    */
   interface UIFeatureFlags {
     hasNetwork: boolean
+    hasLogs: boolean
   }
   
   /**
@@ -93,6 +99,7 @@ import { postToContentScript } from '@/utils/postToContentScript'
   
 const UI_FEATURE_FLAGS: UIFeatureFlags = {
   hasNetwork: true, // 👈 Network tab enabled
+  hasLogs: true,
 }
   
   /**
@@ -327,6 +334,12 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
       icon: DatabaseIcon,
       requiresFlag: 'hasPinia' as const,
     },
+    {
+      id: 'logs',
+      title: 'Logs',
+      icon: FileTextIcon,
+      requiresFlag: 'hasLogs' as const,
+    },
   ] as const
   
   const tabs = computed(() =>
@@ -344,7 +357,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     icon: SettingsIcon,
   } as const
   
-  type TabId = 'props' | 'stores' | 'network' | 'options'
+  type TabId = 'props' | 'stores' | 'network' | 'logs' | 'options'
   
   const activeTab = ref<TabId>('props')
   
@@ -483,6 +496,14 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
             @clear-pending-breakpoint="clearPendingBreakpoint"
             @navigate-to-options="handleNavigateToOptions"
           />
+        </div>
+
+        <!-- ===== Logs tab ===== -->
+        <div
+          v-else-if="activeTab === 'logs'"
+          class="h-full overflow-hidden"
+        >
+          <LogsTab />
         </div>
 
         <!-- ===== Options tab ===== -->

@@ -146,6 +146,57 @@ function assignToPiniaPatchRoot(patchRoot: any, key: string, newValue: any): voi
   patchRoot[key] = newValue
 }
 
+function unwrapWritable(value: any): any {
+  return isVueRef(value) && !isComputedRef(value) ? value.value : value
+}
+
+function isReadOnlyStoreKey(store: any, key: string): boolean {
+  if (typeof store[key] === 'function' || isComputedRef(store[key])) return true
+  const descriptor = Object.getOwnPropertyDescriptor(store, key)
+  return !!descriptor && typeof descriptor.get === 'function' && typeof descriptor.set !== 'function'
+}
+
+/** Deletes a nested key; the merge never removes keys, so editor deletions arrive as explicit paths */
+function deleteNestedPath(root: any, path: string[]): boolean {
+  let obj = root
+  for (let i = 0; i < path.length - 1; i++) {
+    obj = unwrapWritable(obj?.[path[i]])
+    if (!obj || typeof obj !== 'object') return false
+  }
+  const last = path[path.length - 1]
+  if (Array.isArray(obj) || !Object.prototype.hasOwnProperty.call(obj, last)) return false
+  delete obj[last]
+  return true
+}
+
+/**
+ * Top-level keys backed by a ref (setup stores) are set to undefined: deleting the ref from
+ * the state root would detach it from the store. Plain state keys are deleted.
+ */
+function applyRemovedPaths(store: any, paths: string[][] | undefined, allowTopLevel: boolean): void {
+  for (const path of paths ?? []) {
+    if (!Array.isArray(path) || path.length === 0) continue
+    const rootKey = path[0]
+    try {
+      if (path.length > 1) {
+        deleteNestedPath(store, path)
+        continue
+      }
+      if (!allowTopLevel || isReadOnlyStoreKey(store, rootKey)) continue
+      const state = store.$state
+      if (state && Object.prototype.hasOwnProperty.call(state, rootKey)) {
+        const raw = state.__v_raw ?? state
+        if (isVueRef(raw[rootKey])) state[rootKey] = undefined
+        else delete state[rootKey]
+      } else if (rootKey in store) {
+        store[rootKey] = undefined
+      }
+    } catch (e) {
+      console.warn('[injected/pinia/state-writer] removing key failed:', path.join('.'), e)
+    }
+  }
+}
+
 /**
  * Патчит состояние хранилища (обрабатывает все паттерны: setup, options, гибрид)
  */
@@ -208,7 +259,7 @@ export function patchState(storeId: string, path: string, value: any): boolean {
 /**
  * Заменяет все состояние хранилища (обрабатывает все паттерны: setup, options, гибрид)
  */
-export function replaceState(storeId: string, newState: Record<string, any>): boolean {
+export function replaceState(storeId: string, newState: Record<string, any>, removedPaths?: string[][]): boolean {
   const store = getStore(storeId)
   if (!store) {
     return false
@@ -265,6 +316,7 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
             }
           }
         }
+        applyRemovedPaths(store, removedPaths, true)
       })
       
       return true
@@ -276,6 +328,7 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
       if (isComputedRef(store[key])) continue
       store[key] = newState[key]
     }
+    applyRemovedPaths(store, removedPaths, true)
     return true
   } catch (e) {
     console.error('[injected/pinia/state-writer] replaceState failed:', storeId, e)
@@ -287,7 +340,7 @@ export function replaceState(storeId: string, newState: Record<string, any>): bo
  * Патчит геттеры, находя и обновляя исходное состояние
  * Геттеры = f(состояние), поэтому мы обновляем состояние, чтобы изменить значения геттеров
  */
-export function patchGetters(storeId: string, newGetters: Record<string, any>): {
+export function patchGetters(storeId: string, newGetters: Record<string, any>, removedPaths?: string[][]): {
   success: boolean
   updated: string[]      // Real state updated
   error?: string
@@ -350,6 +403,8 @@ export function patchGetters(storeId: string, newGetters: Record<string, any>): 
           console.warn('[injected/pinia/state-writer] patchGetters key failed:', storeId, key, keyErr)
         }
       }
+      // A getter itself cannot be removed, only keys inside its value
+      applyRemovedPaths(store, removedPaths, false)
     })
 
     if (keyFailures.length && updated.length === 0) {

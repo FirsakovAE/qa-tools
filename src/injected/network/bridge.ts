@@ -212,7 +212,8 @@ let activeMocks: MockConfig[] = []
 
 function matchUrl(url: string, pattern: { scheme?: string; host?: string; port?: string; path?: string; query?: string }): boolean {
   try {
-    const urlObj = new URL(url)
+    const urlObj = parseNetworkUrl(url)
+    if (!urlObj) return false
     
     if (pattern.scheme && urlObj.protocol.replace(':', '') !== pattern.scheme) return false
     if (pattern.host && !patternToRegex(pattern.host).test(urlObj.hostname)) return false
@@ -350,8 +351,34 @@ function handleRequest(request: PendingRequest): void {
   sendToContentScript('NETWORK_ENTRY_CAPTURED', { entry })
 }
 
+/** Request breakpoint applied: replace the captured request with what is actually sent */
+function handleRequestModified(request: PendingRequest): void {
+  const pendingEntry = pendingRequests.get(request.id)
+  if (!pendingEntry) return
+  const contentType = request.requestHeaders.find(h => h.name.toLowerCase() === 'content-type')?.value || ''
+  const entry: Partial<NetworkEntry> = {
+    ...pendingEntry,
+    version: (pendingEntry.version || 1) + 1,
+    method: request.method,
+    url: request.url,
+    path: extractUrlPath(request.url),
+    name: extractUrlName(request.url),
+    requestHeaders: request.requestHeaders,
+    params: parseUrlParams(request.url),
+    authorization: extractAuthorization(request.requestHeaders),
+    requestBody: config.captureRequestBody && request.requestBody
+      ? createBodyContent(request.requestBody, contentType, request.requestBody.length)
+      : null,
+  }
+  pendingRequests.set(request.id, entry)
+  sendToContentScript('NETWORK_ENTRY_MODIFIED', { entry })
+}
+
 function handleResponse(id: string, response: ResponseData): void {
-  const pendingEntry = pendingRequests.get(id)
+  // A response breakpoint reports the response twice: before the pause and after Apply.
+  // The second report replaces the already completed entry.
+  const completedIdx = pendingRequests.has(id) ? -1 : entries.findIndex(e => e.id === id)
+  const pendingEntry = pendingRequests.get(id) ?? (completedIdx !== -1 ? entries[completedIdx] : undefined)
   if (!pendingEntry) return
   
   const contentType = response.headers.find(h => h.name.toLowerCase() === 'content-type')?.value || ''
@@ -381,10 +408,14 @@ function handleResponse(id: string, response: ResponseData): void {
     initiator: pendingEntry.initiator || 'fetch'
   }
   
-  pendingRequests.delete(id)
-  entries.push(completedEntry)
-  if (entries.length > config.maxEntries) {
-    entries = entries.slice(-config.maxEntries)
+  if (completedIdx !== -1) {
+    entries[completedIdx] = completedEntry
+  } else {
+    pendingRequests.delete(id)
+    entries.push(completedEntry)
+    if (entries.length > config.maxEntries) {
+      entries = entries.slice(-config.maxEntries)
+    }
   }
   sendToContentScript('NETWORK_ENTRY_UPDATED', { entry: completedEntry })
 }
@@ -515,6 +546,7 @@ export function initNetworkModule(): void {
   
   initNetworkInterceptor({
     onRequest: handleRequest,
+    onRequestModified: handleRequestModified,
     onResponse: handleResponse,
     onError: handleError,
     onBreakpointCheck: checkBreakpoint,

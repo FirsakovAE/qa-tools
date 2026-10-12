@@ -572,3 +572,31 @@
   background-color: hsl(var(--muted-foreground) / 0.6);
   background-clip: content-box;
 }
+
+/*
+ * Tree mode: long primitive values — flex items default to `min-width: auto`
+ * and refuse to shrink, so the row grows and scroll lands on a generic
+ * ancestor. Pin overflow to `.jse-value-outer` so horizontal scroll uses
+ * the themed native bars above (same look as `ScrollBar.vue`).
+ */
+.ui-json-editor__host .jse-tree-mode .jse-json-node .jse-contents {
+  min-width: 0;
+}
+
+.ui-json-editor__host .jse-tree-mode .jse-value-outer {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overflow-y: clip;
+  overscroll-behavior-x: contain;
+}
+
+/*
+ * This node only scrolls horizontally; suppress the vertical scrollbar that
+ * `overflow-x: auto` can still reserve on some engines (WebKit: width = vertical track).
+ */
+.ui-json-editor__host .jse-tree-mode .jse-value-outer::-webkit-scrollbar {
+  width: 0;
+  height: 10px;
+}
