@@ -19,19 +19,21 @@ import JsonEditor from '@/components/JsonEditor.vue'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import type { LogChange, LogEvent } from '@/types/logs'
-import { LOG_KIND_META } from '@/types/logs'
 import type { BodyContent, NetworkEntry } from '@/types/network'
 import { formatBytes } from '@/types/network'
 import { isOmittedValue, type OmittedValue } from '@/injected/logs/sanitize'
 import LogActionsMenuContent from './LogActionsMenuContent.vue'
 import { formatLogDateTime, previewValue, toPrettyJson } from './format'
+import { hydrateLog, logBadgeClass, type LogsSource } from './view'
 
 type SectionId =
-  | 'overview' | 'changes' | 'before' | 'after' | 'args' | 'result' | 'stack' | 'raw'
+  | 'overview' | 'changes' | 'before' | 'after' | 'state' | 'args' | 'result' | 'stack' | 'raw'
   | 'params' | 'requestHeaders' | 'requestBody' | 'responseHeaders' | 'responseBody'
 
 const props = defineProps<{
   event: LogEvent
+  /** Events and network entries the view is restored from */
+  source: LogsSource
   /** Paired request/response event of the same network entry */
   related?: LogEvent | null
 }>()
@@ -56,10 +58,14 @@ function persistJsonMode(m: 'text' | 'tree') {
   if (settings.value?.json) settings.value.json.mode = m
 }
 
-const meta = computed(() => LOG_KIND_META[props.event.kind])
-const data = computed(() => props.event.data as Record<string, any>)
+/** Event with restored fields (states, change values, network entry half) */
+const hydrated = computed(() => hydrateLog(props.event, props.source))
+const view = computed(() => hydrated.value.event)
+const missing = computed(() => hydrated.value.missing)
+const data = computed(() => view.value.data)
+const isStoreBase = computed(() => props.event.kind === 'store' && data.value.op !== 'change')
 
-/** Request or response half of the network entry (older exports may hold the full entry) */
+/** Request or response half of the network entry */
 const entry = computed<Partial<NetworkEntry> | null>(() => (data.value.entry as Partial<NetworkEntry> | undefined) ?? null)
 
 const relatedLabel = computed(() => {
@@ -69,11 +75,27 @@ const relatedLabel = computed(() => {
 
 const changes = computed<LogChange[]>(() => (Array.isArray(data.value.changes) ? data.value.changes : []))
 
+/** Explanation shown instead of a state that cannot be restored */
+const unavailableNotice = computed(() => {
+  const section = activeSection.value
+  if (section === 'state' && missing.value.state) return 'The state was not saved (it could not be restored when older changes were compacted).'
+  if (section === 'before' && missing.value.before) {
+    return 'The state before this change cannot be restored: earlier events of this store are missing or incomplete. The changed values are shown in Changes.'
+  }
+  if (section === 'after' && missing.value.after) {
+    return 'The state after this change cannot be restored: earlier events of this store are missing or incomplete. The changed values are shown in Changes.'
+  }
+  if (missing.value.entry && section !== 'raw') return 'The network entry of this event is no longer available.'
+  return ''
+})
+
 const sections = computed(() => {
   const list: Array<{ id: SectionId; label: string }> = []
   const kind = props.event.kind
   const en = entry.value
-  if (kind === 'request' && en) {
+  if ((kind === 'request' || kind === 'response') && !en) {
+    list.push({ id: 'overview', label: 'Overview' })
+  } else if (kind === 'request' && en) {
     list.push({ id: 'overview', label: 'Overview' })
     if (en.params?.length) list.push({ id: 'params', label: `Params (${en.params.length})` })
     list.push({ id: 'requestHeaders', label: 'Headers' })
@@ -82,6 +104,9 @@ const sections = computed(() => {
     list.push({ id: 'overview', label: 'Overview' })
     list.push({ id: 'responseHeaders', label: 'Headers' })
     list.push({ id: 'responseBody', label: 'Body' })
+  } else if (isStoreBase.value) {
+    list.push({ id: 'state', label: 'State' })
+    list.push({ id: 'overview', label: 'Overview' })
   } else if (kind === 'store' || kind === 'props') {
     list.push({ id: 'changes', label: `Changes (${changes.value.length}${data.value.changesTruncated ? '+' : ''})` })
     list.push({ id: 'before', label: 'Before' })
@@ -119,9 +144,18 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
   ]
   const en = entry.value
   switch (props.event.kind) {
+    case 'store':
+      rows.push({ label: 'Store', value: String(d.storeId) })
+      if (d.op === 'init') rows.push({ label: 'Recorded', value: 'Store created while logging (initial state)' })
+      else if (d.op === 'snapshot') rows.push({ label: 'Recorded', value: 'Logging started on an existing store (current state)' })
+      else if (d.op === 'checkpoint') rows.push({ label: 'Recorded', value: `State after ${d.compacted} older changes compacted by the limits` })
+      break
     case 'request':
     case 'response':
-      if (!en) break
+      if (!en) {
+        rows.push({ label: 'Request', value: props.event.key })
+        break
+      }
       rows.push({ label: 'URL', value: String(en.url ?? '') })
       rows.push({ label: 'Method', value: String(en.method) })
       if (props.event.kind === 'response') {
@@ -156,6 +190,8 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
       if (d.name) rows.push({ label: 'Name', value: String(d.name) })
       rows.push({ label: 'Message', value: String(d.message) })
       if (d.filename) rows.push({ label: 'Location', value: `${d.filename}:${d.lineno ?? 0}:${d.colno ?? 0}` })
+      if (d.stackTruncated) rows.push({ label: 'Stack', value: `Truncated: top ${d.stackTruncated.kept} of ${d.stackTruncated.frames} frames kept` })
+      if (d.suppressedBefore) rows.push({ label: 'Suppressed', value: `${d.suppressedBefore} earlier console errors (more than 50 per second)` })
       break
   }
   return rows
@@ -164,7 +200,7 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
 /** Context line for store/props headers */
 const contextLine = computed(() => {
   const d = data.value
-  if (props.event.kind === 'store') {
+  if (props.event.kind === 'store' && !isStoreBase.value) {
     const parts = [`Mutation: ${d.mutationType || 'direct'}`]
     if (Array.isArray(d.actions) && d.actions.length) parts.push(`Action: ${d.actions.join(', ')}`)
     return parts.join(' · ')
@@ -220,10 +256,11 @@ const jsonBlock = computed(() => {
   switch (activeSection.value) {
     case 'before': return { text: toPrettyJson(d.before), language: 'json' }
     case 'after': return { text: toPrettyJson(d.after), language: 'json' }
+    case 'state': return { text: toPrettyJson(d.state), language: 'json' }
     case 'args': return { text: toPrettyJson(d.args ?? []), language: 'json' }
     case 'result': return { text: toPrettyJson(d.status === 'error' ? d.error : d.result ?? null), language: 'json' }
     case 'stack': return { text: String(d.stack ?? ''), language: 'plain' }
-    case 'raw': return { text: toPrettyJson(props.event), language: 'json' }
+    case 'raw': return { text: toPrettyJson(view.value), language: 'json' }
     default: return null
   }
 })
@@ -234,6 +271,7 @@ const omittedPart = computed<OmittedValue | null>(() => {
   const value =
     activeSection.value === 'before' ? d.before
     : activeSection.value === 'after' ? d.after
+    : activeSection.value === 'state' ? d.state
     : activeSection.value === 'args' ? d.args
     : activeSection.value === 'result' ? (d.status === 'error' ? d.error : d.result)
     : activeSection.value === 'changes' ? d.changes
@@ -261,13 +299,13 @@ function changeTypeClass(type: LogChange['type']): string {
 
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1 min-w-0">
-                <Badge variant="outline" class="text-xs whitespace-nowrap" :class="meta?.badgeClass">
-                  {{ meta?.label ?? event.kind }}
+                <Badge variant="outline" class="text-xs whitespace-nowrap" :class="logBadgeClass(event)">
+                  {{ view.label }}
                 </Badge>
-                <span class="font-semibold truncate" :title="event.title">{{ event.title }}</span>
+                <span class="font-semibold truncate" :title="view.title">{{ view.title }}</span>
               </div>
-              <div class="text-sm truncate text-muted-foreground" :title="contextLine || event.subtitle">
-                {{ contextLine || event.subtitle || formatLogDateTime(event.timestamp) }}
+              <div class="text-sm truncate text-muted-foreground" :title="contextLine || view.subtitle">
+                {{ contextLine || view.subtitle || formatLogDateTime(event.timestamp) }}
               </div>
             </div>
 
@@ -327,6 +365,11 @@ function changeTypeClass(type: LogChange['type']): string {
             {{ formatBytes((data.__sizeLimited as { limit?: number } | undefined)?.limit ?? 0) }}.
             Increase “Max event size” in Options › Logs to keep it.
           </p>
+        </div>
+
+        <!-- State that cannot be restored -->
+        <div v-else-if="unavailableNotice" class="h-full flex items-center justify-center p-6">
+          <p class="max-w-md text-center text-sm text-muted-foreground">{{ unavailableNotice }}</p>
         </div>
 
         <!-- Overview -->
@@ -399,8 +442,14 @@ function changeTypeClass(type: LogChange['type']): string {
                     </Badge>
                   </TableCell>
                   <TableCell class="font-mono text-xs py-2 align-top">
-                    <div v-if="c.type !== 'added'" class="text-red-500/90">− {{ previewValue(c.before) }}</div>
-                    <div v-if="c.type !== 'removed'" class="text-green-500/90">+ {{ previewValue(c.after) }}</div>
+                    <div v-if="c.type !== 'added'" class="text-red-500/90">
+                      − <template v-if="'before' in c">{{ previewValue(c.before) }}</template>
+                      <span v-else class="italic text-muted-foreground">not available</span>
+                    </div>
+                    <div v-if="c.type !== 'removed'" class="text-green-500/90">
+                      + <template v-if="'after' in c">{{ previewValue(c.after) }}</template>
+                      <span v-else class="italic text-muted-foreground">not available</span>
+                    </div>
                   </TableCell>
                 </TableRow>
               </TableBody>

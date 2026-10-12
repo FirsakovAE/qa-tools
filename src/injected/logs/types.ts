@@ -21,16 +21,15 @@ export interface LogChange {
   after?: unknown
 }
 
+/** Stored event: titles and other display fields are derived on read (see runtime.ts) */
 export interface LogEvent {
   id: string
   kind: LogKind
   timestamp: number
-  /** Ignore-rule key (kind + key identify a group of similar events) */
+  /** Subject id (store, component, request group...) and ignore-rule key */
   key: string
   level: LogLevel
-  title: string
-  subtitle?: string
-  data: Record<string, unknown>
+  data: Record<string, any>
   /** Approximate serialized size (chars), used for the memory budget */
   size?: number
 }
@@ -40,4 +39,11 @@ export interface LogIgnoreKey {
   key: string
 }
 
-export type LogEventInput = Omit<LogEvent, 'id' | 'timestamp' | 'size'> & { timestamp?: number }
+export type LogEventInput = Omit<LogEvent, 'id' | 'timestamp' | 'size'> & {
+  timestamp?: number
+  /**
+   * Runs on the sanitized and size-limited payload before it is stored: drops what can be
+   * derived from the parts that survived the limits.
+   */
+  finalize?: (data: Record<string, any>, key: string) => Record<string, any>
+}

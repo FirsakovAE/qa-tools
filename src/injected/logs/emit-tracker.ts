@@ -11,12 +11,10 @@
  * Vue 2: the instance `$emit` is patched (only emits with listeners are logged).
  */
 
-import { serializeProps } from '../props/serialize'
 import { componentName, componentUid, parentChain, type VueVersion } from './component-utils'
-import { getSanitizer, isIgnored, isLogsPaused, recordLog } from './core'
+import { isIgnored, isLogsPaused, recordLog } from './core'
 
 const MAX_EMITS_PER_COMPONENT_PER_SEC = 30
-const ARGS_PREVIEW_CHARS = 120
 
 const hooked = new WeakSet<object>()
 const ownFunctions = new WeakSet<Function>()
@@ -83,21 +81,11 @@ function serializeArg(value: unknown): unknown {
     if (value && typeof value === 'object' && typeof (value as any).nodeType === 'number') {
       return `[DOM ${describeNode(value)}]`
     }
-    return serializeProps(value)
+    // Plain values are copied (whole, masked) by recordLog synchronously
+    return value
   } catch {
     return '[Non-serializable]'
   }
-}
-
-function previewArgs(args: unknown[]): string {
-  if (args.length === 0) return 'no arguments'
-  let text: string
-  try {
-    text = args.map(a => (a === undefined ? 'undefined' : JSON.stringify(a))).join(', ')
-  } catch {
-    text = `${args.length} argument(s)`
-  }
-  return text.length > ARGS_PREVIEW_CHARS ? `${text.slice(0, ARGS_PREVIEW_CHARS)}...` : text
 }
 
 function logEmit(instance: any, version: VueVersion, event: string, rawArgs: unknown[], once: boolean): void {
@@ -106,23 +94,15 @@ function logEmit(instance: any, version: VueVersion, event: string, rawArgs: unk
   const key = `${name}.${event}`
   if (isIgnored('emit', key) || !allowedByRate(instance)) return
 
-  // Masked before the preview is built: the subtitle shows argument values
-  const args = getSanitizer().sanitize<unknown[]>(rawArgs.map(serializeArg)).value
-  recordLog({
-    kind: 'emit',
-    key,
-    level: 'info',
-    title: `${name} @${event}`,
-    subtitle: previewArgs(args),
-    data: {
-      component: name,
-      event,
-      uid: componentUid(instance, version),
-      parents: parentChain(instance, version),
-      once,
-      args,
-    },
-  })
+  // The component name is the part of the key before `.<event>`
+  const data: Record<string, unknown> = {
+    event,
+    uid: componentUid(instance, version),
+    parents: parentChain(instance, version),
+    args: rawArgs.map(serializeArg),
+  }
+  if (once) data.once = true
+  recordLog({ kind: 'emit', key, level: 'info', data })
 }
 
 function safeLog(instance: any, version: VueVersion, event: string, args: unknown[], once: boolean): void {

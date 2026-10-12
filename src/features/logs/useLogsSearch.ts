@@ -1,15 +1,17 @@
 /**
  * Logs search: by event name (title, subtitle, group key, URL), payload keys and payload values.
  * Search types, debounce and min length come from settings (Options > Logs / General).
- * Payload indexes are built lazily per event and released together with the event.
+ * Payload indexes are built lazily per event and released together with the event. They cover
+ * the stored payload: changed values and paths of store / props diffs, full states of store
+ * snapshots and checkpoints, the own half of a network entry.
  */
 
 import { ref, computed, watch, type Ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { LogEvent, LogChange } from '@/types/logs'
-import type { NetworkEntry } from '@/types/network'
 import { parseSearchTerm } from '@/utils/searchUtils'
+import { describeLog, networkEntryOf, searchPayload, type LogsSource } from './view'
 
 const MAX_INDEX_CHARS = 200_000
 const MAX_INDEX_DEPTH = 20
@@ -23,7 +25,7 @@ const searchTerm = ref('')
 const debouncedTerm = ref('')
 const indexes = new WeakMap<LogEvent, PayloadIndex>()
 
-function buildIndex(event: LogEvent): PayloadIndex {
+function buildIndex(event: LogEvent, source: LogsSource): PayloadIndex {
   const keys: string[] = []
   const values: string[] = []
   let keyChars = 0
@@ -61,20 +63,20 @@ function buildIndex(event: LogEvent): PayloadIndex {
 
   const changes = (event.data as { changes?: LogChange[] }).changes
   if (Array.isArray(changes)) for (const c of changes) pushKey(c.path)
-  walk(event.data, 0)
+  walk(searchPayload(event, source), 0)
   return { keys: `\n${keys.join('\n')}\n`, values: `\n${values.join('\n')}\n` }
 }
 
-function indexOf(event: LogEvent): PayloadIndex {
+function indexOf(event: LogEvent, source: LogsSource): PayloadIndex {
   let idx = indexes.get(event)
   if (!idx) {
-    idx = buildIndex(event)
+    idx = buildIndex(event, source)
     indexes.set(event, idx)
   }
   return idx
 }
 
-export function useLogsSearch(events: Ref<LogEvent[]>, settings: Ref<InspectorSettings | null>) {
+export function useLogsSearch(events: Ref<LogEvent[]>, source: Ref<LogsSource>, settings: Ref<InspectorSettings | null>) {
   const options = computed(() => {
     const s = settings.value?.logsSearch
     const byName = s?.byName ?? true
@@ -102,11 +104,11 @@ export function useLogsSearch(events: Ref<LogEvent[]>, settings: Ref<InspectorSe
     const o = options.value
     const has = (field: string | undefined) => !!field && (exact ? field.toLowerCase() === q : field.toLowerCase().includes(q))
     if (o.byName) {
-      const entry = (event.data as { entry?: NetworkEntry }).entry
-      if (has(event.title) || has(event.subtitle) || has(event.key) || has(entry?.url)) return true
+      const { title, subtitle } = describeLog(event, source.value)
+      if (has(title) || has(subtitle) || has(event.key) || has(networkEntryOf(event, source.value)?.url)) return true
     }
     if (o.byKey || o.byValue) {
-      const idx = indexOf(event)
+      const idx = indexOf(event, source.value)
       const inText = (text: string) => (exact ? text.includes(`\n${q}\n`) : text.includes(q))
       if (o.byKey && inText(idx.keys)) return true
       if (o.byValue && inText(idx.values)) return true

@@ -174,6 +174,16 @@ function shouldExcludeMethod(method: string): boolean {
 }
 
 /**
+ * An app handler called by the interceptor threw: report it as uncaught, as the browser would
+ * for a native XHR event (the page's error listeners and the console see the app's error)
+ */
+function reportHandlerError(error: unknown): void {
+  const report = (globalThis as { reportError?: (e: unknown) => void }).reportError
+  if (typeof report === 'function') report(error)
+  else setTimeout(() => { throw error })
+}
+
+/**
  * Truncate body if too large
  */
 function truncateBody(body: string | null): { text: string; truncated: boolean; originalSize: number } {
@@ -1757,7 +1767,7 @@ function interceptXHR(): void {
           handler.handleEvent(loadEvent)
         }
       } catch (err) {
-        console.error('[injected/network] Error calling load handler:', err)
+        reportHandlerError(err)
       }
     }
     
@@ -1772,7 +1782,7 @@ function interceptXHR(): void {
           handler.handleEvent(readystateEvent)
         }
       } catch (err) {
-        console.error('[injected/network] Error calling readystatechange handler:', err)
+        reportHandlerError(err)
       }
     }
   }
@@ -1792,7 +1802,7 @@ function interceptXHR(): void {
           handler.handleEvent(errorEvent)
         }
       } catch (err) {
-        console.error('[injected/network] Error calling error handler:', err)
+        reportHandlerError(err)
       }
     }
   }

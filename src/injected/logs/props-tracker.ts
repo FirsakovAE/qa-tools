@@ -7,12 +7,15 @@
  * At beforeUpdate the new props are already applied, so the previous shallow copy is
  * "before" and the current props are "after". Changes are confirmed by a diff of
  * serialized values — re-created inline objects/handlers with equal content are not logged.
+ * An event stores the new props and the old values of the changed paths; the old props
+ * are restored on read.
  */
 
 import { findVueRoots } from '../props/vue-detect'
-import { serializeRawPropsForDeclared } from '../props/serialize'
-import { diffValues, limitChanges, summarizeChanges, MAX_CHANGES } from './diff'
-import { isIgnored, isLogsPaused, onLogsStateChanged, recordLog } from './core'
+import { diffValues, limitChanges, withoutAfter, MAX_CHANGES } from './diff'
+import { isCaptureEnabled, isIgnored, isLogsPaused, onLogsStateChanged, recordLog } from './core'
+import { logsRuntime } from './runtime'
+import { createSanitizer } from './sanitize'
 import { componentName, parentChain } from './component-utils'
 import { trackEmits } from './emit-tracker'
 
@@ -22,6 +25,8 @@ const SUBTREE_WALK_DELAY_MS = 50
 const MAX_EVENTS_PER_COMPONENT_PER_SEC = 30
 
 type RootRef = { version: 2 | 3; instance: any }
+
+const snapshotter = createSanitizer({ enabled: false, keys: [], valuePatterns: false })
 
 const tracked = new WeakSet<object>()
 const lastProps = new WeakMap<object, Record<string, unknown>>()
@@ -37,6 +42,18 @@ function rawProps(instance: any, version: 2 | 3): Record<string, unknown> | null
   const props = version === 3 ? instance?.props : instance?._props
   if (!props || typeof props !== 'object') return null
   return (props.__v_raw ?? props) as Record<string, unknown>
+}
+
+/** Full plain-JSON props (declared undefined props as null); masked later in recordLog */
+function snapshotProps(props: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = {}
+  for (const key of Object.keys(props)) normalized[key] = props[key] === undefined ? null : props[key]
+  try {
+    return snapshotter.sanitize<Record<string, unknown>>(normalized).value
+  } catch (e) {
+    console.error('[injected/logs/props] snapshot failed:', e)
+    return {}
+  }
 }
 
 function shallowCopy(obj: Record<string, unknown>): Record<string, unknown> {
@@ -70,7 +87,7 @@ function onBeforeUpdate(instance: any, version: 2 | 3): void {
   const next = rawProps(instance, version)
   if (!next) return
   const prev = lastProps.get(instance)
-  if (!prev || isLogsPaused()) {
+  if (!prev || isLogsPaused() || !isCaptureEnabled('props')) {
     lastProps.set(instance, shallowCopy(next))
     return
   }
@@ -80,29 +97,38 @@ function onBeforeUpdate(instance: any, version: 2 | 3): void {
   const name = componentName(instance, version)
   if (isIgnored('props', name) || !allowedByRate(instance)) return
 
-  const before = serializeRawPropsForDeclared(prev)
-  const after = serializeRawPropsForDeclared(next)
+  const before = snapshotProps(prev)
+  const after = snapshotProps(next)
   const changes = diffValues(before, after)
   if (changes.length === 0) return
 
-  const uid = version === 3 ? instance.uid : instance._uid
-  const parents = parentChain(instance, version)
-  recordLog({
-    kind: 'props',
-    key: name,
-    level: 'info',
-    title: name,
-    subtitle: summarizeChanges(changes),
-    data: {
-      component: name,
-      uid,
-      parents,
-      changes: limitChanges(changes),
-      changesTruncated: changes.length >= MAX_CHANGES,
-      before,
-      after,
-    },
-  })
+  const limited = limitChanges(changes)
+  const truncated = changes.length >= MAX_CHANGES
+  // The old props are restored by reverting the diff on the new props when it is exact
+  const exact = !truncated && !limited.some(c => logsRuntime.isIncomplete(c.before))
+  const data: Record<string, unknown> = {
+    uid: version === 3 ? instance.uid : instance._uid,
+    parents: parentChain(instance, version),
+    changes: limited,
+    after,
+  }
+  if (truncated) data.changesTruncated = true
+  if (!exact) data.before = before
+
+  recordLog({ kind: 'props', key: name, level: 'info', data, finalize: compactPropsData })
+}
+
+/** Drops what the stored snapshots make derivable (applied after the size limits) */
+function compactPropsData(data: Record<string, any>): Record<string, any> {
+  const afterKept = logsRuntime.isComplete(data.after)
+  if (afterKept && logsRuntime.isComplete(data.before)) {
+    // Both snapshots survived: the diff is recomputed on read
+    delete data.changes
+    delete data.changesTruncated
+  } else if (afterKept && Array.isArray(data.changes)) {
+    data.changes = data.changes.map(withoutAfter)
+  }
+  return data
 }
 
 function attach(instance: any, version: 2 | 3): void {
@@ -138,8 +164,13 @@ function attach(instance: any, version: 2 | 3): void {
   }
 }
 
+/** Components are attached for props and emits; neither logged: no tree walks */
+function walksNeeded(): boolean {
+  return !isLogsPaused() && (isCaptureEnabled('props') || isCaptureEnabled('emit'))
+}
+
 function scheduleSubtreeWalk(instance: object, version: 2 | 3): void {
-  if (isLogsPaused()) return
+  if (!walksNeeded()) return
   pendingWalks.set(instance, version)
   if (walkTimer) return
   walkTimer = setTimeout(() => {
@@ -208,7 +239,7 @@ function refreshRoots(): void {
 }
 
 function scan(): void {
-  if (isLogsPaused() || document.hidden) return
+  if (!walksNeeded() || document.hidden) return
   try {
     if (roots.length === 0 || Date.now() - rootsFoundAt > ROOTS_REFRESH_MS) refreshRoots()
     for (const root of roots) {

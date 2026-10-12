@@ -1,9 +1,14 @@
 /**
  * Logs Tab Types
  * Mirrors src/injected/logs/types.ts (the injected bundle cannot import from @/types)
+ *
+ * Stored events keep only primary data: the subject id is stored once in `key`, titles,
+ * subtitles and other display fields are derived on read (features/logs/view.ts), store
+ * changes are diffs against the previous state of the store, network events reference one
+ * shared network entry.
  */
 
-import type { NetworkEntry } from './network'
+import type { HeaderEntry, NetworkEntry } from './network'
 
 export type LogKind =
   | 'request'
@@ -17,20 +22,6 @@ export type LogKind =
 
 export type LogLevel = 'info' | 'warn' | 'error'
 
-export type LogsExportFormat = 'json' | 'html'
-
-export const DEFAULT_LOGS_EXPORT_FORMAT: LogsExportFormat = 'html'
-
-/** Stored settings may hold the removed 'ask' value */
-export function normalizeExportFormat(value: unknown): LogsExportFormat {
-  return value === 'json' || value === 'html' ? value : DEFAULT_LOGS_EXPORT_FORMAT
-}
-
-export const LOGS_EXPORT_FORMATS: Array<{ value: LogsExportFormat; label: string; description: string }> = [
-  { value: 'json', label: 'JSON', description: 'Raw events for re-import or tooling' },
-  { value: 'html', label: 'HTML', description: 'Static report that opens in any browser and can be re-imported' },
-]
-
 export interface LogChange {
   path: string
   type: 'added' | 'removed' | 'changed'
@@ -43,36 +34,39 @@ export interface LogEvent {
   kind: LogKind
   /** Epoch ms */
   timestamp: number
-  /** Ignore-rule key: events with the same kind + key belong to one ignorable group */
+  /** Subject id (store, component, request group...) and ignore-rule key */
   key: string
   level: LogLevel
-  title: string
-  subtitle?: string
-  data: Record<string, unknown>
+  data: Record<string, any>
   /** Approximate serialized size (chars), used for the memory budget */
   size?: number
 }
 
-/** Fields both network events keep to identify the request */
-type NetworkIdentity = 'id' | 'timestamp' | 'method' | 'url' | 'path' | 'name' | 'initiator' | 'pending'
-
-/** "Send request" event: only what was sent */
-export type NetworkRequestPart = Pick<NetworkEntry,
-  NetworkIdentity | 'requestHeaders' | 'requestHeadersPageVisible' | 'params' | 'authorization' | 'requestBody'>
-
-/** "Receive response" event: only what came back */
-export type NetworkResponsePart = Pick<NetworkEntry,
-  NetworkIdentity | 'status' | 'statusText' | 'duration' | 'size' | 'error' | 'responseHeaders' | 'responseHeadersPageVisible' | 'responseBody'>
+/**
+ * Change store events:
+ *  - `init` (Store initialized) / `snapshot` (Store snapshot) / `checkpoint` (compacted older
+ *    changes): full `state`;
+ *  - `change`: `changes` without old values (restored from the previous state); `state` only
+ *    when the diff alone cannot be replayed exactly.
+ */
+export type StoreLogOp = 'init' | 'snapshot' | 'checkpoint' | 'change'
 
 export interface NetworkLogData {
-  entry: NetworkRequestPart | NetworkResponsePart
+  entryId: string
 }
 
-export interface ChangeLogData {
-  changes: LogChange[]
-  changesTruncated?: boolean
-  before: unknown
-  after: unknown
+/** Index into the full header list or a header that is not in it */
+export type HeaderRef = number | HeaderEntry
+
+/** Network entry as stored by Logs (one per request, shared by both network events) */
+export interface StoredNetworkEntry extends Omit<NetworkEntry,
+  'version' | 'name' | 'requestBody' | 'responseBody' | 'requestHeadersPageVisible' | 'responseHeadersPageVisible'> {
+  /** References into the body pool: equal bodies are stored once */
+  requestBodyRef?: string
+  responseBodyRef?: string
+  /** Page-visible (Classic) header lists as references into the full lists */
+  requestHeadersVisible?: HeaderRef[]
+  responseHeadersVisible?: HeaderRef[]
 }
 
 /** Persisted rule: events matching kind + key are dropped and not logged */
@@ -101,3 +95,5 @@ export const LOG_KIND_META: Record<LogKind, LogKindMeta> = {
 }
 
 export const LOG_KINDS = Object.keys(LOG_KIND_META) as LogKind[]
+
+export const LOG_KIND_LABELS: Record<string, string> = Object.fromEntries(LOG_KINDS.map(k => [k, LOG_KIND_META[k].label]))

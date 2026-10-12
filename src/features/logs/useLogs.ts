@@ -6,41 +6,51 @@
  *
  * Sources:
  *  - injected logs module (`__LOGS__` broadcasts): props, emit, store, action, navigation, error
- *    (already sanitized and size-limited in page context)
- *  - existing network broadcasts (`__NETWORK__`): Send request / Receive response
- *    (sanitized here, the raw entries are shared with the Network tab)
+ *    (already sanitized, size-limited and compacted in page context)
+ *  - existing network broadcasts (`__NETWORK__`): Send request / Receive response. Both events
+ *    reference one masked network entry in the network pool (see networkPool.ts).
  *
- * Memory: incoming events are committed in batches; each group is a ring buffer
- * (Options > Logs > limits) and the total approximate size is kept within the memory budget.
+ * Memory: incoming events are committed in batches; the total approximate size (events +
+ * network pool, shared data counted once) is kept within the budget by dropping the oldest
+ * events, old store changes are folded into checkpoints (Options > Logs).
  */
 
 import { ref, shallowRef, computed, watch } from 'vue'
 import type { NetworkEntry } from '@/types/network'
-import type { LogEvent, LogIgnoreRule, LogKind, NetworkRequestPart, NetworkResponsePart } from '@/types/logs'
+import type { LogEvent, LogIgnoreRule, LogKind } from '@/types/logs'
 import { LOG_KIND_META } from '@/types/logs'
 import { inspectorState, useInspectorSettings } from '@/settings/useInspectorSettings'
 import { postToContentScript } from '@/utils/postToContentScript'
 import {
   LOG_LIMIT_KEYS,
+  isCaptured,
   limitKeyForKind,
+  maxEventChars,
   normalizeLimits,
   normalizeMasking,
   type LogLimitKey,
 } from '@/injected/logs/config'
 import { createSanitizer, measureJson } from '@/injected/logs/sanitize'
+import { checkpointThrough, countsTowardLimit, enforceLogLimits } from '@/injected/logs/limits'
 import { sanitizeNetworkEntry } from './sanitizeNetwork'
+import { createNetworkPool, type NetworkPool } from './networkPool'
+import type { LogsSource } from './view'
 
 const COMMIT_DELAY_MS = 100
 const HEARTBEAT_MS = 10_000
+/** Size of a network event itself; its entry is counted by the pool */
+const NETWORK_EVENT_SIZE = 120
 
 const events = shallowRef<LogEvent[]>([])
 const paused = ref(false)
 const isReady = ref(false)
 const memoryUsed = ref(0)
+const pool = createNetworkPool()
 
 const byId = new Map<string, LogEvent>()
 let pending: LogEvent[] = []
 let commitTimer: ReturnType<typeof setTimeout> | null = null
+let poolChanged = false
 /** Network history re-sent by NETWORK_ENTRIES_DATA must not resurrect cleared events */
 let clearedAt = 0
 let initialized = false
@@ -87,52 +97,40 @@ function syncConfig(): void {
 // Event list (sorted by timestamp, ring per group + memory budget)
 // ============================================================================
 
-function eventSize(event: LogEvent): number {
-  if (typeof event.size === 'number' && event.size > 0) return event.size
-  return measureJson(event.data) + event.title.length + (event.subtitle?.length ?? 0) + 120
+function isNetworkEvent(event: LogEvent): boolean {
+  return event.kind === 'request' || event.kind === 'response'
 }
 
-/** Drops the oldest events beyond the group limits and the memory budget. Mutates `list`. */
+function eventSize(event: LogEvent): number {
+  if (typeof event.size === 'number' && event.size > 0) return event.size
+  return measureJson(event.data) + event.key.length + 80
+}
+
+function releaseEvent(event: LogEvent): void {
+  byId.delete(event.id)
+  if (isNetworkEvent(event) && typeof event.data?.entryId === 'string') pool.release(event.data.entryId)
+}
+
+/** Drops / folds the oldest events beyond the memory budget */
 function applyLimits(list: LogEvent[]): LogEvent[] {
-  const counts = new Map<LogKind, number>()
-  for (const e of list) counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1)
-
-  const excess = new Map<LogKind, number>()
-  for (const [kind, count] of counts) {
-    const over = count - limits.value.counts[limitKeyForKind(kind)]
-    if (over > 0) excess.set(kind, over)
-  }
-
-  let kept = list
-  if (excess.size > 0) {
-    kept = []
-    for (const e of list) {
-      const over = excess.get(e.kind)
-      if (over) {
-        excess.set(e.kind, over - 1)
-        byId.delete(e.id)
-      } else {
-        kept.push(e)
-      }
-    }
-  }
-
-  let total = 0
-  for (const e of kept) total += e.size ?? 0
-  const budget = limits.value.maxMemoryMB * 1024 * 1024
-  let drop = 0
-  while (total > budget && drop < kept.length) {
-    total -= kept[drop].size ?? 0
-    byId.delete(kept[drop].id)
-    drop++
-  }
-  memoryUsed.value = total
-  return drop > 0 ? kept.slice(drop) : kept
+  const result = enforceLogLimits(list, limits.value, {
+    extraSize: () => pool.size,
+    onDrop: releaseEvent,
+  })
+  for (const event of result.removed) byId.delete(event.id)
+  for (const event of result.added) byId.set(event.id, event)
+  memoryUsed.value = result.total
+  return result.list
 }
 
 function commit(): void {
   commitTimer = null
-  if (pending.length === 0) return
+  if (pending.length === 0) {
+    if (poolChanged) events.value = applyLimits(events.value)
+    poolChanged = false
+    return
+  }
+  poolChanged = false
   const fresh = pending
   pending = []
   fresh.sort((a, b) => a.timestamp - b.timestamp)
@@ -148,12 +146,22 @@ function scheduleCommit(): void {
   if (!commitTimer) commitTimer = setTimeout(commit, COMMIT_DELAY_MS)
 }
 
+/** A page checkpoint is redundant when this list still holds the change it was folded through */
+function isRedundantCheckpoint(event: LogEvent): boolean {
+  const through = checkpointThrough(event)
+  if (!through) return false
+  if (byId.has(through)) return true
+  const newer = (e: LogEvent) => e.kind === 'store' && e.key === event.key && !!checkpointThrough(e) && e.timestamp >= event.timestamp
+  return events.value.some(newer) || pending.some(newer)
+}
+
 function addEvents(incoming: LogEvent[]): void {
   let added = false
   for (const e of incoming) {
-    if (!e || byId.has(e.id) || isIgnored(e)) continue
+    if (!e || byId.has(e.id) || isIgnored(e) || isRedundantCheckpoint(e)) continue
     const event = { ...e, size: eventSize(e) }
     byId.set(event.id, event)
+    if (isNetworkEvent(event)) pool.retain(event.data.entryId)
     pending.push(event)
     added = true
   }
@@ -201,65 +209,51 @@ function entryTimestamp(entry: NetworkEntry): number {
   return Number.isFinite(ts) ? ts : Date.now()
 }
 
-function sanitizedEntry(entry: NetworkEntry): { entry: NetworkEntry; size: number } {
-  return sanitizeNetworkEntry(entry, sanitizer.value, limits.value.maxEventKB * 1024)
-}
-
-function requestPart(e: NetworkEntry): NetworkRequestPart {
+function requestEvent(entry: NetworkEntry, key: string): LogEvent {
   return {
-    id: e.id, timestamp: e.timestamp, method: e.method, url: e.url, path: e.path, name: e.name,
-    initiator: e.initiator, pending: e.pending,
-    requestHeaders: e.requestHeaders, requestHeadersPageVisible: e.requestHeadersPageVisible,
-    params: e.params, authorization: e.authorization, requestBody: e.requestBody,
-  }
-}
-
-function responsePart(e: NetworkEntry): NetworkResponsePart {
-  return {
-    id: e.id, timestamp: e.timestamp, method: e.method, url: e.url, path: e.path, name: e.name,
-    initiator: e.initiator, pending: e.pending,
-    status: e.status, statusText: e.statusText, duration: e.duration, size: e.size, error: e.error,
-    responseHeaders: e.responseHeaders, responseHeadersPageVisible: e.responseHeadersPageVisible,
-    responseBody: e.responseBody,
-  }
-}
-
-// Each event stores only its own half; the other half is emptied before sanitizing so it
-// costs nothing in the size budget.
-function requestEvent(raw: NetworkEntry): LogEvent {
-  const { entry: sanitized, size } = sanitizedEntry({ ...raw, responseHeaders: [], responseHeadersPageVisible: undefined, responseBody: null })
-  const entry = requestPart(sanitized)
-  return {
-    id: `net-req-${raw.id}`,
+    id: `net-req-${entry.id}`,
     kind: 'request',
-    timestamp: entryTimestamp(raw),
-    key: networkLogKey(raw),
+    timestamp: entryTimestamp(entry),
+    key,
     level: 'info',
-    title: `${entry.method} ${entry.path || entry.url}`,
-    subtitle: entry.url,
-    data: { entry },
-    size: size + 200,
+    data: { entryId: entry.id },
+    size: NETWORK_EVENT_SIZE,
   }
 }
 
-function responseEvent(raw: NetworkEntry): LogEvent {
-  const { entry: sanitized, size } = sanitizedEntry({
-    ...raw, requestHeaders: [], requestHeadersPageVisible: undefined, params: [], authorization: { type: 'None' }, requestBody: null,
-  })
-  const entry = responsePart(sanitized)
-  const failed = !!raw.error || raw.status === 0 || raw.status >= 400
-  const status = raw.error ? `Failed: ${entry.error}` : `${raw.status} ${raw.statusText ?? ''}`.trim()
+function responseEvent(entry: NetworkEntry, key: string): LogEvent {
+  const failed = !!entry.error || entry.status === 0 || entry.status >= 400
   return {
-    id: `net-res-${raw.id}`,
+    id: `net-res-${entry.id}`,
     kind: 'response',
-    timestamp: entryTimestamp(raw) + (raw.duration || 0),
-    key: networkLogKey(raw),
-    level: failed ? (raw.status >= 400 && raw.status < 500 ? 'warn' : 'error') : 'info',
-    title: `${entry.method} ${entry.path || entry.url}`,
-    subtitle: status,
-    data: { entry },
-    size: size + 200,
+    timestamp: entryTimestamp(entry) + (entry.duration || 0),
+    key,
+    level: failed ? (entry.status >= 400 && entry.status < 500 ? 'warn' : 'error') : 'info',
+    data: { entryId: entry.id },
+    size: NETWORK_EVENT_SIZE,
   }
+}
+
+/**
+ * Stores the masked entry once and adds / refreshes its events. `request` / `response`:
+ * `add` only adds a missing event, `upsert` also replaces an existing one (new data).
+ */
+function ingestNetworkEntry(raw: NetworkEntry, request: 'add' | 'upsert' | null, response: 'add' | 'upsert' | null): void {
+  if (!isCaptured(limits.value, 'request')) return
+  const key = networkLogKey({ ...raw, url: sanitizer.value.maskString(raw.url ?? ''), path: sanitizer.value.maskString(raw.path ?? '') })
+  const wantRequest = request && !isIgnored({ kind: 'request', key }) && (request === 'upsert' || !byId.has(`net-req-${raw.id}`))
+  const wantResponse = response && !isIgnored({ kind: 'response', key }) && (response === 'upsert' || !byId.has(`net-res-${raw.id}`))
+  if (!wantRequest && !wantResponse) return
+
+  const { entry, fixedSize } = sanitizeNetworkEntry(raw, sanitizer.value, maxEventChars(limits.value))
+  pool.put(entry, fixedSize)
+  // New event objects: views derived from the previous entry data are cached per event
+  if (wantRequest || byId.has(`net-req-${entry.id}`)) upsertEvent(requestEvent(entry, key))
+  if (wantResponse || byId.has(`net-res-${entry.id}`)) upsertEvent(responseEvent(entry, key))
+  pool.collect(entry.id)
+  // The pool may have grown without new events (bodies of a completed request)
+  poolChanged = true
+  scheduleCommit()
 }
 
 function processNetworkMessage(msg: any): void {
@@ -267,31 +261,25 @@ function processNetworkMessage(msg: any): void {
 
   switch (msg.type) {
     case 'NETWORK_ENTRY_CAPTURED':
-      if (msg.entry && !byId.has(`net-req-${msg.entry.id}`)) addEvents([requestEvent(msg.entry)])
+      if (msg.entry) ingestNetworkEntry(msg.entry, 'add', null)
       break
 
     // Request breakpoint applied: show the request that was actually sent
     case 'NETWORK_ENTRY_MODIFIED':
-      if (msg.entry) upsertEvent(requestEvent(msg.entry))
+      if (msg.entry) ingestNetworkEntry(msg.entry, 'upsert', null)
       break
 
     case 'NETWORK_ENTRY_UPDATED':
-      if (msg.entry && !msg.entry.pending) {
-        // Request data is final here (breakpoint edits included)
-        upsertEvent(requestEvent(msg.entry))
-        upsertEvent(responseEvent(msg.entry))
-      }
+      // Request data is final here (breakpoint edits included)
+      if (msg.entry && !msg.entry.pending) ingestNetworkEntry(msg.entry, 'upsert', 'upsert')
       break
 
     case 'NETWORK_ENTRIES_DATA':
       if (Array.isArray(msg.entries)) {
-        const seeded: LogEvent[] = []
         for (const entry of msg.entries as NetworkEntry[]) {
           if (entryTimestamp(entry) < clearedAt) continue
-          if (!byId.has(`net-req-${entry.id}`)) seeded.push(requestEvent(entry))
-          if (!entry.pending && !byId.has(`net-res-${entry.id}`)) seeded.push(responseEvent(entry))
+          ingestNetworkEntry(entry, 'add', entry.pending ? null : 'add')
         }
-        addEvents(seeded)
       }
       break
   }
@@ -394,7 +382,10 @@ export function initLogsCollector(): void {
 export interface ImportedLogs {
   fileName: string
   exportedAt?: string
+  /** Report format version of the file */
+  version: number
   events: LogEvent[]
+  pool: NetworkPool
   skipped: number
 }
 
@@ -416,8 +407,7 @@ export interface LogsStats {
 export const logsStats = computed<LogsStats>(() => {
   const counts = Object.fromEntries(LOG_LIMIT_KEYS.map(k => [k, 0])) as Record<LogLimitKey, number>
   for (const e of events.value) {
-    const key = limitKeyForKind(e.kind)
-    if (e.kind !== 'response') counts[key]++
+    if (e.kind !== 'response' && countsTowardLimit(e)) counts[limitKeyForKind(e.kind)]++
   }
   return { counts, memoryUsed: memoryUsed.value }
 })
@@ -425,11 +415,15 @@ export const logsStats = computed<LogsStats>(() => {
 export function useLogs() {
   initLogsCollector()
 
-  const sourceEvents = computed(() => imported.value?.events ?? events.value)
+  /** All events of the shown source (ignored ones included: store chains need them) */
+  const source = computed<LogsSource>(() =>
+    imported.value ? { events: imported.value.events, pool: imported.value.pool } : { events: events.value, pool },
+  )
 
   const visibleEvents = computed(() => {
-    if (ignoredIds.value.size === 0) return sourceEvents.value
-    return sourceEvents.value.filter(e => !isIgnored(e))
+    const list = source.value.events
+    if (ignoredIds.value.size === 0) return list
+    return list.filter(e => !isIgnored(e))
   })
 
   function togglePause() {
@@ -442,6 +436,7 @@ export function useLogs() {
     byId.clear()
     pending = []
     events.value = []
+    pool.clear()
     memoryUsed.value = 0
     sendCommand('LOGS_CLEAR')
   }
@@ -475,6 +470,7 @@ export function useLogs() {
 
   return {
     events: visibleEvents,
+    source,
     totalCount: computed(() => visibleEvents.value.length),
     paused,
     isReady,

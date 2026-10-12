@@ -1,8 +1,13 @@
 /**
- * Page tracker: SPA navigation (History API, popstate, hashchange) and uncaught errors.
+ * Page tracker: SPA navigation (History API, popstate, hashchange), uncaught errors and
+ * `console.error` of the page (see console-tracker.ts). Errors raised by Vue Inspector itself
+ * or by browser extensions are not logged; stacks are kept compact.
  */
 
 import { recordLog } from './core'
+import { initConsoleLogs } from './console-tracker'
+import { errorInfoOf, locationOf, recordError } from './errors'
+import { isForeignUrl, parseFrames } from './stack'
 
 let lastHref = ''
 let initialized = false
@@ -21,13 +26,10 @@ function recordNavigation(navType: string): void {
   if (to === lastHref) return
   const from = lastHref
   lastHref = to
-  const path = pathOf(to)
   recordLog({
     kind: 'navigation',
-    key: path,
+    key: pathOf(to),
     level: 'info',
-    title: path,
-    subtitle: navType,
     data: { navType, from, to },
   })
 }
@@ -46,28 +48,6 @@ function patchHistory(method: 'pushState' | 'replaceState'): void {
   } as History['pushState']
 }
 
-function errorMessageOf(value: unknown): { message: string; name?: string; stack?: string } {
-  if (value instanceof Error) return { message: value.message, name: value.name, stack: value.stack }
-  if (typeof value === 'string') return { message: value }
-  try {
-    return { message: JSON.stringify(value) ?? String(value) }
-  } catch {
-    return { message: String(value) }
-  }
-}
-
-function recordError(source: string, err: { message: string; name?: string; stack?: string }, extra: Record<string, unknown> = {}): void {
-  const message = err.message || 'Unknown error'
-  recordLog({
-    kind: 'error',
-    key: message.slice(0, 300),
-    level: 'error',
-    title: message.slice(0, 300),
-    subtitle: source,
-    data: { source, ...err, message, ...extra },
-  })
-}
-
 export function initPageLogs(): void {
   if (initialized) return
   initialized = true
@@ -80,7 +60,10 @@ export function initPageLogs(): void {
 
   window.addEventListener('error', (event: ErrorEvent) => {
     if (!(event instanceof ErrorEvent)) return
-    const err = event.error ? errorMessageOf(event.error) : { message: event.message }
+    const err = event.error ? errorInfoOf(event.error) : { message: event.message }
+    // Where the error was thrown: an error re-reported by the network interceptor keeps the app frame
+    const origin = parseFrames(err.stack ?? '')[0]?.url || event.filename || ''
+    if (origin && isForeignUrl(origin)) return
     recordError('Uncaught error', err, {
       filename: event.filename,
       lineno: event.lineno,
@@ -89,6 +72,12 @@ export function initPageLogs(): void {
   })
 
   window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-    recordError('Unhandled rejection', errorMessageOf(event.reason))
+    const err = errorInfoOf(event.reason)
+    const frames = parseFrames(err.stack ?? '')
+    // Produced entirely by Vue Inspector / an extension; a page call through the fetch wrapper stays
+    if (frames.length > 0 && frames.every(f => isForeignUrl(f.url))) return
+    recordError('Unhandled rejection', err, locationOf(err.stack))
   })
+
+  initConsoleLogs()
 }

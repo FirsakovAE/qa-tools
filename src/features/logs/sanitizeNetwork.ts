@@ -4,14 +4,33 @@ import { MASK, type Sanitizer } from '@/injected/logs/sanitize'
 /** JSON bodies above this are masked as plain text instead of being parsed */
 const MAX_PARSE_CHARS = 5_000_000
 
+// Masking returns the input objects when nothing was masked: the Logs entry then shares
+// headers and bodies with the Network tab entry instead of holding a copy.
+
 function maskHeaders(list: HeaderEntry[] | undefined, s: Sanitizer): HeaderEntry[] {
   if (!Array.isArray(list)) return []
-  return list.map(h => ({ name: h.name, value: s.isSensitiveKey(h.name) ? MASK : s.maskString(String(h.value ?? '')) }))
+  let changed = false
+  const out = list.map(h => {
+    const value = String(h.value ?? '')
+    const masked = s.isSensitiveKey(h.name) && value ? MASK : s.maskString(value)
+    if (masked === h.value) return h
+    changed = true
+    return { name: h.name, value: masked }
+  })
+  return changed ? out : list
 }
 
 function maskPairs<T extends UrlParam | FormDataEntry>(list: T[] | undefined, s: Sanitizer): T[] {
   if (!Array.isArray(list)) return []
-  return list.map(p => ({ ...p, value: s.isSensitiveKey(p.key) ? MASK : s.maskString(String(p.value ?? '')) }))
+  let changed = false
+  const out = list.map(p => {
+    const value = String(p.value ?? '')
+    const masked = s.isSensitiveKey(p.key) && value ? MASK : s.maskString(value)
+    if (masked === p.value) return p
+    changed = true
+    return { ...p, value: masked }
+  })
+  return changed ? out : list
 }
 
 function maskBodyText(text: string, contentType: string, s: Sanitizer): string {
@@ -20,7 +39,8 @@ function maskBodyText(text: string, contentType: string, s: Sanitizer): string {
   if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && text.length <= MAX_PARSE_CHARS) {
     try {
       const parsed = JSON.parse(text)
-      return JSON.stringify(s.sanitize(parsed).value, null, text.includes('\n') ? 2 : undefined)
+      const masked = JSON.stringify(s.sanitize(parsed).value, null, text.includes('\n') ? 2 : undefined)
+      return masked === text ? text : masked
     } catch { /* not JSON — mask as text */ }
   }
   if (/x-www-form-urlencoded/i.test(contentType)) return s.maskString(`?${text}`).slice(1)
@@ -29,16 +49,20 @@ function maskBodyText(text: string, contentType: string, s: Sanitizer): string {
 
 function maskBody(body: BodyContent | null | undefined, s: Sanitizer): BodyContent | null {
   if (!body) return null
-  return {
-    ...body,
-    text: body.isBinary ? body.text : maskBodyText(String(body.text ?? ''), body.contentType ?? '', s),
-    formData: body.formData ? maskPairs(body.formData, s) : undefined,
-  }
+  const text = body.isBinary ? body.text : maskBodyText(String(body.text ?? ''), body.contentType ?? '', s)
+  const formData = body.formData ? maskPairs(body.formData, s) : undefined
+  if (text === body.text && formData === body.formData) return body
+  return { ...body, text, formData }
+}
+
+/** A fresh string: a slice may keep the whole original (shared with the Network tab) alive */
+function detachedSlice(text: string, length: number): string {
+  return JSON.parse(JSON.stringify(text.slice(0, length)))
 }
 
 function truncateBody(body: BodyContent | null, maxChars: number): BodyContent | null {
   if (!body || body.text.length <= maxChars) return body
-  return { ...body, text: body.text.slice(0, Math.max(0, maxChars)), truncated: true }
+  return { ...body, text: detachedSlice(body.text, Math.max(0, maxChars)), truncated: true }
 }
 
 function headersSize(list: HeaderEntry[]): number {
@@ -49,9 +73,14 @@ function headersSize(list: HeaderEntry[]): number {
 
 /**
  * Masked copy of a network entry that fits `maxChars` (bodies are truncated, largest first).
- * The input entry is shared with the Network tab and is never mutated.
+ * The input entry is shared with the Network tab and is never mutated. `fixedSize` is the
+ * size without bodies (bodies are accounted for separately by the body pool).
  */
-export function sanitizeNetworkEntry(entry: NetworkEntry, s: Sanitizer, maxChars: number): { entry: NetworkEntry; size: number } {
+export function sanitizeNetworkEntry(
+  entry: NetworkEntry,
+  s: Sanitizer,
+  maxChars: number,
+): { entry: NetworkEntry; size: number; fixedSize: number } {
   const auth = entry.authorization
   const maskAuth = s.masking.enabled && (s.isSensitiveKey('authorization') || s.isSensitiveKey('token'))
   const out: NetworkEntry = {
@@ -65,25 +94,23 @@ export function sanitizeNetworkEntry(entry: NetworkEntry, s: Sanitizer, maxChars
     responseHeadersPageVisible: entry.responseHeadersPageVisible ? maskHeaders(entry.responseHeadersPageVisible, s) : undefined,
     params: maskPairs(entry.params, s),
     authorization: auth
-      ? { ...auth, token: auth.token && maskAuth ? MASK : auth.token }
+      ? (auth.token && maskAuth ? { ...auth, token: MASK } : auth)
       : { type: 'None' },
     requestBody: maskBody(entry.requestBody, s),
     responseBody: maskBody(entry.responseBody, s),
   }
 
-  const fixed =
+  const fixedSize =
     out.url.length +
     headersSize(out.requestHeaders) +
     headersSize(out.responseHeaders) +
-    headersSize(out.requestHeadersPageVisible ?? []) +
-    headersSize(out.responseHeadersPageVisible ?? []) +
     out.params.reduce((n, p) => n + p.key.length + p.value.length + 20, 0) +
     600
   let reqLen = out.requestBody?.text.length ?? 0
   let resLen = out.responseBody?.text.length ?? 0
 
-  if (fixed + reqLen + resLen > maxChars) {
-    const available = Math.max(0, maxChars - fixed)
+  if (fixedSize + reqLen + resLen > maxChars) {
+    const available = Math.max(0, maxChars - fixedSize)
     // Give each body half; a smaller body leaves its unused share to the other
     const half = Math.floor(available / 2)
     const reqBudget = reqLen <= half ? reqLen : Math.max(half, available - Math.min(resLen, half))
@@ -94,5 +121,5 @@ export function sanitizeNetworkEntry(entry: NetworkEntry, s: Sanitizer, maxChars
     resLen = out.responseBody?.text.length ?? 0
   }
 
-  return { entry: out, size: fixed + reqLen + resLen }
+  return { entry: out, size: fixedSize + reqLen + resLen, fixedSize }
 }

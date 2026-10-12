@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { LogIgnoreRule, LogsExportFormat } from '@/types/logs'
-import { LOG_KIND_META, LOGS_EXPORT_FORMATS, normalizeExportFormat } from '@/types/logs'
-import RadioGroup from '@/components/ui/RadioGroup/RadioGroup.vue'
-import RadioGroupItem from '@/components/ui/RadioGroup/RadioGroupItem.vue'
+import type { LogIgnoreRule } from '@/types/logs'
+import { LOG_KIND_META } from '@/types/logs'
 import { TableCell } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
 import SettingsTableSection from '../components/SettingsTableSection.vue'
 import type { TableColumn } from '../components/SettingsTableSection.vue'
@@ -62,14 +61,8 @@ function getIgnoreActions(rule: LogIgnoreRule): MenuAction[] {
   return [{ label: 'Log again', icon: Eye, onClick: () => removeIgnoreRule(rule.id) }]
 }
 
-// -------------------- EXPORT --------------------
-const exportFormat = computed<LogsExportFormat>({
-  get: () => normalizeExportFormat(props.settings.logsExportFormat),
-  set: value => { props.settings.logsExportFormat = value },
-})
-
-// -------------------- LIMITS --------------------
-const limitRows: Array<{ key: LogLimitKey; label: string; unit: string }> = [
+// -------------------- CAPTURE & LIMITS --------------------
+const captureRows: Array<{ key: LogLimitKey; label: string; unit: string }> = [
   { key: 'network', label: 'Network', unit: 'requests' },
   { key: 'props', label: 'Props changes', unit: 'events' },
   { key: 'emit', label: 'Emits', unit: 'events' },
@@ -95,8 +88,14 @@ function writeLimit(event: Event, apply: (l: Limits, value: number) => void, rea
   input.value = String(read(next))
 }
 
-function setCount(key: LogLimitKey, event: Event) {
-  writeLimit(event, (l, v) => { l.counts[key] = v }, l => l.counts[key])
+function setCapture(key: LogLimitKey, value: boolean) {
+  const next = normalizeLimits(props.settings.logsLimits)
+  next.capture[key] = value
+  props.settings.logsLimits = next
+}
+
+function setLimitEventSize(value: boolean) {
+  props.settings.logsLimits = { ...normalizeLimits(props.settings.logsLimits), limitEventSize: value }
 }
 
 function setMemory(event: Event) {
@@ -203,33 +202,15 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
       </template>
     </SettingsTableSection>
 
-    <!-- Export -->
-    <div id="logs-export-section" class="space-y-3 border-t pt-4">
-      <div>
-        <h4 class="text-sm font-semibold">Export</h4>
-        <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
-          Format of Export Logs and of single-event exports. Both formats can be opened with Import Logs.
-        </p>
-      </div>
-      <RadioGroup v-model="exportFormat" class="gap-3">
-        <div v-for="format in LOGS_EXPORT_FORMATS" :key="format.value" class="flex flex-col gap-1">
-          <div class="flex items-center space-x-2">
-            <RadioGroupItem :id="`logs-export-${format.value}`" :value="format.value" />
-            <Label :for="`logs-export-${format.value}`" class="text-sm font-normal cursor-pointer">{{ format.label }}</Label>
-          </div>
-          <p class="text-xs text-muted-foreground leading-relaxed pl-6">{{ format.description }}</p>
-        </div>
-      </RadioGroup>
-    </div>
-
     <!-- Limits -->
     <div id="logs-limits-section" class="space-y-4 border-t pt-4">
       <div class="flex items-start justify-between gap-2">
         <div>
-          <h4 class="text-sm font-semibold">Logs limits</h4>
+          <h4 class="text-sm font-semibold">What to log and limits</h4>
           <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
-            Each type is a ring buffer: when it is full, the oldest events are overwritten.
-            The memory budget applies to all types together.
+            Switched-off groups are not logged at all (already logged events stay).
+            When the memory budget is reached, the oldest events are dropped; older Pinia changes are compacted into a store checkpoint instead,
+            so the remaining changes keep their Before / After. Network data shared by several events is counted once.
           </p>
         </div>
         <Button variant="ghost" size="sm" class="h-7 text-xs gap-1.5 shrink-0" @click="resetLimits">
@@ -239,25 +220,18 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
       </div>
 
       <div class="space-y-2">
-        <h5 class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Events per type</h5>
+        <h5 class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Logged events</h5>
         <div class="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-2">
-          <template v-for="row in limitRows" :key="row.key">
-            <Label :for="`logs-limit-${row.key}`" class="text-sm font-normal">{{ row.label }}</Label>
+          <template v-for="row in captureRows" :key="row.key">
+            <Label :for="`logs-capture-${row.key}`" class="text-sm font-normal cursor-pointer">{{ row.label }}</Label>
             <span class="text-xs text-muted-foreground tabular-nums text-right" title="Currently stored">
-              {{ logsStats.counts[row.key] }} /
+              {{ logsStats.counts[row.key] }} {{ row.unit }}
             </span>
-            <div class="flex items-center gap-2">
-              <Input
-                :id="`logs-limit-${row.key}`"
-                type="number"
-                class="h-8 w-24 text-right tabular-nums"
-                :min="LOG_LIMIT_BOUNDS.count.min"
-                :max="LOG_LIMIT_BOUNDS.count.max"
-                :model-value="limits.counts[row.key]"
-                @change="setCount(row.key, $event)"
-              />
-              <span class="text-xs text-muted-foreground w-14">{{ row.unit }}</span>
-            </div>
+            <Switch
+              :id="`logs-capture-${row.key}`"
+              :model-value="limits.capture[row.key]"
+              @update:model-value="setCapture(row.key, !!$event)"
+            />
           </template>
         </div>
       </div>
@@ -278,11 +252,20 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
             />
             <span class="text-xs text-muted-foreground w-14">MB</span>
           </div>
-          <Label for="logs-limit-event" class="text-sm font-normal">Max event size</Label>
+          <div class="flex items-center gap-3">
+            <Checkbox
+              id="logs-limit-event-enabled"
+              :model-value="limits.limitEventSize"
+              @update:model-value="setLimitEventSize(!!$event)"
+            />
+            <Label for="logs-limit-event-enabled" class="text-sm font-normal cursor-pointer">Limit event size</Label>
+          </div>
           <div class="flex items-center gap-2">
             <Input
               id="logs-limit-event"
               type="number"
+              aria-label="Max event size"
+              :disabled="!limits.limitEventSize"
               class="h-8 w-24 text-right tabular-nums"
               :min="LOG_LIMIT_BOUNDS.eventKB.min"
               :max="LOG_LIMIT_BOUNDS.eventKB.max"
@@ -302,7 +285,12 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
           </div>
           <p class="text-xs text-muted-foreground">
             Used {{ formatBytes(logsStats.memoryUsed) }} of {{ formatBytes(memoryBudget) }} (approximate serialized size).
-            Larger parts of an event (store snapshots, arguments, results) are dropped and network bodies are cut to the max event size.
+            <template v-if="limits.limitEventSize">
+              Larger parts of an event (store snapshots, arguments, results) are dropped and network bodies are cut to the max event size.
+            </template>
+            <template v-else>
+              Events are kept whole (nothing is cut), so an exported report can be imported with complete data. The newest event is kept even if it alone exceeds the budget.
+            </template>
           </p>
         </div>
       </div>

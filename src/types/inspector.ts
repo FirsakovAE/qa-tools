@@ -1,4 +1,4 @@
-import type { LogIgnoreRule, LogsExportFormat } from './logs'
+import type { LogIgnoreRule } from './logs'
 import type { LogsLimits, LogsMasking } from '@/injected/logs/config'
 
 export interface FavoriteItem {
@@ -370,6 +370,4 @@ export interface BaseInspectorSettings {
     logsLimits: LogsLimits
     /** Masking of sensitive data in logged payloads (applied at capture, so also in exports) */
     logsMasking: LogsMasking
-    /** Format of Export Logs and of single-event exports */
-    logsExportFormat: LogsExportFormat
 }

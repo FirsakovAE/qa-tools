@@ -8,13 +8,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/ContextMenu'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/DropdownMenu'
-import type { LogEvent, LogKindMeta } from '@/types/logs'
-import { LOG_KIND_META } from '@/types/logs'
+import type { LogEvent } from '@/types/logs'
 import LogActionsMenuContent from './LogActionsMenuContent.vue'
 import { formatLogTime } from './format'
+import { describeLog, logBadgeClass, logLabel, type LogsSource } from './view'
 
 const props = defineProps<{
   events: LogEvent[]
+  /** Events and network entries the rows are read from */
+  source: LogsSource
   selectedId: string | null
   emptyMessage?: string
   /** Rows ticked for export */
@@ -35,8 +37,8 @@ const emit = defineEmits<{
 // Newest first
 const sortedEvents = computed(() => [...props.events].reverse())
 
-function kindMeta(event: LogEvent): LogKindMeta {
-  return LOG_KIND_META[event.kind] ?? { label: event.kind, badgeClass: '' }
+function describe(event: LogEvent) {
+  return describeLog(event, props.source)
 }
 
 function onRowClick(id: string, event: MouseEvent) {
@@ -97,21 +99,21 @@ const ROW_HEIGHT = 40
               <Badge
                 variant="outline"
                 class="text-[11px] px-1.5 py-0 whitespace-nowrap"
-                :class="kindMeta(event).badgeClass"
+                :class="logBadgeClass(event)"
               >
-                {{ kindMeta(event).label }}
+                {{ logLabel(event) }}
               </Badge>
             </div>
 
             <div class="log-cell log-cell-event">
-              <div class="truncate text-sm" :title="event.title">{{ event.title }}</div>
+              <div class="truncate text-sm" :title="describe(event).title">{{ describe(event).title }}</div>
               <div
-                v-if="event.subtitle"
+                v-if="describe(event).subtitle"
                 class="truncate text-xs"
                 :class="event.level === 'error' ? 'text-destructive_text' : 'text-muted-foreground'"
-                :title="event.subtitle"
+                :title="describe(event).subtitle"
               >
-                {{ event.subtitle }}
+                {{ describe(event).subtitle }}
               </div>
             </div>
 

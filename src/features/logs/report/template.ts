@@ -1,32 +1,57 @@
 /**
- * Static HTML report for exported logs.
+ * Static HTML report for exported logs (the only export format).
  *
- * The report is one self-contained file: inline CSS (`report.css`), the export payload as a
- * JSON data block and a small renderer (`report.client.js`). The module depends on nothing
- * from the app, so the template can change independently of the extension / Bookmark builds.
- * The data block is the same JSON as the JSON export, which is what Import Logs reads back.
+ * The report is one self-contained file that opens offline: inline CSS (`report.css`), the
+ * export payload as a JSON data block, the logs runtime (the same code the Logs tab uses to
+ * restore states, titles and network entries) and a small renderer (`report.client.js`).
+ * Import Logs reads the data block back.
+ *
+ * Payload versions: 1 - full events (`title`, `subtitle`, `data.entry` halves, store
+ * `before` / `after`); 2 - compact events plus a shared network section (see LogsReportPayload).
+ * Import accepts both, plus version 1 JSON files.
  */
 
 import css from './report.css?raw'
 import client from './report.client.js?raw'
 import icon from '../../../../public/icons/icon16.png?inline'
+import { createLogsRuntime } from '@/injected/logs/runtime'
+import type { StoredNetworkEntry } from '@/types/logs'
+import type { BodyContent } from '@/types/network'
 
 export const REPORT_DATA_ID = 'qa-logs-data'
+export const LOGS_REPORT_FORMAT = 'vue-inspector-logs'
+export const LOGS_REPORT_VERSION = 2
 
 const DATA_OPEN = `<script type="application/json" id="${REPORT_DATA_ID}">`
 const DATA_CLOSE = '</script>'
 
+/** Stored event: titles, subtitles and restorable states are derived when the file is read */
+export interface ReportEvent {
+  id: string
+  kind: string
+  timestamp: number
+  key: string
+  level: string
+  data: Record<string, unknown>
+}
+
 export interface LogsReportPayload {
+  format: typeof LOGS_REPORT_FORMAT
+  version: number
   info: {
     name: string
     exportedAt: string
     count: number
-    version?: string
     /** Display labels by event kind */
     kinds?: Record<string, { label: string }>
     [key: string]: unknown
   }
-  events: unknown[]
+  events: ReportEvent[]
+  /** Network entries referenced by request / response events (`data.entryId`); bodies by ref */
+  network?: {
+    entries: Record<string, StoredNetworkEntry>
+    bodies: Record<string, BodyContent>
+  }
 }
 
 function minifyCss(source: string): string {
@@ -60,8 +85,13 @@ function embedJson(value: unknown): string {
     .replace(/\u2029/g, '\\u2029')
 }
 
+/** Script text that cannot close the script element */
+function embedScript(source: string): string {
+  return source.replace(/<\/(script)/gi, '<\\/$1')
+}
+
 const STYLE = minifyCss(css)
-const SCRIPT = compactJs(client)
+const SCRIPT = embedScript(`var LogsRuntime=(${createLogsRuntime.toString()})();\n${compactJs(client)}`)
 
 export function renderLogsReport(payload: LogsReportPayload): string {
   const title = `${payload.info.name} - ${payload.info.exportedAt}`

@@ -2,8 +2,10 @@
  * Logs core: event buffer, batching transport and command handling.
  *
  * Events are buffered in page context so the UI can fetch history when it connects
- * later (overlay opened, DevTools panel reconnected). The buffer is a ring per event group
- * plus a total memory budget (limits come from the UI settings via LOGS_CONFIG_SYNC).
+ * later (overlay opened, DevTools panel reconnected). The buffer is one chronological list
+ * within a total memory budget; event groups can be switched off and the per-event size limit
+ * is optional (settings come from the UI via LOGS_CONFIG_SYNC). Old store changes are folded
+ * into checkpoints (see limits.ts).
  *
  * Every payload is sanitized here (safe plain JSON + masking) before it is stored or posted.
  * Live events are posted only while a UI is subscribed (heartbeat); otherwise they are just
@@ -14,18 +16,22 @@ import type { LogEvent, LogEventInput, LogIgnoreKey, LogKind } from './types'
 import {
   DEFAULT_LOGS_LIMITS,
   DEFAULT_LOGS_MASKING,
-  limitKeyForKind,
+  isCaptured,
+  maxEventChars,
   normalizeLimits,
   normalizeMasking,
   type LogsLimits,
 } from './config'
-import { createSanitizer, fitPayload, measureJson, type Sanitized, type Sanitizer } from './sanitize'
+import { createSanitizer, fitPayload, measureJson, type Sanitizer } from './sanitize'
+import { enforceLogLimits } from './limits'
 
 const FLUSH_INTERVAL_MS = 150
 /** Longer than the UI heartbeat even under background-tab timer throttling (1/min) */
 const SUBSCRIPTION_TTL_MS = 90_000
+/** Per-event overhead of the envelope (id, kind, timestamp, level) in the size estimate */
+const EVENT_OVERHEAD = 80
 
-const rings = new Map<LogKind, LogEvent[]>()
+let buffer: LogEvent[] = []
 let totalSize = 0
 let queue: LogEvent[] = []
 let flushTimer: ReturnType<typeof setTimeout> | null = null
@@ -36,11 +42,11 @@ let initialized = false
 let subscribedUntil = 0
 
 let limits: LogsLimits = normalizeLimits(DEFAULT_LOGS_LIMITS)
+let maskingJson = JSON.stringify(normalizeMasking(DEFAULT_LOGS_MASKING))
 let sanitizer: Sanitizer = createSanitizer(DEFAULT_LOGS_MASKING)
-/** Store snapshots are immutable copies owned by the tracker: "after" is reused as next "before" */
-let snapshotMemo = new WeakMap<object, Sanitized>()
 
 const stateListeners = new Set<() => void>()
+const resetListeners = new Set<() => void>()
 
 function ignoreId(kind: LogKind, key: string): string {
   return `${kind}\u0000${key}`
@@ -72,51 +78,36 @@ function flush(): void {
   if (isSubscribed()) post('LOGS_EVENTS', { events })
 }
 
-function notifyStateChanged(): void {
-  for (const fn of stateListeners) {
+function notify(listeners: Set<() => void>, what: string): void {
+  for (const fn of listeners) {
     try {
       fn()
     } catch (e) {
-      console.error('[injected/logs] state listener failed:', e)
+      console.error(`[injected/logs] ${what} listener failed:`, e)
     }
   }
 }
 
 // ============================================================================
-// Ring buffer
+// Buffer
 // ============================================================================
 
-function evictOldest(): boolean {
-  let oldestRing: LogEvent[] | null = null
-  for (const ring of rings.values()) {
-    if (ring.length > 0 && (!oldestRing || ring[0].timestamp < oldestRing[0].timestamp)) oldestRing = ring
-  }
-  const removed = oldestRing?.shift()
-  if (!removed) return false
-  totalSize -= removed.size ?? 0
-  return true
+function recount(): void {
+  totalSize = 0
+  for (const e of buffer) totalSize += e.size ?? 0
 }
 
 function enforceLimits(): void {
-  for (const [kind, ring] of rings) {
-    const max = limits.counts[limitKeyForKind(kind)]
-    if (ring.length > max) {
-      for (const e of ring.splice(0, ring.length - max)) totalSize -= e.size ?? 0
-    }
-  }
-  const budget = limits.maxMemoryMB * 1024 * 1024
-  while (totalSize > budget && evictOldest()) { /* evict */ }
-}
-
-function bufferedEvents(): LogEvent[] {
-  const all: LogEvent[] = []
-  for (const ring of rings.values()) all.push(...ring)
-  return all.sort((a, b) => a.timestamp - b.timestamp)
+  if (totalSize <= limits.maxMemoryMB * 1024 * 1024) return
+  const result = enforceLogLimits(buffer, limits, { inPlace: true })
+  if (!result.changed) return
+  buffer = result.list
+  recount()
 }
 
 function clearBuffer(): void {
-  rings.clear()
-  totalSize = 0
+  buffer = []
+  recount()
   queue = []
 }
 
@@ -128,58 +119,77 @@ export function isLogsPaused(): boolean {
   return paused
 }
 
+/** Masking rule for keys of values that are previewed as text (the masking of payloads does not reach them) */
+export function isSensitiveLogKey(key: string): boolean {
+  return sanitizer.isSensitiveKey(key)
+}
+
+/** Whether events of this group are logged at all (Options > Logs) */
+export function isCaptureEnabled(kind: LogKind): boolean {
+  return isCaptured(limits, kind)
+}
+
+/** The group is switched off, or this event is in the ignore list */
 export function isIgnored(kind: LogKind, key: string): boolean {
+  if (!isCaptured(limits, kind)) return true
   return ignored.size > 0 && ignored.has(ignoreId(kind, key))
 }
 
-/** Sanitizer with the current masking settings (for previews built before recordLog) */
-export function getSanitizer(): Sanitizer {
-  return sanitizer
-}
-
-/** Called on pause/resume and when ignore rules change (trackers refresh stale snapshots) */
+/** Called on pause/resume, when ignore rules or logged groups change (trackers refresh stale snapshots) */
 export function onLogsStateChanged(fn: () => void): void {
   stateListeners.add(fn)
 }
 
-export function recordLog(input: LogEventInput): void {
-  if (paused || isIgnored(input.kind, input.key)) return
+/**
+ * Called after the buffer was cleared or the masking changed: diff chains must restart from
+ * a fresh full snapshot.
+ */
+export function onLogsReset(fn: () => void): void {
+  resetListeners.add(fn)
+}
 
-  let data: Record<string, unknown>
+/** Records an event; returns the stored (sanitized, compacted) event or null when skipped */
+export function recordLog(input: LogEventInput): LogEvent | null {
+  if (paused || isIgnored(input.kind, input.key)) return null
+  const key = sanitizer.maskString(String(input.key ?? ''))
+  if (key !== input.key && isIgnored(input.kind, key)) return null
+
+  let data: Record<string, any>
   let size: number
   try {
-    const memo = input.kind === 'store' ? snapshotMemo : undefined
-    const sanitized = sanitizer.sanitize<Record<string, unknown>>(input.data, { partSizes: true, memo })
-    const fitted = fitPayload(sanitized.value ?? {}, sanitized.size, limits.maxEventKB * 1024, sanitized.parts)
+    const sanitized = sanitizer.sanitize<Record<string, unknown>>(input.data, { partSizes: true })
+    const fitted = fitPayload(sanitized.value ?? {}, sanitized.size, maxEventChars(limits), sanitized.parts)
     data = fitted.data
     size = fitted.size
+    if (input.finalize) {
+      data = input.finalize(data, key)
+      size = measureJson(data)
+    }
   } catch (e) {
     console.error('[injected/logs] sanitize failed:', e)
     data = { error: '[Payload could not be serialized]' }
     size = measureJson(data)
   }
 
-  const title = sanitizer.maskString(String(input.title ?? ''))
-  const subtitle = input.subtitle === undefined ? undefined : sanitizer.maskString(String(input.subtitle))
   const event: LogEvent = {
-    ...input,
-    title,
-    subtitle,
-    data,
-    size: size + title.length + (subtitle?.length ?? 0) + 120,
     id: `log-${Date.now().toString(36)}-${(++counter).toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    kind: input.kind,
     timestamp: input.timestamp ?? Date.now(),
+    key,
+    level: input.level,
+    data,
+    size: size + key.length + EVENT_OVERHEAD,
   }
 
-  let ring = rings.get(event.kind)
-  if (!ring) rings.set(event.kind, (ring = []))
-  ring.push(event)
+  buffer.push(event)
   totalSize += event.size ?? 0
   enforceLimits()
 
-  if (!isSubscribed()) return
-  queue.push(event)
-  if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS)
+  if (isSubscribed()) {
+    queue.push(event)
+    if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS)
+  }
+  return event
 }
 
 function subscribe(): boolean {
@@ -196,44 +206,53 @@ function handleCommand(event: MessageEvent): void {
   switch (type) {
     case 'LOGS_GET_EVENTS':
       subscribe()
-      post('LOGS_EVENTS_DATA', { events: bufferedEvents(), paused })
+      post('LOGS_EVENTS_DATA', { events: buffer, paused })
       break
 
     case 'LOGS_SUBSCRIBE':
       // Resync after a lapse: events recorded meanwhile were only buffered
-      if (!subscribe()) post('LOGS_EVENTS_DATA', { events: bufferedEvents(), paused })
+      if (!subscribe()) post('LOGS_EVENTS_DATA', { events: buffer, paused })
       break
 
     case 'LOGS_CLEAR':
       clearBuffer()
       post('LOGS_CLEARED')
+      notify(resetListeners, 'reset')
       break
 
     case 'LOGS_PAUSE':
       paused = true
-      notifyStateChanged()
+      notify(stateListeners, 'state')
       post('LOGS_STATUS', { paused })
       break
 
     case 'LOGS_RESUME':
       paused = false
-      notifyStateChanged()
+      notify(stateListeners, 'state')
       post('LOGS_STATUS', { paused })
       break
 
     case 'LOGS_IGNORE_SYNC': {
       const rules = Array.isArray(event.data.rules) ? (event.data.rules as LogIgnoreKey[]) : []
       ignored = new Set(rules.map(r => ignoreId(r.kind, r.key)))
-      notifyStateChanged()
+      notify(stateListeners, 'state')
       break
     }
 
-    case 'LOGS_CONFIG_SYNC':
+    case 'LOGS_CONFIG_SYNC': {
+      const previousCapture = JSON.stringify(limits.capture)
       limits = normalizeLimits(event.data.limits)
-      sanitizer = createSanitizer(normalizeMasking(event.data.masking))
-      snapshotMemo = new WeakMap()
+      const masking = normalizeMasking(event.data.masking)
+      const nextMaskingJson = JSON.stringify(masking)
+      const maskingChanged = nextMaskingJson !== maskingJson
+      maskingJson = nextMaskingJson
+      sanitizer = createSanitizer(masking)
       enforceLimits()
+      // Diffs masked differently than their base would not apply to it
+      if (maskingChanged) notify(resetListeners, 'reset')
+      if (JSON.stringify(limits.capture) !== previousCapture) notify(stateListeners, 'state')
       break
+    }
   }
 }
 

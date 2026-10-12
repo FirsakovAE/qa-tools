@@ -1,19 +1,33 @@
 /**
- * Pinia tracker: logs state changes (before/after snapshots + diff) and action calls.
+ * Pinia tracker: logs state changes and action calls.
+ *
+ * Every observed store starts its history with one full state: `Store initialized` when the
+ * store was created while the inspector watched Pinia, `Store snapshot` when observation
+ * started on an existing store (first attach, resume after pause, un-ignore, cleared logs).
+ * Later changes are stored as diffs only; Before / After are restored on read.
+ * A diff that cannot be replayed exactly (too many changes, truncated values) carries the
+ * full new state as well, so the chain stays restorable.
  *
  * Mutations are coalesced per store until the next macrotask, so a loop of mutations produces
  * one "Change store" event. Pinia's $subscribe is a deep watcher that re-traverses the whole
  * state on every mutation, so during a burst it is detached and re-armed at flush time
- * (the before/after diff captures everything in between). Stores are not watched at all while
+ * (the diff captures everything in between). Stores are not watched at all while
  * logs are paused or the store is ignored.
+ *
+ * A logged state is `{ state, getters }`, split like the Store tab: `$state` keys, and getters
+ * (computed, accessors, data outside `$state` such as `this.user = ...` for a key missing in
+ * `state()`). `$subscribe` sees only `$state`, so getters are watched with the root component's
+ * `$watch`; when that is unavailable (builds without the Options API), or a getter is a plain
+ * value that may be non-reactive, the store is re-checked after its actions.
  */
 
 import type { PiniaInstance, PiniaStore } from '../pinia/types'
 import { waitForPinia, watchPiniaStores } from '../pinia/detect'
-import { getStoreStateKeys } from '../pinia/store-meta'
-import { diffValues, limitChanges, summarizeChanges, MAX_CHANGES } from './diff'
-import { isIgnored, isLogsPaused, onLogsStateChanged, recordLog } from './core'
+import { getGetterKeys, getStoreStateKeys, isComputedRef } from '../pinia/store-meta'
+import { diffValues, limitChanges, withoutBefore, MAX_CHANGES } from './diff'
+import { isIgnored, isLogsPaused, onLogsReset, onLogsStateChanged, recordLog } from './core'
 import { createSanitizer } from './sanitize'
+import { logsRuntime } from './runtime'
 
 interface PendingMutation {
   store: PiniaStore
@@ -28,8 +42,12 @@ const attached = new WeakSet<object>()
 const enabled = new Set<PiniaStore>()
 const watchers = new Map<PiniaStore, () => void>()
 const snapshots = new Map<string, unknown>()
+/** Whether the stored history of a store can be replayed up to its latest event */
+const chainIntact = new Map<string, boolean>()
 const activeActions = new Map<string, string[]>()
 const pending = new Map<string, PendingMutation>()
+/** Stores registered in Pinia while it was observed (consumed by the next sync) */
+let created = new WeakSet<object>()
 let pinia: PiniaInstance | null = null
 let initialized = false
 
@@ -38,14 +56,88 @@ function storesOf(instance: PiniaInstance): PiniaStore[] {
   return (s instanceof Map ? Array.from(s.values()) : Object.values(s)) as PiniaStore[]
 }
 
+interface StoreSnapshot {
+  state: Record<string, unknown>
+  getters: Record<string, unknown>
+}
+
+type WatchFn = (getter: () => unknown, cb: () => void, options: { deep: boolean; flush: 'sync' }) => unknown
+
+const getterWatchers = new Map<PiniaStore, () => void>()
+let rootWatch: WatchFn | null = null
+
+function candidateApps(): any[] {
+  const apps: any[] = [(pinia as any)?._a]
+  try {
+    apps.push(...((window as any).__VUE_DEVTOOLS_GLOBAL_HOOK__?.apps ?? []))
+    document.querySelectorAll('[data-v-app], #app, #root').forEach(el => apps.push((el as any).__vue_app__))
+  } catch { /* no DOM access */ }
+  return apps.filter(Boolean)
+}
+
+/** `$watch` of a mounted root component (public instance API); null until an app is mounted */
+function getRootWatch(): WatchFn | null {
+  if (rootWatch) return rootWatch
+  for (const app of candidateApps()) {
+    const root = app._instance ?? app._container?._vnode?.component
+    const proxy = root?.proxy
+    if (proxy && typeof proxy.$watch === 'function') {
+      rootWatch = proxy.$watch.bind(proxy) as WatchFn
+      return rootWatch
+    }
+  }
+  return null
+}
+
+function ownValue(store: PiniaStore, key: string): { value: unknown } | null {
+  const desc = Object.getOwnPropertyDescriptor(store, key)
+  return desc && 'value' in desc ? { value: desc.value } : null
+}
+
+/** Getter keys as the Store tab shows them, without plugin properties and markRaw objects (router, API clients) */
+function getterKeys(store: PiniaStore): string[] {
+  const custom: unknown = (store as any)._customProperties
+  return getGetterKeys(store).filter(key => {
+    if (custom instanceof Set && custom.has(key)) return false
+    const own = ownValue(store, key)
+    const value = own?.value
+    // Options-store getters are `markRaw(computed())`
+    if (isComputedRef(value)) return true
+    return !(value && typeof value === 'object' && (value as { __v_skip?: boolean }).__v_skip)
+  })
+}
+
+/** Getters that are plain values assigned to the store (`this.user = ...`), possibly non-reactive */
+function hasPlainGetters(store: PiniaStore): boolean {
+  return getterKeys(store).some(key => {
+    const own = ownValue(store, key)
+    return !!own && !isComputedRef(own.value)
+  })
+}
+
+function readGetter(store: PiniaStore, key: string): unknown {
+  try {
+    return store[key]
+  } catch (e) {
+    return `[Error: ${e instanceof Error ? e.message : String(e)}]`
+  }
+}
+
+/** Same split as the Store tab: `$state` keys and getters (computed, accessors, data outside `$state`) */
+function readStoreData(store: PiniaStore): StoreSnapshot {
+  const state: Record<string, unknown> = {}
+  const getters: Record<string, unknown> = {}
+  for (const key of getStoreStateKeys(store)) state[key] = store[key]
+  for (const key of getterKeys(store)) getters[key] = readGetter(store, key)
+  return { state, getters }
+}
+
 function takeSnapshot(store: PiniaStore): unknown {
   try {
-    const state: Record<string, unknown> = {}
-    for (const key of getStoreStateKeys(store)) state[key] = store[key]
-    return snapshotter.sanitize(state).value
+    return snapshotter.sanitize(readStoreData(store)).value
   } catch (e) {
     console.error('[injected/logs/pinia] snapshot failed:', store?.$id, e)
-    return {}
+    return { state: {}, getters: {} }
   }
 }
 
@@ -62,6 +154,19 @@ function serializeError(error: unknown): { message: string; name?: string; stack
   return { message: typeof error === 'string' ? error : JSON.stringify(copyValue(error)) }
 }
 
+function recordBase(storeId: string, op: 'init' | 'snapshot', state: unknown): void {
+  recordLog({
+    kind: 'store',
+    key: storeId,
+    level: 'info',
+    data: { op, state },
+    finalize: data => {
+      chainIntact.set(storeId, logsRuntime.isComplete(data.state))
+      return data
+    },
+  })
+}
+
 function flushStore(storeId: string): void {
   const p = pending.get(storeId)
   pending.delete(storeId)
@@ -76,20 +181,31 @@ function flushStore(storeId: string): void {
   const changes = diffValues(before, after)
   if (changes.length === 0) return
 
+  const limited = limitChanges(changes)
+  const truncated = changes.length >= MAX_CHANGES
+  const exact = !truncated && !limited.some(c => logsRuntime.isIncomplete(c.after))
+  // On an intact chain the old values are read from the previous state
+  const intact = chainIntact.get(storeId) !== false
+  const mutationType = Array.from(p.types).join(', ')
+
+  const data: Record<string, unknown> = {
+    op: 'change',
+    changes: intact ? limited.map(withoutBefore) : limited,
+  }
+  if (mutationType && mutationType !== 'direct') data.mutationType = mutationType
+  if (p.actions.size > 0) data.actions = Array.from(p.actions)
+  if (truncated) data.changesTruncated = true
+  if (!exact || !intact) data.state = after
+
   recordLog({
     kind: 'store',
     key: storeId,
     level: 'info',
-    title: storeId,
-    subtitle: summarizeChanges(changes),
-    data: {
-      storeId,
-      mutationType: Array.from(p.types).join(', '),
-      actions: Array.from(p.actions),
-      changes: limitChanges(changes),
-      changesTruncated: changes.length >= MAX_CHANGES,
-      before,
-      after,
+    data,
+    finalize: stored => {
+      if (stored.state !== undefined) chainIntact.set(storeId, logsRuntime.isComplete(stored.state))
+      else if (!Array.isArray(stored.changes)) chainIntact.set(storeId, false)
+      return stored
     },
   })
 }
@@ -126,6 +242,11 @@ function onAction(store: PiniaStore, ctx: any): void {
     const s = activeActions.get(storeId)
     const i = s ? s.lastIndexOf(name) : -1
     if (s && i !== -1) s.splice(i, 1)
+    // Getters may be unwatched, and plain values outside `$state` non-reactive: the action may have changed them unseen
+    if (enabled.has(store) && !isLogsPaused() && (!getterWatchers.has(store) || hasPlainGetters(store))) {
+      onMutation(store, undefined)
+      pending.get(storeId)?.actions.add(name)
+    }
   }
 
   if (isIgnored('action', key)) {
@@ -136,37 +257,53 @@ function onAction(store: PiniaStore, ctx: any): void {
 
   const start = performance.now()
   const args = copyValue(Array.from(ctx?.args ?? []))
-  const base = { storeId, action: name, args }
 
   ctx.after?.((result: unknown) => {
     finish()
-    const duration = Math.round(performance.now() - start)
     recordLog({
       kind: 'action',
       key,
       level: 'info',
-      title: `${storeId}.${name}()`,
-      subtitle: `${duration} ms`,
-      data: { ...base, status: 'success', result, duration },
+      data: { args, result, duration: Math.round(performance.now() - start) },
     })
   })
 
   ctx.onError?.((error: unknown) => {
     finish()
-    const duration = Math.round(performance.now() - start)
-    const err = serializeError(error)
     recordLog({
       kind: 'action',
       key,
       level: 'error',
-      title: `${storeId}.${name}()`,
-      subtitle: `Error: ${err.message}`,
-      data: { ...base, status: 'error', error: err, duration },
+      data: { args, error: serializeError(error), duration: Math.round(performance.now() - start) },
     })
   })
 }
 
+function armGetters(store: PiniaStore): void {
+  if (getterWatchers.has(store)) return
+  const watch = getRootWatch()
+  if (!watch) return
+  try {
+    const stop = watch(
+      () => getterKeys(store).map(key => readGetter(store, key)),
+      () => {
+        try {
+          onMutation(store, undefined)
+        } catch (e) {
+          console.error('[injected/logs/pinia] onMutation failed:', store.$id, e)
+        }
+      },
+      { deep: true, flush: 'sync' },
+    )
+    // `$watch` is a no-op in builds without the Options API
+    if (typeof stop === 'function') getterWatchers.set(store, stop as () => void)
+  } catch (e) {
+    console.error('[injected/logs/pinia] $watch failed:', store.$id, e)
+  }
+}
+
 function arm(store: PiniaStore): void {
+  armGetters(store)
   if (watchers.has(store)) return
   try {
     const stop = (store.$subscribe as any)((mutation: any) => {
@@ -183,18 +320,27 @@ function arm(store: PiniaStore): void {
 }
 
 function disarm(store: PiniaStore): void {
-  const stop = watchers.get(store)
-  if (!stop) return
-  watchers.delete(store)
-  try {
-    stop()
-  } catch { /* store disposed */ }
+  for (const map of [watchers, getterWatchers]) {
+    const stop = map.get(store)
+    if (!stop) continue
+    map.delete(store)
+    try {
+      stop()
+    } catch { /* store disposed */ }
+  }
 }
 
-function enable(store: PiniaStore): void {
-  if (enabled.has(store)) return
+/** Starts observing a store; a store that is already observed keeps its history as is */
+function enable(store: PiniaStore, op: 'init' | 'snapshot'): void {
+  if (enabled.has(store)) {
+    // The app may have mounted after the store was enabled: `$watch` is available now
+    if (!pending.has(store.$id)) armGetters(store)
+    return
+  }
   enabled.add(store)
-  snapshots.set(store.$id, takeSnapshot(store))
+  const state = takeSnapshot(store)
+  snapshots.set(store.$id, state)
+  recordBase(store.$id, op, state)
   arm(store)
 }
 
@@ -202,6 +348,7 @@ function disable(store: PiniaStore): void {
   if (!enabled.delete(store)) return
   disarm(store)
   snapshots.delete(store.$id)
+  chainIntact.delete(store.$id)
   pending.delete(store.$id)
 }
 
@@ -236,7 +383,31 @@ function syncStores(): void {
     attachStore(store)
     if (!attached.has(store)) continue
     if (isLogsPaused() || isIgnored('store', store.$id)) disable(store)
-    else enable(store)
+    else enable(store, created.has(store) ? 'init' : 'snapshot')
+  }
+  // A store enabled later (resume, un-ignore) already existed when observation started
+  created = new WeakSet()
+}
+
+/** Stores just registered in Pinia: their first state is the initial one */
+function markCreatedStores(): void {
+  if (!pinia || isLogsPaused()) return
+  for (const store of storesOf(pinia)) {
+    if (store && !attached.has(store)) created.add(store)
+  }
+}
+
+/** History was cleared or re-masked: restart every observed chain from a full state */
+function resnapshot(): void {
+  for (const store of enabled) {
+    const p = pending.get(store.$id)
+    if (p) {
+      pending.delete(store.$id)
+      arm(store)
+    }
+    const state = takeSnapshot(store)
+    snapshots.set(store.$id, state)
+    recordBase(store.$id, 'snapshot', state)
   }
 }
 
@@ -245,6 +416,7 @@ export function initPiniaLogs(): void {
   initialized = true
 
   onLogsStateChanged(syncStores)
+  onLogsReset(resnapshot)
 
   waitForPinia(5000)
     .then(instance => {
@@ -254,8 +426,11 @@ export function initPiniaLogs(): void {
       }
       pinia = instance
       syncStores()
-      // Store setup runs after `_s.set` — attach on the next task so the initial snapshot is populated
-      watchPiniaStores(instance, () => setTimeout(syncStores, 0))
+      // Store setup runs after `_s.set` — attach on the next task so the initial state is populated
+      watchPiniaStores(instance, () => {
+        markCreatedStores()
+        setTimeout(syncStores, 0)
+      })
     })
     .catch(e => {
       initialized = false

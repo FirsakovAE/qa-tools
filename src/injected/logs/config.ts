@@ -5,11 +5,12 @@
 export type LogLimitKey = 'network' | 'props' | 'emit' | 'store' | 'action' | 'navigation' | 'error'
 
 export interface LogsLimits {
-  /** Ring buffer size per event group (network: per request and per response events) */
-  counts: Record<LogLimitKey, number>
+  /** Event groups that are logged at all (network: both request and response events) */
+  capture: Record<LogLimitKey, boolean>
   /** Total budget for buffered events (approximate serialized size) */
   maxMemoryMB: number
-  /** Larger payload parts are omitted (network bodies are truncated) */
+  /** Off: payloads are kept whole. On: larger parts are omitted and network bodies are truncated to `maxEventKB` */
+  limitEventSize: boolean
   maxEventKB: number
 }
 
@@ -24,13 +25,13 @@ export interface LogsMasking {
 export const LOG_LIMIT_KEYS: LogLimitKey[] = ['network', 'props', 'emit', 'store', 'action', 'navigation', 'error']
 
 export const DEFAULT_LOGS_LIMITS: LogsLimits = {
-  counts: { network: 500, props: 1000, emit: 1000, store: 1000, action: 1000, navigation: 200, error: 200 },
+  capture: { network: true, props: true, emit: true, store: true, action: true, navigation: true, error: true },
   maxMemoryMB: 64,
+  limitEventSize: false,
   maxEventKB: 512,
 }
 
 export const LOG_LIMIT_BOUNDS = {
-  count: { min: 10, max: 20000 },
   memoryMB: { min: 8, max: 1024 },
   eventKB: { min: 16, max: 16384 },
 }
@@ -71,16 +72,24 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
 }
 
 export function normalizeLimits(raw: Partial<LogsLimits> | null | undefined): LogsLimits {
-  const counts = {} as Record<LogLimitKey, number>
-  const { count, memoryMB, eventKB } = LOG_LIMIT_BOUNDS
-  for (const key of LOG_LIMIT_KEYS) {
-    counts[key] = clampInt(raw?.counts?.[key], count.min, count.max, DEFAULT_LOGS_LIMITS.counts[key])
-  }
+  const capture = {} as Record<LogLimitKey, boolean>
+  const { memoryMB, eventKB } = LOG_LIMIT_BOUNDS
+  for (const key of LOG_LIMIT_KEYS) capture[key] = raw?.capture?.[key] !== false
   return {
-    counts,
+    capture,
     maxMemoryMB: clampInt(raw?.maxMemoryMB, memoryMB.min, memoryMB.max, DEFAULT_LOGS_LIMITS.maxMemoryMB),
+    limitEventSize: raw?.limitEventSize === true,
     maxEventKB: clampInt(raw?.maxEventKB, eventKB.min, eventKB.max, DEFAULT_LOGS_LIMITS.maxEventKB),
   }
+}
+
+/** Per-event size limit in characters; Infinity when payloads are kept whole */
+export function maxEventChars(limits: LogsLimits): number {
+  return limits.limitEventSize ? limits.maxEventKB * 1024 : Infinity
+}
+
+export function isCaptured(limits: LogsLimits, kind: string): boolean {
+  return limits.capture[limitKeyForKind(kind)] !== false
 }
 
 export function normalizeMasking(raw: Partial<LogsMasking> | null | undefined): LogsMasking {

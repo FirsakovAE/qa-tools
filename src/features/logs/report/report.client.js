@@ -1,5 +1,7 @@
-// Vue Inspector Logs report runtime. Plain browser JS, embedded verbatim into the report.
-// Reads the JSON block written by the generator and renders the Logs view.
+// Vue Inspector Logs report renderer. Plain browser JS, embedded verbatim into the report.
+// Reads the JSON block written by the generator and renders the Logs view. Events are stored
+// compactly; `LogsRuntime` (embedded before this script) restores titles, store states and
+// network entries the same way the Logs tab does.
 // Page data is only ever inserted with textContent (JSON highlighting escapes first).
 // Keep it free of multi-line template literals and of the closing script tag sequence.
 (function () {
@@ -25,41 +27,77 @@
   }
   var info = payload.info || {}
   var kindsMeta = info.kinds || {}
+  var kindLabels = {}
+  Object.keys(kindsMeta).forEach(function (k) { if (kindsMeta[k] && kindsMeta[k].label) kindLabels[k] = kindsMeta[k].label })
 
-  var events = (Array.isArray(payload.events) ? payload.events : []).map(function (raw, index) {
+  var RT = LogsRuntime
+  var hasOwn = function (obj, key) { return !!obj && Object.prototype.hasOwnProperty.call(obj, key) }
+  var network = payload.network && typeof payload.network === 'object' ? payload.network : {}
+  var entryCache = {}
+  function getEntry(id) {
+    if (id == null || !hasOwn(network.entries, id)) return undefined
+    if (!hasOwn(entryCache, id)) {
+      var stored = network.entries[id]
+      entryCache[id] = stored && typeof stored === 'object'
+        ? RT.resolveEntry(Object.assign({ id: id }, stored), function (ref) { return hasOwn(network.bodies, ref) ? network.bodies[ref] : undefined })
+        : undefined
+    }
+    return entryCache[id]
+  }
+
+  var rawEvents = (Array.isArray(payload.events) ? payload.events : []).filter(function (raw) { return raw && typeof raw === 'object' })
+  rawEvents.forEach(function (raw) {
+    if (!raw.data || typeof raw.data !== 'object') raw.data = {}
+    if (typeof raw.key !== 'string') raw.key = String(raw.key || '')
+  })
+  var ctx = { stores: RT.indexStores(rawEvents), getEntry: getEntry }
+
+  var events = rawEvents.map(function (raw, index) {
     var ts = typeof raw.timestamp === 'number' ? raw.timestamp : Date.parse(raw.time)
+    var described = { title: raw.key }
+    try { described = RT.describe(raw, ctx) } catch (err) { /* keep the key */ }
     return {
       index: index,
       raw: raw,
       kind: String(raw.kind || 'other'),
+      label: RT.eventLabel(raw, kindLabels),
       ts: isFinite(ts) ? ts : 0,
       level: raw.level || 'info',
-      title: String(raw.title || '(untitled)'),
-      subtitle: raw.subtitle == null ? '' : String(raw.subtitle),
-      key: String(raw.key || ''),
-      data: raw.data && typeof raw.data === 'object' ? raw.data : {},
+      title: String(described.title || '(untitled)'),
+      subtitle: described.subtitle == null ? '' : String(described.subtitle),
+      key: raw.key,
+      data: raw.data,
     }
   })
   // Newest first, as in the Logs tab
   var ordered = events.slice().sort(function (a, b) { return b.ts - a.ts || b.index - a.index })
 
+  function isNetwork(e) { return e.kind === 'request' || e.kind === 'response' }
+  function entryOf(e) { return isNetwork(e) ? getEntry(e.data.entryId) : undefined }
+
   // Request and response events of one network entry: "<kind>:<entryId>" -> event
   var networkPairs = {}
   events.forEach(function (e) {
-    var id = (e.kind === 'request' || e.kind === 'response') && e.data.entry && e.data.entry.id
-    if (id != null) networkPairs[e.kind + ':' + id] = e
+    if (isNetwork(e) && e.data.entryId != null) networkPairs[e.kind + ':' + e.data.entryId] = e
   })
   function pairedEvent(e) {
-    var id = e.data.entry && e.data.entry.id
-    if (id == null) return null
-    if (e.kind === 'request') return networkPairs['response:' + id] || null
-    if (e.kind === 'response') return networkPairs['request:' + id] || null
-    return null
+    if (!isNetwork(e) || e.data.entryId == null) return null
+    return networkPairs[(e.kind === 'request' ? 'response:' : 'request:') + e.data.entryId] || null
   }
 
   function isFailed(e) {
-    var en = e.kind === 'response' && e.data.entry
+    var en = e.kind === 'response' && entryOf(e)
     return !!en && (!!en.error || Number(en.status) >= 400)
+  }
+
+  // Full views (restored states, change values, entry halves); a few recent ones are kept
+  var views = []
+  function viewOf(e) {
+    for (var i = 0; i < views.length; i++) if (views[i].e === e) return views[i].v
+    var v = RT.hydrate(e.raw, ctx, kindLabels)
+    views.unshift({ e: e, v: v })
+    if (views.length > 8) views.pop()
+    return v
   }
 
   // Overview cards open "All events" narrowed by one of these (hash "#all:<filter>")
@@ -208,7 +246,8 @@
   function textOf(e) {
     var t = searchText.get(e)
     if (t === undefined) {
-      t = (e.title + '\n' + e.subtitle + '\n' + e.key + '\n' + label(e.kind)).toLowerCase()
+      var en = entryOf(e)
+      t = (e.title + '\n' + e.subtitle + '\n' + e.key + '\n' + e.label + (en ? '\n' + en.url : '')).toLowerCase()
       searchText.set(e, t)
     }
     return t
@@ -218,7 +257,8 @@
   function dataOf(e) {
     var t = dataText.get(e)
     if (t === undefined) {
-      try { t = JSON.stringify(e.data).toLowerCase() } catch (err) { t = '' }
+      var en = entryOf(e)
+      try { t = JSON.stringify(en ? RT.entryPart(en, e.kind) : e.data).toLowerCase() } catch (err) { t = '' }
       dataText.set(e, t)
     }
     return t
@@ -315,7 +355,8 @@
       h('h2', { class: 'h2', text: 'Report' }),
       kv([
         ['Exported', info.exportedAt ? fmtDateTime(Date.parse(info.exportedAt)) : '-'],
-        ['Generator', (info.name || 'Vue Inspector Logs') + (info.version ? ' ' + info.version : '')],
+        ['Generator', info.name || 'Vue Inspector Logs'],
+        ['Format version', payload.version || 1],
         ['Events in file', events.length],
       ]),
     ])
@@ -328,7 +369,7 @@
       'data-index': e.index,
     }, [
       h('span', { class: 'time', text: fmtTime(e.ts) }),
-      h('span', { class: 'badge ' + kindClass(e.kind), text: label(e.kind) }),
+      h('span', { class: 'badge ' + kindClass(e.kind), text: e.label }),
       h('span', { class: 'ev' }, [
         h('div', { class: 'ev-title', text: e.title, title: e.title }),
         e.subtitle ? h('div', { class: 'ev-sub', text: e.subtitle, title: e.subtitle }) : null,
@@ -390,11 +431,17 @@
 
   // ---------------------------------------------------------------- details
 
-  function sectionsFor(e) {
-    var d = e.data
+  function isStoreBase(e, d) { return e.kind === 'store' && d.op && d.op !== 'change' }
+
+  function sectionsFor(e, d) {
     var en = d.entry || {}
     var list = []
-    if (e.kind === 'request') {
+    if (isNetwork(e) && !d.entry) {
+      list.push(['overview', 'Overview'])
+    } else if (isStoreBase(e, d)) {
+      list.push(['state', 'State'])
+      list.push(['overview', 'Overview'])
+    } else if (e.kind === 'request') {
       list.push(['overview', 'Overview'])
       if (en.params && en.params.length) list.push(['params', 'Params (' + en.params.length + ')'])
       list.push(['requestHeaders', 'Headers'])
@@ -423,10 +470,20 @@
     return list
   }
 
-  function overviewRows(e) {
-    var d = e.data
+  function overviewRows(e, d) {
     var rows = [['Time', fmtDateTime(e.ts)]]
     var en = d.entry
+    if (isNetwork(e) && !en) {
+      rows.push(['Request', e.key], ['Network entry', 'not included in this report'])
+      return rows
+    }
+    if (e.kind === 'store') {
+      rows.push(['Store', d.storeId])
+      if (d.op === 'init') rows.push(['Recorded', 'Store created while logging (initial state)'])
+      else if (d.op === 'snapshot') rows.push(['Recorded', 'Logging started on an existing store (current state)'])
+      else if (d.op === 'checkpoint') rows.push(['Recorded', 'State after ' + d.compacted + ' older changes compacted by the limits'])
+      return rows
+    }
     if (en) {
       rows.push(['URL', en.url], ['Method', en.method])
       if (e.kind === 'response') {
@@ -449,6 +506,8 @@
       if (d.name) rows.push(['Name', d.name])
       rows.push(['Message', d.message])
       if (d.filename) rows.push(['Location', d.filename + ':' + (d.lineno || 0) + ':' + (d.colno || 0)])
+      if (d.stackTruncated) rows.push(['Stack', 'Truncated: top ' + d.stackTruncated.kept + ' of ' + d.stackTruncated.frames + ' frames kept'])
+      if (d.suppressedBefore) rows.push(['Suppressed', d.suppressedBefore + ' earlier console errors (more than 50 per second)'])
     } else {
       Object.keys(d).forEach(function (k) {
         var v = d[k]
@@ -458,9 +517,8 @@
     return rows
   }
 
-  function contextLine(e) {
-    var d = e.data
-    if (e.kind === 'store') {
+  function contextLine(e, d) {
+    if (e.kind === 'store' && !isStoreBase(e, d)) {
       var parts = ['Mutation: ' + (d.mutationType || 'direct')]
       if (Array.isArray(d.actions) && d.actions.length) parts.push('Action: ' + d.actions.join(', '))
       return parts.join(' / ')
@@ -470,6 +528,7 @@
   }
 
   function omittedNotice(e, part) {
+    if (part.reason === 'unavailable') return h('div', { class: 'muted', text: 'The state was not saved (it could not be restored when older changes were compacted).' })
     var lim = e.data.__sizeLimited && e.data.__sizeLimited.limit
     return h('div', { class: 'muted', text: 'This part (' + fmtBytes(part.size) + ') was not saved: it exceeded the per-event limit' + (lim ? ' of ' + fmtBytes(lim) : '') + ' when the logs were captured.' })
   }
@@ -493,29 +552,39 @@
     return nodes
   }
 
-  function changesView(e) {
-    var changes = Array.isArray(e.data.changes) ? e.data.changes : []
+  function changeValue(c, field) {
+    return hasOwn(c, field) ? preview(c[field]) : 'not available'
+  }
+
+  function changesView(d) {
+    var changes = Array.isArray(d.changes) ? d.changes : []
     if (!changes.length) return h('div', { class: 'muted', text: 'No changes' })
     var nodes = changes.map(function (c) {
       var cls = c.type === 'added' ? 'c-added' : c.type === 'removed' ? 'c-removed' : 'c-changed'
       return h('div', { class: 'change' }, [
         h('div', { class: 'change-path' }, [h('span', { class: 'badge tiny ' + cls, text: c.type }), h('span', { text: c.path })]),
-        c.type !== 'added' ? h('div', { class: 'minus', text: '- ' + preview(c.before) }) : null,
-        c.type !== 'removed' ? h('div', { class: 'plus', text: '+ ' + preview(c.after) }) : null,
+        c.type !== 'added' ? h('div', { class: 'minus', text: '- ' + changeValue(c, 'before') }) : null,
+        c.type !== 'removed' ? h('div', { class: 'plus', text: '+ ' + changeValue(c, 'after') }) : null,
       ])
     })
-    if (e.data.changesTruncated) nodes.push(h('div', { class: 'muted', text: 'Too many changes - list is truncated. See Before / After for full state.' }))
+    if (d.changesTruncated) nodes.push(h('div', { class: 'muted', text: 'Too many changes - list is truncated. See Before / After for full state.' }))
     return nodes
   }
 
-  function tabContent(e, tab) {
-    var d = e.data
+  var STATE_MISSING = 'cannot be restored: earlier events of this store are not in the report or are incomplete. The changed values are shown in Changes.'
+
+  function tabContent(e, tab, v) {
+    var d = v.event.data
+    var missing = v.missing || {}
     var en = d.entry || {}
-    var part = tab === 'before' ? d.before : tab === 'after' ? d.after : tab === 'args' ? d.args
+    if (tab === 'before' && missing.before) return h('div', { class: 'muted', text: 'The state before this change ' + STATE_MISSING })
+    if (tab === 'after' && missing.after) return h('div', { class: 'muted', text: 'The state after this change ' + STATE_MISSING })
+    var part = tab === 'before' ? d.before : tab === 'after' ? d.after : tab === 'state' ? d.state : tab === 'args' ? d.args
       : tab === 'result' ? (d.status === 'error' ? d.error : d.result) : tab === 'changes' ? d.changes : undefined
     if (isOmitted(part)) return omittedNotice(e, part)
     switch (tab) {
-      case 'overview': return kv(overviewRows(e))
+      case 'state': return jsonBlock(d.state)
+      case 'overview': return kv(overviewRows(e, d))
       case 'params': return kv((en.params || []).map(function (p) { return [p.key, p.value] }), true)
       case 'requestHeaders':
       case 'responseHeaders': {
@@ -524,13 +593,13 @@
       }
       case 'requestBody': return bodyView(en.requestBody)
       case 'responseBody': return bodyView(en.responseBody)
-      case 'changes': return changesView(e)
+      case 'changes': return changesView(d)
       case 'before': return jsonBlock(d.before)
       case 'after': return jsonBlock(d.after)
       case 'args': return jsonBlock(d.args || [])
       case 'result': return jsonBlock(d.status === 'error' ? d.error : d.result === undefined ? null : d.result)
       case 'stack': return code(String(d.stack || ''), false)
-      default: return jsonBlock(e.raw)
+      default: return jsonBlock(v.event)
     }
   }
 
@@ -543,7 +612,14 @@
       add(box, h('div', { class: 'placeholder', text: 'Select an event to see details' }))
       return
     }
-    var sections = sectionsFor(e)
+    var v
+    try {
+      v = viewOf(e)
+    } catch (err) {
+      v = { event: Object.assign({}, e.raw, { title: e.title, subtitle: e.subtitle, label: e.label }), missing: {} }
+    }
+    var d = v.event.data || {}
+    var sections = sectionsFor(e, d)
     var ids = sections.map(function (s) { return s[0] })
     if (ids.indexOf(state.tab) === -1) state.tab = ids[0]
 
@@ -563,13 +639,13 @@
     var head = h('div', { class: 'd-head' }, [
       h('div', { class: 'd-head-main' }, [
         h('div', { class: 'd-title-row' }, [
-          h('span', { class: 'badge ' + kindClass(e.kind), text: label(e.kind) }),
-          e.kind === 'response' && e.data.entry
-            ? h('span', { class: 'badge mono ' + statusClass(e.data.entry), text: e.data.entry.error ? 'Failed' : e.data.entry.status })
+          h('span', { class: 'badge ' + kindClass(e.kind), text: e.label }),
+          e.kind === 'response' && d.entry
+            ? h('span', { class: 'badge mono ' + statusClass(d.entry), text: d.entry.error ? 'Failed' : d.entry.status })
             : null,
           h('span', { class: 'd-title', text: e.title, title: e.title }),
         ]),
-        h('div', { class: 'd-sub', text: contextLine(e) || e.subtitle || fmtDateTime(e.ts) }),
+        h('div', { class: 'd-sub', text: contextLine(e, d) || e.subtitle || fmtDateTime(e.ts) }),
       ]),
       pairLink,
       h('a', { class: 'icon-btn', href: hereHref(-1), title: 'Close (Esc)', text: '\u00d7' }),
@@ -581,7 +657,7 @@
     }))
     var body = h('div', { class: 'd-body' })
     try {
-      add(body, tabContent(e, state.tab))
+      add(body, tabContent(e, state.tab, v))
     } catch (err) {
       add(body, h('div', { class: 'muted', text: 'This part cannot be displayed: ' + err.message }))
     }

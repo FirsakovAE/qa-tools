@@ -15,9 +15,8 @@ import {
 import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
 import { useRowSelection } from '@/composables/useRowSelection'
-import type { LogEvent, LogKind, LogsExportFormat } from '@/types/logs'
-import { LOG_KINDS, LOG_KIND_META, normalizeExportFormat } from '@/types/logs'
-import type { NetworkEntry } from '@/types/network'
+import type { LogEvent, LogKind } from '@/types/logs'
+import { LOG_KINDS, LOG_KIND_META } from '@/types/logs'
 import { toast } from '@/components/ui/Toaster'
 import LogsTable from './LogsTable.vue'
 import LogDetails from './LogDetails.vue'
@@ -27,11 +26,13 @@ import { useLogsSearch } from './useLogsSearch'
 import { exportLogEvent, exportLogs } from './exportLogs'
 import { parseLogsFile, LogsImportError, IMPORT_ACCEPT } from './importLogs'
 import { formatLogDateTime } from './format'
+import { networkEntryOf, pairedNetworkEvent } from './view'
 
 const settings = useInspectorSettingsSync()
 
 const {
   events,
+  source,
   totalCount,
   paused,
   ignoreRules,
@@ -65,7 +66,7 @@ const kindFiltered = computed(() => {
   return events.value.filter(e => kinds.has(e.kind))
 })
 
-const { searchTerm, filtered: filteredEvents, isSearching } = useLogsSearch(kindFiltered, settings)
+const { searchTerm, filtered: filteredEvents, isSearching } = useLogsSearch(kindFiltered, source, settings)
 
 const filteredCount = computed(() => filteredEvents.value.length)
 const isFiltered = computed(() => isSearching.value || !allTypesSelected.value)
@@ -74,17 +75,15 @@ const isFiltered = computed(() => isSearching.value || !allTypesSelected.value)
 // Export / Import
 // ============================================================================
 
-const exportFormat = computed(() => normalizeExportFormat(settings.value?.logsExportFormat))
-
 const rowSelection = useRowSelection(() => filteredEvents.value.map(e => e.id))
 
-function handleExportLogs(format: LogsExportFormat) {
+function handleExportLogs() {
   if (rowSelection.count.value === 0) {
-    exportLogs(filteredEvents.value, format)
+    exportLogs(filteredEvents.value, source.value)
     return
   }
   const ids = new Set(rowSelection.checkedIds.value)
-  exportLogs(filteredEvents.value.filter(e => ids.has(e.id)), format)
+  exportLogs(filteredEvents.value.filter(e => ids.has(e.id)), source.value)
 }
 
 const importing = ref(false)
@@ -129,13 +128,7 @@ const selectedEvent = computed(() => (selectedId.value ? getEvent(selectedId.val
 
 /** Send request / Receive response events of one network entry */
 function pairOf(event: LogEvent | null): LogEvent | null {
-  if (!event || (event.kind !== 'request' && event.kind !== 'response')) return null
-  const entryId = (event.data as { entry?: NetworkEntry }).entry?.id
-  if (!entryId) return null
-  const pairKind = event.kind === 'request' ? 'response' : 'request'
-  const byConvention = getEvent(`net-${pairKind === 'request' ? 'req' : 'res'}-${entryId}`)
-  if (byConvention) return byConvention
-  return events.value.find(e => e.kind === pairKind && (e.data as { entry?: NetworkEntry }).entry?.id === entryId) ?? null
+  return pairedNetworkEvent(event, source.value, getEvent)
 }
 
 const relatedEvent = computed(() => pairOf(selectedEvent.value))
@@ -151,16 +144,14 @@ watch(events, list => {
 })
 
 function handleExport(event: LogEvent) {
-  exportLogEvent(event, exportFormat.value, pairOf(event))
+  exportLogEvent(event, source.value)
 }
 
 function handleCopyCurl(event: LogEvent) {
-  // A response event holds only the response; the request comes from its Send request event
-  const entryId = (event.data as { entry?: { id?: string } }).entry?.id
-  const source = event.kind === 'response' && entryId ? getEvent(`net-req-${entryId}`) : event
-  const entry = (source?.data as { entry?: NetworkEntry } | undefined)?.entry
+  // Both events share the entry, so a response event also has its request data
+  const entry = networkEntryOf(event, source.value)
   if (!entry) {
-    toast.error('The request of this response is no longer in the logs')
+    toast.error('The network entry of this event is no longer in the logs')
     return
   }
   copyCurl(entry)
@@ -231,7 +222,7 @@ function handleClear() {
           </FacetedFilter>
 
           <div class="export-inline flex items-center gap-2">
-            <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" :format="exportFormat" @export="handleExportLogs" />
+            <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -241,7 +232,7 @@ function handleClear() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  Open an exported logs file (JSON or HTML report)
+                  Open an exported HTML logs report (older JSON exports are supported too)
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -251,7 +242,7 @@ function handleClear() {
 
       <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
         <div class="hidden export-wrapped space-x-2">
-          <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" :format="exportFormat" @export="handleExportLogs" />
+          <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
@@ -261,7 +252,7 @@ function handleClear() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Open an exported logs file (JSON or HTML report)
+                Open an exported HTML logs report (older JSON exports are supported too)
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -388,6 +379,7 @@ function handleClear() {
       <div class="h-full min-h-0 overflow-hidden outline-none" tabindex="-1" @keydown="rowSelection.handleKeydown">
         <LogsTable
           :events="filteredEvents"
+          :source="source"
           :selected-id="selectedId"
           :checked-ids="rowSelection.checked.value"
           :header-check-state="rowSelection.headerState.value"
@@ -408,6 +400,7 @@ function handleClear() {
         <LogDetails
           v-if="selectedEvent"
           :event="selectedEvent"
+          :source="source"
           :related="relatedEvent"
           @back="selectedId = null"
           @export="handleExport"
