@@ -346,13 +346,13 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
 
 #### Event types
 
-* **Send request** / **Receive response** — every **fetch** / **XMLHttpRequest** call is logged as two events. Each one stores only its own half of the exchange: the request event keeps **Params**, **Headers**, **Authorization** and **Body** of the request, the response event keeps **Status**, **Duration**, **Size**, **Headers** and **Body** of the response.
+* **Send request** / **Receive response** — every **fetch** / **XMLHttpRequest** call is logged as two events that share one network entry. The request event shows **Params**, **Headers**, **Authorization** and **Body** of the request, the response event shows **Status**, **Duration**, **Size**, **Headers** and **Body** of the response.
 * **Change props** — changed props of a component with the list of changes and full **Before** / **After** snapshots.
 * **Emit** — component events: component, event name, arguments, listener type (**regular** / **once**), parent chain.
-* **Change store** — changed **Pinia** state with the list of changes and full **Before** / **After** snapshots.
+* **Change store** — changed **Pinia** state with the list of changes and full **Before** / **After** snapshots. A store created while logging gets a **Store initialized** event with its full state, a store that already existed when logging started gets a **Store snapshot**; later events store only the changes, and **Before** / **After** are restored from them. A recorded store state is split like on the **Pinia Store** tab: `state` holds the declared state, `getters` holds getters and data the store keeps outside its declared state (for example, fields assigned in actions of an options store with an empty `state()`); changes of both are logged.
 * **Store action** — **Pinia** action calls: arguments, result or error, status and duration.
 * **Navigation** — SPA navigation (**pushState**, **replaceState**, **popstate**, **hashchange**) with **From** / **To**.
-* **JS error** — uncaught errors and unhandled promise rejections with message, location and stack.
+* **JS error** — uncaught errors, unhandled promise rejections and `console.error` calls of the page, with message, source, location and a compact stack (the top 10 frames; a cut is marked). Messages of Vue Inspector itself and of other browser extensions are not logged, including its internal reports of failed fetch / XHR requests (they are already **Network** events); the app’s own error messages about requests are kept.
 
 #### Logs table
 
@@ -370,6 +370,7 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
   * **Send request** — **Overview**, **Params (n)**, **Headers**, **Body**, **Raw**;
   * **Receive response** — **Overview**, **Headers**, **Body**, **Raw**;
   * **Change props** / **Change store** — **Changes (n)** (diff with added / removed / changed paths), **Before**, **After**, **Raw**;
+  * **Store initialized** / **Store snapshot** / **Store checkpoint** — **State**, **Overview**, **Raw**;
   * **Store action** — **Overview**, **Arguments**, **Result** / **Error**, **Raw**;
   * **Emit** — **Arguments (n)**, **Overview**, **Raw**;
   * **Navigation** / **JS error** — **Overview**, **Stack** (for errors), **Raw**.
@@ -377,7 +378,7 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
 * Actions are collected in the **⋮** menu of the details header and in the row context menu:
 
   * **Export event** — single-event export; for **Send request** / **Receive response** it is **Export request & response** and exports both events of the request in one file;
-  * **Copy cURL** — for both network events; for a response the command is built from its paired request;
+  * **Copy cURL** — for both network events (they share the request data);
   * **Open request event** / **Open response event** — jump to the paired network event;
   * **Ignore** — stop logging this group of events (same request, component, store, etc.).
 
@@ -385,12 +386,12 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
 
 * A checkbox column was added at the start of the **Logs** table (same position as the favorites star in **Props** and **Pinia**).
 * Hotkeys: **Shift + click** — select a range, **Ctrl / Cmd + click** on a row — toggle a row, **Ctrl / Cmd + A** — select all filtered rows; the header checkbox selects or clears everything.
-* When rows are selected, **Export Logs (n)** exports only them; otherwise all filtered events are exported.
+* When rows are selected, **Export Logs (n)** exports only them; otherwise all filtered events are exported. Network events are always exported with their pair (request + response).
 
 #### Export and import
 
-* **Export Logs** downloads the events in the format chosen in **Options → Logs → Export**: **HTML** (default) or **JSON**. Single-event exports use the same format.
-* **HTML** export is a static, self-contained report (dark theme, no external resources) that repeats the **Logs** tab:
+* **Export Logs** and single-event exports download an **HTML** report. It contains the structured event data for **Import Logs** (with a format version) and opens offline. A **Change store** event whose previous store event is not exported carries its full state, so **Before** / **After** stay available in the file.
+* The report is static and self-contained (dark theme, no external resources) and repeats the **Logs** tab:
 
   * sidebar navigation by sections (**Report**, **Network**, **Components**, **Pinia**, **Page**) with event counters;
   * **Overview** with summary cards; **Events**, **Errors** and **Failed requests** open **All events** with the matching filter;
@@ -398,7 +399,7 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
   * event details with the same tabs as in the app and a button that jumps between a request and its response;
   * **Download Vue Inspector** link to the project page at the bottom of the sidebar.
 
-* **Import Logs** opens previously exported **JSON** and **HTML** files. Imported events are shown in a separate read-only view with the file name and export time; **Back to live logs** returns to live recording. Invalid events are skipped, foreign HTML files are rejected.
+* **Import Logs** opens exported **HTML** reports, as well as **JSON** and **HTML** files from earlier builds. Imported events are shown in a separate read-only view with the file name and export time; **Back to live logs** returns to live recording. Invalid events are skipped, foreign HTML files are rejected.
 
 #### Data safety and limits
 
@@ -407,15 +408,16 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
   * by key: password, token, secret, authorization, cookie, apikey, card number, cvv, otp and others (list is editable);
   * by value: **JWT**, **Bearer** / **Basic** credentials and card numbers inside any text.
 
-* Every type is a ring buffer: when it is full, the oldest events are overwritten. Defaults: **Network** — 500, **Props**, **Emits**, **Pinia changes**, **Store actions** — 1 000, **Navigation** and **JS errors** — 200 events.
-* A shared **memory budget** (64 MB by default) and a **max event size** (512 KB by default): large parts of an event are dropped and network bodies are truncated with a notice in the details.
+* Every event group (**Network**, **Props changes**, **Emits**, **Pinia changes**, **Store actions**, **Navigation**, **JS errors**) can be switched off: it is not logged at all.
+* Old **Change store** events are compacted into a **Store checkpoint** (*initial state → checkpoint → recent changes*) instead of being dropped, so the remaining changes keep their **Before** / **After**.
+* A shared **memory budget** (64 MB by default): when it is reached, the oldest events are dropped; the newest event is always kept. A network entry shared by a request and its response, and equal bodies, are counted once.
+* Events are kept whole by default (store states, props, emit arguments, network bodies), so an imported report has complete data. An optional **max event size** (512 KB by default) drops large parts of an event and truncates network bodies with a notice in the details.
 
 #### Options → Logs
 
 * **Search Settings** — default search modes.
 * **Ignore list** — ignored event groups with **Log again** and **Log all again**.
-* **Export** — default export format (**JSON** / **HTML**).
-* **Logs limits** — events per type, memory budget, max event size, current usage and **Defaults**.
+* **What to log and limits** — switches for event groups, memory budget, optional max event size, current usage and **Defaults**.
 * **Data masking** — enable masking, value patterns, own key list and **Default keys**.
 
 ---

@@ -37,45 +37,37 @@ The same list is available from the **ignored** indicator in the **Logs** toolba
 
 ---
 
-## Export
+## What to log and limits
 
-Format of **Export Logs** and of single-event exports:
+### Logged events
 
-* **JSON** — raw events for re-import or tools;
-* **HTML** (default) — static report that opens in any browser and can be re-imported.
+Each group has a switch: a switched-off group is not logged at all, and already logged events stay. All groups are on by default.
 
-Details: [Export and import](./export.md).
+| Group | Events |
+| ----- | ------ |
+| **Network** | **Send request** and **Receive response** |
+| **Props changes** | **Change props** |
+| **Emits** | **Emit** |
+| **Pinia changes** | **Change store** (when switched on again, the store starts with a new **Store snapshot**) |
+| **Store actions** | **Store action** |
+| **Navigation** | **Navigation** |
+| **JS errors** | **JS error** |
 
----
-
-## Logs limits
-
-Each event type is a **ring buffer**: when it is full, the oldest events are overwritten. The memory budget applies to all types together.
-
-### Events per type
-
-| Type | Default | Unit |
-| ---- | ------- | ---- |
-| **Network** | 500 | requests |
-| **Props changes** | 1 000 | events |
-| **Emits** | 1 000 | events |
-| **Pinia changes** | 1 000 | events |
-| **Store actions** | 1 000 | events |
-| **Navigation** | 200 | events |
-| **JS errors** | 200 | events |
-
-Allowed range: **10 – 20 000**. The number before the field shows how many events of the type are currently stored. For **Network** the limit applies separately to **Send request** and **Receive response** events.
+The number next to a switch shows how many events of the group are currently stored.
 
 ### Data size
 
 | Setting | Default | Range | Meaning |
 | ------- | ------- | ----- | ------- |
-| **Memory budget** | 64 MB | 8 – 1024 MB | Total size of all buffered events (approximate serialized size) |
-| **Max event size** | 512 KB | 16 – 16 384 KB | Larger parts of an event (store snapshots, arguments, results) are dropped, network bodies are cut to this size |
+| **Memory budget** | 64 MB | 8 – 1024 MB | Total size of all buffered events (approximate serialized size). A network entry shared by a request and its response, and equal bodies, are counted once |
+| **Limit event size** | off | — | Off: events are kept whole and nothing is cut, so an exported report can be imported with complete data |
+| **Max event size** | 512 KB | 16 – 16 384 KB | Only with **Limit event size**: larger parts of an event (store snapshots, arguments, results) are dropped, network bodies are cut to this size |
+
+When the memory budget is reached, the oldest events are dropped. **Pinia changes** are compacted into a **Store checkpoint** instead, so the remaining changes keep their **Before** / **After**; the initial state of a store and its checkpoint go last (see [How events are stored](./general.md#how-events-are-stored)). The newest event is always kept, even if it alone exceeds the budget.
 
 The bar under the fields shows current usage (**Used X of Y**); it turns orange above 90 %.
 
-Values outside the range are corrected to the nearest bound. **Defaults** restores all limits.
+Values outside the range are corrected to the nearest bound. **Defaults** restores all settings of the block.
 
 ---
 

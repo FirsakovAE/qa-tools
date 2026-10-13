@@ -30,6 +30,7 @@ import PropsSection from './sections/PropsSection.vue'
 import PiniaSection from './sections/PiniaSection.vue'
 import LogsSection from './sections/LogsSection.vue'
 import AboutSection from './sections/AboutSection.vue'
+import SupportMenu from './components/SupportMenu.vue'
 import SettingsDetails from './SettingsDetails.vue'
 import BreakpointForm from '@/features/network/BreakpointForm.vue'
 import MockForm from '@/features/network/MockForm.vue'
@@ -549,8 +550,8 @@ onMounted(async () => {
             <MenuIcon class="h-4 w-4" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" class="w-[240px] p-4 text-foreground bg-background">
-          <nav class="flex flex-col gap-1 mt-4">
+        <SheetContent side="left" class="flex h-full w-[240px] flex-col overflow-hidden p-4 text-foreground bg-background">
+          <nav class="mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
             <Button
               v-for="section in sections"
               :key="section.id"
@@ -566,6 +567,7 @@ onMounted(async () => {
               {{ section.label }}
             </Button>
           </nav>
+          <SupportMenu class="shrink-0" />
         </SheetContent>
       </Sheet>
 
@@ -593,21 +595,24 @@ onMounted(async () => {
       <div class="h-full min-h-0 min-w-0 flex overflow-hidden gap-2">
 
         <!-- Sidebar Nav (hidden at ≤1200px) -->
-        <div class="options-sidebar shrink-0 w-[240px] p-1 flex flex-col gap-1 bg-muted/50 rounded-lg">
-          <Button
-            v-for="section in sections"
-            :key="section.id"
-            variant="ghost"
-            size="sm"
-            :class="[
-              'w-full justify-start h-10 text-sm',
-              activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
-            ]"
-            @click="activeSection = section.id"
-          >
-            <component :is="section.icon" class="w-5 h-5 mr-2 shrink-0" />
-            {{ section.label }}
-          </Button>
+        <div class="options-sidebar flex h-full min-h-0 w-[240px] shrink-0 flex-col overflow-hidden rounded-lg bg-muted/50 p-1">
+          <div class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+            <Button
+              v-for="section in sections"
+              :key="section.id"
+              variant="ghost"
+              size="sm"
+              :class="[
+                'w-full justify-start h-10 text-sm',
+                activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
+              ]"
+              @click="activeSection = section.id"
+            >
+              <component :is="section.icon" class="w-5 h-5 mr-2 shrink-0" />
+              {{ section.label }}
+            </Button>
+          </div>
+          <SupportMenu class="shrink-0" />
         </div>
 
         <!-- Section Content -->
