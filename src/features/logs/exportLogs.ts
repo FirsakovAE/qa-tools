@@ -2,6 +2,7 @@ import type { LogEvent, StoredNetworkEntry } from '@/types/logs'
 import { LOG_KINDS, LOG_KIND_META } from '@/types/logs'
 import type { BodyContent } from '@/types/network'
 import { logsRuntime as rt, type RuntimeChange } from '@/injected/logs/runtime'
+import { createSnapshotStore, storedRecord } from '@/injected/logs/snapshots'
 import {
   LOGS_REPORT_FORMAT,
   LOGS_REPORT_VERSION,
@@ -43,8 +44,12 @@ const RESPONSE_ONLY: Array<keyof StoredNetworkEntry> = [
  * it gets its full state, the old values of its changes and, when the changes cannot be
  * reverted exactly, the state before.
  */
-function materializeStoreChange(event: LogEvent, stores: ReturnType<typeof rt.indexStores>): Record<string, any> {
-  const data = event.data
+function materializeStoreChange(
+  event: LogEvent,
+  stores: ReturnType<typeof rt.indexStores>,
+  getSnap: (id: string) => unknown,
+): Record<string, any> {
+  const data = storedRecord(event.data, getSnap)
   const states = rt.restoreStoreChange(event, stores)
   const changes: RuntimeChange[] = Array.isArray(data.changes) ? data.changes.map((c: RuntimeChange) => rt.fillChange(c, states)) : []
   const out: Record<string, any> = { ...data, changes }
@@ -62,13 +67,17 @@ function storeEventsData(events: LogEvent[], source: LogsSource): Map<LogEvent, 
   const out = new Map<LogEvent, Record<string, any>>()
   const exported = new Set<unknown>(events)
   const stores = rt.indexStores(source.events)
+  const getSnap = (id: string) => source.snapshotPool?.get(id)
   for (const event of events) {
-    if (event.kind !== 'store' || rt.storeOp(event) !== 'change' || event.data?.op === undefined) continue
+    if (event.kind !== 'store') continue
+    // Read the stored object only. Resolving it would expand every shared snapshot.
+    const data = storedRecord(event.data, getSnap)
+    if (data.op !== 'change') continue
     const chain = stores.chains.get(event.key)
     const index = stores.position.get(event)
     const previous = chain && index !== undefined && index > 0 ? chain[index - 1] : undefined
     if (previous && exported.has(previous)) continue
-    out.set(event, materializeStoreChange(event, stores))
+    out.set(event, materializeStoreChange(event, stores, getSnap))
   }
   return out
 }
@@ -118,21 +127,41 @@ function networkSubset(events: LogEvent[], source: LogsSource): NonNullable<Logs
   return { entries, bodies }
 }
 
+function asData(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+/**
+ * Events already reference the live snapshot pool, so export keeps those references.
+ * Only a store change whose base is not in the file is expanded, then interned on its own.
+ */
+function packExpanded(store: ReturnType<typeof createSnapshotStore>, data: unknown): Record<string, unknown> {
+  const resolved = rt.resolveValue(data)
+  return asData(store.intern(resolved && typeof resolved === 'object' ? resolved : {}))
+}
+
 /** Report data for `events` (chronological) read from `source` */
 export function buildLogsReport(events: LogEvent[], source: LogsSource, now = Date.now()): LogsReportPayload {
   const sorted = [...events].sort((a, b) => a.timestamp - b.timestamp)
   const storeData = storeEventsData(sorted, source)
-  const items: ReportEvent[] = sorted.map(e => ({
-    id: e.id,
-    kind: e.kind,
-    timestamp: e.timestamp,
-    key: e.key,
-    level: e.level,
-    data: storeData.get(e) ?? e.data,
-  }))
+  const expanded = createSnapshotStore()
+  const items: ReportEvent[] = sorted.map(e => {
+    const materialized = storeData.get(e)
+    return {
+      id: e.id,
+      kind: e.kind,
+      timestamp: e.timestamp,
+      key: e.key,
+      level: e.level,
+      data: materialized ? packExpanded(expanded, materialized) : asData(e.data),
+    }
+  })
+  const roots = items.map(item => item.data)
+  const pooled = { ...source.snapshotPool?.reachable(roots), ...expanded.reachable(roots) }
+  const hasSnapshots = Object.keys(pooled).length > 0
   return {
     format: LOGS_REPORT_FORMAT,
-    version: LOGS_REPORT_VERSION,
+    version: hasSnapshots ? LOGS_REPORT_VERSION : 2,
     info: {
       name: 'Vue Inspector Logs',
       exportedAt: new Date(now).toISOString(),
@@ -140,6 +169,7 @@ export function buildLogsReport(events: LogEvent[], source: LogsSource, now = Da
       kinds: Object.fromEntries(LOG_KINDS.map(k => [k, { label: LOG_KIND_META[k].label }])),
     },
     events: items,
+    ...(hasSnapshots ? { snapshots: pooled } : {}),
     network: networkSubset(sorted, source),
   }
 }

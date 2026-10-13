@@ -15,6 +15,11 @@ import type { NetworkPool } from './networkPool'
 export interface LogsSource {
   events: LogEvent[]
   pool: NetworkPool
+  /** Shared immutable values referenced from event data */
+  snapshotPool?: {
+    get(id: string): unknown
+    reachable(roots: unknown[]): Record<string, unknown>
+  }
 }
 
 const HYDRATE_CACHE_SIZE = 16
@@ -84,7 +89,7 @@ export function hydrateLog(event: LogEvent, source: LogsSource): HydratedEvent {
 /** Data indexed by key / value search: the stored payload, or the own half of a network entry */
 export function searchPayload(event: LogEvent, source: LogsSource): unknown {
   const entry = networkEntryOf(event, source)
-  return entry ? rt.entryPart(entry as Record<string, any>, event.kind) : event.data
+  return entry ? rt.entryPart(entry as Record<string, any>, event.kind) : rt.resolveValue(event.data)
 }
 
 /** The other network event of the same entry */

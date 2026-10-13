@@ -3,7 +3,7 @@ import { LOG_KINDS } from '@/types/logs'
 import type { NetworkEntry } from '@/types/network'
 import type { Sanitizer } from '@/injected/logs/sanitize'
 import { logsRuntime as rt } from '@/injected/logs/runtime'
-import type { ImportedLogs } from './useLogs'
+import { acceptLogSnapshots, type ImportedLogs } from './useLogs'
 import { createNetworkPool, type NetworkPool } from './networkPool'
 import { sanitizeNetworkEntry } from './sanitizeNetwork'
 import { extractLogsReportData, isLogsReportHtml, LOGS_REPORT_FORMAT, LOGS_REPORT_VERSION } from './report/template'
@@ -41,6 +41,7 @@ interface ExtractedFile {
   version: number
   items: unknown[]
   exportedAt?: string
+  snapshots?: Record<string, unknown>
   network?: { entries: Record<string, unknown>; bodies: Record<string, unknown> }
 }
 
@@ -67,6 +68,7 @@ function extractFile(json: unknown): ExtractedFile {
         version: json.format === LOGS_REPORT_FORMAT ? Number(json.version) : 1,
         items: json.events,
         exportedAt: typeof info?.exportedAt === 'string' ? info.exportedAt : undefined,
+        snapshots: isObject(json.snapshots) ? json.snapshots as Record<string, unknown> : undefined,
         network,
       }
     }
@@ -143,6 +145,7 @@ export async function parseLogsFile(file: File, sanitizer: Sanitizer): Promise<I
   }
 
   const parsed = extractFile(json)
+  if (parsed.snapshots) acceptLogSnapshots(parsed.snapshots)
   const pool = createNetworkPool()
   const entryIds: string[] = []
   if (parsed.version >= 2 && parsed.network) {

@@ -28,8 +28,13 @@ export interface EnforceOptions {
    * by reference (page buffer). The UI keeps states immutable because views share them.
    */
   inPlace?: boolean
-  /** Size of data stored outside the events (shared network entries) */
+  /** Size of data stored outside the events (shared network entries, snapshot pool) */
   extraSize?: () => number
+  /**
+   * Rewrites a new checkpoint payload before it is measured (snapshot interning).
+   * `size` is the serialized size of `data` only; the key and envelope are added here.
+   */
+  compactData?: (data: Record<string, any>) => { data: Record<string, any>; size: number }
   /** Called for every dropped event (folded store changes are not dropped) */
   onDrop?: (event: LogEvent) => void
 }
@@ -82,6 +87,7 @@ export function foldStoreChanges(
   list: LogEvent[],
   fold: Set<LogEvent>,
   inPlace: boolean,
+  compactData?: EnforceOptions['compactData'],
 ): { list: LogEvent[]; removed: LogEvent[]; added: LogEvent[] } {
   const left = new Map<string, number>()
   for (const event of fold) left.set(event.key, (left.get(event.key) ?? 0) + 1)
@@ -94,6 +100,7 @@ export function foldStoreChanges(
       s = { current: undefined, known: false, owned: false, compacted: 0, last: null, previousCheckpoint: null, firstBase: null, superseded: [], foldedSize: 0 }
       states.set(event.key, s)
     }
+    const data = rt.payload(event)
     const anchor = rt.storeAnchor(event)
     const op = rt.storeOp(event)
 
@@ -105,9 +112,10 @@ export function foldStoreChanges(
       }
       s.known = rt.isComplete(anchor)
       s.current = anchor
-      s.owned = inPlace && op === 'checkpoint'
+      // A pooled snapshot is shared; mutating it would change every event that references it
+      s.owned = inPlace && op === 'checkpoint' && !rt.sharesSnapshot(anchor)
       if (op === 'checkpoint') {
-        s.compacted += Number(event.data?.compacted) || 0
+        s.compacted += Number(data.compacted) || 0
         s.previousCheckpoint = event
       }
       if (!s.firstBase && op !== 'checkpoint') s.firstBase = event
@@ -115,7 +123,6 @@ export function foldStoreChanges(
       continue
     }
 
-    const data = event.data ?? {}
     if (rt.isComplete(anchor)) {
       s.current = anchor
       s.known = true
@@ -149,9 +156,15 @@ export function foldStoreChanges(
     const previousSize = s.previousCheckpoint?.size
     const previousMeasured = s.previousCheckpoint ? measuredSizes.get(s.previousCheckpoint) : undefined
     const estimate = previousSize !== undefined ? previousSize + s.foldedSize : Infinity
-    const useEstimate = s.known && previousMeasured !== undefined
+    const useEstimate = !compactData && s.known && previousMeasured !== undefined
       && s.compacted % CHECKPOINT_REMEASURE_EVERY !== 0 && estimate <= previousMeasured * 2 + 1024
-    const size = useEstimate ? estimate : measureJson(state) + key.length + 120
+    let data: Record<string, any> = { op: 'checkpoint', compacted: s.compacted, state }
+    let size = useEstimate ? estimate : measureJson(state) + key.length + 120
+    if (compactData) {
+      const compacted = compactData(data)
+      data = compacted.data
+      size = compacted.size + key.length + 120
+    }
     const measured = useEstimate ? previousMeasured! : size
     const checkpoint: LogEvent = {
       id: `${CHECKPOINT_ID_PREFIX}${s.last.id}`,
@@ -159,7 +172,7 @@ export function foldStoreChanges(
       timestamp: s.last.timestamp,
       key,
       level: 'info',
-      data: { op: 'checkpoint', compacted: s.compacted, state },
+      data,
       size,
     }
     measuredSizes.set(checkpoint, measured)
@@ -199,7 +212,7 @@ export function enforceLogLimits(input: LogEvent[], limits: LogsLimits, options:
       }
     }
     if (fold.size > 0) {
-      const folded = foldStoreChanges(list, fold, !!options.inPlace)
+      const folded = foldStoreChanges(list, fold, !!options.inPlace, options.compactData)
       list = folded.list
       removed.push(...folded.removed)
       added.push(...folded.added)

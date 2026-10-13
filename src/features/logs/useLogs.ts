@@ -11,8 +11,8 @@
  *    reference one masked network entry in the network pool (see networkPool.ts).
  *
  * Memory: incoming events are committed in batches; the total approximate size (events +
- * network pool, shared data counted once) is kept within the budget by dropping the oldest
- * events, old store changes are folded into checkpoints (Options > Logs).
+ * network pool + snapshot pool, shared data counted once) is kept within the budget by dropping
+ * the oldest events, old store changes are folded into checkpoints (Options > Logs).
  */
 
 import { ref, shallowRef, computed, watch } from 'vue'
@@ -32,6 +32,8 @@ import {
 } from '@/injected/logs/config'
 import { createSanitizer, measureJson } from '@/injected/logs/sanitize'
 import { checkpointThrough, countsTowardLimit, enforceLogLimits } from '@/injected/logs/limits'
+import { logsRuntime as rt } from '@/injected/logs/runtime'
+import { createSnapshotStore } from '@/injected/logs/snapshots'
 import { sanitizeNetworkEntry } from './sanitizeNetwork'
 import { createNetworkPool, type NetworkPool } from './networkPool'
 import type { LogsSource } from './view'
@@ -114,12 +116,20 @@ function releaseEvent(event: LogEvent): void {
 /** Drops / folds the oldest events beyond the memory budget */
 function applyLimits(list: LogEvent[]): LogEvent[] {
   const result = enforceLogLimits(list, limits.value, {
-    extraSize: () => pool.size,
+    extraSize: () => pool.size + snapshots.bytes,
     onDrop: releaseEvent,
+    compactData: data => {
+      const interned = snapshots.intern(data) as Record<string, any>
+      rt.loadSnapshots(snapshots.peekPending())
+      return { data: interned, size: measureJson(interned) }
+    },
   })
   for (const event of result.removed) byId.delete(event.id)
   for (const event of result.added) byId.set(event.id, event)
-  memoryUsed.value = result.total
+  releaseSnapshots(result.list)
+  let total = pool.size + snapshots.bytes
+  for (const event of result.list) total += eventSize(event)
+  memoryUsed.value = total
   return result.list
 }
 
@@ -310,11 +320,13 @@ function processLogsMessage(msg: any): void {
       break
 
     case 'LOGS_EVENTS':
+      acceptLogSnapshots(msg.snapshots)
       if (Array.isArray(msg.events) && !paused.value) addEvents(msg.events)
       break
 
     case 'LOGS_EVENTS_DATA':
       markReady()
+      acceptLogSnapshots(msg.snapshots)
       if (typeof msg.paused === 'boolean') paused.value = msg.paused
       if (Array.isArray(msg.events)) {
         addEvents(msg.events.filter((e: LogEvent) => e.timestamp >= clearedAt))
@@ -391,8 +403,26 @@ export interface ImportedLogs {
 
 const imported = shallowRef<ImportedLogs | null>(null)
 
+const snapshots = createSnapshotStore()
+
+function releaseSnapshots(kept?: LogEvent[]): void {
+  const roots: unknown[] = []
+  for (const event of kept ?? events.value) roots.push(event.data)
+  if (!kept) for (const event of pending) roots.push(event.data)
+  if (imported.value) for (const event of imported.value.events) roots.push(event.data)
+  snapshots.collect(roots)
+  rt.replaceSnapshots(snapshots.all())
+}
+
+/** Merges snapshot entries carried with a log message or an imported file */
+export function acceptLogSnapshots(map: unknown): void {
+  snapshots.load(map)
+  rt.loadSnapshots(map)
+}
+
 export function setImportedLogs(value: ImportedLogs | null): void {
   imported.value = value
+  releaseSnapshots()
 }
 
 // ============================================================================
@@ -415,9 +445,16 @@ export const logsStats = computed<LogsStats>(() => {
 export function useLogs() {
   initLogsCollector()
 
+  const snapshotPool = {
+    get: (id: string) => snapshots.get(id),
+    reachable: (roots: unknown[]) => snapshots.reachable(roots),
+  }
+
   /** All events of the shown source (ignored ones included: store chains need them) */
   const source = computed<LogsSource>(() =>
-    imported.value ? { events: imported.value.events, pool: imported.value.pool } : { events: events.value, pool },
+    imported.value
+      ? { events: imported.value.events, pool: imported.value.pool, snapshotPool }
+      : { events: events.value, pool, snapshotPool },
   )
 
   const visibleEvents = computed(() => {
@@ -437,7 +474,8 @@ export function useLogs() {
     pending = []
     events.value = []
     pool.clear()
-    memoryUsed.value = 0
+    releaseSnapshots()
+    memoryUsed.value = pool.size + snapshots.bytes
     sendCommand('LOGS_CLEAR')
   }
 

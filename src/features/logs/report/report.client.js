@@ -31,6 +31,7 @@
   Object.keys(kindsMeta).forEach(function (k) { if (kindsMeta[k] && kindsMeta[k].label) kindLabels[k] = kindsMeta[k].label })
 
   var RT = LogsRuntime
+  if (payload.snapshots && typeof payload.snapshots === 'object') RT.loadSnapshots(payload.snapshots)
   var hasOwn = function (obj, key) { return !!obj && Object.prototype.hasOwnProperty.call(obj, key) }
   var network = payload.network && typeof payload.network === 'object' ? payload.network : {}
   var entryCache = {}
@@ -47,7 +48,8 @@
 
   var rawEvents = (Array.isArray(payload.events) ? payload.events : []).filter(function (raw) { return raw && typeof raw === 'object' })
   rawEvents.forEach(function (raw) {
-    if (!raw.data || typeof raw.data !== 'object') raw.data = {}
+    var resolved = raw.data && typeof raw.data === 'object' ? RT.resolveValue(raw.data) : {}
+    raw.data = resolved && typeof resolved === 'object' ? resolved : {}
     if (typeof raw.key !== 'string') raw.key = String(raw.key || '')
   })
   var ctx = { stores: RT.indexStores(rawEvents), getEntry: getEntry }
@@ -106,9 +108,33 @@
     failed: { label: 'Failed requests', test: isFailed },
   }
 
-  var state = { section: 'overview', filter: '', selected: -1, tab: '', query: '', inData: false, limit: PAGE_SIZE }
+  var state = { section: 'overview', filter: '', selected: -1, tab: '', query: '', inData: false, limit: PAGE_SIZE, typeOpen: false }
   var visible = []
-  var rendered = { section: null, filter: null, query: null, inData: null }
+  var rendered = { section: null, filter: null, query: null, inData: null, types: null }
+
+  // Kinds present in this file, in Logs-tab order. All are on until the All events filter changes them.
+  var typeSeen = {}
+  events.forEach(function (e) { typeSeen[e.kind] = true })
+  var typeOptions = KNOWN.filter(function (k) { return typeSeen[k] })
+  Object.keys(typeSeen).forEach(function (k) { if (typeOptions.indexOf(k) === -1) typeOptions.push(k) })
+  var enabledTypes = {}
+  typeOptions.forEach(function (k) { enabledTypes[k] = true })
+
+  function allTypesOn() {
+    for (var i = 0; i < typeOptions.length; i++) if (!enabledTypes[typeOptions[i]]) return false
+    return typeOptions.length > 0
+  }
+
+  function anyTypeOn() {
+    for (var i = 0; i < typeOptions.length; i++) if (enabledTypes[typeOptions[i]]) return true
+    return false
+  }
+
+  function typesKey() {
+    var s = ''
+    for (var i = 0; i < typeOptions.length; i++) s += enabledTypes[typeOptions[i]] ? '1' : '0'
+    return s
+  }
   var searchText = new WeakMap()
 
   // ---------------------------------------------------------------- helpers
@@ -270,6 +296,7 @@
     var filter = FILTERS[state.filter]
     return ordered.filter(function (e) {
       if (section !== 'all' && section !== 'overview' && e.kind !== section) return false
+      if ((section === 'all' || section === 'overview') && typeOptions.length && !enabledTypes[e.kind]) return false
       if (filter && !filter.test(e)) return false
       if (!q) return true
       return textOf(e).indexOf(q) !== -1 || (state.inData && dataOf(e).indexOf(q) !== -1)
@@ -382,6 +409,75 @@
     slice.forEach(function (e) { list.appendChild(row(e)) })
   }
 
+  function setTypeOpen(open) {
+    state.typeOpen = open
+    var root = doc.querySelector('.type-filter')
+    if (!root) return
+    var menu = root.querySelector('.type-menu')
+    var btn = root.querySelector('.type-btn')
+    if (menu) menu.hidden = !open
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false')
+  }
+
+  function applyTypes(on) {
+    typeOptions.forEach(function (k) { enabledTypes[k] = on })
+    state.typeOpen = true
+    render()
+  }
+
+  function typeFilter() {
+    if (!typeOptions.length) return null
+    var badges = []
+    if (allTypesOn()) {
+      badges.push(h('span', { class: 'type-sep' }))
+      badges.push(h('span', { class: 'type-count', text: 'All' }))
+    } else {
+      var picked = []
+      typeOptions.forEach(function (k) { if (enabledTypes[k]) picked.push(label(k)) })
+      if (picked.length) {
+        badges.push(h('span', { class: 'type-sep' }))
+        badges.push(h('span', { class: 'type-count', text: picked[0] }))
+        if (picked.length > 1) badges.push(h('span', { class: 'type-count', text: '+' + (picked.length - 1) }))
+      }
+    }
+    var btn = h('button', {
+      class: 'type-btn',
+      type: 'button',
+      'aria-haspopup': 'listbox',
+      'aria-expanded': state.typeOpen ? 'true' : 'false',
+    }, [h('span', { text: 'Type' })].concat(badges))
+    btn.addEventListener('click', function (ev) {
+      ev.stopPropagation()
+      setTypeOpen(!state.typeOpen)
+    })
+    var options = typeOptions.map(function (k) {
+      var input = h('input', { type: 'checkbox' })
+      input.checked = !!enabledTypes[k]
+      input.addEventListener('change', function () {
+        enabledTypes[k] = input.checked
+        state.typeOpen = true
+        render()
+      })
+      return h('label', { class: 'type-option' }, [
+        input,
+        h('span', { class: 'dot ' + kindClass(k) }),
+        h('span', { text: label(k) }),
+      ])
+    })
+    var allBtn = h('button', { type: 'button', text: 'Select all' })
+    var clearBtn = h('button', { type: 'button', text: 'Clear' })
+    allBtn.disabled = allTypesOn()
+    clearBtn.disabled = !anyTypeOn()
+    allBtn.addEventListener('click', function (ev) { ev.stopPropagation(); applyTypes(true) })
+    clearBtn.addEventListener('click', function (ev) { ev.stopPropagation(); applyTypes(false) })
+    var menu = h('div', { class: 'type-menu', role: 'group', 'aria-label': 'Event types' }, [
+      h('div', { class: 'type-options' }, options),
+      h('div', { class: 'type-actions' }, [allBtn, clearBtn]),
+    ])
+    if (!state.typeOpen) menu.hidden = true
+    return h('div', { class: 'type-filter' }, [btn, menu])
+  }
+
   function renderMain() {
     var main = $('main')
     main.textContent = ''
@@ -397,11 +493,18 @@
       ? events.length
       : events.filter(function (e) { return e.kind === state.section }).length
     var filter = FILTERS[state.filter]
-    var desc = visible.length === total ? total + ' events'
-      : visible.length + ' of ' + total + ' events match' + (filter ? ' the filter' : '') + (state.query.trim() ? (filter ? ' and the search' : ' the search') : '')
+    var typeNarrowed = state.section === 'all' && typeOptions.length && !allTypesOn()
+    var reasons = []
+    if (filter) reasons.push('the filter')
+    if (typeNarrowed) reasons.push('the type filter')
+    if (state.query.trim()) reasons.push('the search')
+    var desc = reasons.length
+      ? visible.length + ' of ' + total + ' events match ' + reasons.join(' and ')
+      : total + ' events'
     add(main, [
       h('div', { class: 'page-head' }, [
         h('h1', { class: 'page-title', text: title }),
+        state.section === 'all' ? typeFilter() : null,
         filter ? h('a', { class: 'chip', href: sectionHref(state.section, -1), title: 'Remove filter' }, [
           h('span', { text: 'Filter: ' + filter.label }),
           h('span', { class: 'chip-x', text: '\u00d7' }),
@@ -410,7 +513,10 @@
       h('p', { class: 'page-desc', text: desc }),
     ])
     if (!visible.length) {
-      add(main, h('div', { class: 'list' }, h('div', { class: 'empty', text: 'No events' })))
+      var emptyText = 'No events'
+      if (state.section === 'all' && typeOptions.length && !anyTypeOn()) emptyText = 'No event types selected \u2014 enable them in the Type filter'
+      else if (reasons.length) emptyText = 'No events match the filters'
+      add(main, h('div', { class: 'list' }, h('div', { class: 'empty', text: emptyText })))
       return
     }
     var list = h('div', { class: 'list', id: 'list' }, h('div', { class: 'list-head' }, [h('span', { text: 'Time' }), h('span', { text: 'Type' }), h('span', { text: 'Event' })]))
@@ -627,7 +733,7 @@
     var pairLink = null
     if (pair) {
       // Stay in the current list when the pair is listed there, otherwise open its own section
-      var listed = state.section === 'all' && (!FILTERS[state.filter] || FILTERS[state.filter].test(pair))
+      var listed = state.section === 'all' && !!enabledTypes[pair.kind] && (!FILTERS[state.filter] || FILTERS[state.filter].test(pair))
       pairLink = h('a', {
         class: 'pair-btn',
         href: listed ? hereHref(pair.index) : sectionHref(pair.kind, pair.index),
@@ -693,11 +799,13 @@
   }
 
   function render() {
-    if (rendered.section !== state.section || rendered.filter !== state.filter || rendered.query !== state.query || rendered.inData !== state.inData) {
-      if (rendered.section !== state.section || rendered.filter !== state.filter) state.limit = PAGE_SIZE
+    var tk = typesKey()
+    if (rendered.section !== state.section || rendered.filter !== state.filter || rendered.query !== state.query || rendered.inData !== state.inData || rendered.types !== tk) {
+      if (rendered.section !== state.section || rendered.filter !== state.filter || rendered.types !== tk) state.limit = PAGE_SIZE
+      if (state.section !== 'all') state.typeOpen = false
       renderSidebar()
       renderMain()
-      rendered = { section: state.section, filter: state.filter, query: state.query, inData: state.inData }
+      rendered = { section: state.section, filter: state.filter, query: state.query, inData: state.inData, types: tk }
     }
     if (state.selected !== -1 && visible.length && visible.indexOf(events[state.selected]) >= state.limit) {
       state.limit = visible.indexOf(events[state.selected]) + PAGE_SIZE
@@ -727,8 +835,20 @@
   $('in-data').addEventListener('change', function (ev) { state.inData = ev.target.checked; render() })
   $('menu').addEventListener('click', function () { doc.body.classList.toggle('show-sidebar') })
 
+  doc.addEventListener('click', function (ev) {
+    if (!state.typeOpen) return
+    var root = doc.querySelector('.type-filter')
+    if (root && root.contains(ev.target)) return
+    setTypeOpen(false)
+  })
+
   doc.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && state.typeOpen) {
+      setTypeOpen(false)
+      return
+    }
     if (ev.target && ev.target.tagName === 'INPUT') return
+    if (state.typeOpen) return
     if (ev.key === 'Escape' && state.selected !== -1) {
       location.hash = hereHref(-1)
     } else if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && visible.length) {

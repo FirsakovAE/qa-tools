@@ -134,6 +134,7 @@ Events keep only primary data; titles, descriptions and full states are derived 
 
 * **Pinia.** When a store is created while logging is running, a **Store initialized** event records its full state. When logging starts on a store that already exists, a **Store snapshot** event records its current state. After that, every **Change store** event stores only the changes. **Before** / **After** are rebuilt from the base state and the changes up to the event. Switching Inspector tabs does not create new snapshots. A new snapshot is recorded after **Clear** and after masking settings change. A recorded state is split like on the **Pinia Store** tab: `state` holds the declared state, `getters` holds getters and data the store keeps outside its declared state (for example, fields assigned in actions of an options store with an empty `state()`). Changes of both are tracked, so change paths start with `state.` or `getters.`.
 * **Network.** **Send request** and **Receive response** reference one shared network entry. Equal response or request bodies (for example, a polled endpoint) are stored once.
+* **Shared snapshots.** Identical values inside any event — props, store state, action arguments and results, emit arguments, errors, navigation — are stored once. Each later copy is a reference to that snapshot. The Logs tab and the HTML report restore the full value, so the data you see is the data that was captured.
 
 ### Limits
 

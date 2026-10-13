@@ -61,9 +61,10 @@ function buildIndex(event: LogEvent, source: LogsSource): PayloadIndex {
     }
   }
 
-  const changes = (event.data as { changes?: LogChange[] }).changes
+  const payload = searchPayload(event, source)
+  const changes = payload && typeof payload === 'object' ? (payload as { changes?: LogChange[] }).changes : undefined
   if (Array.isArray(changes)) for (const c of changes) pushKey(c.path)
-  walk(searchPayload(event, source), 0)
+  walk(payload, 0)
   return { keys: `\n${keys.join('\n')}\n`, values: `\n${values.join('\n')}\n` }
 }
 

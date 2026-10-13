@@ -7,8 +7,9 @@
  * Import Logs reads the data block back.
  *
  * Payload versions: 1 - full events (`title`, `subtitle`, `data.entry` halves, store
- * `before` / `after`); 2 - compact events plus a shared network section (see LogsReportPayload).
- * Import accepts both, plus version 1 JSON files.
+ * `before` / `after`); 2 - compact events plus a shared network section (see LogsReportPayload);
+ * 3 - the same as 2, plus a snapshot pool (`snapshots`) for identical values referenced from
+ * events as `{ __snap: id }`. Import accepts all of them, plus version 1 JSON files.
  */
 
 import css from './report.css?raw'
@@ -20,7 +21,7 @@ import type { BodyContent } from '@/types/network'
 
 export const REPORT_DATA_ID = 'qa-logs-data'
 export const LOGS_REPORT_FORMAT = 'vue-inspector-logs'
-export const LOGS_REPORT_VERSION = 2
+export const LOGS_REPORT_VERSION = 3
 
 const DATA_OPEN = `<script type="application/json" id="${REPORT_DATA_ID}">`
 const DATA_CLOSE = '</script>'
@@ -47,6 +48,11 @@ export interface LogsReportPayload {
     [key: string]: unknown
   }
   events: ReportEvent[]
+  /**
+   * Identical immutable values stored once. Events reference an entry with `{ __snap: id }`.
+   * Present on format version 3.
+   */
+  snapshots?: Record<string, unknown>
   /** Network entries referenced by request / response events (`data.entryId`); bodies by ref */
   network?: {
     entries: Record<string, StoredNetworkEntry>

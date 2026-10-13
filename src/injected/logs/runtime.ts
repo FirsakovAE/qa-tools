@@ -8,6 +8,10 @@
  * keep the new props plus a reverse diff, network events reference a shared network entry.
  * This module restores the full (legacy-shaped) view of an event from that data.
  *
+ * Identical values are stored once as snapshots (`{ __snap: id }` plus a pool). `resolveValue`
+ * restores them. A pool entry `{ __snapLit }` is a captured value that itself looked like a
+ * reference; resolving it returns that value and does not follow it.
+ *
  * `createLogsRuntime` must stay self-contained (no references outside its body, ASCII only):
  * the HTML report embeds its source text and runs it offline.
  */
@@ -148,6 +152,154 @@ export function createLogsRuntime() {
   }
 
   // ==========================================================================
+  // Shared snapshots: `{ __snap: id }` restores from the pool. Read-only results are shared.
+  // ==========================================================================
+
+  const snapshots = new Map<string, unknown>()
+  const snapSizes = new Map<string, number>()
+  const resolvedSnaps = new Map<string, unknown>()
+  const sharedSnaps = new WeakSet<object>()
+  const payloadCache = new WeakMap<RuntimeEvent, { gen: number; data: Record<string, any> }>()
+  let snapshotBytes = 0
+  let snapshotGen = 0
+
+  function isSnapRef(value: unknown): value is { __snap: string } {
+    if (!isObject(value) || Array.isArray(value)) return false
+    const keys = Object.keys(value)
+    return keys.length === 1 && keys[0] === '__snap' && typeof (value as { __snap: unknown }).__snap === 'string'
+  }
+
+  function isSnapLit(value: unknown): value is { __snapLit: string } {
+    if (!isObject(value) || Array.isArray(value)) return false
+    const keys = Object.keys(value)
+    return keys.length === 1 && keys[0] === '__snapLit' && typeof (value as { __snapLit: unknown }).__snapLit === 'string'
+  }
+
+  function rememberSnap(id: string, value: unknown): void {
+    if (snapshots.has(id)) return
+    snapshots.set(id, value)
+    let size = 0
+    try {
+      size = JSON.stringify(value)?.length ?? 0
+    } catch { /* unreadable entry adds no size */ }
+    snapSizes.set(id, size)
+    snapshotBytes += size
+  }
+
+  /** Merges snapshot entries. An id already loaded keeps its first value. */
+  function loadSnapshots(map: unknown): void {
+    if (!isObject(map)) return
+    for (const id of Object.keys(map)) rememberSnap(id, map[id])
+  }
+
+  /** Replaces the pool (after the page buffer drops events). Invalidates restored payloads. */
+  function replaceSnapshots(map: unknown): void {
+    snapshots.clear()
+    snapSizes.clear()
+    resolvedSnaps.clear()
+    snapshotBytes = 0
+    snapshotGen++
+    loadSnapshots(map)
+  }
+
+  function resolveContainer(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      const out = new Array(value.length)
+      let unchanged = true
+      for (let i = 0; i < value.length; i++) {
+        out[i] = resolveValue(value[i])
+        if (out[i] !== value[i]) unchanged = false
+      }
+      return unchanged ? value : out
+    }
+    const keys = Object.keys(value as object)
+    const out: Record<string, unknown> = {}
+    let unchanged = true
+    for (const key of keys) {
+      const next = resolveValue((value as Record<string, unknown>)[key])
+      out[key] = next
+      if (next !== (value as Record<string, unknown>)[key]) unchanged = false
+    }
+    return unchanged ? value : out
+  }
+
+  /** Restores snapshot references. The result shares pooled values and must not be mutated. */
+  function resolveValue(value: unknown): unknown {
+    if (!isObject(value)) return value
+    if (!isSnapRef(value)) return resolveContainer(value)
+    const id = value.__snap
+    if (!snapshots.has(id)) return value
+    if (resolvedSnaps.has(id)) return resolvedSnaps.get(id)
+    const stored = snapshots.get(id)
+    if (isSnapLit(stored)) {
+      const literal = { __snap: stored.__snapLit }
+      resolvedSnaps.set(id, literal)
+      sharedSnaps.add(literal)
+      return literal
+    }
+    if (!isObject(stored)) {
+      resolvedSnaps.set(id, stored)
+      return stored
+    }
+    // A snapshot that contains its own id resolves the cycle as the reference itself
+    resolvedSnaps.set(id, value)
+    const out = resolveContainer(stored)
+    resolvedSnaps.set(id, out)
+    if (isObject(out)) sharedSnaps.add(out)
+    return out
+  }
+
+  /** True when mutating `value` would change a pooled snapshot */
+  function sharesSnapshot(value: unknown, depth = 0): boolean {
+    if (!isObject(value) || depth > 100) return false
+    if (sharedSnaps.has(value)) return true
+    for (const key of Object.keys(value)) {
+      if (sharesSnapshot(value[key], depth + 1)) return true
+    }
+    return false
+  }
+
+  /** Event payload with snapshot references restored */
+  function payload(event: RuntimeEvent): Record<string, any> {
+    const data = event && event.data
+    if (!isObject(data)) return {}
+    const hit = payloadCache.get(event)
+    if (hit && hit.gen === snapshotGen) return hit.data
+    const resolved = resolveValue(data)
+    const out = isObject(resolved) ? resolved as Record<string, any> : {}
+    payloadCache.set(event, { gen: snapshotGen, data: out })
+    return out
+  }
+
+  /** Drops snapshots no remaining event references. `roots` are stored payloads (with refs). */
+  function retainSnapshots(roots: unknown[]): void {
+    const keep = new Set<string>()
+    const mark = (value: unknown) => {
+      if (!isObject(value)) return
+      if (isSnapRef(value)) {
+        if (keep.has(value.__snap) || !snapshots.has(value.__snap)) return
+        keep.add(value.__snap)
+        mark(snapshots.get(value.__snap))
+        return
+      }
+      for (const key of Object.keys(value)) mark(value[key])
+    }
+    for (const root of roots) mark(root)
+    for (const id of [...snapshots.keys()]) {
+      if (keep.has(id)) continue
+      snapshotBytes -= snapSizes.get(id) ?? 0
+      snapshots.delete(id)
+      snapSizes.delete(id)
+      resolvedSnaps.delete(id)
+    }
+    if (snapshotBytes < 0) snapshotBytes = 0
+  }
+
+  function snapshotSize(): number {
+    return snapshotBytes
+  }
+
+  // ==========================================================================
   // Diff
   // ==========================================================================
 
@@ -258,7 +410,7 @@ export function createLogsRuntime() {
   // ==========================================================================
 
   function storeOp(event: RuntimeEvent): 'init' | 'snapshot' | 'checkpoint' | 'change' {
-    const op = event.data && event.data.op
+    const op = payload(event).op
     return op === 'init' || op === 'snapshot' || op === 'checkpoint' ? op : 'change'
   }
 
@@ -268,7 +420,7 @@ export function createLogsRuntime() {
 
   /** Full state stored by the event (bases, resynced changes, events of version 1 files) */
   function storeAnchor(event: RuntimeEvent): unknown {
-    const data = event.data || {}
+    const data = payload(event)
     if (data.state !== undefined) return data.state
     return data.op === undefined ? data.after : undefined
   }
@@ -311,7 +463,7 @@ export function createLogsRuntime() {
     let shared = true
     for (let i = start; i <= last; i++) {
       const event = chain[i]
-      const data = event.data || {}
+      const data = payload(event)
       const result: RestoredStates | null = want.has(i) ? { beforeKnown: false, afterKnown: false } : null
       if (result && known) {
         result.before = current
@@ -348,7 +500,7 @@ export function createLogsRuntime() {
 
   /** Before / after of one store change, falling back to self-contained data of the event */
   function restoreStoreChange(event: RuntimeEvent, stores?: StoreChains): RestoredStates {
-    const data = event.data || {}
+    const data = payload(event)
     const chain = stores && stores.chains.get(event.key)
     const index = stores ? stores.position.get(event) : undefined
     const states: RestoredStates = chain && index !== undefined
@@ -377,7 +529,7 @@ export function createLogsRuntime() {
   // ==========================================================================
 
   function restoreProps(event: RuntimeEvent): { states: RestoredStates; changes: RuntimeChange[]; truncated: boolean } {
-    const data = event.data || {}
+    const data = payload(event)
     const states: RestoredStates = {
       before: data.before,
       after: data.after,
@@ -485,7 +637,7 @@ export function createLogsRuntime() {
   }
 
   function emitComponent(event: RuntimeEvent): string {
-    const data = event.data || {}
+    const data = payload(event)
     if (typeof data.component === 'string') return data.component
     const suffix = `.${data.event}`
     return event.key.endsWith(suffix) ? event.key.slice(0, -suffix.length) : event.key
@@ -504,7 +656,7 @@ export function createLogsRuntime() {
   }
 
   function describe(event: RuntimeEvent, ctx: HydrateContext): { title: string; subtitle?: string } {
-    const data = event.data || {}
+    const data = payload(event)
     const key = String(event.key || '')
     const legacy = event as RuntimeEvent & { title?: unknown; subtitle?: unknown }
     switch (event.kind) {
@@ -543,7 +695,7 @@ export function createLogsRuntime() {
 
   /** Full view of an event: what the UI shows and what Raw displays */
   function hydrate(event: RuntimeEvent, ctx: HydrateContext, kindLabels: Record<string, string>): HydratedEvent {
-    const data = event.data || {}
+    const data = payload(event)
     const missing: HydratedEvent['missing'] = {}
     let full: Record<string, any>
 
@@ -641,6 +793,13 @@ export function createLogsRuntime() {
     clone,
     isIncomplete,
     isComplete,
+    loadSnapshots,
+    replaceSnapshots,
+    resolveValue,
+    sharesSnapshot,
+    payload,
+    retainSnapshots,
+    snapshotSize,
     diffValues,
     applyChanges,
     summarizeChanges,

@@ -8,8 +8,10 @@
  * into checkpoints (see limits.ts).
  *
  * Every payload is sanitized here (safe plain JSON + masking) before it is stored or posted.
- * Live events are posted only while a UI is subscribed (heartbeat); otherwise they are just
- * buffered and delivered as history on the next subscribe.
+ * Identical values are then stored once in a snapshot pool; events keep references, and the
+ * memory budget counts each unique value once. Live events are posted only while a UI is
+ * subscribed (heartbeat); otherwise they are just buffered and delivered as history on the
+ * next subscribe, together with the snapshots they reference.
  */
 
 import type { LogEvent, LogEventInput, LogIgnoreKey, LogKind } from './types'
@@ -24,6 +26,8 @@ import {
 } from './config'
 import { createSanitizer, fitPayload, measureJson, type Sanitizer } from './sanitize'
 import { enforceLogLimits } from './limits'
+import { logsRuntime as rt } from './runtime'
+import { createSnapshotStore } from './snapshots'
 
 const FLUSH_INTERVAL_MS = 150
 /** Longer than the UI heartbeat even under background-tab timer throttling (1/min) */
@@ -40,6 +44,8 @@ let ignored = new Set<string>()
 let counter = 0
 let initialized = false
 let subscribedUntil = 0
+
+const snapshots = createSnapshotStore()
 
 let limits: LogsLimits = normalizeLimits(DEFAULT_LOGS_LIMITS)
 let maskingJson = JSON.stringify(normalizeMasking(DEFAULT_LOGS_MASKING))
@@ -70,12 +76,27 @@ function isSubscribed(): boolean {
   return Date.now() < subscribedUntil
 }
 
+function postEvents(type: string, events: LogEvent[], extra: Record<string, unknown> = {}): void {
+  const fresh = type === 'LOGS_EVENTS_DATA' ? snapshots.all() : snapshots.peekPending()
+  snapshots.drain()
+  const data: Record<string, unknown> = { events, ...extra }
+  if (Object.keys(fresh).length > 0) data.snapshots = fresh
+  post(type, data)
+}
+
+function releaseUnused(): void {
+  snapshots.collect(buffer.concat(queue).map(event => event.data))
+  rt.replaceSnapshots(snapshots.all())
+  recount()
+}
+
 function flush(): void {
   flushTimer = null
   if (queue.length === 0) return
   const events = queue
   queue = []
-  if (isSubscribed()) post('LOGS_EVENTS', { events })
+  if (isSubscribed()) postEvents('LOGS_EVENTS', events)
+  releaseUnused()
 }
 
 function notify(listeners: Set<() => void>, what: string): void {
@@ -97,18 +118,31 @@ function recount(): void {
   for (const e of buffer) totalSize += e.size ?? 0
 }
 
+function compactStored(data: Record<string, any>): { data: Record<string, any>; size: number } {
+  const interned = snapshots.intern(data) as Record<string, any>
+  return { data: interned, size: measureJson(interned) }
+}
+
 function enforceLimits(): void {
-  if (totalSize <= limits.maxMemoryMB * 1024 * 1024) return
-  const result = enforceLogLimits(buffer, limits, { inPlace: true })
+  rt.loadSnapshots(snapshots.peekPending())
+  const budget = limits.maxMemoryMB * 1024 * 1024
+  if (totalSize + snapshots.bytes <= budget) return
+  const result = enforceLogLimits(buffer, limits, {
+    inPlace: true,
+    extraSize: () => snapshots.bytes,
+    compactData: compactStored,
+  })
   if (!result.changed) return
   buffer = result.list
-  recount()
+  releaseUnused()
 }
 
 function clearBuffer(): void {
   buffer = []
-  recount()
   queue = []
+  snapshots.collect([])
+  rt.replaceSnapshots({})
+  recount()
 }
 
 // ============================================================================
@@ -165,6 +199,8 @@ export function recordLog(input: LogEventInput): LogEvent | null {
       data = input.finalize(data, key)
       size = measureJson(data)
     }
+    data = snapshots.intern(data) as Record<string, any>
+    size = measureJson(data)
   } catch (e) {
     console.error('[injected/logs] sanitize failed:', e)
     data = { error: '[Payload could not be serialized]' }
@@ -206,12 +242,12 @@ function handleCommand(event: MessageEvent): void {
   switch (type) {
     case 'LOGS_GET_EVENTS':
       subscribe()
-      post('LOGS_EVENTS_DATA', { events: buffer, paused })
+      postEvents('LOGS_EVENTS_DATA', buffer, { paused })
       break
 
     case 'LOGS_SUBSCRIBE':
       // Resync after a lapse: events recorded meanwhile were only buffered
-      if (!subscribe()) post('LOGS_EVENTS_DATA', { events: buffer, paused })
+      if (!subscribe()) postEvents('LOGS_EVENTS_DATA', buffer, { paused })
       break
 
     case 'LOGS_CLEAR':
