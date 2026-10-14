@@ -141,6 +141,3 @@ Fund features and experiments.
 ```text
 TPStwFujav3ZZATYb43iwHrrpMCZaoud84
 ```
-
-<img src="src/assets/usdt.jpg" alt="USDT TRC-20 QR code" width="220" />
-
