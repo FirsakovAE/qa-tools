@@ -128,3 +128,16 @@ https://firsakovae.github.io/qa-tools/
 ```
 
 Drag the bookmark and launch it on the target page.
+
+---
+
+## Support Vue Inspector
+
+Fund features and experiments.
+
+* **Monthly support** — [Boosty support levels](https://boosty.to/adambarmy)
+* **Donate with USDT** — a one-time transfer directly to the author. USDT on Tron (TRC-20):
+
+```text
+TPStwFujav3ZZATYb43iwHrrpMCZaoud84
+```

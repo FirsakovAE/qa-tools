@@ -8,8 +8,8 @@ import { createNetworkPool, type NetworkPool } from './networkPool'
 import { sanitizeNetworkEntry } from './sanitizeNetwork'
 import { extractLogsReportData, isLogsReportHtml, LOGS_REPORT_FORMAT, LOGS_REPORT_VERSION } from './report/template'
 
-/** HTML reports; JSON is accepted for files exported by older versions */
-export const IMPORT_ACCEPT = '.html,.htm,.json,text/html,application/json'
+/** HTML reports exported from the Logs tab */
+export const IMPORT_ACCEPT = '.html,.htm,text/html'
 
 export const MAX_IMPORT_FILE_MB = 100
 export const MAX_IMPORT_EVENTS = 50_000
@@ -45,36 +45,30 @@ interface ExtractedFile {
   network?: { entries: Record<string, unknown>; bodies: Record<string, unknown> }
 }
 
-/**
- * Accepts the Export Logs payload (version 2, or version 1 from older JSON / HTML exports),
- * a single exported event, or a plain array of events.
- */
+/** Accepts the current Export Logs payload (format version 1). */
 function extractFile(json: unknown): ExtractedFile {
-  if (Array.isArray(json)) return { version: 1, items: json }
-  if (isObject(json)) {
-    if (json.format === LOGS_REPORT_FORMAT) {
-      const version = Number(json.version)
-      if (!Number.isInteger(version) || version < 1) throw new LogsImportError('The logs file has an unknown format version.')
-      if (version > LOGS_REPORT_VERSION) {
-        throw new LogsImportError(`The logs file was exported by a newer version (format ${version}). Update Vue Inspector to open it.`)
-      }
-    }
-    if (Array.isArray(json.events)) {
-      const info = json.info as Record<string, unknown> | undefined
-      const network = isObject(json.network)
-        ? { entries: isObject(json.network.entries) ? json.network.entries : {}, bodies: isObject(json.network.bodies) ? json.network.bodies : {} }
-        : undefined
-      return {
-        version: json.format === LOGS_REPORT_FORMAT ? Number(json.version) : 1,
-        items: json.events,
-        exportedAt: typeof info?.exportedAt === 'string' ? info.exportedAt : undefined,
-        snapshots: isObject(json.snapshots) ? json.snapshots as Record<string, unknown> : undefined,
-        network,
-      }
-    }
-    if (typeof json.kind === 'string' && json.data) return { version: 1, items: [json] }
+  if (!isObject(json) || json.format !== LOGS_REPORT_FORMAT || !Array.isArray(json.events)) {
+    throw new LogsImportError('Not a logs file: expected an HTML report exported from the Logs tab.')
   }
-  throw new LogsImportError('Not a logs file: expected an HTML report exported from the Logs tab (or an older JSON export).')
+  const version = Number(json.version)
+  if (version !== LOGS_REPORT_VERSION) {
+    throw new LogsImportError(
+      Number.isInteger(version) && version > LOGS_REPORT_VERSION
+        ? `The logs file was exported by a newer version (format ${version}). Update Vue Inspector to open it.`
+        : 'The logs file uses an older format and cannot be opened.',
+    )
+  }
+  const info = json.info as Record<string, unknown> | undefined
+  const network = isObject(json.network)
+    ? { entries: isObject(json.network.entries) ? json.network.entries : {}, bodies: isObject(json.network.bodies) ? json.network.bodies : {} }
+    : undefined
+  return {
+    version,
+    items: json.events,
+    exportedAt: typeof info?.exportedAt === 'string' ? info.exportedAt : undefined,
+    snapshots: isObject(json.snapshots) ? json.snapshots as Record<string, unknown> : undefined,
+    network,
+  }
 }
 
 /** Full entry with every field the views read, from possibly partial file data */
@@ -102,21 +96,8 @@ function completeEntry(raw: Record<string, any>): NetworkEntry {
   } as NetworkEntry
 }
 
-/** Version 1 network events hold their half of the entry; both halves form one entry */
-function legacyEntries(items: unknown[]): Map<string, Record<string, any>> {
-  const entries = new Map<string, Record<string, any>>()
-  for (const item of items) {
-    if (!isObject(item) || (item.kind !== 'request' && item.kind !== 'response')) continue
-    const half = isObject(item.data) ? item.data.entry : undefined
-    if (!isObject(half) || half.id === undefined) continue
-    const id = String(half.id)
-    entries.set(id, { ...entries.get(id), ...half, id })
-  }
-  return entries
-}
-
 function addEntry(pool: NetworkPool, raw: Record<string, any>, sanitizer: Sanitizer): void {
-  // Files may come from other sources or older versions: mask with the current settings
+  // Mask with the current settings before the imported entry is shown
   const { entry, fixedSize } = sanitizeNetworkEntry(completeEntry(raw), sanitizer, Number.MAX_SAFE_INTEGER)
   pool.put(entry, fixedSize)
 }
@@ -134,32 +115,21 @@ export async function parseLogsFile(file: File, sanitizer: Sanitizer): Promise<I
       throw new LogsImportError('The HTML report is damaged: its embedded data is not valid JSON.')
     }
     if (json === null) throw new LogsImportError('The HTML report is damaged: embedded data not found.')
-  } else if (/^\s*</.test(content)) {
-    throw new LogsImportError('This HTML file is not a logs report exported from the Logs tab.')
   } else {
-    try {
-      json = JSON.parse(content)
-    } catch {
-      throw new LogsImportError('File is not valid JSON.')
-    }
+    throw new LogsImportError('This file is not a logs report exported from the Logs tab.')
   }
 
   const parsed = extractFile(json)
   if (parsed.snapshots) acceptLogSnapshots(parsed.snapshots)
   const pool = createNetworkPool()
   const entryIds: string[] = []
-  if (parsed.version >= 2 && parsed.network) {
+  if (parsed.network) {
     const { entries, bodies } = parsed.network
     for (const [id, stored] of Object.entries(entries)) {
       if (!isObject(stored)) continue
       const resolved = rt.resolveEntry({ ...(stored as StoredNetworkEntry), id }, ref => (isObject(bodies[ref]) ? bodies[ref] : undefined))
       addEntry(pool, resolved, sanitizer)
       entryIds.push(id)
-    }
-  } else {
-    for (const entry of legacyEntries(parsed.items).values()) {
-      addEntry(pool, entry, sanitizer)
-      entryIds.push(entry.id)
     }
   }
 
@@ -179,8 +149,7 @@ export async function parseLogsFile(file: File, sanitizer: Sanitizer): Promise<I
     usedIds.add(id)
 
     const kind = item.kind as LogKind
-    // Version 1 events without a key are grouped by their stored title
-    const key = sanitizer.maskString(text(item.key, 500) || text(item.title)) || '(untitled)'
+    const key = sanitizer.maskString(text(item.key, 500)) || '(untitled)'
     let data: Record<string, any>
     let size: number
     if (kind === 'request' || kind === 'response') {

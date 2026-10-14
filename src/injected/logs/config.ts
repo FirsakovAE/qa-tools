@@ -26,7 +26,7 @@ export const LOG_LIMIT_KEYS: LogLimitKey[] = ['network', 'props', 'emit', 'store
 
 export const DEFAULT_LOGS_LIMITS: LogsLimits = {
   capture: { network: true, props: true, emit: true, store: true, action: true, navigation: true, error: true },
-  maxMemoryMB: 64,
+  maxMemoryMB: 20,
   limitEventSize: false,
   maxEventKB: 512,
 }

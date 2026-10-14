@@ -105,8 +105,8 @@ const sections = computed(() => {
     list.push({ id: 'responseHeaders', label: 'Headers' })
     list.push({ id: 'responseBody', label: 'Body' })
   } else if (isStoreBase.value) {
-    list.push({ id: 'state', label: 'State' })
     list.push({ id: 'overview', label: 'Overview' })
+    list.push({ id: 'state', label: 'State' })
   } else if (kind === 'store' || kind === 'props') {
     list.push({ id: 'changes', label: `Changes (${changes.value.length}${data.value.changesTruncated ? '+' : ''})` })
     list.push({ id: 'before', label: 'Before' })

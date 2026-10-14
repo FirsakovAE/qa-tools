@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { Upload } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 const props = defineProps<{
   /** Events passing the filters */
@@ -17,29 +16,17 @@ const emit = defineEmits<{
 
 const selectedCount = computed(() => props.selected ?? 0)
 const buttonLabel = computed(() => (selectedCount.value ? `Export Logs (${selectedCount.value})` : 'Export Logs'))
-const scopeLabel = computed(() =>
-  selectedCount.value ? `${selectedCount.value} selected events` : `${props.count} filtered events`,
-)
 </script>
 
 <template>
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger as-child>
-        <Button
-          variant="outline"
-          size="sm"
-          class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
-          :disabled="count === 0"
-          @click="emit('export')"
-        >
-          <Upload class="h-3.5 w-3.5" />
-          <span class="text-xs font-medium">{{ buttonLabel }}</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        Export {{ scopeLabel }} as an HTML report (opens in any browser, can be imported back). Network events are exported with their request / response pair
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
+  <Button
+    variant="outline"
+    size="sm"
+    class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+    :disabled="count === 0"
+    @click="emit('export')"
+  >
+    <Upload class="h-3.5 w-3.5" />
+    <span class="text-xs font-medium">{{ buttonLabel }}</span>
+  </Button>
 </template>

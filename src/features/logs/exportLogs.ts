@@ -158,10 +158,9 @@ export function buildLogsReport(events: LogEvent[], source: LogsSource, now = Da
   })
   const roots = items.map(item => item.data)
   const pooled = { ...source.snapshotPool?.reachable(roots), ...expanded.reachable(roots) }
-  const hasSnapshots = Object.keys(pooled).length > 0
   return {
     format: LOGS_REPORT_FORMAT,
-    version: hasSnapshots ? LOGS_REPORT_VERSION : 2,
+    version: LOGS_REPORT_VERSION,
     info: {
       name: 'Vue Inspector Logs',
       exportedAt: new Date(now).toISOString(),
@@ -169,7 +168,7 @@ export function buildLogsReport(events: LogEvent[], source: LogsSource, now = Da
       kinds: Object.fromEntries(LOG_KINDS.map(k => [k, { label: LOG_KIND_META[k].label }])),
     },
     events: items,
-    ...(hasSnapshots ? { snapshots: pooled } : {}),
+    snapshots: pooled,
     network: networkSubset(sorted, source),
   }
 }

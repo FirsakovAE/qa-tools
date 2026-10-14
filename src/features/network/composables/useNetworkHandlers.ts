@@ -81,6 +81,15 @@ export function useNetworkHandlers(deps: UseNetworkHandlersDeps) {
     }
   }
 
+  /** Same cutoff as `.responsive-panels` in `src/assets/index.css`: details cover the list. */
+  function isSingleScreenLayout(): boolean {
+    return window.matchMedia('(max-width: 999px)').matches
+  }
+
+  function closeDetailsOnSingleScreen() {
+    if (isSingleScreenLayout()) selectedEntryId.value = null
+  }
+
   function selectFirstPendingBreakpoint() {
     if (pendingBreakpointIds.value.length > 0) {
       mockFormMode.value = false
@@ -106,6 +115,7 @@ export function useNetworkHandlers(deps: UseNetworkHandlersDeps) {
     breakpointFormMode.value = false
     breakpointFormEntry.value = null
     breakpointFormExisting.value = null
+    closeDetailsOnSingleScreen()
   }
 
   function handleBreakpointConfirm(breakpoint: BreakpointItem) {
@@ -120,6 +130,7 @@ export function useNetworkHandlers(deps: UseNetworkHandlersDeps) {
     breakpointFormMode.value = false
     breakpointFormEntry.value = null
     breakpointFormExisting.value = null
+    closeDetailsOnSingleScreen()
   }
 
   // Mock form
@@ -135,6 +146,7 @@ export function useNetworkHandlers(deps: UseNetworkHandlersDeps) {
     mockFormMode.value = false
     mockFormEntry.value = null
     mockFormExisting.value = null
+    closeDetailsOnSingleScreen()
   }
 
   function handleMockConfirm(mock: MockRule) {
@@ -152,6 +164,7 @@ export function useNetworkHandlers(deps: UseNetworkHandlersDeps) {
     mockFormMode.value = false
     mockFormEntry.value = null
     mockFormExisting.value = null
+    closeDetailsOnSingleScreen()
   }
 
   function handleCopyCurl(entry: NetworkEntry) {

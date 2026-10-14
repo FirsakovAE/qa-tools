@@ -272,6 +272,24 @@ img{max-width:100%;display:block}
   font-size:.8125rem;color:var(--text-2);line-height:1.6;
 }
 
+/* ─── Support ─── */
+.support-qr{width:min(220px,100%);height:auto;margin:1.25rem auto;border-radius:8px;background:#fff}
+.support-addr{margin:.25rem 0 0;text-align:center;font-family:var(--font-mono);font-size:.8125rem;line-height:1.5;word-break:break-all;user-select:all;color:var(--text)}
+.support-modal{
+  position:fixed;inset:0;z-index:200;
+  display:flex;align-items:center;justify-content:center;
+  padding:1.5rem;background:rgba(0,0,0,.55);
+}
+.support-modal[hidden]{display:none}
+.support-modal-card{
+  width:min(400px,100%);padding:1.5rem;
+  background:var(--surface);border:1px solid var(--border-h);border-radius:var(--radius);
+  text-align:center;
+}
+.support-modal-title{margin:0;font-size:1.25rem;font-weight:600;text-align:center}
+.support-modal-desc{margin:.5rem 0 0;color:var(--text-2);font-size:.9375rem;line-height:1.6;text-align:center}
+.support-modal-actions{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;margin-top:1.25rem}
+
 /* ─── Release section ─── */
 .release-card{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
@@ -358,6 +376,7 @@ img{max-width:100%;display:block}
       <a href="#features">Features</a>
       <a href="#installation">Installation</a>
       <a href="#releases">Releases</a>
+      <a href="#support">Support</a>
       <a href="./docs/index.html">Documentation</a>
       <a href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">GitHub</a>
     </nav>
@@ -368,6 +387,7 @@ img{max-width:100%;display:block}
       <a href="#features" onclick="this.parentElement.classList.remove('open')">Features</a>
       <a href="#installation" onclick="this.parentElement.classList.remove('open')">Installation</a>
       <a href="#releases" onclick="this.parentElement.classList.remove('open')">Releases</a>
+      <a href="#support" onclick="this.parentElement.classList.remove('open')">Support</a>
       <a href="./docs/index.html" onclick="this.parentElement.classList.remove('open')">Documentation</a>
       <a href="https://github.com/FirsakovAE/qa-tools" target="_blank" rel="noopener">GitHub</a>
     </nav>
@@ -573,6 +593,24 @@ No proxies. No rebuilds. No DevTools limitations.
   </div>
 </section>
 
+<!-- ═══ Support ═══ -->
+<section id="support" class="snap-section auto-h cta-section" style="padding:6rem 0">
+  <div class="container text-center fade-in">
+    <h2 class="section-title">Support Vue Inspector</h2>
+    <p class="section-subtitle mx-auto" style="margin-top:1rem;margin-bottom:2rem">Fund features and experiments.</p>
+    <div class="flex gap-4 items-center" style="justify-content:center;flex-wrap:wrap">
+      <a class="btn btn-secondary" href="https://boosty.to/adambarmy" target="_blank" rel="noopener noreferrer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.661 14.337 6.801 0h6.362L11.88 4.444l-.038.077-3.378 11.733h3.15c-1.321 3.289-2.35 5.867-3.086 7.733-5.816-.063-7.442-4.228-6.02-9.155M8.554 24l7.67-11.035h-3.25l2.83-7.073c4.852.508 7.137 4.33 5.791 8.952C20.16 19.81 14.344 24 8.68 24h-.127z"/></svg>
+        Monthly support
+      </a>
+      <button type="button" class="btn btn-secondary" onclick="openUsdtModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.7538 10.5176c0 .6251-2.2379 1.1483-5.2381 1.2812l.0028.0007c-.0848.0064-.5233.0325-1.5012.0325-.7778 0-1.33-.0233-1.5237-.0325-3.0059-.1322-5.2495-.6555-5.2495-1.2819s2.2436-1.149 5.2495-1.2834v2.0442c.1965.0142.7594.0474 1.5372.0474.9334 0 1.4008-.0389 1.4849-.0466V9.2356c2.9994.1337 5.2381.657 5.2381 1.282zm5.19.5466L12.1248 22.389a.1803.1803 0 0 1-.2496 0L.0562 11.0635a.1781.1781 0 0 1-.0382-.2079l4.3762-9.1921a.1767.1767 0 0 1 .1626-.1026h14.8878a.1768.1768 0 0 1 .1612.1032l4.3762 9.1922a.1782.1782 0 0 1-.0382.2079zm-4.478-.4038c0-.8068-2.5515-1.4799-5.9473-1.6369V7.195h4.186V4.4055H6.3076V7.195h4.1852v1.8286c-3.4018.1562-5.9601.83-5.9601 1.6376 0 .8075 2.5583 1.4806 5.9601 1.6376v5.8618h3.025v-5.8639c3.394-.1563 5.948-.8295 5.948-1.6363z"/></svg>
+        Donate with USDT
+      </button>
+    </div>
+  </div>
+</section>
+
 <!-- ═══ Footer ═══ -->
 <footer class="site-footer">
   <div class="container">
@@ -590,6 +628,21 @@ No proxies. No rebuilds. No DevTools limitations.
     </div>
   </div>
 </footer>
+
+<div id="usdtModal" class="support-modal" hidden onclick="if (event.target === this) closeUsdtModal()">
+  <div class="support-modal-card" role="dialog" aria-modal="true" aria-labelledby="usdtModalTitle">
+    <h2 id="usdtModalTitle" class="support-modal-title">Donate with USDT</h2>
+    <p class="support-modal-desc">A one-time transfer directly to the author. USDT on Tron (TRC-20).</p>
+    <img class="support-qr" src="./usdt.jpg" alt="USDT TRC-20 QR code" width="220" height="220">
+    <p class="support-addr">TPStwFujav3ZZATYb43iwHrrpMCZaoud84</p>
+    <div class="support-modal-actions">
+      <button type="button" class="btn btn-secondary" onclick="copyUsdtAddress(this)">
+        <span>Copy address</span>
+      </button>
+      <button type="button" class="btn btn-secondary" onclick="closeUsdtModal()">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ Scripts ═══ -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -678,6 +731,40 @@ document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
         el.addEventListener('click', function(e) { alert('Drag this button to your bookmarks bar,\nthen use it on any page with a Vue application.'); e.preventDefault(); });
       }
     })();
+    function openUsdtModal() {
+      var modal = document.getElementById('usdtModal');
+      if (!modal) return;
+      modal.hidden = false;
+    }
+    function closeUsdtModal() {
+      var modal = document.getElementById('usdtModal');
+      if (!modal) return;
+      modal.hidden = true;
+    }
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') closeUsdtModal();
+    });
+    function copyUsdtAddress(btn) {
+      var addr = 'TPStwFujav3ZZATYb43iwHrrpMCZaoud84';
+      var label = btn.querySelector('span');
+      var mark = function () {
+        if (!label) return;
+        label.textContent = 'Copied';
+        setTimeout(function () { label.textContent = 'Copy address'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(addr).then(mark, function () {});
+        return;
+      }
+      var el = document.querySelector('.support-addr');
+      if (!el) return;
+      var range = document.createRange();
+      range.selectNodeContents(el);
+      var sel = window.getSelection();
+      if (!sel) return;
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
     // ── GitHub Release (inline: runs even if main.js fails) ──
     (async function(){
       try {

@@ -6,7 +6,7 @@ title: Работа с логами
 
 Вкладка **Logs** — единый хронологический журнал того, что происходит на странице: сетевые запросы, изменения props и эмиты компонентов, изменения и экшены **Pinia**, навигация SPA и JS-ошибки. Она помогает восстановить сценарий по шагам и передать его в виде файла.
 
-Вкладка видна всегда, располагается после **Pinia Store** и одинаково работает в расширении и в режиме **Bookmark** ([Standalone](/ru/standalone)).
+Вкладка видна всегда, располагается после **Pinia Store** и записывает события одинаково в расширении и в режиме **Bookmark** ([Standalone](/ru/standalone)). **Import Logs** есть только в установленном расширении.
 
 ## Типы событий
 
@@ -58,7 +58,7 @@ title: Работа с логами
 | **Pause** / **Resume** | Остановить и возобновить запись новых событий |
 | **Clear** | Удалить все записанные события |
 | **Export Logs** | Экспорт событий в **HTML**-отчёт (см. [Экспорт и импорт](./export.md)) |
-| **Import Logs** | Открыть экспортированный **HTML**-отчёт (или файл **JSON** из предыдущей версии) |
+| **Import Logs** | Открыть экспортированный **HTML**-отчёт. Только в установленном расширении (см. [Экспорт и импорт](./export.md)) |
 
 ## Рабочая область
 
@@ -96,7 +96,7 @@ title: Работа с логами
 | **Send request** | **Overview**, **Params (n)**, **Headers**, **Body**, **Raw** |
 | **Receive response** | **Overview**, **Headers**, **Body**, **Raw** |
 | **Change props**, **Change store** | **Changes (n)**, **Before**, **After**, **Raw** |
-| **Store initialized**, **Store snapshot**, **Store checkpoint** | **State**, **Overview**, **Raw** |
+| **Store initialized**, **Store snapshot**, **Store checkpoint** | **Overview**, **State**, **Raw** |
 | **Store action** | **Overview**, **Arguments**, **Result** / **Error**, **Raw** |
 | **Emit** | **Arguments (n)**, **Overview**, **Raw** |
 | **Navigation**, **JS error** | **Overview**, **Stack** (для ошибок), **Raw** |

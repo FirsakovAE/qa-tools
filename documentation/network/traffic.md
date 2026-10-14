@@ -11,6 +11,8 @@ The **Network** tab and **Options → Network** provide two interception mechani
 
 Both apply only to **`fetch`** and **`XMLHttpRequest`** on the current page.
 
+On a narrow panel the list and the request details share one screen. Saving a breakpoint or mock, or leaving that form with the back button, closes the details. On a wide panel the details stay open.
+
 You can **suspend all breakpoint rules** or **all mock rules** globally from the **Network** toolbar or via **Enable breakpoint rules** / **Enable mock responses** in **Options → Network** — rules remain saved but are not applied until re-enabled. See [Working with requests](/network/general#breakpoint-rules-and-mock-responses-global).
 
 General interception limits (page context, CORS, scope) are described in [Working with requests](/network/general).

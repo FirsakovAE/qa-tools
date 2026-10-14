@@ -27,6 +27,7 @@ import { exportLogEvent, exportLogs } from './exportLogs'
 import { parseLogsFile, LogsImportError, IMPORT_ACCEPT } from './importLogs'
 import { formatLogDateTime } from './format'
 import { networkEntryOf, pairedNetworkEvent } from './view'
+import { getRuntimeAdapter } from '@/runtime'
 
 const settings = useInspectorSettingsSync()
 
@@ -87,6 +88,7 @@ function handleExportLogs() {
 }
 
 const importing = ref(false)
+const canImportLogs = computed(() => getRuntimeAdapter()?.capabilities.mode === 'extension')
 
 function handleImport() {
   const input = document.createElement('input')
@@ -223,7 +225,7 @@ function handleClear() {
 
           <div class="export-inline flex items-center gap-2">
             <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
-            <TooltipProvider>
+            <TooltipProvider v-if="canImportLogs">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <Button variant="outline" size="sm" class="h-8 gap-1.5" :disabled="importing" @click="handleImport">
@@ -232,7 +234,7 @@ function handleClear() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  Open an exported HTML logs report (older JSON exports are supported too)
+                  Open an exported HTML logs report
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -243,7 +245,7 @@ function handleClear() {
       <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
         <div class="hidden export-wrapped space-x-2">
           <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
-          <TooltipProvider>
+          <TooltipProvider v-if="canImportLogs">
             <Tooltip>
               <TooltipTrigger as-child>
                 <Button variant="outline" size="sm" class="h-8 gap-1.5" :disabled="importing" @click="handleImport">
@@ -252,7 +254,7 @@ function handleClear() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Open an exported HTML logs report (older JSON exports are supported too)
+                Open an exported HTML logs report
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Switch } from '@/components/ui/switch'
 import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
 import SettingsTableSection from '../components/SettingsTableSection.vue'
 import type { TableColumn } from '../components/SettingsTableSection.vue'
@@ -206,12 +205,7 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
     <div id="logs-limits-section" class="space-y-4 border-t pt-4">
       <div class="flex items-start justify-between gap-2">
         <div>
-          <h4 class="text-sm font-semibold">What to log and limits</h4>
-          <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
-            Switched-off groups are not logged at all (already logged events stay).
-            When the memory budget is reached, the oldest events are dropped; older Pinia changes are compacted into a store checkpoint instead,
-            so the remaining changes keep their Before / After. Network data shared by several events is counted once.
-          </p>
+          <h4 class="text-sm font-semibold">Logs and limits</h4>
         </div>
         <Button variant="ghost" size="sm" class="h-7 text-xs gap-1.5 shrink-0" @click="resetLimits">
           <RotateCcw class="h-3.5 w-3.5" />
@@ -227,7 +221,7 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
             <span class="text-xs text-muted-foreground tabular-nums text-right" title="Currently stored">
               {{ logsStats.counts[row.key] }} {{ row.unit }}
             </span>
-            <Switch
+            <Checkbox
               :id="`logs-capture-${row.key}`"
               :model-value="limits.capture[row.key]"
               @update:model-value="setCapture(row.key, !!$event)"
@@ -260,12 +254,11 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
             />
             <Label for="logs-limit-event-enabled" class="text-sm font-normal cursor-pointer">Limit event size</Label>
           </div>
-          <div class="flex items-center gap-2">
+          <div v-if="limits.limitEventSize" class="flex items-center gap-2">
             <Input
               id="logs-limit-event"
               type="number"
               aria-label="Max event size"
-              :disabled="!limits.limitEventSize"
               class="h-8 w-24 text-right tabular-nums"
               :min="LOG_LIMIT_BOUNDS.eventKB.min"
               :max="LOG_LIMIT_BOUNDS.eventKB.max"
@@ -285,12 +278,6 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
           </div>
           <p class="text-xs text-muted-foreground">
             Used {{ formatBytes(logsStats.memoryUsed) }} of {{ formatBytes(memoryBudget) }} (approximate serialized size).
-            <template v-if="limits.limitEventSize">
-              Larger parts of an event (store snapshots, arguments, results) are dropped and network bodies are cut to the max event size.
-            </template>
-            <template v-else>
-              Events are kept whole (nothing is cut), so an exported report can be imported with complete data. The newest event is kept even if it alone exceeds the budget.
-            </template>
           </p>
         </div>
       </div>
@@ -300,7 +287,7 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
     <SettingsTableSection
       section-id="logs-masking-section"
       title="Data masking"
-      description="Values are masked when an event is captured, so they never reach the Logs view, exports or imports. Keys match case-insensitively, ignoring separators; words of 4 letters or fewer must match a whole word (e.g. pwd, otp)."
+      description="Values are masked when an event is captured, so they never reach the Logs view, exports or imports."
       :columns="maskKeyColumns"
       :rows="maskKeyRows"
       :row-key="(r) => (r as { key: string }).key"

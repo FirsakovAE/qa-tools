@@ -6,6 +6,8 @@ import type { RowCheckState } from '@/composables/useRowSelection'
 defineProps<{
   state: RowCheckState
   title?: string
+  /** Header control uses the header text color; row checkboxes stay primary */
+  header?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +24,7 @@ function onMousedown(event: MouseEvent) {
   <!-- The whole cell is the hit area; the checkbox only reflects the state -->
   <div
     class="virtual-table__cell-check row-check-cell"
+    :class="{ 'row-check-cell--header': header }"
     :title="title"
     @mousedown="onMousedown"
     @click.stop="emit('toggle', $event)"
@@ -37,5 +40,13 @@ function onMousedown(event: MouseEvent) {
 .row-check-cell :deep(button[data-state='indeterminate']) {
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
+}
+.row-check-cell--header :deep(button) {
+  border-color: hsl(var(--muted-foreground));
+}
+.row-check-cell--header :deep(button[data-state='checked']),
+.row-check-cell--header :deep(button[data-state='indeterminate']) {
+  background: hsl(var(--muted-foreground));
+  color: hsl(var(--background));
 }
 </style>

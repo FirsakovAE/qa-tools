@@ -6,7 +6,7 @@ title: Working with logs
 
 The **Logs** tab is a single chronological journal of what happens on the page: network requests, component props and emits, **Pinia** changes and actions, SPA navigation and JS errors. It helps to reconstruct a scenario step by step and to hand it over as a file.
 
-The tab is always visible, comes after **Pinia Store**, and works the same way in the extension and in **Bookmark** ([Standalone](/standalone)) mode.
+The tab is always visible, comes after **Pinia Store**, and records events the same way in the extension and in **Bookmark** ([Standalone](/standalone)) mode. **Import Logs** is only in the installed extension.
 
 ## Event types
 
@@ -58,7 +58,7 @@ As in other tabs, a query **without** quotes matches a substring, a query wrappe
 | **Pause** / **Resume** | Stop and resume recording new events |
 | **Clear** | Remove all recorded events |
 | **Export Logs** | Export events to an **HTML** report (see [Export and import](./export.md)) |
-| **Import Logs** | Open an exported **HTML** report (or a **JSON** file from an earlier version) |
+| **Import Logs** | Open an exported **HTML** report. Only in the installed extension (see [Export and import](./export.md)) |
 
 ## Work area
 
@@ -96,7 +96,7 @@ Clicking a row opens details on the right. The layout follows **Network**: a tab
 | **Send request** | **Overview**, **Params (n)**, **Headers**, **Body**, **Raw** |
 | **Receive response** | **Overview**, **Headers**, **Body**, **Raw** |
 | **Change props**, **Change store** | **Changes (n)**, **Before**, **After**, **Raw** |
-| **Store initialized**, **Store snapshot**, **Store checkpoint** | **State**, **Overview**, **Raw** |
+| **Store initialized**, **Store snapshot**, **Store checkpoint** | **Overview**, **State**, **Raw** |
 | **Store action** | **Overview**, **Arguments**, **Result** / **Error**, **Raw** |
 | **Emit** | **Arguments (n)**, **Overview**, **Raw** |
 | **Navigation**, **JS error** | **Overview**, **Stack** (errors), **Raw** |

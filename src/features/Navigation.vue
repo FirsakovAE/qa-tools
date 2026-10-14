@@ -494,7 +494,6 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           <NetworkTab 
             :pending-breakpoint="pendingBreakpoint"
             @clear-pending-breakpoint="clearPendingBreakpoint"
-            @navigate-to-options="handleNavigateToOptions"
           />
         </div>
 

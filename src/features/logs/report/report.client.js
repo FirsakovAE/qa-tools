@@ -8,6 +8,10 @@
   'use strict'
 
   var APP_URL = 'https://firsakovae.github.io/qa-tools/'
+  var BOOSTY_URL = 'https://boosty.to/adambarmy'
+  var USDT_ADDRESS = 'TPStwFujav3ZZATYb43iwHrrpMCZaoud84'
+  var USDT_QR_SIZE = 29
+  var USDT_QR = '1111111001101111000110111111110000010010111111110001000001101110101011110100100010111011011101011111011010100101110110111010110110011000101011101100000101010100001101010000011111111010101010101010111111100000000100110101011100000000101111100101100001001011111001101110010111111000110011100110101011001101110010111000000111100010010010110100110010010011011010101011100100011111001000000110010000111110111000011101111011100100001101011000001100101000011000100001101001101110100010001000100100010111010000111011000110000110001000011011100111011000000010010011000110001011000110111010101110111010101100001111111000000000011000000110110001100011111110000110011111101011000100000101100101110101000110111011101010011001110011111011010111010110010101010100100111101110101000111110100001101101000001000100110100011111101011111110111100000101000010100'
   var PAGE_SIZE = 300
   var HIGHLIGHT_MAX = 300000
   var GROUPS = [
@@ -109,6 +113,8 @@
   }
 
   var state = { section: 'overview', filter: '', selected: -1, tab: '', query: '', inData: false, limit: PAGE_SIZE, typeOpen: false }
+  // Set by "All events" in the details header: scroll that row to the top of the list
+  var pinTo = -1
   var visible = []
   var rendered = { section: null, filter: null, query: null, inData: null, types: null }
 
@@ -342,10 +348,144 @@
         other.map(function (k) { return link(k, label(k), c[k], k) }),
       )))
     }
-    add(nav, h('a', { class: 'promo', href: APP_URL, target: '_blank', rel: 'noopener noreferrer' }, [
-      h('span', { class: 'promo-title' }, [h('img', { class: 'brand-mark', src: ($('brand-icon') || {}).src, alt: '' }), 'Download Vue Inspector']),
-      h('span', { class: 'promo-url', text: APP_URL.replace(/^https?:\/\//, '').replace(/\/$/, '') }),
+    add(nav, h('div', { class: 'side-foot' }, [
+      supportBlock(),
+      h('a', { class: 'promo', href: APP_URL, target: '_blank', rel: 'noopener noreferrer' }, [
+        h('span', { class: 'promo-title' }, [h('img', { class: 'brand-mark', src: ($('brand-icon') || {}).src, alt: '' }), 'Download Vue Inspector']),
+        h('span', { class: 'promo-url', text: APP_URL.replace(/^https?:\/\//, '').replace(/\/$/, '') }),
+      ]),
     ]))
+  }
+
+  function svgEl(name) { return doc.createElementNS('http://www.w3.org/2000/svg', name) }
+
+  function externalIcon() {
+    var svg = svgEl('svg')
+    svg.setAttribute('class', 'ext-icon')
+    svg.setAttribute('viewBox', '0 0 12 12')
+    svg.setAttribute('aria-hidden', 'true')
+    var path = svgEl('path')
+    path.setAttribute('d', 'M4 2H2.5v7.5H10V8M6.5 2H10v3.5M10 2L5.5 6.5')
+    path.setAttribute('fill', 'none')
+    path.setAttribute('stroke', 'currentColor')
+    path.setAttribute('stroke-width', '1.2')
+    path.setAttribute('stroke-linecap', 'round')
+    path.setAttribute('stroke-linejoin', 'round')
+    svg.appendChild(path)
+    return svg
+  }
+
+  function supportBlock() {
+    var monthly = h('a', {
+      class: 'support-card',
+      href: BOOSTY_URL,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    }, [
+      h('span', { class: 'support-card-title' }, ['Monthly support', externalIcon()]),
+      h('span', { class: 'support-card-desc', text: 'Boosty support levels.' }),
+    ])
+    var usdt = h('button', { class: 'support-card', type: 'button', onclick: openDonate }, [
+      h('span', { class: 'support-card-title', text: 'Donate with USDT' }),
+      h('span', { class: 'support-card-desc', text: 'One-time, direct to the author.' }),
+    ])
+    return h('div', { class: 'support' }, [
+      h('p', { class: 'support-title', text: 'Support Vue Inspector' }),
+      h('p', { class: 'support-desc', text: 'Fund features and experiments.' }),
+      monthly,
+      usdt,
+    ])
+  }
+
+  var donateLayer = null
+  var donateCopyBtn = null
+  var donateTimer = 0
+
+  function usdtQr() {
+    var quiet = 4
+    var n = USDT_QR_SIZE
+    var full = n + quiet * 2
+    var svg = svgEl('svg')
+    svg.setAttribute('class', 'donate-qr')
+    svg.setAttribute('viewBox', '0 0 ' + full + ' ' + full)
+    svg.setAttribute('role', 'img')
+    svg.setAttribute('aria-label', 'USDT TRC-20 QR code')
+    var bg = svgEl('rect')
+    bg.setAttribute('width', String(full))
+    bg.setAttribute('height', String(full))
+    bg.setAttribute('fill', '#fff')
+    svg.appendChild(bg)
+    var y, x, cell
+    for (y = 0; y < n; y++) {
+      for (x = 0; x < n; x++) {
+        if (USDT_QR.charAt(y * n + x) !== '1') continue
+        cell = svgEl('rect')
+        cell.setAttribute('x', String(x + quiet))
+        cell.setAttribute('y', String(y + quiet))
+        cell.setAttribute('width', '1')
+        cell.setAttribute('height', '1')
+        svg.appendChild(cell)
+      }
+    }
+    return svg
+  }
+
+  function markDonateCopied() {
+    if (!donateCopyBtn) return
+    donateCopyBtn.textContent = 'Copied'
+    clearTimeout(donateTimer)
+    donateTimer = setTimeout(function () {
+      if (donateCopyBtn) donateCopyBtn.textContent = 'Copy address'
+    }, 2000)
+  }
+
+  function copyUsdtAddress() {
+    var finish = function () { markDonateCopied() }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(USDT_ADDRESS).then(finish, function () {
+        selectUsdtAddress()
+        finish()
+      })
+      return
+    }
+    selectUsdtAddress()
+    finish()
+  }
+
+  function selectUsdtAddress() {
+    var el = doc.querySelector('.donate-addr')
+    if (!el) return
+    var range = doc.createRange()
+    range.selectNodeContents(el)
+    var sel = window.getSelection()
+    if (!sel) return
+    sel.removeAllRanges()
+    sel.addRange(range)
+    try { doc.execCommand('copy') } catch (err) { /* selection stays for a manual copy */ }
+  }
+
+  function closeDonate() {
+    if (donateLayer) donateLayer.hidden = true
+  }
+
+  function openDonate() {
+    if (!donateLayer) {
+      donateCopyBtn = h('button', { type: 'button', text: 'Copy address', onclick: copyUsdtAddress })
+      var card = h('div', { class: 'donate-card', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Donate with USDT' }, [
+        h('h2', { class: 'donate-title', text: 'Donate with USDT' }),
+        h('p', { class: 'donate-desc', text: 'A one-time transfer directly to the author. USDT on Tron (TRC-20).' }),
+        usdtQr(),
+        h('p', { class: 'donate-addr', text: USDT_ADDRESS }),
+        h('div', { class: 'donate-actions' }, [
+          donateCopyBtn,
+          h('button', { type: 'button', text: 'Close', onclick: closeDonate }),
+        ]),
+      ])
+      card.addEventListener('click', function (ev) { ev.stopPropagation() })
+      donateLayer = h('div', { class: 'donate', hidden: true, onclick: closeDonate }, [card])
+      doc.body.appendChild(donateLayer)
+    }
+    donateLayer.hidden = false
   }
 
   // ---------------------------------------------------------------- main
@@ -545,8 +685,8 @@
     if (isNetwork(e) && !d.entry) {
       list.push(['overview', 'Overview'])
     } else if (isStoreBase(e, d)) {
-      list.push(['state', 'State'])
       list.push(['overview', 'Overview'])
+      list.push(['state', 'State'])
     } else if (e.kind === 'request') {
       list.push(['overview', 'Overview'])
       if (en.params && en.params.length) list.push(['params', 'Params (' + en.params.length + ')'])
@@ -741,6 +881,29 @@
         text: pair.kind === 'response' ? 'Response \u2192' : '\u2190 Request',
       })
     }
+    var allHref = sectionHref('all', e.index)
+    var allLink = h('a', {
+      class: 'pair-btn',
+      href: allHref,
+      title: 'Show this event at the top of All events',
+      text: 'All events \u2192',
+      onclick: function (ev) {
+        if (ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return
+        enabledTypes[e.kind] = true
+        var q = state.query.trim().toLowerCase()
+        if (q && textOf(e).indexOf(q) === -1 && !(state.inData && dataOf(e).indexOf(q) !== -1)) {
+          state.query = ''
+          var input = $('search')
+          if (input) input.value = ''
+        }
+        pinTo = e.index
+        if (location.hash === allHref) {
+          ev.preventDefault()
+          parseHash()
+          render()
+        }
+      },
+    })
 
     var head = h('div', { class: 'd-head' }, [
       h('div', { class: 'd-head-main' }, [
@@ -753,8 +916,11 @@
         ]),
         h('div', { class: 'd-sub', text: contextLine(e, d) || e.subtitle || fmtDateTime(e.ts) }),
       ]),
-      pairLink,
-      h('a', { class: 'icon-btn', href: hereHref(-1), title: 'Close (Esc)', text: '\u00d7' }),
+      h('div', { class: 'd-actions' }, [
+        allLink,
+        pairLink,
+        h('a', { class: 'icon-btn', href: hereHref(-1), title: 'Close (Esc)', text: '\u00d7' }),
+      ]),
     ])
     var tabs = h('div', { class: 'tabs' }, sections.map(function (s) {
       var b = h('button', { class: 'tab' + (s[0] === state.tab ? ' active' : ''), type: 'button', text: s[1] })
@@ -773,14 +939,30 @@
 
   function markSelected() {
     var list = $('list')
-    if (!list) return
+    var main = $('main')
+    var spacer = $('pin-spacer')
+    if (!list) {
+      if (spacer) spacer.remove()
+      return
+    }
     var prev = list.querySelector('.row.active')
     if (prev) prev.classList.remove('active')
     var cur = list.querySelector('.row[data-index="' + state.selected + '"]')
-    if (cur) {
-      cur.classList.add('active')
-      if (cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' })
+    var pin = pinTo === state.selected && !!cur
+    if (pinTo === state.selected) pinTo = -1
+    if (cur) cur.classList.add('active')
+    if (pin && main) {
+      // Extra space so a row near the end of the list can sit at the top
+      if (!spacer) {
+        spacer = h('div', { id: 'pin-spacer' })
+        main.appendChild(spacer)
+      }
+      spacer.style.height = main.clientHeight + 'px'
+      if (cur.scrollIntoView) cur.scrollIntoView({ block: 'start' })
+      return
     }
+    if (spacer) spacer.remove()
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' })
   }
 
   // ---------------------------------------------------------------- routing
@@ -843,6 +1025,10 @@
   })
 
   doc.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && donateLayer && !donateLayer.hidden) {
+      closeDonate()
+      return
+    }
     if (ev.key === 'Escape' && state.typeOpen) {
       setTypeOpen(false)
       return

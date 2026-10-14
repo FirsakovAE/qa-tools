@@ -16,7 +16,7 @@ Every export is one **HTML** file: a static report for reading plus the structur
 
 The data inside the report is compact, like the live log (see [How events are stored](./general.md#how-events-are-stored)): store changes are diffs, a request and its response share one network entry, equal bodies are stored once, and identical values in any event are stored once as a shared snapshot. Titles, Before / After states, snapshot values and request / response details are restored when the report is opened.
 
-The embedded data has a format version. Files from newer versions of Vue Inspector are rejected with a message instead of being misread.
+The embedded data uses format version 1. A file from a newer or an older format is rejected with a message instead of being misread.
 
 ---
 
@@ -61,6 +61,7 @@ The **HTML** report is one self-contained file: styles, scripts, the application
 * **Report** — **Overview** and **All events** with the total count;
 * sections by type with counters: **Network** (**Send request**, **Receive response**), **Components** (**Change props**, **Emit**), **Pinia** (**Change store**, **Store action**), **Page** (**Navigation**, **JS error**);
 * **Download Vue Inspector** at the bottom — link to the project page.
+* **Support Vue Inspector** above it: **Monthly support** opens Boosty, **Donate with USDT** shows the Tron (TRC-20) address, a QR code and **Copy address**.
 
 ### Overview
 
@@ -74,6 +75,7 @@ Summary cards: **Events**, **Errors**, **Failed requests**, first and last event
 * **All events** has a **Type** dropdown with checkboxes, the same control as on the **Logs** tab. Every type is on by default. **Select all** and **Clear** turn the whole list on or off. With every type off, the list is empty. The filter stays on this page while you search or use the **Errors** / **Failed requests** chip, and does not change the sidebar sections.
 * Clicking a row opens details with the same tabs as in the app (**Overview**, **Params**, **Headers**, **Body**, **Changes**, **Before** / **After**, **State**, **Raw**, etc.).
 * For network events, the button next to **Close** jumps between the request and its response.
+* **All events →** in the details header opens **All events** and places this event at the top of the list. If its type was switched off, that type is switched on so the event stays in the list.
 * **↑ / ↓** move between events, **Esc** closes details.
 * The selected section and event are kept in the address (`#…`), so a link to a specific event can be shared and survives a reload.
 
@@ -81,15 +83,13 @@ Summary cards: **Events**, **Errors**, **Failed requests**, first and last event
 
 ## Import
 
-**Import Logs** opens an **HTML** report exported from the **Logs** tab. **JSON** and **HTML** files exported by earlier versions open too.
+**Import Logs** opens an **HTML** report exported from the **Logs** tab. The button is in the installed extension; Bookmark mode does not import logs.
 
 * Imported events are shown in a separate read-only view. The banner shows the file name, the number of events and the export time.
 * **Back to live logs** returns to live recording; live events are not lost while a file is open.
 * Invalid events are skipped (the number is shown in the import message).
 * HTML files that are not a Logs report are rejected with a message.
 * Imported data goes through the current masking settings once more.
-
-In files from earlier versions the request and response halves of a network entry are joined back into one entry.
 
 ---
 

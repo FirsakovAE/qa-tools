@@ -37,29 +37,29 @@ The same list is available from the **ignored** indicator in the **Logs** toolba
 
 ---
 
-## What to log and limits
+## Logs and limits
 
 ### Logged events
 
-Each group has a switch: a switched-off group is not logged at all, and already logged events stay. All groups are on by default.
+Each group has a checkbox: an unchecked group is not logged at all, and already logged events stay. All groups are on by default.
 
 | Group | Events |
 | ----- | ------ |
 | **Network** | **Send request** and **Receive response** |
 | **Props changes** | **Change props** |
 | **Emits** | **Emit** |
-| **Pinia changes** | **Change store** (when switched on again, the store starts with a new **Store snapshot**) |
+| **Pinia changes** | **Change store** (when checked again, the store starts with a new **Store snapshot**) |
 | **Store actions** | **Store action** |
 | **Navigation** | **Navigation** |
 | **JS errors** | **JS error** |
 
-The number next to a switch shows how many events of the group are currently stored.
+The number next to a checkbox shows how many events of the group are currently stored.
 
 ### Data size
 
 | Setting | Default | Range | Meaning |
 | ------- | ------- | ----- | ------- |
-| **Memory budget** | 64 MB | 8 – 1024 MB | Total size of all buffered events (approximate serialized size). A network entry shared by a request and its response, and equal bodies, are counted once |
+| **Memory budget** | 20 MB | 8 – 1024 MB | Total size of all buffered events (approximate serialized size). A network entry shared by a request and its response, and equal bodies, are counted once |
 | **Limit event size** | off | — | Off: events are kept whole and nothing is cut, so an exported report can be imported with complete data |
 | **Max event size** | 512 KB | 16 – 16 384 KB | Only with **Limit event size**: larger parts of an event (store snapshots, arguments, results) are dropped, network bodies are cut to this size |
 

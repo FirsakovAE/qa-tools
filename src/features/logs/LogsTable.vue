@@ -63,6 +63,7 @@ const ROW_HEIGHT = 40
   >
     <template #header>
       <RowCheckCell
+        header
         :state="headerCheckState"
         :title="headerCheckState === true ? 'Unselect all' : 'Select all for export (Ctrl+A)'"
         @toggle="emit('checkAll')"

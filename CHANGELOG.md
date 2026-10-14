@@ -396,10 +396,10 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
   * sidebar navigation by sections (**Report**, **Network**, **Components**, **Pinia**, **Page**) with event counters;
   * **Overview** with summary cards; **Events**, **Errors** and **Failed requests** open **All events** with the matching filter;
   * search across titles or inside data (**in data**), keyboard navigation (**↑ / ↓**, **Esc**), deep links to a selected event;
-  * event details with the same tabs as in the app and a button that jumps between a request and its response;
-  * **Download Vue Inspector** link to the project page at the bottom of the sidebar.
+  * event details with the same tabs as in the app, a button that jumps between a request and its response, and **All events →**, which opens **All events** with this event at the top of the list;
+  * **Support Vue Inspector** above **Download Vue Inspector**: **Monthly support** opens Boosty, **Donate with USDT** shows the Tron (TRC-20) address, a QR code and **Copy address**.
 
-* **Import Logs** opens exported **HTML** reports, as well as **JSON** and **HTML** files from earlier builds. Imported events are shown in a separate read-only view with the file name and export time; **Back to live logs** returns to live recording. Invalid events are skipped, foreign HTML files are rejected.
+* **Import Logs** opens an **HTML** report exported from the **Logs** tab (format version 1). It is available in the installed extension. Imported events are shown in a separate read-only view with the file name and export time; **Back to live logs** returns to live recording. Invalid events are skipped, foreign HTML files and older formats are rejected.
 
 #### Data safety and limits
 
@@ -408,23 +408,26 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
   * by key: password, token, secret, authorization, cookie, apikey, card number, cvv, otp and others (list is editable);
   * by value: **JWT**, **Bearer** / **Basic** credentials and card numbers inside any text.
 
-* Every event group (**Network**, **Props changes**, **Emits**, **Pinia changes**, **Store actions**, **Navigation**, **JS errors**) can be switched off: it is not logged at all.
+* Every event group (**Network**, **Props changes**, **Emits**, **Pinia changes**, **Store actions**, **Navigation**, **JS errors**) can be turned off with a checkbox: it is not logged at all.
 * Old **Change store** events are compacted into a **Store checkpoint** (*initial state → checkpoint → recent changes*) instead of being dropped, so the remaining changes keep their **Before** / **After**.
-* A shared **memory budget** (64 MB by default): when it is reached, the oldest events are dropped; the newest event is always kept. A network entry shared by a request and its response, and equal bodies, are counted once.
+* A shared **memory budget** (20 MB by default): when it is reached, the oldest events are dropped; the newest event is always kept. A network entry shared by a request and its response, and equal bodies, are counted once. A budget already saved in settings stays until **Defaults**.
+* Identical values inside any event are stored once; later copies are references. The **Logs** tab and the HTML report restore the full value, and **Export Logs** no longer expands those copies on the main thread.
 * Events are kept whole by default (store states, props, emit arguments, network bodies), so an imported report has complete data. An optional **max event size** (512 KB by default) drops large parts of an event and truncates network bodies with a notice in the details.
 
 #### Options → Logs
 
 * **Search Settings** — default search modes.
 * **Ignore list** — ignored event groups with **Log again** and **Log all again**.
-* **What to log and limits** — switches for event groups, memory budget, optional max event size, current usage and **Defaults**.
-* **Data masking** — enable masking, value patterns, own key list and **Default keys**.
+* **Logs and limits** — checkboxes for event groups, memory budget, optional max event size (the size field is shown only when **Limit event size** is on), current usage (**Used X of Y**) and **Defaults**.
+* **Data masking** — enable masking, value patterns, own key list and **Default keys**. The description states that values are masked when an event is captured.
 
 ---
 
 ### Network
 
-* A checkbox column was added at the start of the **Network** table with the same hotkeys as in **Logs**; **Export Collection (n)** exports only the selected requests.
+* A checkbox column was added at the start of the **Network** table with the same hotkeys as in **Logs**; **Export Collection (n)** exports only the selected requests. The header checkbox uses the header text color; checkboxes in the rows stay as they are (the same in **Logs**).
+* **bp** and **mock** counts open a list of the active rules, in the same way as **ignored** on the **Logs** tab. **Pause** disables a rule without deleting it; **×** deletes it. Only active rules are listed. The pulsing **bp** chip still selects the request that is waiting.
+* On a narrow panel, saving a breakpoint or mock, or leaving that form with the back button, closes the request details. On a wide panel the details stay open.
 * After a request is edited at a **Breakpoint**, **Network** and **Logs** show the data that was actually sent (URL, method, headers, body), not the data captured before the pause.
 
 ---
@@ -440,6 +443,8 @@ A new **Logs** tab: one chronological journal of what happens on the page. The t
 
 ### UI / UX
 
+* **Support Vue Inspector** sits at the bottom of the Options sidebar: **Monthly support** opens Boosty, **Donate with USDT** opens a dialog with the Tron (TRC-20) address, a QR code and **Copy address**. The two actions keep their own frames.
+* The project page has the same support actions under **Support Vue Inspector**, laid out like the closing call to action. **Donate with USDT** opens a dialog with the address and QR. The README ends with the same details.
 * Filter lists (**Search by** in **Network**, **Props**, **Pinia** and **Type** / **Search by** in **Logs**) use the UI kit scrollbar instead of the default browser one.
 * The favorites star column in **Pinia** is aligned with the first column of **Props**, **Network** and **Logs**.
 

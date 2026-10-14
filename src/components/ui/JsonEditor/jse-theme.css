@@ -16,9 +16,10 @@
 
 /* ───────────────────────────── DARK ───────────────────────────── */
 .ui-json-editor__host.jse-theme-dark {
-  /* typography (default mono is 14px; +2px for better readability) */
-  --jse-font-size-mono: 16px;
+  /* UI chrome. Mono size stays the library default. */
   --jse-font-size: 16px;
+  /* Library default is calc(1em + 4px). */
+  --jse-line-height: 16px;
 
   /* surfaces */
   --jse-background-color: hsl(var(--background));
@@ -127,9 +128,10 @@
 
 /* ──────────────────────────── LIGHT ──────────────────────────── */
 .ui-json-editor__host.jse-theme-default {
-  /* typography (default mono is 14px; +2px for better readability) */
-  --jse-font-size-mono: 16px;
+  /* UI chrome. Mono size stays the library default. */
   --jse-font-size: 16px;
+  /* Library default is calc(1em + 4px). */
+  --jse-line-height: 16px;
 
   --jse-background-color: hsl(var(--background));
   --jse-text-color: hsl(var(--foreground));

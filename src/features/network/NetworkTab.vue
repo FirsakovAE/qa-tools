@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Trash2, Pause, Play, SearchIcon, Upload, PauseCircle, Shuffle } from 'lucide-vue-next'
+import { Trash2, Pause, Play, SearchIcon, Upload, PauseCircle, Shuffle, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover'
 import { Input } from '@/components/ui/input'
 import { FacetedFilter } from '@/components/ui/FacetedFilter'
 import {
@@ -51,7 +52,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'clearPendingBreakpoint'): void
-  (e: 'navigateToOptions', anchor: string): void
 }>()
 
 // ============================================================================
@@ -96,6 +96,54 @@ function toggleBreakpointsRulesEnabled() {
 function toggleMocksRulesEnabled() {
   if (!settings.value) return
   settings.value.networkMocksEnabled = !mocksRulesActive.value
+}
+
+function breakpointUrl(bp: BreakpointItem): string {
+  let url = `${bp.scheme}://${bp.host}`
+  if (bp.port) url += `:${bp.port}`
+  url += bp.path
+  if (bp.query) url += `?${bp.query}`
+  return url
+}
+
+function mockUrl(mock: MockRule): string {
+  let url = `${mock.scheme || '*'}://${mock.host || '*'}`
+  if (mock.port) url += `:${mock.port}`
+  url += mock.path || '/*'
+  if (mock.query) url += `?${mock.query}`
+  return url
+}
+
+function pauseBreakpoint(id: string) {
+  const bps = settings.value?.breakpoints
+  if (!bps) return
+  const index = bps.active.findIndex(bp => bp.id === id)
+  if (index === -1) return
+  const [bp] = bps.active.splice(index, 1)
+  bps.inactive.push(bp)
+}
+
+function deleteBreakpoint(id: string) {
+  const bps = settings.value?.breakpoints
+  if (!bps) return
+  bps.active = bps.active.filter(bp => bp.id !== id)
+  bps.inactive = bps.inactive.filter(bp => bp.id !== id)
+}
+
+function pauseMock(id: string) {
+  const mocks = settings.value?.mocks
+  if (!mocks) return
+  const index = mocks.active.findIndex(m => m.id === id)
+  if (index === -1) return
+  const [mock] = mocks.active.splice(index, 1)
+  mocks.inactive.push(mock)
+}
+
+function deleteMock(id: string) {
+  const mocks = settings.value?.mocks
+  if (!mocks) return
+  mocks.active = mocks.active.filter(m => m.id !== id)
+  mocks.inactive = mocks.inactive.filter(m => m.id !== id)
 }
 
 const allBreakpointsWithStatus = computed(() => [
@@ -492,28 +540,106 @@ watch(settings, (s) => {
         >
           {{ pendingBreakpointIds.length }}<span class="badge-label">bp</span>
         </Badge>
-        <Badge 
-          v-if="activeBreakpoints.length > 0" 
-          variant="outline" 
-          class="whitespace-nowrap cursor-pointer transition-colors"
-          :class="breakpointsRulesActive
-            ? 'text-amber-500 border-amber-500/30 hover:bg-amber-500/10'
-            : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
-          @click="emit('navigateToOptions', 'breakpoints-section')"
-        >
-          {{ activeBreakpoints.length }}<span class="badge-label">bp</span>
-        </Badge>
-        <Badge 
-          v-if="activeMocks.length > 0" 
-          variant="outline" 
-          class="whitespace-nowrap cursor-pointer transition-colors"
-          :class="mocksRulesActive
-            ? 'text-purple-500 border-purple-500/30 hover:bg-purple-500/10'
-            : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
-          @click="emit('navigateToOptions', 'mocks-section')"
-        >
-          {{ activeMocks.length }}<span class="badge-label">mock</span>
-        </Badge>
+        <Popover v-if="activeBreakpoints.length > 0">
+          <PopoverTrigger as-child>
+            <Badge
+              variant="outline"
+              class="whitespace-nowrap cursor-pointer transition-colors"
+              :class="breakpointsRulesActive
+                ? 'text-amber-500 border-amber-500/30 hover:bg-amber-500/10'
+                : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
+            >
+              {{ activeBreakpoints.length }}<span class="badge-label">bp</span>
+            </Badge>
+          </PopoverTrigger>
+          <PopoverContent class="w-96 p-0" align="end">
+            <div class="flex items-center justify-between px-3 py-2 border-b">
+              <span class="text-sm font-medium">Breakpoints</span>
+            </div>
+            <div class="max-h-72 overflow-y-auto py-1">
+              <div
+                v-for="bp in activeBreakpoints"
+                :key="bp.id"
+                class="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50"
+              >
+                <Badge variant="outline" class="text-[10px] px-1.5 py-0 whitespace-nowrap shrink-0">
+                  {{ bp.method || bp.trigger }}
+                </Badge>
+                <span class="flex-1 min-w-0 truncate font-mono text-xs" :title="breakpointUrl(bp)">
+                  {{ bp.description?.trim() || breakpointUrl(bp) }}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 shrink-0"
+                  title="Disable without deleting"
+                  @click="pauseBreakpoint(bp.id)"
+                >
+                  <Pause class="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 shrink-0"
+                  title="Delete"
+                  @click="deleteBreakpoint(bp.id)"
+                >
+                  <X class="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+        <Popover v-if="activeMocks.length > 0">
+          <PopoverTrigger as-child>
+            <Badge
+              variant="outline"
+              class="whitespace-nowrap cursor-pointer transition-colors"
+              :class="mocksRulesActive
+                ? 'text-purple-500 border-purple-500/30 hover:bg-purple-500/10'
+                : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
+            >
+              {{ activeMocks.length }}<span class="badge-label">mock</span>
+            </Badge>
+          </PopoverTrigger>
+          <PopoverContent class="w-96 p-0" align="end">
+            <div class="flex items-center justify-between px-3 py-2 border-b">
+              <span class="text-sm font-medium">Mock responses</span>
+            </div>
+            <div class="max-h-72 overflow-y-auto py-1">
+              <div
+                v-for="mock in activeMocks"
+                :key="mock.id"
+                class="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50"
+              >
+                <Badge variant="outline" class="text-[10px] px-1.5 py-0 whitespace-nowrap shrink-0 font-mono">
+                  {{ mock.status }}
+                </Badge>
+                <span class="flex-1 min-w-0 truncate font-mono text-xs" :title="mockUrl(mock)">
+                  {{ mock.description?.trim() || mockUrl(mock) }}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 shrink-0"
+                  title="Disable without deleting"
+                  @click="pauseMock(mock.id)"
+                >
+                  <Pause class="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 shrink-0"
+                  title="Delete"
+                  @click="deleteMock(mock.id)"
+                >
+                  <X class="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         <Badge v-if="paused" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
           Paused
         </Badge>

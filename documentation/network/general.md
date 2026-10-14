@@ -32,15 +32,15 @@ For key/value modes the body must parse as JSON; otherwise the search index may 
 
 ### Status indicators
 
-The right side of the **Network** toolbar shows status chips. Some are **clickable** and jump to the related **Options** section or to a specific log entry.
+The right side of the **Network** toolbar shows status chips. Some are **clickable**.
 
 | Item | Purpose |
 | ---- | ------- |
 | **N** or **N/M** | Row count after filters; with active search, **M** is the total requests in the buffer. |
 | **pending** | Requests still in flight. |
 | **bp** (highlighted, pulse) | Breakpoints waiting for UI action. Click selects the first such row. |
-| **bp** (solid amber) | Count of active breakpoint rules. Click opens **Options** with all breakpoints. |
-| **mock** | Active mock response rules. Click opens **Options → Network → Mock Responses**. |
+| **bp** (solid amber) | Count of active breakpoint rules. Click opens that list. **Pause** disables a rule without deleting it; **×** deletes it. Disabled rules leave the list. |
+| **mock** | Active mock response rules. Click opens that list, with the same **Pause** and **×** actions. |
 | **Paused** | Traffic logging to the list is paused. |
 
 When **breakpoint rules** or **mock response rules** are **suspended** globally (see below), the **bp** and **mock** chips keep their counts but use a **muted** style to show that those rules are **not** applied until you turn them back on.
