@@ -12,15 +12,15 @@
 import { isCaptureEnabled, isLogsPaused, isSensitiveLogKey } from './core'
 import { locationOf, recordError } from './errors'
 import { MASK } from './sanitize'
-import { compactStack, isForeignUrl, isInspectorUrl, parseFrames } from './stack'
+import { compactStack, isForeignUrl, isInspectorUrl, parseFrames, skipStackFrames } from './stack'
 
 const MAX_PER_SECOND = 50
 const MAX_MESSAGE_CHARS = 2000
 const PREVIEW_KEYS = 10
 /** Prefixes of Vue Inspector's own messages (secondary signal, see above) */
 const INSPECTOR_PREFIX_RE = /^\[(?:injected|content|runtime|standalone|VueInspector|Vue Inspector)\b/
-/** `capture` and the console wrapper */
-const OWN_FRAMES = 2
+/** The page bridge (or the fallback wrapper) is the first frame of the call-site stack */
+const BRIDGE_FRAMES = 1
 const MARK = '__vueInspectorConsole'
 
 let initialized = false
@@ -72,12 +72,13 @@ function formatMessage(args: unknown[]): string {
 }
 
 function isInternalCall(callSite: string, message: string): boolean {
-  const frames = parseFrames(callSite)
-  const caller = frames[OWN_FRAMES]
+  // The wrapper frame may have no URL (`<anonymous>`), so drop it as a line before parsing
+  const frames = parseFrames(skipStackFrames(callSite, BRIDGE_FRAMES))
+  const caller = frames[0]
   if (caller && isForeignUrl(caller.url)) return true
   if (!INSPECTOR_PREFIX_RE.test(message)) return false
   // No usable stack, or a foreign console wrapper between the inspector and this one
-  return !caller || frames.slice(OWN_FRAMES).some(f => isInspectorUrl(f.url))
+  return !caller || frames.some(f => isInspectorUrl(f.url))
 }
 
 function allowedByRate(): boolean {
@@ -91,14 +92,19 @@ function allowedByRate(): boolean {
   return false
 }
 
-function capture(args: unknown[]): void {
-  if (isLogsPaused() || !isCaptureEnabled('error')) return
-  const callSite = new Error().stack ?? ''
+let nativeConsoleError: typeof console.error | null = null
+
+/**
+ * Classifies one `console.error` call. `callSite` is captured in the wrapper, so its first
+ * frame is the bridge. Returns true when Vue Inspector itself logged the message.
+ */
+export function observeConsoleError(args: unknown[], callSite: string): boolean {
   const message = formatMessage(args) || '(empty console.error)'
-  if (isInternalCall(callSite, message) || !allowedByRate()) return
+  const internal = isInternalCall(callSite, message)
+  if (internal || isLogsPaused() || !isCaptureEnabled('error') || !allowedByRate()) return internal
 
   const error = args.find((a): a is Error => a instanceof Error)
-  const site = compactStack(callSite, { dropLeadingInspector: true, header: false })
+  const site = compactStack(skipStackFrames(callSite, BRIDGE_FRAMES), { dropLeadingInspector: true, header: false })
   const extra: Record<string, unknown> = {
     ...locationOf(error?.stack ?? site.stack),
   }
@@ -112,19 +118,33 @@ function capture(args: unknown[]): void {
   }
   if (!error?.stack) Object.assign(extra, site)
   recordError('console.error', { message, name: error?.name, stack: error?.stack }, extra)
+  return false
 }
 
-export function initConsoleLogs(): void {
+/** Native `console.error`, called from this extension script so Chrome keeps the entry */
+export function emitAppConsoleError(args: unknown[]): void {
+  nativeConsoleError?.apply(console, args)
+}
+
+export function prepareConsoleLogs(): void {
+  if (nativeConsoleError) return
+  if (typeof console.error === 'function') nativeConsoleError = console.error
+}
+
+/** Used only when the page bridge could not be installed (CSP). Page errors then share this script. */
+export function installConsoleErrorFallback(): void {
   if (initialized) return
   initialized = true
-  const original = console.error
+  const original = nativeConsoleError ?? console.error
   if (typeof original !== 'function' || (original as unknown as Record<string, unknown>)[MARK]) return
+  nativeConsoleError = original
 
   const wrapped = function (this: unknown, ...args: unknown[]) {
     if (!reporting) {
       reporting = true
       try {
-        capture(args)
+        const fromApp = observeConsoleError(args, new Error().stack ?? '')
+        if (fromApp) return original.apply(this, args)
       } catch { /* never break the page's console */ } finally {
         reporting = false
       }

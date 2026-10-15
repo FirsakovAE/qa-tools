@@ -35,7 +35,7 @@ import { checkpointThrough, countsTowardLimit, enforceLogLimits } from '@/inject
 import { logsRuntime as rt } from '@/injected/logs/runtime'
 import { createSnapshotStore } from '@/injected/logs/snapshots'
 import { sanitizeNetworkEntry } from './sanitizeNetwork'
-import { createNetworkPool, type NetworkPool } from './networkPool'
+import { createNetworkPool } from './networkPool'
 import type { LogsSource } from './view'
 
 const COMMIT_DELAY_MS = 100
@@ -387,42 +387,20 @@ export function initLogsCollector(): void {
   }, 500)
 }
 
-// ============================================================================
-// Imported logs (read-only view of an exported file)
-// ============================================================================
-
-export interface ImportedLogs {
-  fileName: string
-  exportedAt?: string
-  /** Report format version of the file */
-  version: number
-  events: LogEvent[]
-  pool: NetworkPool
-  skipped: number
-}
-
-const imported = shallowRef<ImportedLogs | null>(null)
-
 const snapshots = createSnapshotStore()
 
 function releaseSnapshots(kept?: LogEvent[]): void {
   const roots: unknown[] = []
   for (const event of kept ?? events.value) roots.push(event.data)
   if (!kept) for (const event of pending) roots.push(event.data)
-  if (imported.value) for (const event of imported.value.events) roots.push(event.data)
   snapshots.collect(roots)
   rt.replaceSnapshots(snapshots.all())
 }
 
-/** Merges snapshot entries carried with a log message or an imported file */
-export function acceptLogSnapshots(map: unknown): void {
+/** Merges snapshot entries carried with a log message */
+function acceptLogSnapshots(map: unknown): void {
   snapshots.load(map)
   rt.loadSnapshots(map)
-}
-
-export function setImportedLogs(value: ImportedLogs | null): void {
-  imported.value = value
-  releaseSnapshots()
 }
 
 // ============================================================================
@@ -450,12 +428,8 @@ export function useLogs() {
     reachable: (roots: unknown[]) => snapshots.reachable(roots),
   }
 
-  /** All events of the shown source (ignored ones included: store chains need them) */
-  const source = computed<LogsSource>(() =>
-    imported.value
-      ? { events: imported.value.events, pool: imported.value.pool, snapshotPool }
-      : { events: events.value, pool, snapshotPool },
-  )
+  /** All events of the live buffer (ignored ones included: store chains need them) */
+  const source = computed<LogsSource>(() => ({ events: events.value, pool, snapshotPool }))
 
   const visibleEvents = computed(() => {
     const list = source.value.events
@@ -480,7 +454,6 @@ export function useLogs() {
   }
 
   function getEvent(id: string): LogEvent | undefined {
-    if (imported.value) return imported.value.events.find(e => e.id === id)
     return byId.get(id)
   }
 
@@ -513,8 +486,6 @@ export function useLogs() {
     paused,
     isReady,
     ignoreRules,
-    imported,
-    sanitizer,
     togglePause,
     clearEvents,
     getEvent,

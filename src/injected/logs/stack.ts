@@ -36,6 +36,19 @@ const OWN_BASE: string = (() => {
   return js !== -1 ? src.slice(0, js + 1) : src.slice(0, src.lastIndexOf('/') + 1)
 })()
 
+/** Drops the first `count` stack frames (the message lines stay) */
+export function skipStackFrames(stack: string, count: number): string {
+  if (count <= 0) return stack
+  let left = count
+  return stack.split('\n').filter(line => {
+    if (left > 0 && (FRAME_RE.test(line) || /^\s*at\s/.test(line))) {
+      left--
+      return false
+    }
+    return true
+  }).join('\n')
+}
+
 export function parseFrames(stack: string): StackFrame[] {
   const out: StackFrame[] = []
   for (const line of stack.split('\n')) {

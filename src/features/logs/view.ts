@@ -11,7 +11,7 @@ import type { NetworkEntry } from '@/types/network'
 import { logsRuntime as rt, type HydratedEvent, type StoreChains } from '@/injected/logs/runtime'
 import type { NetworkPool } from './networkPool'
 
-/** Events of one source (live buffer or an imported file) and its network entries */
+/** Events of the live buffer and its network entries */
 export interface LogsSource {
   events: LogEvent[]
   pool: NetworkPool

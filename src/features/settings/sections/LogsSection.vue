@@ -287,7 +287,7 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
     <SettingsTableSection
       section-id="logs-masking-section"
       title="Data masking"
-      description="Values are masked when an event is captured, so they never reach the Logs view, exports or imports."
+      description="Values are masked when an event is captured, so they never reach the Logs view or exports."
       :columns="maskKeyColumns"
       :rows="maskKeyRows"
       :row-key="(r) => (r as { key: string }).key"

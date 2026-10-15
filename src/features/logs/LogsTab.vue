@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Trash2, Pause, Play, SearchIcon, Download, EyeOff, X, FileJson } from 'lucide-vue-next'
+import { Trash2, Pause, Play, SearchIcon, EyeOff, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -21,13 +21,10 @@ import { toast } from '@/components/ui/Toaster'
 import LogsTable from './LogsTable.vue'
 import LogDetails from './LogDetails.vue'
 import ExportLogsMenu from './ExportLogsMenu.vue'
-import { useLogs, ignoreRuleLabel, setImportedLogs } from './useLogs'
+import { useLogs, ignoreRuleLabel } from './useLogs'
 import { useLogsSearch } from './useLogsSearch'
 import { exportLogEvent, exportLogs } from './exportLogs'
-import { parseLogsFile, LogsImportError, IMPORT_ACCEPT } from './importLogs'
-import { formatLogDateTime } from './format'
 import { networkEntryOf, pairedNetworkEvent } from './view'
-import { getRuntimeAdapter } from '@/runtime'
 
 const settings = useInspectorSettingsSync()
 
@@ -37,8 +34,6 @@ const {
   totalCount,
   paused,
   ignoreRules,
-  imported,
-  sanitizer,
   togglePause,
   clearEvents,
   getEvent,
@@ -73,7 +68,7 @@ const filteredCount = computed(() => filteredEvents.value.length)
 const isFiltered = computed(() => isSearching.value || !allTypesSelected.value)
 
 // ============================================================================
-// Export / Import
+// Export
 // ============================================================================
 
 const rowSelection = useRowSelection(() => filteredEvents.value.map(e => e.id))
@@ -85,40 +80,6 @@ function handleExportLogs() {
   }
   const ids = new Set(rowSelection.checkedIds.value)
   exportLogs(filteredEvents.value.filter(e => ids.has(e.id)), source.value)
-}
-
-const importing = ref(false)
-const canImportLogs = computed(() => getRuntimeAdapter()?.capabilities.mode === 'extension')
-
-function handleImport() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = IMPORT_ACCEPT
-  input.onchange = async () => {
-    const file = input.files?.[0]
-    if (!file) return
-    importing.value = true
-    try {
-      const result = await parseLogsFile(file, sanitizer.value)
-      selectedId.value = null
-      rowSelection.clear()
-      setImportedLogs(result)
-      const skipped = result.skipped ? ` (${result.skipped} invalid skipped)` : ''
-      toast.success(`Imported ${result.events.length} events${skipped}`)
-    } catch (e) {
-      console.error('[logs/LogsTab] import failed:', e)
-      toast.error(e instanceof LogsImportError ? e.message : 'Failed to import logs file')
-    } finally {
-      importing.value = false
-    }
-  }
-  input.click()
-}
-
-function closeImported() {
-  selectedId.value = null
-  rowSelection.clear()
-  setImportedLogs(null)
 }
 
 // ============================================================================
@@ -165,10 +126,6 @@ function handleIgnore(event: LogEvent) {
 }
 
 function handleClear() {
-  if (imported.value) {
-    closeImported()
-    return
-  }
   selectedId.value = null
   rowSelection.clear()
   clearEvents()
@@ -225,19 +182,6 @@ function handleClear() {
 
           <div class="export-inline flex items-center gap-2">
             <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
-            <TooltipProvider v-if="canImportLogs">
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <Button variant="outline" size="sm" class="h-8 gap-1.5" :disabled="importing" @click="handleImport">
-                    <Download class="h-3.5 w-3.5" />
-                    <span class="text-xs font-medium">Import Logs</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  Open an exported HTML logs report
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
         </div>
       </div>
@@ -245,19 +189,6 @@ function handleClear() {
       <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
         <div class="hidden export-wrapped space-x-2">
           <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
-          <TooltipProvider v-if="canImportLogs">
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button variant="outline" size="sm" class="h-8 gap-1.5" :disabled="importing" @click="handleImport">
-                  <Download class="h-3.5 w-3.5" />
-                  <span class="text-xs font-medium">Import Logs</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                Open an exported HTML logs report
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
         <div class="hidden flex-1 export-spacer" />
 
@@ -310,7 +241,7 @@ function handleClear() {
           </PopoverContent>
         </Popover>
 
-        <Badge v-if="paused && !imported" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
+        <Badge v-if="paused" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
           Paused
         </Badge>
 
@@ -322,7 +253,6 @@ function handleClear() {
                 size="icon"
                 class="h-8 w-8"
                 :class="{ 'text-orange-500': paused }"
-                :disabled="!!imported"
                 @click="togglePause"
               >
                 <Pause v-if="!paused" class="h-4 w-4" />
@@ -342,38 +272,18 @@ function handleClear() {
                 variant="ghost"
                 size="icon"
                 class="h-8 w-8"
-                :disabled="!imported && totalCount === 0"
+                :disabled="totalCount === 0"
                 @click="handleClear"
               >
                 <Trash2 class="h-4 w-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {{ imported ? 'Close imported file' : 'Clear all' }}
+              Clear all
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </div>
-    </div>
-
-    <!-- Imported file banner -->
-    <div
-      v-if="imported"
-      class="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b bg-sky-500/10 text-xs"
-      :class="{ 'toolbar-hide-on-details': selectedEvent }"
-    >
-      <FileJson class="h-3.5 w-3.5 shrink-0 text-sky-500" />
-      <span class="truncate">
-        Imported <span class="font-mono font-medium">{{ imported.fileName }}</span>
-        · {{ imported.events.length }} events
-        <template v-if="imported.exportedAt">· exported {{ formatLogDateTime(Date.parse(imported.exportedAt)) }}</template>
-        <template v-if="imported.skipped">· {{ imported.skipped }} invalid skipped</template>
-      </span>
-      <span class="text-muted-foreground whitespace-nowrap">Live logging continues in the background</span>
-      <Button variant="ghost" size="sm" class="h-6 ml-auto text-xs gap-1" @click="closeImported">
-        <X class="h-3.5 w-3.5" />
-        Back to live logs
-      </Button>
     </div>
 
     <!-- Content -->

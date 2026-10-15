@@ -57,7 +57,7 @@ function copyToClipboard() {
     <ScrollArea :class="[fullHeight ? 'flex-1 min-h-0 full-height-scroll' : 'h-[330px]']">
       <div :class="['p-2', fullHeight ? 'min-h-full w-full' : '']">
         <pre
-          class="json-viewer--plain font-mono text-sm leading-relaxed whitespace-pre-wrap break-words"
+          class="json-viewer json-viewer--plain whitespace-pre-wrap break-words"
           :class="fullHeight ? 'min-h-full' : 'min-h-[300px]'"
         >{{ modelValue }}</pre>
       </div>

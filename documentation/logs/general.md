@@ -6,7 +6,7 @@ title: Working with logs
 
 The **Logs** tab is a single chronological journal of what happens on the page: network requests, component props and emits, **Pinia** changes and actions, SPA navigation and JS errors. It helps to reconstruct a scenario step by step and to hand it over as a file.
 
-The tab is always visible, comes after **Pinia Store**, and records events the same way in the extension and in **Bookmark** ([Standalone](/standalone)) mode. **Import Logs** is only in the installed extension.
+The tab is always visible, comes after **Pinia Store**, and records events the same way in the extension and in **Bookmark** ([Standalone](/standalone)) mode.
 
 ## Event types
 
@@ -57,8 +57,7 @@ As in other tabs, a query **without** quotes matches a substring, a query wrappe
 | ------- | ------- |
 | **Pause** / **Resume** | Stop and resume recording new events |
 | **Clear** | Remove all recorded events |
-| **Export Logs** | Export events to an **HTML** report (see [Export and import](./export.md)) |
-| **Import Logs** | Open an exported **HTML** report. Only in the installed extension (see [Export and import](./export.md)) |
+| **Export Logs** | Export events to an **HTML** report (see [Export](./export.md)) |
 
 ## Work area
 
@@ -103,7 +102,7 @@ Clicking a row opens details on the right. The layout follows **Network**: a tab
 
 **Changes** shows a diff by path: added, removed and changed values with the old and new value. Very large diffs are truncated; the full state stays available on **Before** / **After**.
 
-**Before** / **After** of a store change are restored from the store's base state and the changes after it. When that is impossible (for example, an imported file without the earlier events of the store), the tab says so and **Changes** still shows the changed values; a value that cannot be restored is shown as *not available*.
+**Before** / **After** of a store change are restored from the store's base state and the changes after it. When that is impossible (the earlier events of the store are no longer in the log), the tab says so and **Changes** still shows the changed values; a value that cannot be restored is shown as *not available*.
 
 **Raw** shows the event with all restored fields.
 
@@ -151,14 +150,14 @@ Old **Change store** events are not simply dropped: they are compacted into a **
 * **Compact stack.** The message and the top 10 frames are kept — that is where the error happened. A cut stack ends with *… N more frames (stack truncated)*, and **Overview** shows **Stack: Truncated** with the number of kept frames.
 * **WebSocket** messages are not captured.
 
-While logging runs, `console.error` goes through Vue Inspector, so the browser console may show the inspector script as the source of the line. The message itself and its stack are unchanged.
+Errors of the inspected page stay in the page console and in **Logs**. They are not added to the extension error list (`chrome://extensions`); that list shows only failures of Vue Inspector itself. While logging runs, a page `console.error` passes through a small page-side bridge, so the browser console may attribute that line to the bridge. The message and the stack are unchanged.
 
 ### Data masking
 
-Sensitive data is masked **when an event is captured**, so it never reaches the view, exports or imports: passwords, tokens, cookies, authorization headers, card numbers and similar keys, as well as **JWT**, **Bearer** / **Basic** credentials and card numbers inside any text.
+Sensitive data is masked **when an event is captured**, so it never reaches the view or exports: passwords, tokens, cookies, authorization headers, card numbers and similar keys, as well as **JWT**, **Bearer** / **Basic** credentials and card numbers inside any text.
 
 ## See also
 
-* [Export and import](./export.md)
+* [Export](./export.md)
 * [Logs settings](./settings.md)
 * [Working with requests](/network/general)

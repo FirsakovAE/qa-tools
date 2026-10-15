@@ -60,7 +60,7 @@ The number next to a checkbox shows how many events of the group are currently s
 | Setting | Default | Range | Meaning |
 | ------- | ------- | ----- | ------- |
 | **Memory budget** | 20 MB | 8 – 1024 MB | Total size of all buffered events (approximate serialized size). A network entry shared by a request and its response, and equal bodies, are counted once |
-| **Limit event size** | off | — | Off: events are kept whole and nothing is cut, so an exported report can be imported with complete data |
+| **Limit event size** | off | — | Off: events are kept whole and nothing is cut, so an exported report keeps complete data |
 | **Max event size** | 512 KB | 16 – 16 384 KB | Only with **Limit event size**: larger parts of an event (store snapshots, arguments, results) are dropped, network bodies are cut to this size |
 
 When the memory budget is reached, the oldest events are dropped. **Pinia changes** are compacted into a **Store checkpoint** instead, so the remaining changes keep their **Before** / **After**; the initial state of a store and its checkpoint go last (see [How events are stored](./general.md#how-events-are-stored)). The newest event is always kept, even if it alone exceeds the budget.
@@ -73,7 +73,7 @@ Values outside the range are corrected to the nearest bound. **Defaults** restor
 
 ## Data masking {#data-masking}
 
-Values are masked **when an event is captured**, so they never reach the **Logs** view, exports or imports.
+Values are masked **when an event is captured**, so they never reach the **Logs** view or exports.
 
 | Option | Meaning |
 | ------ | ------- |
@@ -94,5 +94,5 @@ Masked values are replaced with markers: `[MASKED]` for values of sensitive keys
 ## See also
 
 * [Working with logs](./general.md)
-* [Export and import](./export.md)
+* [Export](./export.md)
 * [Settings management](/options/settings_management)

@@ -4,7 +4,6 @@
  * The report is one self-contained file that opens offline: inline CSS (`report.css`), the
  * export payload as a JSON data block, the logs runtime (the same code the Logs tab uses to
  * restore states, titles and network entries) and a small renderer (`report.client.js`).
- * Import Logs reads the data block back.
  *
  * Payload version 1: compact events, a shared network section and a snapshot pool
  * (`snapshots`) for identical values referenced from events as `{ __snap: id }`.
@@ -118,7 +117,7 @@ export function renderLogsReport(payload: LogsReportPayload): string {
 </header>
 <div class="layout">
 <nav id="sidebar" class="sidebar" aria-label="Sections"></nav>
-<main id="main" class="main"><noscript>This report needs JavaScript to display events. The raw data is embedded in this file and can be opened with Import Logs.</noscript></main>
+<main id="main" class="main"><noscript>This report needs JavaScript to display events.</noscript></main>
 <section id="details" class="details" aria-label="Event details"></section>
 </div>
 ${DATA_OPEN}${embedJson(payload)}${DATA_CLOSE}
@@ -128,16 +127,3 @@ ${DATA_OPEN}${embedJson(payload)}${DATA_CLOSE}
 `
 }
 
-export function isLogsReportHtml(text: string): boolean {
-  return text.includes(`id="${REPORT_DATA_ID}"`)
-}
-
-/** Reads the export payload back from a report; null if the text is not a logs report */
-export function extractLogsReportData(text: string): unknown | null {
-  const start = text.indexOf(DATA_OPEN)
-  if (start === -1) return null
-  const from = start + DATA_OPEN.length
-  const end = text.indexOf(DATA_CLOSE, from)
-  if (end === -1) return null
-  return JSON.parse(text.slice(from, end))
-}

@@ -77,7 +77,7 @@ const sidebarEn = [
     text: 'Logs',
     items: [
       { text: 'Working with logs', link: '/logs/general' },
-      { text: 'Export and import', link: '/logs/export' },
+      { text: 'Export', link: '/logs/export' },
       { text: 'Logs settings', link: '/logs/settings' },
     ],
   },
@@ -224,7 +224,7 @@ export default defineConfig({
             text: 'Logs',
             items: [
               { text: 'Работа с логами', link: '/ru/logs/general' },
-              { text: 'Экспорт и импорт', link: '/ru/logs/export' },
+              { text: 'Экспорт', link: '/ru/logs/export' },
               { text: 'Настройки логов', link: '/ru/logs/settings' },
             ],
           },

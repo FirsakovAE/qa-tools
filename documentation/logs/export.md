@@ -1,10 +1,10 @@
 ---
-title: Export and import
+title: Export
 ---
 
-# Export and import
+# Export
 
-Events from the **Logs** tab can be saved to an **HTML** report and opened again — in any browser or with **Import Logs** in Vue Inspector. This is useful for bug reports, for sharing a scenario with colleagues and for analysis outside the page.
+Events from the **Logs** tab can be saved to an **HTML** report and opened in any browser. This is useful for bug reports, for sharing a scenario with colleagues and for analysis outside the page.
 
 General information about the tab: [Working with logs](./general.md).
 
@@ -12,11 +12,11 @@ General information about the tab: [Working with logs](./general.md).
 
 ## Export format
 
-Every export is one **HTML** file: a static report for reading plus the structured event data that **Import Logs** reads back. There is no separate JSON export.
+Every export is one **HTML** file: a static report that opens in the browser. There is no separate JSON export.
 
 The data inside the report is compact, like the live log (see [How events are stored](./general.md#how-events-are-stored)): store changes are diffs, a request and its response share one network entry, equal bodies are stored once, and identical values in any event are stored once as a shared snapshot. Titles, Before / After states, snapshot values and request / response details are restored when the report is opened.
 
-The embedded data uses format version 1. A file from a newer or an older format is rejected with a message instead of being misread.
+The embedded data uses format version 1.
 
 ---
 
@@ -78,18 +78,6 @@ Summary cards: **Events**, **Errors**, **Failed requests**, first and last event
 * **All events →** in the details header opens **All events** and places this event at the top of the list. If its type was switched off, that type is switched on so the event stays in the list.
 * **↑ / ↓** move between events, **Esc** closes details.
 * The selected section and event are kept in the address (`#…`), so a link to a specific event can be shared and survives a reload.
-
----
-
-## Import
-
-**Import Logs** opens an **HTML** report exported from the **Logs** tab. The button is in the installed extension; Bookmark mode does not import logs.
-
-* Imported events are shown in a separate read-only view. The banner shows the file name, the number of events and the export time.
-* **Back to live logs** returns to live recording; live events are not lost while a file is open.
-* Invalid events are skipped (the number is shown in the import message).
-* HTML files that are not a Logs report are rejected with a message.
-* Imported data goes through the current masking settings once more.
 
 ---
 

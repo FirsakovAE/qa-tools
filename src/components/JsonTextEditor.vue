@@ -164,7 +164,7 @@ function onInput(e: Event) {
 
         <pre
           v-else
-          class="json-viewer p-2 leading-relaxed
+          class="json-viewer p-2
                  whitespace-pre-wrap break-words"
           :class="[
             fullHeight ? 'min-h-full' : 'min-h-[300px]',

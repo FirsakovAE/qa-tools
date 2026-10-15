@@ -178,6 +178,12 @@ function shouldExcludeMethod(method: string): boolean {
  * for a native XHR event (the page's error listeners and the console see the app's error)
  */
 function reportHandlerError(error: unknown): void {
+  // The page bridge reports it, so Chrome does not file the app's error as an extension error
+  const bridge = (globalThis as { __VUE_INSPECTOR_PAGE_ERRORS__?: { report?: (error: unknown) => void } }).__VUE_INSPECTOR_PAGE_ERRORS__
+  if (typeof bridge?.report === 'function') {
+    bridge.report(error)
+    return
+  }
   const report = (globalThis as { reportError?: (e: unknown) => void }).reportError
   if (typeof report === 'function') report(error)
   else setTimeout(() => { throw error })
