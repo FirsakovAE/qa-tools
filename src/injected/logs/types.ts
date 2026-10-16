@@ -5,6 +5,10 @@
 export type LogKind =
   | 'request'
   | 'response'
+  | 'ws'
+  | 'ws-sent'
+  | 'ws-received'
+  | 'ws-closed'
   | 'props'
   | 'emit'
   | 'store'

@@ -7,6 +7,8 @@
  */
 
 import type { PendingRequest, ResponseData, BreakpointConfig, BreakpointMatch, MockConfig, MockMatch } from './types'
+import type { WebSocketSnapshot } from './websocket'
+import { resetWebSocketLog, pushWebSocketFrame } from './websocket'
 import {
   initNetworkInterceptor,
   pauseInterception,
@@ -18,6 +20,7 @@ import {
   getActiveBreakpointIds
 } from './interceptor'
 import { looksLikeFormDataDraftJson } from '../../utils/jsonGuards'
+import { isBinaryContentType, mediaFormatLabel, type MediaInfo } from './media-preview'
 
 // ============================================================================
 // Inline Types (to avoid cross-bundle imports)
@@ -56,6 +59,28 @@ interface BodyContent {
   contentType: string
   isBinary: boolean
   formData?: FormDataEntry[]
+  media?: MediaInfo
+}
+
+interface WebSocketFrame {
+  id: string
+  time: number
+  direction: 'sent' | 'received'
+  kind: 'text' | 'binary'
+  data: string
+  size: number
+  truncated: boolean
+  mocked?: boolean
+}
+
+interface WebSocketInfo {
+  protocols: string[]
+  protocol: string
+  state: 'connecting' | 'open' | 'closed'
+  closeCode?: number
+  closeReason?: string
+  frames: WebSocketFrame[]
+  droppedFrames: number
 }
 
 interface NetworkEntry {
@@ -78,7 +103,8 @@ interface NetworkEntry {
   responseBody: BodyContent | null
   error?: string
   pending: boolean
-  initiator: 'fetch' | 'xhr'
+  initiator: 'fetch' | 'xhr' | 'websocket'
+  websocket?: WebSocketInfo
 }
 
 interface NetworkConfig {
@@ -170,11 +196,6 @@ function extractAuthorization(headers: HeaderEntry[]): AuthorizationInfo {
   return { type: 'Custom', token: value }
 }
 
-function isBinaryContentType(contentType: string): boolean {
-  const binaryTypes = ['image/', 'audio/', 'video/', 'application/octet-stream', 'application/pdf', 'application/zip', 'application/gzip', 'application/x-tar']
-  return binaryTypes.some(type => contentType.toLowerCase().startsWith(type))
-}
-
 /** Serialized request bodies from interceptor (ArrayBuffer / Blob / non-JSON object) — not JSON; must not JSON.parse. */
 function isSerializedBodyPlaceholder(body: string): boolean {
   const t = body.trim()
@@ -255,7 +276,7 @@ function checkBreakpoint(url: string, trigger: 'request' | 'response', method?: 
 }
 
 function handleBreakpointHit(requestId: string, breakpointId: string, trigger: 'request' | 'response'): void {
-  const entry = pendingRequests.get(requestId)
+  const entry = pendingRequests.get(requestId) ?? entries.find((item) => item.id === requestId)
   sendToContentScript('NETWORK_BREAKPOINT_HIT', { requestId, breakpointId, trigger, entry: entry || null })
 }
 
@@ -286,17 +307,18 @@ function sendToContentScript(type: string, data: any): void {
   window.postMessage({ type, __FROM_VUE_INSPECTOR__: true, __NETWORK__: true, ...data }, '*')
 }
 
-function createBodyContent(body: string | null, contentType: string, originalSize: number, truncated = false): BodyContent | null {
-  if (body === null) return null
-  const isBinary = isBinaryContentType(contentType)
+function createBodyContent(body: string | null, contentType: string, originalSize: number, truncated = false, media?: MediaInfo): BodyContent | null {
+  const isBinary = isBinaryContentType(contentType) || !!media
+  if (body === null && !isBinary) return null
+  const textBody = body ?? ''
 
   let formData: FormDataEntry[] | undefined
   if (!isBinary) {
     const mayBeFormDataJson =
-      !isSerializedBodyPlaceholder(body) && looksLikeFormDataDraftJson(body)
+      !isSerializedBodyPlaceholder(textBody) && looksLikeFormDataDraftJson(textBody)
     if (mayBeFormDataJson) {
       try {
-        const parsed = JSON.parse(body)
+        const parsed = JSON.parse(textBody)
         if (parsed && parsed.__formData === true && Array.isArray(parsed.entries)) {
           formData = parsed.entries as FormDataEntry[]
         }
@@ -307,12 +329,13 @@ function createBodyContent(body: string | null, contentType: string, originalSiz
   }
 
   return {
-    text: isBinary ? '' : body,
+    text: isBinary ? '' : textBody,
     truncated,
     originalSize,
     contentType: formData ? 'multipart/form-data' : contentType,
     isBinary,
     formData,
+    media: media ?? (isBinary ? { format: mediaFormatLabel(contentType) } : undefined),
   }
 }
 
@@ -401,8 +424,14 @@ function handleResponse(id: string, response: ResponseData): void {
     params: pendingEntry.params || [],
     authorization: pendingEntry.authorization || { type: 'None' },
     requestBody: pendingEntry.requestBody || null,
-    responseBody: config.captureResponseBody && response.body
-      ? createBodyContent(response.body, contentType, response.size, response.body.length < response.size)
+    responseBody: config.captureResponseBody && (response.body != null || response.media || isBinaryContentType(contentType))
+      ? createBodyContent(
+          response.body,
+          contentType,
+          response.size,
+          response.body != null && response.body.length < response.size,
+          response.media,
+        )
       : null,
     pending: false,
     initiator: pendingEntry.initiator || 'fetch'
@@ -456,6 +485,65 @@ function handleError(id: string, errorMessage: string): void {
   sendToContentScript('NETWORK_ENTRY_UPDATED', { entry: errorEntry })
 }
 
+function websocketEntry(snapshot: WebSocketSnapshot): NetworkEntry {
+  const failed = snapshot.state === 'closed' && !!snapshot.error
+  const requestHeaders = snapshot.protocols.length
+    ? [{ name: 'Sec-WebSocket-Protocol', value: snapshot.protocols.join(', ') }]
+    : []
+  const responseHeaders: Array<{ name: string; value: string }> = []
+  if (snapshot.protocol) responseHeaders.push({ name: 'Sec-WebSocket-Protocol', value: snapshot.protocol })
+  if (snapshot.extensions) responseHeaders.push({ name: 'Sec-WebSocket-Extensions', value: snapshot.extensions })
+  let statusText = 'Connecting'
+  if (snapshot.state === 'open') statusText = 'Open'
+  else if (snapshot.state === 'closed') {
+    statusText = snapshot.closeCode ? `Closed ${snapshot.closeCode}` : 'Closed'
+  }
+  return {
+    id: snapshot.id,
+    version: snapshot.version,
+    timestamp: new Date(snapshot.startTime).toISOString(),
+    method: 'WS',
+    url: snapshot.url,
+    path: extractUrlPath(snapshot.url),
+    name: extractUrlName(snapshot.url),
+    status: snapshot.state === 'connecting' || failed ? 0 : 101,
+    statusText,
+    duration: snapshot.duration,
+    size: snapshot.size,
+    requestHeaders,
+    responseHeaders,
+    params: [],
+    authorization: { type: 'None' },
+    requestBody: null,
+    responseBody: null,
+    error: snapshot.error,
+    pending: snapshot.pending,
+    initiator: 'websocket',
+    websocket: {
+      protocols: snapshot.protocols,
+      protocol: snapshot.protocol,
+      state: snapshot.state,
+      closeCode: snapshot.closeCode,
+      closeReason: snapshot.closeReason,
+      frames: snapshot.frames,
+      droppedFrames: snapshot.droppedFrames,
+    },
+  }
+}
+
+function handleWebSocket(snapshot: WebSocketSnapshot, isNew: boolean): void {
+  const entry = websocketEntry(snapshot)
+  const idx = entries.findIndex((item) => item.id === entry.id)
+  if (idx === -1) {
+    entries.push(entry)
+    if (entries.length > config.maxEntries) entries = entries.slice(-config.maxEntries)
+    sendToContentScript(isNew ? 'NETWORK_ENTRY_CAPTURED' : 'NETWORK_ENTRY_UPDATED', { entry })
+    return
+  }
+  entries[idx] = entry
+  sendToContentScript('NETWORK_ENTRY_UPDATED', { entry })
+}
+
 // ============================================================================
 // Message Handler
 // ============================================================================
@@ -481,6 +569,7 @@ function handleMessage(event: MessageEvent): void {
       entries = []
       pendingRequests.clear()
       sendToContentScript('NETWORK_CLEARED', {})
+      resetWebSocketLog()
       break
       
     case 'NETWORK_GET_ENTRIES':
@@ -521,6 +610,12 @@ function handleMessage(event: MessageEvent): void {
       }
       break
       
+    case 'NETWORK_WS_FRAME':
+      if (event.data.connectionId && (event.data.direction === 'sent' || event.data.direction === 'received')) {
+        pushWebSocketFrame(String(event.data.connectionId), event.data.direction, String(event.data.text ?? ''))
+      }
+      break
+
     case 'NETWORK_BREAKPOINT_RESUME':
       if (event.data.requestId) {
         const success = resumeBreakpoint(event.data.requestId, event.data.modifications)
@@ -549,6 +644,7 @@ export function initNetworkModule(): void {
     onRequestModified: handleRequestModified,
     onResponse: handleResponse,
     onError: handleError,
+    onWebSocket: handleWebSocket,
     onBreakpointCheck: checkBreakpoint,
     onBreakpointHit: handleBreakpointHit,
     onMockCheck: checkMock,

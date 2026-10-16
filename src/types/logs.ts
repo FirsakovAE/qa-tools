@@ -13,6 +13,10 @@ import type { HeaderEntry, NetworkEntry } from './network'
 export type LogKind =
   | 'request'
   | 'response'
+  | 'ws'
+  | 'ws-sent'
+  | 'ws-received'
+  | 'ws-closed'
   | 'props'
   | 'emit'
   | 'store'
@@ -86,6 +90,10 @@ export interface LogKindMeta {
 export const LOG_KIND_META: Record<LogKind, LogKindMeta> = {
   request: { label: 'Send request', badgeClass: 'text-sky-500 border-sky-500/40 bg-sky-500/10' },
   response: { label: 'Receive response', badgeClass: 'text-green-500 border-green-500/40 bg-green-500/10' },
+  ws: { label: 'WebSocket open', badgeClass: 'text-cyan-500 border-cyan-500/40 bg-cyan-500/10' },
+  'ws-sent': { label: 'WebSocket sent', badgeClass: 'text-sky-400 border-sky-400/40 bg-sky-400/10' },
+  'ws-received': { label: 'WebSocket received', badgeClass: 'text-green-500 border-green-500/40 bg-green-500/10' },
+  'ws-closed': { label: 'WebSocket closed', badgeClass: 'text-orange-500 border-orange-500/40 bg-orange-500/10' },
   props: { label: 'Change props', badgeClass: 'text-teal-500 border-teal-500/40 bg-teal-500/10' },
   emit: { label: 'Emit', badgeClass: 'text-pink-500 border-pink-500/40 bg-pink-500/10' },
   store: { label: 'Change store', badgeClass: 'text-yellow-500 border-yellow-500/40 bg-yellow-500/10' },

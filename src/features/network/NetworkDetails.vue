@@ -73,7 +73,9 @@ const JsonEditor = defineAsyncComponent({
 })
 import type { NetworkEntry } from '@/types/network'
 import { getStatusCategory, formatBytes, formatDuration } from '@/types/network'
+import MediaPreview from '@/features/network/MediaPreview.vue'
 import { copyToClipboard } from '@/utils/networkUtils'
+import { formatJsonPayload } from '@/utils/jsonGuards'
 import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
 import type { BaseInspectorSettings, BreakpointWithStatus, MockWithStatus } from '@/types/inspector'
@@ -85,6 +87,8 @@ import {
   type BreakpointDraftShape,
 } from './composables'
 import { useNetworkUIState, resolveNetworkDetailsSection } from './composables/useNetworkUIState'
+import { sendNetworkCommand } from './composables/useNetworkEntries'
+import { isCentrifugeEntry, isEmptyJsonObject } from './centrifuge'
 
 type BodyFormatMode = 'raw' | 'form-data'
 
@@ -232,9 +236,18 @@ watch(
 // Computed
 // ============================================================================
 
-type SectionId = 'url' | 'params' | 'headers' | 'request' | 'response'
+type SectionId = 'url' | 'params' | 'headers' | 'request' | 'response' | 'messages'
+
+const isWebSocket = computed(() => props.entry.initiator === 'websocket')
 
 const sections = computed<Array<{ id: SectionId; label: string }>>(() => {
+  if (isWebSocket.value) {
+    const count = props.entry.websocket?.frames.length ?? 0
+    return [
+      { id: 'headers', label: 'Headers' },
+      { id: 'messages', label: count ? `Messages (${count})` : 'Messages' },
+    ]
+  }
   const baseSections: Array<{ id: SectionId; label: string }> = [
     { id: 'params', label: 'Params' },
     { id: 'headers', label: 'Headers' },
@@ -248,6 +261,16 @@ const sections = computed<Array<{ id: SectionId; label: string }>>(() => {
 })
 
 const statusClass = computed(() => {
+  if (isWebSocket.value) {
+    const socket = props.entry.websocket
+    if (socket?.state === 'open') return 'bg-green-500/20 text-green-500 border-green-500/30'
+    if (props.entry.pending || socket?.state === 'connecting') return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30'
+    const code = socket?.closeCode
+    const abnormal = !!props.entry.error || (socket?.state === 'closed' && code != null && code !== 1000 && code !== 1001 && code !== 1005)
+    if (abnormal) return 'bg-red-500/20 text-red-500 border-red-500/30'
+    if (socket?.state === 'closed') return 'bg-muted text-muted-foreground border-border'
+    return 'bg-green-500/20 text-green-500 border-green-500/30'
+  }
   if (props.entry.pending) return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30'
   const category = getStatusCategory(props.entry.status)
   switch (category) {
@@ -437,10 +460,74 @@ watch(
       activeSection.value = resolveNetworkDetailsSection(
         lastNetworkDetailsSection.value,
         ids.includes('url'),
+        ids.includes('messages'),
+        ids.includes('request') && !ids.includes('messages'),
       )
     }
   },
 )
+
+const wsScroll = ref<{ $el?: HTMLElement } | null>(null)
+const wsStick = ref(true)
+
+function wsViewport(): HTMLElement | null {
+  return wsScroll.value?.$el?.querySelector('[data-scroll-viewport]') ?? null
+}
+
+function onWsScroll(event: Event) {
+  const el = event.target as HTMLElement
+  wsStick.value = el.scrollTop < 48
+}
+
+const wsFramesNewestFirst = computed(() => {
+  const frames = props.entry.websocket?.frames
+  return frames?.length ? frames.slice().reverse() : []
+})
+
+const centrifugeEmptyFrame = computed(() =>
+  isCentrifugeEntry(props.entry) && isEmptyJsonObject(wsDraft.value),
+)
+
+watch(
+  () => props.entry.websocket?.frames.length,
+  async () => {
+    if (activeSection.value !== 'messages' || !wsStick.value) return
+    await nextTick()
+    const el = wsViewport()
+    if (el) el.scrollTop = 0
+  },
+)
+
+function wsClock(ts: number): string {
+  const d = new Date(ts)
+  const p = (n: number, w = 2) => String(n).padStart(w, '0')
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`
+}
+
+function wsPayload(text: string): string {
+  return formatJsonPayload(text)
+}
+
+const wsDraft = ref('')
+
+function submitWsFrame(direction: 'sent' | 'received') {
+  const socket = props.entry.websocket
+  if (!socket || socket.state === 'closed') return
+  if (direction === 'sent' && socket.state !== 'open') return
+  sendNetworkCommand('NETWORK_WS_FRAME', {
+    connectionId: props.entry.id,
+    direction,
+    text: wsDraft.value,
+  })
+}
+
+const wsStatusText = computed(() => {
+  const socket = props.entry.websocket
+  if (socket?.state === 'open') return 'Open'
+  if (props.entry.pending || socket?.state === 'connecting') return 'Connecting'
+  if (socket?.closeCode && socket.closeCode !== 1005) return `Closed ${socket.closeCode}`
+  return socket?.state === 'closed' ? 'Closed' : String(props.entry.status)
+})
 
 function handleApplyBreakpoint() {
   if (!props.breakpointMode) return
@@ -460,6 +547,7 @@ watch(
         activeSection.value = resolveNetworkDetailsSection(
           lastNetworkDetailsSection.value,
           !!canEditRequest.value,
+          props.entry.initiator === 'websocket',
         )
       }
     }
@@ -498,7 +586,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               {{ displayMethod }}
             </Badge>
             <Badge variant="outline" :class="statusClass" class="font-mono text-xs">
-              {{ entry.pending ? '⏳ Pending' : entry.status }}
+              {{ isWebSocket ? wsStatusText : (entry.pending ? '⏳ Pending' : entry.status) }}
             </Badge>
             <span class="text-xs text-muted-foreground">
               {{ formatDuration(entry.duration) }}
@@ -535,7 +623,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         </div>
         
         <!-- Copy as cURL button (desktop >= 1000px) -->
-        <Tooltip>
+        <Tooltip v-if="!isWebSocket">
           <TooltipTrigger as-child>
             <Button
               variant="outline"
@@ -554,7 +642,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         </Tooltip>
 
         <!-- 3-dot actions menu (mobile < 1000px, same as table) -->
-        <DropdownMenu>
+        <DropdownMenu v-if="!isWebSocket">
           <DropdownMenuTrigger as-child>
             <Button
               variant="outline"
@@ -601,6 +689,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
           </div>
         </ContextMenuTrigger>
         <NetworkActionsMenuContent
+          v-if="!isWebSocket"
           variant="context"
           :entry="props.entry"
           :breakpoint-matching-ids="props.breakpointMatchingIds"
@@ -632,11 +721,87 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
           {{ section.label }}
         </button>
       </div>
-      
+
       <!-- Content -->
       <div class="flex-1 min-h-0 overflow-hidden">
+        <div v-if="activeSection === 'messages'" class="h-full flex flex-col">
+          <div class="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 border-b text-xs text-muted-foreground">
+            <span>{{ wsStatusText }}</span>
+            <span v-if="entry.websocket?.protocol">Protocol {{ entry.websocket.protocol }}</span>
+            <span v-if="entry.websocket?.closeReason">{{ entry.websocket.closeReason }}</span>
+            <span v-if="entry.websocket?.droppedFrames">Earlier messages dropped: {{ entry.websocket.droppedFrames }}</span>
+          </div>
+          <div class="shrink-0 border-b px-3 py-2 space-y-2">
+            <Textarea
+              v-model="wsDraft"
+              rows="3"
+              placeholder="Message"
+              class="min-h-[4.5rem] font-mono text-xs"
+              :disabled="entry.websocket?.state === 'closed'"
+            />
+            <div class="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-8 text-xs text-sky-400 border-sky-400/40"
+                :disabled="entry.websocket?.state !== 'open'"
+                title="Send this message on the socket"
+                @click="submitWsFrame('sent')"
+              >
+                Sent
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-8 text-xs text-green-500 border-green-500/40"
+                :disabled="entry.websocket?.state === 'closed'"
+                title="Deliver this message to the page"
+                @click="submitWsFrame('received')"
+              >
+              Received
+            </Button>
+          </div>
+          <p v-if="centrifugeEmptyFrame" class="text-xs text-amber-500">
+            This frame may trigger a protocol error and disconnect the WebSocket.
+          </p>
+        </div>
+          <ScrollArea ref="wsScroll" class="flex-1 min-h-0" @scroll="onWsScroll">
+          <div class="p-3 space-y-2">
+            <div v-if="!entry.websocket?.frames.length" class="text-sm text-muted-foreground text-center py-8">
+              No messages yet
+            </div>
+            <div
+              v-for="frame in wsFramesNewestFirst"
+              :key="frame.id"
+              class="rounded-md border px-3 py-2"
+            >
+              <div class="flex items-center gap-2 text-xs">
+                <span class="font-mono text-muted-foreground">{{ wsClock(frame.time) }}</span>
+                <span :class="frame.direction === 'sent' ? 'text-sky-400' : 'text-green-500'">
+                  {{ frame.direction === 'sent' ? 'Sent' : 'Received' }}
+                </span>
+                <span v-if="frame.kind === 'binary'" class="text-muted-foreground">Binary</span>
+                <span v-if="frame.mocked" class="text-purple-400">Mock</span>
+                <span class="text-muted-foreground">{{ formatBytes(frame.size) }}</span>
+                <span v-if="frame.truncated" class="text-muted-foreground">truncated</span>
+                <Button
+                  v-if="frame.kind === 'text' && frame.data"
+                  variant="ghost"
+                  size="icon"
+                  class="ml-auto h-6 w-6"
+                  title="Copy message"
+                  @click="copyToClipboard(frame.data)"
+                >
+                  <Copy class="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <pre v-if="frame.data" class="mt-1 mb-0 whitespace-pre-wrap break-all font-mono text-xs">{{ frame.kind === 'text' ? wsPayload(frame.data) : frame.data }}</pre>
+            </div>
+          </div>
+          </ScrollArea>
+        </div>
         <!-- URL Section (Breakpoint mode only) -->
-        <ScrollArea v-if="activeSection === 'url' && canEditRequest" class="h-full">
+        <ScrollArea v-else-if="activeSection === 'url' && canEditRequest" class="h-full">
           <div class="p-3 space-y-4">
             <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md">
               <p class="text-sm text-amber-600 dark:text-amber-400">
@@ -1625,9 +1790,11 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               </div>
             </div>
             
-            <div v-if="entry.responseBody?.isBinary" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-              Binary content cannot be displayed
-            </div>
+            <ScrollArea v-if="entry.responseBody?.isBinary" class="flex-1">
+              <div class="p-6">
+                <MediaPreview :body="entry.responseBody" />
+              </div>
+            </ScrollArea>
             <div v-else class="flex-1 min-h-0">
               <JsonEditor
                 v-if="canEditResponse"

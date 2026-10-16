@@ -10,6 +10,10 @@
  * The bridge calls back into `__VUE_INSPECTOR_PAGE_ERRORS__`, which the extension script
  * installs on `window` before inserting the bridge. It has no imports: `toString()` is evaluated
  * as a standalone script.
+ *
+ * `bindWebSocket` replaces `send` and `close` with functions created here. A page call such as
+ * `send` on a socket that is already closing throws from this script, so Chrome does not file
+ * that exception as an error of the extension.
  */
 
 export interface PageErrorDetail {
@@ -29,6 +33,17 @@ export interface PageErrorApi {
   rejection: (detail: PageErrorDetail) => void
   /** Set by the bridge: re-report a page handler error without attributing it to the extension */
   report?: (error: unknown) => void
+  /**
+   * Set by the bridge: install page-owned WebSocket `send` / `close`.
+   * `beforeSend` returns a context passed to `afterSend` only when `nativeSend` did not throw.
+   */
+  bindWebSocket?: (hooks: {
+    nativeSend: typeof WebSocket.prototype.send
+    nativeClose: typeof WebSocket.prototype.close
+    beforeSend: (socket: WebSocket) => unknown
+    afterSend: (ctx: unknown, data: string | ArrayBufferLike | Blob | ArrayBufferView) => void
+    beforeClose: (socket: WebSocket) => void
+  }) => void
   ready?: boolean
 }
 
@@ -99,6 +114,23 @@ function pageErrorBridge(): void {
     const report = (globalThis as { reportError?: (error: unknown) => void }).reportError
     if (typeof report === 'function') report(error)
     else setTimeout(() => { throw error }, 0)
+  }
+
+  api.bindWebSocket = (hooks) => {
+    const proto = WebSocket.prototype
+    const nativeSend = hooks.nativeSend
+    const nativeClose = hooks.nativeClose
+    proto.send = function (this: WebSocket, data) {
+      let ctx: unknown = null
+      try { ctx = hooks.beforeSend(this) } catch { /* an inspector failure must not replace the page error */ }
+      const result = nativeSend.call(this, data)
+      try { if (ctx) hooks.afterSend(ctx, data) } catch { /* recording must not hide a successful send */ }
+      return result
+    }
+    proto.close = function (this: WebSocket, code?: number, reason?: string) {
+      try { hooks.beforeClose(this) } catch { /* an inspector failure must not replace the page error */ }
+      return nativeClose.call(this, code, reason)
+    }
   }
 }
 

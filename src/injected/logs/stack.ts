@@ -14,11 +14,12 @@ export interface StackFrame {
 
 export interface CompactStack {
   stack: string
-  /** Set when frames were cut: total frame count and how many were kept */
-  stackTruncated?: { frames: number; kept: number }
+  /** Set when frames were cut: total count, how many were kept, and which ends */
+  stackTruncated?: { frames: number; kept: number; head: number; tail: number }
 }
 
-const MAX_FRAMES = 10
+const HEAD_FRAMES = 5
+const TAIL_FRAMES = 5
 const MAX_LINE_CHARS = 300
 const MAX_HEADER_CHARS = 1000
 const FRAME_RE = /^\s*(?:at\s+)?(?:.*?[@(])?((?:[a-z][a-z0-9+.-]*:)+\/*[^\s()]*?):(\d+):(\d+)\)?\s*$/i
@@ -67,9 +68,13 @@ export function isForeignUrl(url: string): boolean {
   return isInspectorUrl(url) || EXTENSION_RE.test(url)
 }
 
+function clipLine(line: string): string {
+  return line.length > MAX_LINE_CHARS ? `${line.slice(0, MAX_LINE_CHARS)}…` : line
+}
+
 /**
- * Keeps the message lines and the top frames (where the error happened), cuts long lines;
- * a cut is stated in the text and in `stackTruncated`
+ * Keeps the message lines and both ends of the stack (first 5 and last 5 frames).
+ * The middle is cut; the cut is stated between the kept frames and in `stackTruncated`.
  */
 export function compactStack(stack: string, options: { dropLeadingInspector?: boolean; header?: boolean } = {}): CompactStack {
   const lines = stack.split('\n')
@@ -84,13 +89,20 @@ export function compactStack(stack: string, options: { dropLeadingInspector?: bo
     while (start < frames.length && isInspectorUrl(FRAME_RE.exec(frames[start])?.[1] ?? '')) start++
   }
   const relevant = frames.slice(start)
-  const kept = relevant.slice(0, MAX_FRAMES).map(l => (l.length > MAX_LINE_CHARS ? `${l.slice(0, MAX_LINE_CHARS)}…` : l))
+  const limit = HEAD_FRAMES + TAIL_FRAMES
+  const omitted = relevant.length > limit ? relevant.length - limit : 0
+  const body = omitted > 0
+    ? [
+        ...relevant.slice(0, HEAD_FRAMES).map(l => `    ${clipLine(l)}`),
+        `    … ${omitted} more frame${omitted === 1 ? '' : 's'} (stack truncated)`,
+        ...relevant.slice(-TAIL_FRAMES).map(l => `    ${clipLine(l)}`),
+      ]
+    : relevant.map(l => `    ${clipLine(l)}`)
   let head = header.join('\n')
   if (head.length > MAX_HEADER_CHARS) head = `${head.slice(0, MAX_HEADER_CHARS)}…`
-  const omitted = relevant.length - kept.length
-  const text = [head, ...kept.map(l => `    ${l}`)]
-  if (omitted > 0) text.push(`    … ${omitted} more frame${omitted === 1 ? '' : 's'} (stack truncated)`)
-  const result: CompactStack = { stack: text.filter(Boolean).join('\n') }
-  if (omitted > 0) result.stackTruncated = { frames: relevant.length, kept: kept.length }
+  const result: CompactStack = { stack: [head, ...body].filter(Boolean).join('\n') }
+  if (omitted > 0) {
+    result.stackTruncated = { frames: relevant.length, kept: limit, head: HEAD_FRAMES, tail: TAIL_FRAMES }
+  }
   return result
 }

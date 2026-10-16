@@ -30,6 +30,7 @@ interface SearchIndexEntry {
   displayName: string
   method: string
   status: string
+  revision: number
   requestBodyKeys: string[]
   requestBodyValues: string[]
   responseBodyKeys: string[]
@@ -119,6 +120,21 @@ function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
       responseBodyValues = extractJsonValues(parsed)
     }
   }
+
+  const frames = entry.websocket?.frames
+  if (frames?.length) {
+    const recent = frames.slice(-30)
+    for (const frame of recent) {
+      if (frame.kind !== 'text' || !frame.data) continue
+      const text = frame.data.length > 1500 ? frame.data.slice(0, 1500) : frame.data
+      responseBodyValues.push(text.toLowerCase())
+      const parsed = tryParseBodyForSearchIndex(text)
+      if (parsed && typeof parsed === 'object') {
+        responseBodyKeys.push(...extractJsonKeys(parsed))
+        responseBodyValues.push(...extractJsonValues(parsed))
+      }
+    }
+  }
   
   return {
     entryId: entry.id,
@@ -126,6 +142,7 @@ function buildIndexEntry(entry: NetworkEntry): SearchIndexEntry {
     displayName: entry.name.toLowerCase(),
     method: entry.method.toLowerCase(),
     status: String(entry.status),
+    revision: entry.version ?? 1,
     requestBodyKeys,
     requestBodyValues,
     responseBodyKeys,
@@ -184,6 +201,7 @@ export function useNetworkSearch(
       const displayName = entry.name.toLowerCase()
       if (
         !existing ||
+        existing.revision !== (entry.version ?? 1) ||
         existing.status !== String(entry.status) ||
         existing.pathLower !== pathLower ||
         existing.displayName !== displayName

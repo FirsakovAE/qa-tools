@@ -20,7 +20,9 @@ import { useEscapeClose } from '@/composables/useEscapeClose'
 import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import type { LogChange, LogEvent } from '@/types/logs'
 import type { BodyContent, NetworkEntry } from '@/types/network'
-import { formatBytes } from '@/types/network'
+import { formatBytes, formatDurationMs } from '@/types/network'
+import { formatJsonPayload } from '@/utils/jsonGuards'
+import MediaPreview from '@/features/network/MediaPreview.vue'
 import { isOmittedValue, type OmittedValue } from '@/injected/logs/sanitize'
 import LogActionsMenuContent from './LogActionsMenuContent.vue'
 import { formatLogDateTime, previewValue, toPrettyJson } from './format'
@@ -28,7 +30,7 @@ import { hydrateLog, logBadgeClass, type LogsSource } from './view'
 
 type SectionId =
   | 'overview' | 'changes' | 'before' | 'after' | 'state' | 'args' | 'result' | 'stack' | 'raw'
-  | 'params' | 'requestHeaders' | 'requestBody' | 'responseHeaders' | 'responseBody'
+  | 'params' | 'requestHeaders' | 'requestBody' | 'responseHeaders' | 'responseBody' | 'messages'
 
 const props = defineProps<{
   event: LogEvent
@@ -68,8 +70,22 @@ const isStoreBase = computed(() => props.event.kind === 'store' && data.value.op
 /** Request or response half of the network entry */
 const entry = computed<Partial<NetworkEntry> | null>(() => (data.value.entry as Partial<NetworkEntry> | undefined) ?? null)
 
+const messageFrames = computed(() => {
+  const frames = entry.value?.websocket?.frames ?? []
+  const frameId = props.event.data?.frameId
+  if (typeof frameId === 'string') return frames.filter(frame => frame.id === frameId)
+  return frames
+})
+
+function frameText(frame: { kind: string; data: string }): string {
+  if (frame.kind === 'binary') return frame.data
+  return formatJsonPayload(frame.data)
+}
+
 const relatedLabel = computed(() => {
   if (!props.related) return undefined
+  if (props.related.kind === 'ws-closed') return 'Open close event'
+  if (props.related.kind === 'ws') return 'Open connection event'
   return props.related.kind === 'response' ? 'Open response event' : 'Open request event'
 })
 
@@ -93,8 +109,16 @@ const sections = computed(() => {
   const list: Array<{ id: SectionId; label: string }> = []
   const kind = props.event.kind
   const en = entry.value
-  if ((kind === 'request' || kind === 'response') && !en) {
+  const socket = kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed' || en?.initiator === 'websocket' || en?.method === 'WS'
+  if ((kind === 'request' || kind === 'response' || kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed') && !en) {
     list.push({ id: 'overview', label: 'Overview' })
+  } else if (socket && en) {
+    list.push({ id: 'overview', label: 'Overview' })
+    const responseHeaders = kind === 'response' || kind === 'ws-received' || kind === 'ws-closed'
+    list.push({ id: responseHeaders ? 'responseHeaders' : 'requestHeaders', label: 'Headers' })
+    const ownFrame = kind === 'ws-sent' || kind === 'ws-received'
+    const count = ownFrame ? 1 : (en.websocket?.frames.length ?? 0)
+    list.push({ id: 'messages', label: ownFrame ? 'Message' : (count ? `Messages (${count})` : 'Messages') })
   } else if (kind === 'request' && en) {
     list.push({ id: 'overview', label: 'Overview' })
     if (en.params?.length) list.push({ id: 'params', label: `Params (${en.params.length})` })
@@ -137,6 +161,13 @@ watch(
   { immediate: true },
 )
 
+function stackTruncatedLabel(info: { frames: number; kept: number; head?: number; tail?: number }): string {
+  if (info.head && info.tail) {
+    return `Truncated: first ${info.head} and last ${info.tail} of ${info.frames} frames kept`
+  }
+  return `Truncated: top ${info.kept} of ${info.frames} frames kept`
+}
+
 const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
   const d = data.value
   const rows: Array<{ label: string; value: string }> = [
@@ -150,6 +181,10 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
       else if (d.op === 'snapshot') rows.push({ label: 'Recorded', value: 'Logging started on an existing store (current state)' })
       else if (d.op === 'checkpoint') rows.push({ label: 'Recorded', value: `State after ${d.compacted} older changes compacted by the limits` })
       break
+    case 'ws':
+    case 'ws-sent':
+    case 'ws-received':
+    case 'ws-closed':
     case 'request':
     case 'response':
       if (!en) {
@@ -158,9 +193,28 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
       }
       rows.push({ label: 'URL', value: String(en.url ?? '') })
       rows.push({ label: 'Method', value: String(en.method) })
+      if (en.initiator === 'websocket' || en.method === 'WS' || props.event.kind === 'ws' || props.event.kind === 'ws-sent' || props.event.kind === 'ws-received' || props.event.kind === 'ws-closed') {
+        const socket = en.websocket
+        if (props.event.kind === 'ws-sent' || props.event.kind === 'ws-received') {
+          rows.push({ label: 'Direction', value: props.event.kind === 'ws-sent' ? 'Sent' : 'Received' })
+        }
+        if (props.event.kind === 'ws-closed' || props.event.kind === 'response' || (props.event.kind !== 'ws-sent' && props.event.kind !== 'ws-received' && socket?.state === 'closed')) {
+          const code = socket?.closeCode
+          const status = code ? `Closed ${code}` : (en.statusText || 'Closed')
+          rows.push({ label: 'Status', value: status })
+          if (socket?.closeReason) rows.push({ label: 'Reason', value: socket.closeReason })
+          if (socket?.reconnect === false) rows.push({ label: 'Reconnect', value: 'No automatic reconnect' })
+        } else {
+          rows.push({ label: 'Status', value: 'Open' })
+        }
+        rows.push({ label: 'Messages', value: String(socket?.frames.length ?? 0) })
+        rows.push({ label: 'Duration', value: formatDurationMs(en.duration ?? 0) })
+        rows.push({ label: 'Size', value: formatBytes(en.size ?? 0) })
+        break
+      }
       if (props.event.kind === 'response') {
         rows.push({ label: 'Status', value: en.error ? `Failed: ${en.error}` : `${en.status} ${en.statusText || ''}`.trim() })
-        rows.push({ label: 'Duration', value: `${en.duration} ms` })
+        rows.push({ label: 'Duration', value: formatDurationMs(en.duration ?? 0) })
         rows.push({ label: 'Size', value: formatBytes(en.size ?? 0) })
       } else {
         rows.push({ label: 'Initiator', value: String(en.initiator) })
@@ -171,7 +225,7 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
       rows.push({ label: 'Store', value: String(d.storeId) })
       rows.push({ label: 'Action', value: String(d.action) })
       rows.push({ label: 'Status', value: String(d.status) })
-      rows.push({ label: 'Duration', value: `${d.duration} ms` })
+      rows.push({ label: 'Duration', value: formatDurationMs(Number(d.duration)) })
       break
     case 'emit':
       rows.push({ label: 'Component', value: String(d.component) })
@@ -190,7 +244,7 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
       if (d.name) rows.push({ label: 'Name', value: String(d.name) })
       rows.push({ label: 'Message', value: String(d.message) })
       if (d.filename) rows.push({ label: 'Location', value: `${d.filename}:${d.lineno ?? 0}:${d.colno ?? 0}` })
-      if (d.stackTruncated) rows.push({ label: 'Stack', value: `Truncated: top ${d.stackTruncated.kept} of ${d.stackTruncated.frames} frames kept` })
+      if (d.stackTruncated) rows.push({ label: 'Stack', value: stackTruncatedLabel(d.stackTruncated) })
       if (d.suppressedBefore) rows.push({ label: 'Suppressed', value: `${d.suppressedBefore} earlier console errors (more than 50 per second)` })
       break
   }
@@ -236,7 +290,7 @@ const bodyNotice = computed(() => {
   const b = body.value
   if (b === undefined) return ''
   if (!b || (!b.text && !b.formData?.length)) return entry.value?.pending ? 'Response is pending' : 'No body'
-  if (b.isBinary) return `Binary content (${b.contentType || 'unknown'})`
+  if (b.isBinary) return activeSection.value === 'responseBody' ? '' : `Binary content (${b.contentType || 'unknown'})`
   return ''
 })
 
@@ -250,9 +304,13 @@ function bodyBlock(b: BodyContent): { text: string; language: string } {
   return { text, language: 'plain' }
 }
 
+const binaryPreview = computed(() =>
+  activeSection.value === 'responseBody' && body.value?.isBinary ? body.value : null
+)
+
 const jsonBlock = computed(() => {
   const d = data.value
-  if (body.value && !bodyNotice.value) return bodyBlock(body.value)
+  if (body.value && !body.value.isBinary && !bodyNotice.value) return bodyBlock(body.value)
   switch (activeSection.value) {
     case 'before': return { text: toPrettyJson(d.before), language: 'json' }
     case 'after': return { text: toPrettyJson(d.after), language: 'json' }
@@ -415,6 +473,19 @@ function changeTypeClass(type: LogChange['type']): string {
           </div>
         </ScrollArea>
 
+        <div v-else-if="binaryPreview" class="h-full flex flex-col">
+          <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b">
+            <span class="text-sm text-muted-foreground">{{ binaryPreview.contentType || 'application/octet-stream' }}</span>
+            <span class="text-xs text-muted-foreground">({{ formatBytes(binaryPreview.originalSize) }})</span>
+            <Badge variant="outline" class="text-xs">Binary</Badge>
+          </div>
+          <ScrollArea class="flex-1">
+            <div class="p-6">
+              <MediaPreview :body="binaryPreview" />
+            </div>
+          </ScrollArea>
+        </div>
+
         <!-- Body that can't be shown -->
         <div v-else-if="bodyNotice" class="h-full flex items-center justify-center p-6 text-sm text-muted-foreground">
           {{ bodyNotice }}
@@ -456,6 +527,23 @@ function changeTypeClass(type: LogChange['type']): string {
             </Table>
             <div v-if="data.changesTruncated" class="pt-3 text-xs text-muted-foreground">
               Too many changes — list is truncated. See Before / After for full state.
+            </div>
+          </div>
+        </ScrollArea>
+
+        <ScrollArea v-else-if="activeSection === 'messages'" class="h-full">
+          <div class="p-3 space-y-2">
+            <div v-if="!messageFrames.length" class="text-sm text-muted-foreground text-center py-8">
+              {{ event.data?.frameId ? 'This message is no longer in the connection log.' : 'No messages' }}
+            </div>
+            <div v-for="frame in messageFrames" :key="frame.id" class="rounded-md border px-3 py-2">
+              <div class="flex items-center gap-2 text-xs">
+                <span :class="frame.direction === 'sent' ? 'text-sky-400' : 'text-green-500'">
+                  {{ frame.direction === 'sent' ? 'Sent' : 'Received' }}
+                </span>
+                <span class="text-muted-foreground">{{ formatBytes(frame.size) }}</span>
+              </div>
+              <pre v-if="frame.data" class="mt-1 mb-0 whitespace-pre-wrap break-all font-mono text-xs">{{ frameText(frame) }}</pre>
             </div>
           </div>
         </ScrollArea>

@@ -202,11 +202,12 @@ export default defineConfig({
         content: 'src/content/index.ts',
         background: 'src/background.ts',
         injected: 'src/injected/main.ts',
-        devtools: 'src/devtools/devtools.ts'
+        devtools: 'src/devtools/devtools.ts',
+        'ws-early': 'src/injected/ws-early.ts'
       },
       output: {
         entryFileNames: (chunkInfo) => {
-          if (['content', 'background', 'injected', 'devtools'].includes(chunkInfo.name)) {
+          if (['content', 'background', 'injected', 'devtools', 'ws-early'].includes(chunkInfo.name)) {
             return 'js/[name].js'
           }
           if (chunkInfo.name === 'injected_ui_html') {
@@ -232,7 +233,7 @@ export default defineConfig({
         generateBundle(_, bundle) {
           // Extension content/background scripts can't use ES `import` statements.
           // If Rollup splits a shared helper into a separate chunk, inline it back.
-          const scriptEntries = ['js/content.js', 'js/background.js', 'js/injected.js', 'js/devtools.js']
+          const scriptEntries = ['js/content.js', 'js/background.js', 'js/injected.js', 'js/devtools.js', 'js/ws-early.js']
           let inlinedCount = 0
 
           for (const entryName of scriptEntries) {

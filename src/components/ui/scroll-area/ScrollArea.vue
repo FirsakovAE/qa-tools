@@ -9,6 +9,10 @@ import ScrollBar from './ScrollBar.vue';
 import { cn } from '@/components/ui/utils';
 
 const props = defineProps<ScrollAreaRootProps>();
+
+const emit = defineEmits<{
+  (e: 'scroll', event: Event): void
+}>();
 </script>
 
 <template>
@@ -16,7 +20,7 @@ const props = defineProps<ScrollAreaRootProps>();
     v-bind="props"
     :class="cn('relative overflow-hidden', $attrs.class ?? '')"
   >
-    <ScrollAreaViewport class="h-full w-full rounded-[inherit]">
+    <ScrollAreaViewport data-scroll-viewport class="h-full w-full rounded-[inherit]" @scroll="emit('scroll', $event)">
       <slot />
     </ScrollAreaViewport>
     <ScrollBar orientation="horizontal" />

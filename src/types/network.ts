@@ -66,10 +66,19 @@ export interface BodyContent {
   originalSize: number
   /** Content type of the body */
   contentType: string
-  /** Whether this is binary content (not displayed) */
+  /** Whether this is binary content */
   isBinary: boolean
   /** Parsed form-data entries (when contentType is multipart/form-data) */
   formData?: FormDataEntry[]
+  /**
+   * Binary response summary. `dataUrl` is the live image preview and is omitted from the HTML report.
+   */
+  media?: {
+    format: string
+    width?: number
+    height?: number
+    dataUrl?: string
+  }
 }
 
 /**
@@ -143,8 +152,37 @@ export interface NetworkEntry {
   /** Whether request is still pending */
   pending: boolean
   
-  /** Initiator type (fetch, xhr) */
-  initiator: 'fetch' | 'xhr'
+  /** Initiator type (fetch, xhr, websocket) */
+  initiator: 'fetch' | 'xhr' | 'websocket'
+
+  /** Present for a WebSocket row: connection state and the message log */
+  websocket?: WebSocketInfo
+}
+
+/** One WebSocket message captured from `send` or `message`. */
+export interface WebSocketFrame {
+  id: string
+  time: number
+  direction: 'sent' | 'received'
+  kind: 'text' | 'binary'
+  data: string
+  size: number
+  truncated: boolean
+  /** Incoming text delivered from a mock rule */
+  mocked?: boolean
+}
+
+/** Live WebSocket connection attached to a network row. */
+export interface WebSocketInfo {
+  protocols: string[]
+  protocol: string
+  state: 'connecting' | 'open' | 'closed'
+  closeCode?: number
+  closeReason?: string
+  /** Set when the protocol says the client will not open a new socket on its own */
+  reconnect?: boolean
+  frames: WebSocketFrame[]
+  droppedFrames: number
 }
 
 /**
@@ -236,8 +274,16 @@ export function formatBytes(bytes: number): string {
 /**
  * Format duration to human readable string
  */
+/** Milliseconds with two digits after the decimal point (`635.90 ms`). */
+export function formatDurationMs(ms: number): string {
+  const n = Number(ms)
+  if (!Number.isFinite(n)) return '0.00 ms'
+  return `${n.toFixed(2)} ms`
+}
+
 export function formatDuration(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)} ms`
+  if (!Number.isFinite(ms)) return '0.00 ms'
+  if (ms < 1000) return formatDurationMs(ms)
   return `${(ms / 1000).toFixed(2)} s`
 }
 

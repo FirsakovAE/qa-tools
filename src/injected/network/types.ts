@@ -17,6 +17,8 @@ export interface InterceptorCallbacks {
   onRequestModified?: (request: PendingRequest) => void
   onResponse: (id: string, response: ResponseData) => void
   onError: (id: string, error: string) => void
+  /** A WebSocket connection was opened or its message log changed */
+  onWebSocket?: (snapshot: import('./websocket').WebSocketSnapshot, isNew: boolean) => void
   /** Called to check if a breakpoint should trigger */
   onBreakpointCheck?: (url: string, trigger: 'request' | 'response', method?: string) => BreakpointMatch | null
   /** Called when a breakpoint is hit */
@@ -34,6 +36,8 @@ export interface ResponseData {
   body: string | null
   size: number
   duration: number
+  /** Present for a binary response: format, pixel size, and a live image preview */
+  media?: import('./media-preview').MediaInfo
 }
 
 /**

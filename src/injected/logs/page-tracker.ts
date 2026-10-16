@@ -7,7 +7,7 @@
  * in this extension script would make Chrome list the site's errors as errors of the extension.
  */
 
-import { recordLog } from './core'
+import { onLogsReset, recordLog } from './core'
 import { emitAppConsoleError, installConsoleErrorFallback, observeConsoleError, prepareConsoleLogs } from './console-tracker'
 import { errorInfoOf, locationOf, recordError } from './errors'
 import { installPageErrorBridge, PAGE_ERROR_API, type PageErrorApi, type PageErrorDetail } from './page-error-bridge'
@@ -25,10 +25,9 @@ function pathOf(href: string): string {
   }
 }
 
-function recordNavigation(navType: string): void {
+function recordNavigation(navType: string, from = lastHref): void {
   const to = location.href
-  if (to === lastHref) return
-  const from = lastHref
+  if (navType !== 'snapshot' && to === lastHref) return
   lastHref = to
   recordLog({
     kind: 'navigation',
@@ -36,6 +35,11 @@ function recordNavigation(navType: string): void {
     level: 'info',
     data: { navType, from, to },
   })
+}
+
+/** Current page, recorded when logging starts and after the log is cleared, the same way store snapshots are */
+function recordCurrentPage(): void {
+  recordNavigation('snapshot', '')
 }
 
 function patchHistory(method: 'pushState' | 'replaceState'): void {
@@ -87,12 +91,14 @@ function installFallbackListeners(): void {
 export function initPageLogs(): void {
   if (initialized) return
   initialized = true
-  lastHref = location.href
 
   patchHistory('pushState')
   patchHistory('replaceState')
   window.addEventListener('popstate', () => recordNavigation('popstate'))
   window.addEventListener('hashchange', () => recordNavigation('hashchange'))
+
+  onLogsReset(recordCurrentPage)
+  recordCurrentPage()
 
   prepareConsoleLogs()
   const api: PageErrorApi = {

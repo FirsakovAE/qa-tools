@@ -38,6 +38,9 @@ const Separator = computed(() =>
 )
 
 const isNetwork = computed(() => props.event.kind === 'request' || props.event.kind === 'response')
+const isWebSocket = computed(() =>
+  props.event.kind === 'ws' || props.event.kind === 'ws-sent' || props.event.kind === 'ws-received' || props.event.kind === 'ws-closed',
+)
 
 function handleClick(e: Event, action: () => void) {
   if (props.variant === 'dropdown') {
@@ -59,7 +62,7 @@ function handleClick(e: Event, action: () => void) {
     </component>
     <component
       :is="Item"
-      v-if="isNetwork"
+      v-if="isNetwork && !isWebSocket"
       @click="handleClick($event, () => emit('copyCurl', event))"
     >
       <Terminal class="h-4 w-4 mr-2" />

@@ -603,15 +603,38 @@ export function createLogsRuntime() {
   const RESPONSE_FIELDS = ['status', 'statusText', 'duration', 'size', 'error', 'responseHeaders', 'responseHeadersPageVisible', 'responseBody']
 
   /** "Send request" shows what was sent, "Receive response" what came back */
+  function isWsKind(kind: string): boolean {
+    return kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed'
+  }
+
   function entryPart(entry: Record<string, any>, kind: string): Record<string, any> {
     const out: Record<string, any> = {}
-    for (const field of IDENTITY.concat(kind === 'request' ? REQUEST_FIELDS : RESPONSE_FIELDS)) {
+    const fields = isWsKind(kind)
+      ? IDENTITY.concat(REQUEST_FIELDS, RESPONSE_FIELDS)
+      : IDENTITY.concat(kind === 'request' ? REQUEST_FIELDS : RESPONSE_FIELDS)
+    for (const field of fields) {
       if (entry[field] !== undefined) out[field] = entry[field]
+    }
+    if (entry.websocket) {
+      out.websocket = entry.websocket
+      for (const field of ['status', 'statusText', 'duration', 'size', 'error']) {
+        if (entry[field] !== undefined) out[field] = entry[field]
+      }
     }
     return out
   }
 
   function responseStatus(entry: Record<string, any>): string {
+    const socket = entry.websocket
+    if (entry.initiator === 'websocket' || entry.method === 'WS') {
+      if (socket?.state && socket.state !== 'closed') return 'Open'
+      const code = socket?.closeCode
+      let text = code ? `Closed ${code}` : (entry.statusText || 'Closed')
+      if (socket?.closeReason) text += ` ${socket.closeReason}`
+      if (socket?.reconnect === false) text += '. No automatic reconnect'
+      if (entry.error) text += `. ${entry.error}`
+      return text
+    }
     return entry.error ? `Failed: ${entry.error}` : `${entry.status} ${entry.statusText || ''}`.trim()
   }
 
@@ -655,6 +678,11 @@ export function createLogsRuntime() {
     return kindLabels[event.kind] || event.kind
   }
 
+  function formatDurationMs(ms: unknown): string {
+    const n = Number(ms)
+    return `${Number.isFinite(n) ? n.toFixed(2) : '0.00'} ms`
+  }
+
   function describe(event: RuntimeEvent, ctx: HydrateContext): { title: string; subtitle?: string } {
     const data = payload(event)
     const key = String(event.key || '')
@@ -671,7 +699,7 @@ export function createLogsRuntime() {
         return { title: key, subtitle: summarizeChanges(restoreProps(event).changes) }
       case 'action': {
         const error = isObject(data.error) ? data.error : null
-        return { title: `${key}()`, subtitle: event.level === 'error' || error ? `Error: ${error ? error.message : ''}` : `${data.duration} ms` }
+        return { title: `${key}()`, subtitle: event.level === 'error' || error ? `Error: ${error ? error.message : ''}` : formatDurationMs(data.duration) }
       }
       case 'emit':
         return { title: `${emitComponent(event)} @${data.event}`, subtitle: previewArgs(data.args) }
@@ -679,11 +707,27 @@ export function createLogsRuntime() {
         return { title: key, subtitle: data.navType }
       case 'error':
         return { title: key, subtitle: data.source }
+      case 'ws':
+      case 'ws-sent':
+      case 'ws-received':
+      case 'ws-closed':
       case 'request':
       case 'response': {
         const entry = ctx.getEntry ? ctx.getEntry(data.entryId) : undefined
         if (!entry) return { title: typeof legacy.title === 'string' ? legacy.title : key, subtitle: 'Network entry is not available' }
         const title = `${entry.method} ${entry.path || entry.url}`
+        if (isWsKind(event.kind) || entry.initiator === 'websocket' || entry.method === 'WS') {
+          if (event.kind === 'ws-closed' || event.kind === 'response') return { title, subtitle: responseStatus(entry) }
+          if (event.kind === 'ws-sent' || event.kind === 'ws-received') {
+            const frames = entry.websocket && entry.websocket.frames
+            const frame = frames && frames.find((item: { id?: string }) => item.id === data.frameId)
+            const dir = event.kind === 'ws-sent' ? 'Sent' : 'Received'
+            const text = frame && typeof frame.data === 'string' ? frame.data.replace(/\s+/g, ' ').trim() : ''
+            const preview = text.length > 80 ? `${text.slice(0, 80)}...` : text
+            return { title, subtitle: preview ? `${dir} ${preview}` : dir }
+          }
+          return { title, subtitle: String(entry.url || '') }
+        }
         return { title, subtitle: event.kind === 'request' ? entry.url : responseStatus(entry) }
       }
     }
@@ -757,11 +801,15 @@ export function createLogsRuntime() {
       case 'error':
         full = { ...data, message: data.message ?? event.key }
         break
+      case 'ws':
+      case 'ws-sent':
+      case 'ws-received':
+      case 'ws-closed':
       case 'request':
       case 'response': {
         const entry = ctx.getEntry ? ctx.getEntry(data.entryId) : undefined
         if (!entry) missing.entry = true
-        full = { entryId: data.entryId, entry: entry ? entryPart(entry, event.kind) : null }
+        full = { entryId: data.entryId, frameId: data.frameId, entry: entry ? entryPart(entry, event.kind) : null }
         break
       }
       default:

@@ -16,11 +16,12 @@
   var HIGHLIGHT_MAX = 300000
   var GROUPS = [
     { title: 'Network', kinds: ['request', 'response'] },
+    { title: 'WebSocket', kinds: ['ws', 'ws-sent', 'ws-received', 'ws-closed'] },
     { title: 'Components', kinds: ['props', 'emit'] },
     { title: 'Pinia', kinds: ['store', 'action'] },
     { title: 'Page', kinds: ['navigation', 'error'] },
   ]
-  var KNOWN = ['request', 'response', 'props', 'emit', 'store', 'action', 'navigation', 'error']
+  var KNOWN = ['request', 'response', 'ws', 'ws-sent', 'ws-received', 'ws-closed', 'props', 'emit', 'store', 'action', 'navigation', 'error']
 
   var doc = document
   var payload = { info: {}, events: [] }
@@ -78,7 +79,28 @@
   // Newest first, as in the Logs tab
   var ordered = events.slice().sort(function (a, b) { return b.ts - a.ts || b.index - a.index })
 
-  function isNetwork(e) { return e.kind === 'request' || e.kind === 'response' }
+  function isWsKind(kind) {
+    return kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed'
+  }
+
+  function isNetwork(e) { return e.kind === 'request' || e.kind === 'response' || isWsKind(e.kind) }
+
+  function sectionId(e) {
+    if (e.data && e.data.ws) return e.kind === 'response' ? 'ws-closed' : 'ws'
+    return e.kind
+  }
+
+  function sectionLabel(id) {
+    if (id === 'ws') return 'WebSocket open'
+    if (id === 'ws-closed') return 'WebSocket closed'
+    return label(id)
+  }
+
+  function sectionColor(id) {
+    if (id === 'ws') return 'request'
+    if (id === 'ws-closed') return 'response'
+    return id
+  }
   function entryOf(e) { return isNetwork(e) ? getEntry(e.data.entryId) : undefined }
 
   // Request and response events of one network entry: "<kind>:<entryId>" -> event
@@ -87,7 +109,10 @@
     if (isNetwork(e) && e.data.entryId != null) networkPairs[e.kind + ':' + e.data.entryId] = e
   })
   function pairedEvent(e) {
-    if (!isNetwork(e) || e.data.entryId == null) return null
+    if (!e.data || e.data.entryId == null) return null
+    if (e.kind === 'ws' || e.kind === 'ws-sent' || e.kind === 'ws-received') return networkPairs['ws-closed:' + e.data.entryId] || null
+    if (e.kind === 'ws-closed') return networkPairs['ws:' + e.data.entryId] || null
+    if (e.kind !== 'request' && e.kind !== 'response') return null
     return networkPairs[(e.kind === 'request' ? 'response:' : 'request:') + e.data.entryId] || null
   }
 
@@ -113,8 +138,8 @@
   }
 
   var state = { section: 'overview', filter: '', selected: -1, tab: '', query: '', inData: false, limit: PAGE_SIZE, typeOpen: false }
-  // Set by "All events" in the details header: scroll that row to the top of the list
-  var pinTo = -1
+  // On a narrow screen Locate hides the details overlay so the list stays visible
+  var listFocus = false
   var visible = []
   var rendered = { section: null, filter: null, query: null, inData: null, types: null }
 
@@ -187,7 +212,12 @@
 
   function fmtDuration(ms) {
     ms = Number(ms) || 0
-    return ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) + ' s'
+    return ms < 1000 ? ms.toFixed(2) + ' ms' : (ms / 1000).toFixed(2) + ' s'
+  }
+
+  function fmtDurationMs(ms) {
+    ms = Number(ms)
+    return (isFinite(ms) ? ms : 0).toFixed(2) + ' ms'
   }
 
   function label(kind) {
@@ -301,7 +331,7 @@
     var section = state.section
     var filter = FILTERS[state.filter]
     return ordered.filter(function (e) {
-      if (section !== 'all' && section !== 'overview' && e.kind !== section) return false
+      if (section !== 'all' && section !== 'overview' && sectionId(e) !== section) return false
       if ((section === 'all' || section === 'overview') && typeOptions.length && !enabledTypes[e.kind]) return false
       if (filter && !filter.test(e)) return false
       if (!q) return true
@@ -313,7 +343,10 @@
 
   function counts() {
     var c = {}
-    events.forEach(function (e) { c[e.kind] = (c[e.kind] || 0) + 1 })
+    events.forEach(function (e) {
+      var id = sectionId(e)
+      c[id] = (c[id] || 0) + 1
+    })
     return c
   }
 
@@ -339,7 +372,7 @@
       if (!present.length) return
       listed = listed.concat(present)
       add(nav, h('div', { class: 'group' }, [h('p', { class: 'group-title', text: g.title })].concat(
-        present.map(function (k) { return link(k, label(k), c[k], k) }),
+        present.map(function (k) { return link(k, sectionLabel(k), c[k], sectionColor(k)) }),
       )))
     })
     var other = Object.keys(c).filter(function (k) { return listed.indexOf(k) === -1 })
@@ -372,6 +405,28 @@
     path.setAttribute('stroke-linecap', 'round')
     path.setAttribute('stroke-linejoin', 'round')
     svg.appendChild(path)
+    return svg
+  }
+
+  function chevronLeft() {
+    var svg = svgEl('svg')
+    svg.setAttribute('class', 'back-icon')
+    svg.setAttribute('viewBox', '0 0 24 24')
+    svg.setAttribute('width', '16')
+    svg.setAttribute('height', '16')
+    svg.setAttribute('aria-hidden', 'true')
+    var shaft = svgEl('path')
+    var head = svgEl('path')
+    shaft.setAttribute('d', 'M19 12H5')
+    head.setAttribute('d', 'M12 19l-7-7 7-7')
+    ;[shaft, head].forEach(function (path) {
+      path.setAttribute('fill', 'none')
+      path.setAttribute('stroke', 'currentColor')
+      path.setAttribute('stroke-width', '2')
+      path.setAttribute('stroke-linecap', 'round')
+      path.setAttribute('stroke-linejoin', 'round')
+      svg.appendChild(path)
+    })
     return svg
   }
 
@@ -531,7 +586,7 @@
 
   function row(e) {
     return h('a', {
-      class: 'row lvl-' + e.level + (e.index === state.selected ? ' active' : ''),
+      class: 'row ' + kindClass(e.kind) + ' lvl-' + e.level + (e.index === state.selected ? ' active' : ''),
       href: hereHref(e.index),
       'data-index': e.index,
     }, [
@@ -628,10 +683,10 @@
       return
     }
     visible = filterEvents()
-    var title = state.section === 'all' || state.section === 'overview' ? 'All events' : label(state.section)
+    var title = state.section === 'all' || state.section === 'overview' ? 'All events' : sectionLabel(state.section)
     var total = state.section === 'all' || state.section === 'overview'
       ? events.length
-      : events.filter(function (e) { return e.kind === state.section }).length
+      : events.filter(function (e) { return sectionId(e) === state.section }).length
     var filter = FILTERS[state.filter]
     var typeNarrowed = state.section === 'all' && typeOptions.length && !allTypesOn()
     var reasons = []
@@ -687,6 +742,13 @@
     } else if (isStoreBase(e, d)) {
       list.push(['overview', 'Overview'])
       list.push(['state', 'State'])
+    } else if (en.method === 'WS' || en.initiator === 'websocket') {
+      list.push(['overview', 'Overview'])
+      var responseHeaders = e.kind === 'response' || e.kind === 'ws-received' || e.kind === 'ws-closed'
+      list.push([responseHeaders ? 'responseHeaders' : 'requestHeaders', 'Headers'])
+      var ownFrame = e.kind === 'ws-sent' || e.kind === 'ws-received'
+      var count = en.websocket && en.websocket.frames ? en.websocket.frames.length : 0
+      list.push(['messages', ownFrame ? 'Message' : (count ? 'Messages (' + count + ')' : 'Messages')])
     } else if (e.kind === 'request') {
       list.push(['overview', 'Overview'])
       if (en.params && en.params.length) list.push(['params', 'Params (' + en.params.length + ')'])
@@ -716,6 +778,13 @@
     return list
   }
 
+  function stackTruncatedLabel(info) {
+    if (info.head && info.tail) {
+      return 'Truncated: first ' + info.head + ' and last ' + info.tail + ' of ' + info.frames + ' frames kept'
+    }
+    return 'Truncated: top ' + info.kept + ' of ' + info.frames + ' frames kept'
+  }
+
   function overviewRows(e, d) {
     var rows = [['Time', fmtDateTime(e.ts)]]
     var en = d.entry
@@ -732,6 +801,21 @@
     }
     if (en) {
       rows.push(['URL', en.url], ['Method', en.method])
+      if (en.method === 'WS' || en.initiator === 'websocket') {
+        var socket = en.websocket || {}
+        if (e.kind === 'ws-sent' || e.kind === 'ws-received') rows.push(['Direction', e.kind === 'ws-sent' ? 'Sent' : 'Received'])
+        if (e.kind === 'ws-closed' || e.kind === 'response' || ((e.kind !== 'ws-sent' && e.kind !== 'ws-received') && socket.state === 'closed')) {
+          var status = socket.closeCode ? ('Closed ' + socket.closeCode) : (en.statusText || 'Closed')
+          rows.push(['Status', status])
+          if (socket.closeReason) rows.push(['Reason', socket.closeReason])
+          if (socket.reconnect === false) rows.push(['Reconnect', 'No automatic reconnect'])
+        } else {
+          rows.push(['Status', 'Open'])
+        }
+        rows.push(['Messages', String((socket.frames && socket.frames.length) || 0)])
+        rows.push(['Duration', fmtDuration(en.duration)], ['Size', fmtBytes(en.size)])
+        return rows
+      }
       if (e.kind === 'response') {
         rows.push(['Status', en.error ? 'Failed: ' + en.error : (en.status + ' ' + (en.statusText || '')).trim()])
         rows.push(['Duration', fmtDuration(en.duration)], ['Size', fmtBytes(en.size)])
@@ -741,7 +825,7 @@
       }
       return rows
     }
-    if (e.kind === 'action') rows.push(['Store', d.storeId], ['Action', d.action], ['Status', d.status], ['Duration', d.duration + ' ms'])
+    if (e.kind === 'action') rows.push(['Store', d.storeId], ['Action', d.action], ['Status', d.status], ['Duration', fmtDurationMs(d.duration)])
     else if (e.kind === 'emit') {
       rows.push(['Component', d.component], ['Event', d.event], ['Listener', d.once ? 'once' : 'regular'])
       if (d.uid !== undefined) rows.push(['uid', d.uid])
@@ -752,7 +836,7 @@
       if (d.name) rows.push(['Name', d.name])
       rows.push(['Message', d.message])
       if (d.filename) rows.push(['Location', d.filename + ':' + (d.lineno || 0) + ':' + (d.colno || 0)])
-      if (d.stackTruncated) rows.push(['Stack', 'Truncated: top ' + d.stackTruncated.kept + ' of ' + d.stackTruncated.frames + ' frames kept'])
+      if (d.stackTruncated) rows.push(['Stack', stackTruncatedLabel(d.stackTruncated)])
       if (d.suppressedBefore) rows.push(['Suppressed', d.suppressedBefore + ' earlier console errors (more than 50 per second)'])
     } else {
       Object.keys(d).forEach(function (k) {
@@ -779,9 +863,20 @@
     return h('div', { class: 'muted', text: 'This part (' + fmtBytes(part.size) + ') was not saved: it exceeded the per-event limit' + (lim ? ' of ' + fmtBytes(lim) : '') + ' when the logs were captured.' })
   }
 
+  function mediaSummary(body) {
+    return h('div', { class: 'media-card' }, [
+      h('p', { class: 'notice', text: 'Binary response received. Body not included in report.' }),
+      h('div', { class: 'media-bar' }, [
+        h('span', { class: 'media-type', text: body.contentType || 'application/octet-stream' }),
+        h('span', { class: 'media-size', text: '(' + fmtBytes(body.originalSize) + ')' }),
+        h('span', { class: 'badge', text: 'Binary' }),
+      ]),
+    ])
+  }
+
   function bodyView(body) {
     if (!body) return h('div', { class: 'muted', text: 'No body' })
-    if (body.isBinary) return h('div', { class: 'muted', text: 'Binary content (' + (body.contentType || 'unknown') + ')' })
+    if (body.isBinary || body.media) return mediaSummary(body)
     var nodes = []
     if (body.truncated) nodes.push(h('p', { class: 'notice', text: 'Body truncated (' + fmtBytes(body.originalSize) + ' originally).' }))
     if (body.formData && body.formData.length) {
@@ -819,6 +914,50 @@
 
   var STATE_MISSING = 'cannot be restored: earlier events of this store are not in the report or are incomplete. The changed values are shown in Changes.'
 
+  function prettyJsonValue(text) {
+    var jsonLike = (text.charAt(0) === '{' && text.charAt(text.length - 1) === '}')
+      || (text.charAt(0) === '[' && text.charAt(text.length - 1) === ']')
+    if (!jsonLike) return null
+    try { return JSON.stringify(JSON.parse(text), null, 2) } catch (err) { return null }
+  }
+
+  function frameBody(frame) {
+    var text = String(frame.data || '')
+    if (frame.kind === 'binary' || text.length > 65536) return { text: text, json: false }
+    var trimmed = text.trim()
+    if (!trimmed) return { text: text, json: false }
+    var one = prettyJsonValue(trimmed)
+    if (one != null) return { text: one, json: true }
+    var lines = trimmed.split(/\r?\n/).map(function (line) { return line.trim() }).filter(Boolean)
+    if (lines.length < 2) return { text: text, json: false }
+    var parts = []
+    for (var i = 0; i < lines.length; i++) {
+      var formatted = prettyJsonValue(lines[i])
+      if (formatted == null) return { text: text, json: false }
+      parts.push(formatted)
+    }
+    return { text: parts.join('\n\n'), json: true }
+  }
+
+  function messagesView(en, e) {
+    var frames = (en.websocket && en.websocket.frames) || []
+    if (e && e.data && e.data.frameId != null) {
+      frames = frames.filter(function (frame) { return frame.id === e.data.frameId })
+      if (!frames.length) return h('div', { class: 'muted', text: 'This message is no longer in the connection log.' })
+    }
+    if (!frames.length) return h('div', { class: 'muted', text: 'No messages' })
+    return frames.map(function (frame) {
+      var body = frameBody(frame)
+      return h('div', { class: 'ws-frame' }, [
+        h('div', { class: 'media-bar' }, [
+          h('span', { class: 'media-type', text: frame.direction === 'sent' ? 'Sent' : 'Received' }),
+          h('span', { class: 'media-size', text: '(' + fmtBytes(frame.size) + ')' }),
+        ]),
+        body.text ? code(body.text, body.json) : h('div', { class: 'muted', text: 'Empty message' }),
+      ])
+    })
+  }
+
   function tabContent(e, tab, v) {
     var d = v.event.data
     var missing = v.missing || {}
@@ -839,6 +978,7 @@
       }
       case 'requestBody': return bodyView(en.requestBody)
       case 'responseBody': return bodyView(en.responseBody)
+      case 'messages': return messagesView(en, e)
       case 'changes': return changesView(d)
       case 'before': return jsonBlock(d.before)
       case 'after': return jsonBlock(d.after)
@@ -877,18 +1017,23 @@
       pairLink = h('a', {
         class: 'pair-btn',
         href: listed ? hereHref(pair.index) : sectionHref(pair.kind, pair.index),
-        title: pair.kind === 'response' ? 'Open the response of this request' : 'Open the request of this response',
-        text: pair.kind === 'response' ? 'Response \u2192' : '\u2190 Request',
+        title: pair.kind === 'ws-closed' ? 'Open the close event of this connection'
+          : pair.kind === 'ws' ? 'Open the connection event'
+          : pair.kind === 'response' ? 'Open the response of this request' : 'Open the request of this response',
+        text: pair.kind === 'ws-closed' ? 'Closed'
+          : pair.kind === 'ws' ? 'Opened'
+          : pair.kind === 'response' ? 'Response' : 'Request',
       })
     }
     var allHref = sectionHref('all', e.index)
     var allLink = h('a', {
       class: 'pair-btn',
       href: allHref,
-      title: 'Show this event at the top of All events',
-      text: 'All events \u2192',
+      title: 'Show this event in All events',
+      text: 'Locate',
       onclick: function (ev) {
         if (ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return
+        listFocus = window.matchMedia('(max-width: 1200px)').matches
         enabledTypes[e.kind] = true
         var q = state.query.trim().toLowerCase()
         if (q && textOf(e).indexOf(q) === -1 && !(state.inData && dataOf(e).indexOf(q) !== -1)) {
@@ -896,7 +1041,6 @@
           var input = $('search')
           if (input) input.value = ''
         }
-        pinTo = e.index
         if (location.hash === allHref) {
           ev.preventDefault()
           parseHash()
@@ -906,6 +1050,7 @@
     })
 
     var head = h('div', { class: 'd-head' }, [
+      h('a', { class: 'icon-btn d-back', href: hereHref(-1), title: 'Close (Esc)', 'aria-label': 'Close' }, [chevronLeft()]),
       h('div', { class: 'd-head-main' }, [
         h('div', { class: 'd-title-row' }, [
           h('span', { class: 'badge ' + kindClass(e.kind), text: e.label }),
@@ -916,11 +1061,7 @@
         ]),
         h('div', { class: 'd-sub', text: contextLine(e, d) || e.subtitle || fmtDateTime(e.ts) }),
       ]),
-      h('div', { class: 'd-actions' }, [
-        allLink,
-        pairLink,
-        h('a', { class: 'icon-btn', href: hereHref(-1), title: 'Close (Esc)', text: '\u00d7' }),
-      ]),
+      h('div', { class: 'd-actions' }, [allLink, pairLink]),
     ])
     var tabs = h('div', { class: 'tabs' }, sections.map(function (s) {
       var b = h('button', { class: 'tab' + (s[0] === state.tab ? ' active' : ''), type: 'button', text: s[1] })
@@ -939,29 +1080,11 @@
 
   function markSelected() {
     var list = $('list')
-    var main = $('main')
-    var spacer = $('pin-spacer')
-    if (!list) {
-      if (spacer) spacer.remove()
-      return
-    }
+    if (!list) return
     var prev = list.querySelector('.row.active')
     if (prev) prev.classList.remove('active')
     var cur = list.querySelector('.row[data-index="' + state.selected + '"]')
-    var pin = pinTo === state.selected && !!cur
-    if (pinTo === state.selected) pinTo = -1
     if (cur) cur.classList.add('active')
-    if (pin && main) {
-      // Extra space so a row near the end of the list can sit at the top
-      if (!spacer) {
-        spacer = h('div', { id: 'pin-spacer' })
-        main.appendChild(spacer)
-      }
-      spacer.style.height = main.clientHeight + 'px'
-      if (cur.scrollIntoView) cur.scrollIntoView({ block: 'start' })
-      return
-    }
-    if (spacer) spacer.remove()
     if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' })
   }
 
@@ -971,7 +1094,7 @@
     var parts = decodeURIComponent(location.hash.slice(1)).split('/')
     var head = (parts[0] || 'overview').split(':')
     var section = head[0]
-    var valid = section === 'overview' || section === 'all' || events.some(function (e) { return e.kind === section })
+    var valid = section === 'overview' || section === 'all' || events.some(function (e) { return sectionId(e) === section })
     state.section = valid ? section : 'overview'
     state.filter = valid && FILTERS[head[1]] ? head[1] : ''
     if (state.filter && state.section === 'overview') state.section = 'all'
@@ -995,10 +1118,13 @@
     }
     markSelected()
     renderDetails()
+    if (state.selected === -1) listFocus = false
+    doc.body.classList.toggle('list-focus', listFocus)
     doc.body.classList.remove('show-sidebar')
   }
 
   function go(index) {
+    listFocus = false
     var section = state.section === 'overview' ? 'all' : state.section
     location.hash = sectionHref(section, index, state.filter)
   }
@@ -1016,6 +1142,18 @@
   })
   $('in-data').addEventListener('change', function (ev) { state.inData = ev.target.checked; render() })
   $('menu').addEventListener('click', function () { doc.body.classList.toggle('show-sidebar') })
+  var backdrop = $('sidebar-backdrop')
+  if (backdrop) backdrop.addEventListener('click', function () { doc.body.classList.remove('show-sidebar') })
+  $('sidebar').addEventListener('click', function (ev) {
+    var t = ev.target
+    if (t && t.closest && t.closest('a.link')) doc.body.classList.remove('show-sidebar')
+  })
+  $('main').addEventListener('click', function (ev) {
+    var t = ev.target
+    if (!t || !t.closest || !t.closest('a.row')) return
+    listFocus = false
+    doc.body.classList.remove('list-focus')
+  })
 
   doc.addEventListener('click', function (ev) {
     if (!state.typeOpen) return

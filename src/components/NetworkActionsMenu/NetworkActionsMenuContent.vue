@@ -94,14 +94,16 @@ function handleClick(e: Event, action: () => void) {
     v-bind="variant === 'dropdown' ? { align: 'end' } : {}"
   >
     <component
+      v-if="entry.initiator !== 'websocket'"
       :is="Item"
       @click="handleClick($event, () => emit('copyCurl', entry))"
     >
       <Terminal class="h-4 w-4 mr-2" />
       Copy cURL
     </component>
-    <component :is="Separator" />
+    <component v-if="entry.initiator !== 'websocket'" :is="Separator" />
     <component
+      v-if="entry.initiator !== 'websocket'"
       :is="Item"
       @click="handleClick($event, () => emit('setBreakpoint', entry))"
     >
@@ -109,6 +111,7 @@ function handleClick(e: Event, action: () => void) {
       {{ matchesBreakpointPattern(entry.id) ? 'Rewrite Breakpoint' : 'Breakpoint Request' }}
     </component>
     <component
+      v-if="entry.initiator !== 'websocket'"
       :is="Item"
       @click="handleClick($event, () => emit('mockResponse', entry))"
     >

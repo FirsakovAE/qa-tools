@@ -98,13 +98,25 @@ export function sanitizeNetworkEntry(
       : { type: 'None' },
     requestBody: maskBody(entry.requestBody, s),
     responseBody: maskBody(entry.responseBody, s),
+    websocket: entry.websocket
+      ? {
+          ...entry.websocket,
+          closeReason: entry.websocket.closeReason ? s.maskString(entry.websocket.closeReason) : entry.websocket.closeReason,
+          frames: entry.websocket.frames.map(frame => ({
+            ...frame,
+            data: frame.data ? s.maskString(frame.data) : frame.data,
+          })),
+        }
+      : entry.websocket,
   }
 
+  const frameLen = out.websocket?.frames.reduce((n, frame) => n + (frame.data?.length ?? 0), 0) ?? 0
   const fixedSize =
     out.url.length +
     headersSize(out.requestHeaders) +
     headersSize(out.responseHeaders) +
     out.params.reduce((n, p) => n + p.key.length + p.value.length + 20, 0) +
+    frameLen +
     600
   let reqLen = out.requestBody?.text.length ?? 0
   let resLen = out.responseBody?.text.length ?? 0

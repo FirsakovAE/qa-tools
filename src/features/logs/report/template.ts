@@ -115,6 +115,7 @@ export function renderLogsReport(payload: LogsReportPayload): string {
 <label class="check"><input id="in-data" type="checkbox"> in data</label>
 <input id="search" class="search" type="search" placeholder="Search events..." autocomplete="off">
 </header>
+<div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 <div class="layout">
 <nav id="sidebar" class="sidebar" aria-label="Sections"></nav>
 <main id="main" class="main"><noscript>This report needs JavaScript to display events.</noscript></main>

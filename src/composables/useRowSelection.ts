@@ -14,7 +14,6 @@ interface ModifierEvent {
  * - click: toggle one row and remember it as the range anchor
  * - Shift+click: apply the anchor's state to every row between the anchor and the clicked row
  * - Ctrl/Cmd+click on a row: toggle it without opening details
- * - Ctrl/Cmd+A inside the table: select all visible rows
  *
  * Only rows present in `orderedIds` (the visible, filtered list) count as selected,
  * so hidden or evicted rows never leak into an export.
@@ -38,9 +37,10 @@ export function useRowSelection(orderedIds: () => string[]) {
   })
 
   function toggle(id: string, event?: ModifierEvent) {
+    const list = ids.value
+    if (!list.includes(id)) return
     const next = new Set(checked.value)
     if (event?.shiftKey && anchor && anchor !== id) {
-      const list = ids.value
       const from = list.indexOf(anchor)
       const to = list.indexOf(id)
       if (from !== -1 && to !== -1) {
@@ -60,6 +60,7 @@ export function useRowSelection(orderedIds: () => string[]) {
   }
 
   function selectAll() {
+    if (!ids.value.length) return
     checked.value = new Set(ids.value)
     anchor = null
   }
@@ -70,6 +71,7 @@ export function useRowSelection(orderedIds: () => string[]) {
   }
 
   function toggleAll() {
+    if (!ids.value.length) return
     if (headerState.value === true) clear()
     else selectAll()
   }
@@ -81,12 +83,5 @@ export function useRowSelection(orderedIds: () => string[]) {
     return true
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
-      event.preventDefault()
-      selectAll()
-    }
-  }
-
-  return { checked, checkedIds, count, headerState, toggle, toggleAll, selectAll, clear, handleRowClick, handleKeydown }
+  return { checked, checkedIds, count, headerState, toggle, toggleAll, selectAll, clear, handleRowClick }
 }

@@ -29,6 +29,7 @@ export function matchUrlPattern(url: string, pattern: string | undefined, mode: 
  * Match a NetworkEntry against a BreakpointItem
  */
 export function matchesBreakpoint(entry: NetworkEntry, bp: BreakpointItem): boolean {
+  if (entry.initiator === 'websocket') return false
   if (!bp.enabled) return false
   
   try {
@@ -122,6 +123,7 @@ export function getMatchingEntryIds(
  * Match a NetworkEntry against a MockRule
  */
 export function matchesMock(entry: NetworkEntry, mock: MockRule): boolean {
+  if (entry.initiator === 'websocket') return false
   if (!mock.enabled) return false
   
   try {

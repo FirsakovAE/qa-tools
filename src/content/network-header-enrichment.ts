@@ -5,6 +5,10 @@
 
 import type { SendBroadcast } from './message-router'
 
+function isWebSocketEntry(entry: { initiator?: string; method?: string } | null | undefined): boolean {
+  return entry?.initiator === 'websocket' || String(entry?.method || '').toUpperCase() === 'WS'
+}
+
 function isNetworkEntryUpdate(data: any): boolean {
   return (
     data?.__FROM_VUE_INSPECTOR__ &&
@@ -24,7 +28,9 @@ export function enrichNetworkBroadcastIfNeeded(data: any, sendToTarget: SendBroa
     return
   }
 
-  if (!isNetworkEntryUpdate(data)) {
+  const wsCaptured = data.type === 'NETWORK_ENTRY_CAPTURED' && isWebSocketEntry(data.entry)
+  const wsBulk = data.type === 'NETWORK_ENTRIES_DATA' && Array.isArray(data.entries) && data.entries.some(isWebSocketEntry)
+  if (!isNetworkEntryUpdate(data) && !wsCaptured && !wsBulk) {
     sendToTarget({ broadcast: true, message: data })
     return
   }
@@ -36,6 +42,21 @@ export function enrichNetworkBroadcastIfNeeded(data: any, sendToTarget: SendBroa
     }
   } catch {
     sendToTarget({ broadcast: true, message: data })
+    return
+  }
+
+  if (wsBulk) {
+    chrome.runtime.sendMessage(
+      { type: 'NETWORK_MERGE_WEBREQUEST_ENTRIES', entries: data.entries },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          sendToTarget({ broadcast: true, message: data })
+          return
+        }
+        const entries = response?.entries ?? data.entries
+        sendToTarget({ broadcast: true, message: { ...data, entries } })
+      },
+    )
     return
   }
 

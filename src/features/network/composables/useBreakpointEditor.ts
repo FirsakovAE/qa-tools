@@ -64,7 +64,7 @@ export function useBreakpointEditor(options: UseBreakpointEditorOptions) {
   const editableResponseBody = ref<string>('')
 
   const initializedEntryId = ref<string | null>(null)
-  const activeSection = ref<'url' | 'params' | 'headers' | 'request' | 'response'>('response')
+  const activeSection = ref<'url' | 'params' | 'headers' | 'request' | 'response' | 'messages'>('response')
 
   // Initialize editable data from DRAFT once when entering breakpoint mode
   watch(

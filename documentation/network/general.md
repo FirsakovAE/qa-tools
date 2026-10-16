@@ -36,7 +36,7 @@ The right side of the **Network** toolbar shows status chips. Some are **clickab
 
 | Item | Purpose |
 | ---- | ------- |
-| **N** or **N/M** | Row count after filters; with active search, **M** is the total requests in the buffer. |
+| **N** or **N/M** | Row count after search and the **All** / **XHR** / **WS** switch. **M** is the total rows in the buffer when that count is smaller. |
 | **pending** | Requests still in flight. |
 | **bp** (highlighted, pulse) | Breakpoints waiting for UI action. Click selects the first such row. |
 | **bp** (solid amber) | Count of active breakpoint rules. Click opens that list. **Pause** disables a rule without deleting it; **×** deletes it. Disabled rules leave the list. |
@@ -67,7 +67,7 @@ The same switches exist as **Enable breakpoint rules** and **Enable mock respons
 While paused:
 
 * new requests **do not appear** in Vue Inspector **Network** until you resume;
-* the interceptor **is removed**: the page uses native `fetch` and `XMLHttpRequest` again (no inspector substitution).
+* the interceptor **is removed**: the page uses native `fetch`, `XMLHttpRequest` and `WebSocket` again (no inspector substitution).
 
 Implications:
 
@@ -80,7 +80,9 @@ Clears accumulated rows next to **Pause**.
 
 ### Export Collection
 
-**Export Collection** saves the current **filtered** request list, or only the selected requests when rows are ticked (see [Export collections](./export.md)).
+**All** / **XHR** / **WS**, next to **Export Collection**, limits the table to every row, to `fetch` / XHR, or to WebSocket. **All** is the default. The switch does not remove rows from the buffer.
+
+**Export Collection** saves the current **filtered** HTTP list, or only the ticked HTTP requests. **WebSocket** rows are left out of the file. Their checkboxes stay disabled, and select all and a **Shift** range skip them. On **WS** the button stays disabled (see [Export collections](./export.md)).
 
 ## Work area
 
@@ -106,8 +108,9 @@ The first column contains checkboxes for choosing requests to export:
 | Click a checkbox | Select / unselect a request |
 | **Shift** + click | Select a range from the last clicked row |
 | **Ctrl / Cmd** + click on a row | Toggle a row without opening details |
-| **Ctrl / Cmd** + **A** (table focused) | Select all filtered requests |
-| Header checkbox | Select all / clear selection |
+| Header checkbox | Select all HTTP rows / clear selection |
+
+A **WebSocket** row cannot be ticked.
 
 ### Request details
 
@@ -117,6 +120,7 @@ Opening a row shows exchange details:
 * **Params** — query string pairs;
 * **Request** — request body;
 * **Response** — response body;
+* **Messages** — for a WebSocket row, each sent and received message.
 
 For **`multipart/form-data`** bodies captured as structured data, **Request** is shown as a **read-only table**: field key, **Text** or **File**, cell value (text fields as-is; file fields show name and size, or **`(binary)`** when the original bytes are not kept as displayable text). **Copy** copies the visible text or the file name, depending on the row.
 
@@ -141,7 +145,9 @@ On **same-origin** requests headers are usually available unless another policy 
 
 In the **Vue Inspector extension** for Chrome / Edge, **Advanced mode** (capture setting under **Options → Network**) can enrich request and response headers with browser-level data beyond what the page is allowed to read. For details, header pinning, **Header links**, and related options, see [Advanced capture mode](./advanced.md).
 
-Very large bodies may be truncated (roughly **20 MB** captured text in code); some binary payloads are not serialized as text for the tab.
+Very large bodies may be truncated (roughly **20 MB** captured text in code).
+
+An image response (**PNG**, **JPEG**, **GIF**, **WEBP**, **BMP**, **SVG**, **AVIF**, **ICO**) shows the picture under the content-type bar, for example `image/jpeg (986.2 KB)` with a **Binary** badge. Other binary types use the same bar, then **Preview unavailable** and **Preview is not supported for this file format.** A picture larger than **8 MB** keeps the bar without the picture. Durations under one second are shown with two digits after the decimal point (`635.90 ms`).
 
 ### Storage cap
 
@@ -153,7 +159,7 @@ When the cap is reached, oldest entries are dropped so recent activity remains v
 
 ### When interception starts
 
-The network module loads with the rest of Vue Inspector in the **tab context** when you open the inspector overlay or attach the DevTools panel. Until that script runs, `fetch` / `XMLHttpRequest` are not patched.
+The network module loads with the rest of Vue Inspector in the **tab context** when you open the inspector overlay or attach the DevTools panel. Until that script runs, `fetch` / `XMLHttpRequest` are not patched. A small page script runs at document start and remembers WebSocket objects the page opens, so **Network** can attach to sockets that are already connected when the inspector starts.
 
 The buffer lives in the page after load; **Network** reads it whenever the panel is open. Without reload, history remains available when you open **Network** later (subject to the **500** entry cap).
 
@@ -163,14 +169,15 @@ Calls through:
 
 * **`fetch`**
 * **`XMLHttpRequest` (XHR)**
+* **`WebSocket`** — one row per connection, including a socket that was already open when the inspector started. The method column shows **WS**. While the socket is open the status is **Open**; after a normal close it shows the close code (**1000** / **1001**) or **Closed**. **Headers** shows the HTTP upgrade request and response recorded by the extension. **Messages** lists each sent and received frame with its time, direction and size, newest first. Text is shown as text. One JSON value is formatted with indents; several JSON values in one frame, separated by newlines, are formatted as separate objects. Binary is a short hex preview. The row keeps the latest **200** messages, and a single message is stored up to **64 KB**. **Sent** sends the composed text on the open socket. **Received** delivers that text to the page. There is no **Params** tab. Breakpoint, mock and **Copy cURL** stay on `fetch` / XHR; the row menu is disabled. **Logs** records **WebSocket open**, **WebSocket sent**, **WebSocket received** and **WebSocket closed** as separate events that share one connection. A JSON frame is shown formatted, including several JSON values separated by newlines in one frame. Those types are in the **Type** filter. When the protocol can be recognized as Centrifuge and the close code means the client will not reconnect (for example **3501**), the close event says **No automatic reconnect** and keeps the reason. Typing `{}` for such a socket shows *This frame may trigger a protocol error and disconnect the WebSocket.* **Sent** and **Received** still send that text.
 
 Not captured, among others:
 
-* other APIs (`navigator.sendBeacon`, `EventSource`, **WebSocket**, `<img>` / `<script>` loads without XHR);
+* other APIs (`navigator.sendBeacon`, `EventSource`, `<img>` / `<script>` loads without XHR);
 * **OPTIONS** preflights (filtered out);
 * extension URLs (`chrome-extension://`, `moz-extension://`, …).
 
-Each row records the initiator type: **fetch** or **xhr**.
+Each HTTP row records the initiator type: **fetch** or **xhr**. A WebSocket row records **websocket**.
 
 ### Interception model
 

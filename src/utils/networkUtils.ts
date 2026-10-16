@@ -215,7 +215,7 @@ export function buildPostmanCollection(entries: NetworkEntry[], name?: string): 
       name: name ?? 'Exported Collection',
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
-    item: entries.map(entryToPostmanItem),
+    item: entries.filter(entry => entry.initiator !== 'websocket').map(entryToPostmanItem),
   }
 }
 

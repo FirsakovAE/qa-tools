@@ -14,19 +14,19 @@ What appears in the list and possible data visibility limitations are described 
 
 ## Where to find the command
 
-**Export Collection** is located on the **Network** toolbar (next to search and filters; on narrow layouts it may appear in a different header section, but the action remains the same).
+**Export Collection** is located on the **Network** toolbar, next to **All** / **XHR** / **WS** (next to search and filters; on narrow layouts it may appear in a different header section, but the action remains the same). **All** lists every row, **XHR** lists `fetch` / XHR, **WS** lists WebSocket. The export follows that switch for HTTP requests and always skips WebSocket.
 
-The tooltip indicates that the **currently filtered** set of requests will be exported.
+The tooltip indicates that the **currently filtered** HTTP requests will be exported.
 
-The button remains **disabled** while the filtered list is empty.
+The button remains **disabled** while the filtered list has no HTTP request. With only WebSocket rows visible it stays disabled.
 
 ---
 
 ## What gets exported
 
-The file contains **only rows currently visible** in the table with **Search** and active search modes applied (path, method, status code, keys and values inside bodies, and so on). This is not necessarily the full request history: active filters restrict what enters the collection.
+The file contains **only HTTP rows currently visible** in the table with **Search** and active search modes applied (path, method, status code, keys and values inside bodies, and so on). This is not necessarily the full request history: active filters restrict what enters the collection. **WebSocket** rows are omitted.
 
-If requests are ticked in the checkbox column, only the selected requests are exported; the button then shows **Export Collection (n)**.
+If HTTP requests are ticked in the checkbox column, only the selected requests are exported; the button then shows **Export Collection (n)**. WebSocket rows cannot be ticked, and a range or select-all does not include them.
 
 For each included row, a separate request is created in the collection with:
 

@@ -3,11 +3,12 @@ import { CheckIcon, MinusIcon } from 'lucide-vue-next'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { RowCheckState } from '@/composables/useRowSelection'
 
-defineProps<{
+const props = defineProps<{
   state: RowCheckState
   title?: string
   /** Header control uses the header text color; row checkboxes stay primary */
   header?: boolean
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -18,18 +19,23 @@ function onMousedown(event: MouseEvent) {
   // Shift+click would otherwise select the text between rows
   if (event.shiftKey) event.preventDefault()
 }
+
+function onClick(event: MouseEvent) {
+  if (props.disabled) return
+  emit('toggle', event)
+}
 </script>
 
 <template>
   <!-- The whole cell is the hit area; the checkbox only reflects the state -->
   <div
     class="virtual-table__cell-check row-check-cell"
-    :class="{ 'row-check-cell--header': header }"
+    :class="{ 'row-check-cell--header': header, 'row-check-cell--disabled': disabled }"
     :title="title"
     @mousedown="onMousedown"
-    @click.stop="emit('toggle', $event)"
+    @click.stop="onClick"
   >
-    <Checkbox :model-value="state" class="pointer-events-none">
+    <Checkbox :model-value="state" :disabled="disabled" class="pointer-events-none">
       <MinusIcon v-if="state === 'indeterminate'" class="h-3.5 w-3.5" />
       <CheckIcon v-else class="h-3.5 w-3.5" />
     </Checkbox>
@@ -48,5 +54,8 @@ function onMousedown(event: MouseEvent) {
 .row-check-cell--header :deep(button[data-state='indeterminate']) {
   background: hsl(var(--muted-foreground));
   color: hsl(var(--background));
+}
+.row-check-cell--disabled {
+  cursor: not-allowed;
 }
 </style>

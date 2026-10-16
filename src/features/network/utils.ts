@@ -69,7 +69,8 @@ export function buildUrlPreview(
  */
 export function getStatusClass(status: number, pending: boolean = false): string {
   if (pending) return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30'
-  
+  if (status === 101) return 'bg-green-500/20 text-green-500 border-green-500/30'
+
   const category = getStatusCategory(status)
   switch (category) {
     case 'success':

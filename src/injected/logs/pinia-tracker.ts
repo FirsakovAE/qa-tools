@@ -29,6 +29,10 @@ import { isIgnored, isLogsPaused, onLogsReset, onLogsStateChanged, recordLog } f
 import { createSanitizer } from './sanitize'
 import { logsRuntime } from './runtime'
 
+function roundMs(ms: number): number {
+  return Math.round(ms * 100) / 100
+}
+
 interface PendingMutation {
   store: PiniaStore
   types: Set<string>
@@ -264,7 +268,7 @@ function onAction(store: PiniaStore, ctx: any): void {
       kind: 'action',
       key,
       level: 'info',
-      data: { args, result, duration: Math.round(performance.now() - start) },
+      data: { args, result, duration: roundMs(performance.now() - start) },
     })
   })
 
@@ -274,7 +278,7 @@ function onAction(store: PiniaStore, ctx: any): void {
       kind: 'action',
       key,
       level: 'error',
-      data: { args, error: serializeError(error), duration: Math.round(performance.now() - start) },
+      data: { args, error: serializeError(error), duration: roundMs(performance.now() - start) },
     })
   })
 }

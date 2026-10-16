@@ -288,7 +288,7 @@ function handleClear() {
 
     <!-- Content -->
     <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden responsive-panels">
-      <div class="h-full min-h-0 overflow-hidden outline-none" tabindex="-1" @keydown="rowSelection.handleKeydown">
+      <div class="h-full min-h-0 overflow-hidden">
         <LogsTable
           :events="filteredEvents"
           :source="source"

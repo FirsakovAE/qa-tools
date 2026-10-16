@@ -65,7 +65,7 @@ const ROW_HEIGHT = 40
       <RowCheckCell
         header
         :state="headerCheckState"
-        :title="headerCheckState === true ? 'Unselect all' : 'Select all for export (Ctrl+A)'"
+        :title="headerCheckState === true ? 'Unselect all' : 'Select all for export'"
         @toggle="emit('checkAll')"
       />
       <div class="log-cell log-cell-time">Time</div>

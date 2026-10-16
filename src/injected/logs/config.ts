@@ -62,7 +62,9 @@ export const DEFAULT_LOGS_MASKING: LogsMasking = {
 }
 
 export function limitKeyForKind(kind: string): LogLimitKey {
-  return kind === 'request' || kind === 'response' ? 'network' : (kind as LogLimitKey)
+  return kind === 'request' || kind === 'response' || kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed'
+    ? 'network'
+    : (kind as LogLimitKey)
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

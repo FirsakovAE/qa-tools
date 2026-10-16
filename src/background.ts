@@ -158,6 +158,20 @@ const webRequestCaptureQueues = new Map<number, WebRequestCaptureRecord[]>()
 
 const WEBREQUEST_QUEUE_MAX = 80
 const WEBREQUEST_CAPTURE_MAX_AGE_MS = 120_000
+const WS_HANDSHAKE_KEY = 'vueInspectorWsHandshakes'
+const WS_HANDSHAKE_MAX = 30
+const WS_HANDSHAKE_MAX_AGE_MS = 6 * 60 * 60 * 1000
+
+interface WsHandshakeRecord {
+  url: string
+  requestHeaders: chrome.webRequest.HttpHeader[]
+  responseHeaders: chrome.webRequest.HttpHeader[]
+  time: number
+}
+
+let wsHandshakes: Map<number, WsHandshakeRecord[]> | null = null
+let wsHandshakeLoad: Promise<Map<number, WsHandshakeRecord[]>> | null = null
+let wsPersistTimer: ReturnType<typeof setTimeout> | 0 = 0
 
 function normalizeUrlForWebRequestMatch(url: string): string {
   try {
@@ -235,11 +249,97 @@ async function waitForMatchingCapture(tabId: number, entry: any, maxWaitMs: numb
   return takeMatchingCapture(tabId, entry)
 }
 
+function isWebSocketEntry(entry: { initiator?: string; method?: string } | null | undefined): boolean {
+  return entry?.initiator === 'websocket' || String(entry?.method || '').toUpperCase() === 'WS'
+}
+
+function loadWsHandshakes(): Promise<Map<number, WsHandshakeRecord[]>> {
+  if (wsHandshakes) return Promise.resolve(wsHandshakes)
+  if (wsHandshakeLoad) return wsHandshakeLoad
+  wsHandshakeLoad = (async () => {
+    const map = new Map<number, WsHandshakeRecord[]>()
+    try {
+      const stored = await chrome.storage.session.get(WS_HANDSHAKE_KEY)
+      const raw = stored?.[WS_HANDSHAKE_KEY]
+      if (raw && typeof raw === 'object') {
+        for (const [tabId, list] of Object.entries(raw as Record<string, WsHandshakeRecord[]>)) {
+          if (Array.isArray(list)) map.set(Number(tabId), list)
+        }
+      }
+    } catch (e) {
+      console.error('[background] loadWsHandshakes failed:', e)
+    }
+    wsHandshakes = map
+    return map
+  })()
+  return wsHandshakeLoad
+}
+
+function scheduleWsPersist(): void {
+  if (wsPersistTimer) return
+  wsPersistTimer = setTimeout(() => {
+    wsPersistTimer = 0
+    void persistWsHandshakes()
+  }, 50)
+}
+
+async function persistWsHandshakes(): Promise<void> {
+  if (!wsHandshakes) return
+  const raw: Record<string, WsHandshakeRecord[]> = {}
+  for (const [tabId, list] of wsHandshakes) raw[String(tabId)] = list
+  try {
+    await chrome.storage.session.set({ [WS_HANDSHAKE_KEY]: raw })
+  } catch (e) {
+    console.error('[background] persistWsHandshakes failed:', e)
+  }
+}
+
+async function rememberWsHandshake(tabId: number, rec: WsHandshakeRecord): Promise<void> {
+  const map = await loadWsHandshakes()
+  const now = Date.now()
+  const list = (map.get(tabId) || []).filter((item) => now - item.time < WS_HANDSHAKE_MAX_AGE_MS)
+  list.push(rec)
+  while (list.length > WS_HANDSHAKE_MAX) list.shift()
+  map.set(tabId, list)
+  scheduleWsPersist()
+}
+
+async function peekWsHandshake(tabId: number, url: string): Promise<WsHandshakeRecord | null> {
+  const map = await loadWsHandshakes()
+  const list = map.get(tabId)
+  if (!list?.length) return null
+  const href = normalizeUrlForWebRequestMatch(url)
+  const now = Date.now()
+  for (let i = list.length - 1; i >= 0; i--) {
+    const item = list[i]
+    if (now - item.time >= WS_HANDSHAKE_MAX_AGE_MS) continue
+    if (item.url === href) return item
+  }
+  return null
+}
+
+function applyWsHandshake(entry: any, cap: WsHandshakeRecord): any {
+  return {
+    ...entry,
+    requestHeaders: chromeHeadersToInspectorHeaders(cap.requestHeaders),
+    responseHeaders: chromeHeadersToInspectorHeaders(cap.responseHeaders),
+  }
+}
+
 function onWebRequestBeforeSendHeaders(
   details: chrome.webRequest.OnBeforeSendHeadersDetails,
 ): chrome.webRequest.BlockingResponse | undefined {
-  if (networkCaptureMode !== 'advanced') return undefined
   if (details.tabId == null || details.tabId < 0) return undefined
+  if (details.type === 'websocket') {
+    pendingChromeRequestMeta.set(details.requestId, {
+      tabId: details.tabId,
+      url: details.url,
+      method: 'GET',
+      requestHeaders: details.requestHeaders || [],
+    })
+    return undefined
+  }
+  if (networkCaptureMode !== 'advanced') return undefined
   if (details.type !== 'xmlhttprequest') return undefined
   pendingChromeRequestMeta.set(details.requestId, {
     tabId: details.tabId,
@@ -253,8 +353,19 @@ function onWebRequestBeforeSendHeaders(
 function onWebRequestHeadersReceived(
   details: chrome.webRequest.OnHeadersReceivedDetails,
 ): chrome.webRequest.BlockingResponse | undefined {
-  if (networkCaptureMode !== 'advanced') return undefined
   if (details.tabId == null || details.tabId < 0) return undefined
+  if (details.type === 'websocket') {
+    const pending = pendingChromeRequestMeta.get(details.requestId)
+    pendingChromeRequestMeta.delete(details.requestId)
+    void rememberWsHandshake(details.tabId, {
+      url: normalizeUrlForWebRequestMatch(pending?.url || details.url),
+      requestHeaders: pending?.requestHeaders || [],
+      responseHeaders: details.responseHeaders || [],
+      time: Date.now(),
+    })
+    return undefined
+  }
+  if (networkCaptureMode !== 'advanced') return undefined
   if (details.type !== 'xmlhttprequest') return undefined
   const pending = pendingChromeRequestMeta.get(details.requestId)
   pendingChromeRequestMeta.delete(details.requestId)
@@ -318,6 +429,9 @@ chrome.runtime.onConnect.addListener((port) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   staticSiteTabs.delete(tabId)
+  if (!wsHandshakes?.has(tabId)) return
+  wsHandshakes.delete(tabId)
+  scheduleWsPersist()
 })
 
 // Функция для синхронизации настроек между IndexedDB и chrome.storage.local
@@ -539,12 +653,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true // Асинхронный ответ
 
         case 'NETWORK_MERGE_WEBREQUEST_HEADERS': {
-            if (networkCaptureMode !== 'advanced' || message.entry == null) {
+            const mergeTabId = sender.tab?.id
+            if (message.entry == null || mergeTabId == null) {
                 sendResponse({ entry: message.entry })
                 return false
             }
-            const mergeTabId = sender.tab?.id
-            if (mergeTabId == null) {
+            if (isWebSocketEntry(message.entry)) {
+                ;(async () => {
+                    try {
+                        const cap = await peekWsHandshake(mergeTabId, String(message.entry.url || ''))
+                        sendResponse({ entry: cap ? applyWsHandshake(message.entry, cap) : message.entry })
+                    } catch (e) {
+                        console.error('[background] NETWORK_MERGE_WEBREQUEST_HEADERS websocket failed:', e)
+                        sendResponse({ entry: message.entry })
+                    }
+                })()
+                return true
+            }
+            if (networkCaptureMode !== 'advanced') {
                 sendResponse({ entry: message.entry })
                 return false
             }
@@ -559,6 +685,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 } catch (e) {
                     console.error('[background] NETWORK_MERGE_WEBREQUEST_HEADERS failed:', e)
                     sendResponse({ entry: message.entry })
+                }
+            })()
+            return true
+        }
+
+        case 'NETWORK_MERGE_WEBREQUEST_ENTRIES': {
+            const entriesTabId = sender.tab?.id
+            const entries = Array.isArray(message.entries) ? message.entries : null
+            if (!entries || entriesTabId == null) {
+                sendResponse({ entries: message.entries })
+                return false
+            }
+            ;(async () => {
+                try {
+                    const next = []
+                    for (const entry of entries) {
+                        if (!isWebSocketEntry(entry)) {
+                            next.push(entry)
+                            continue
+                        }
+                        const cap = await peekWsHandshake(entriesTabId, String(entry?.url || ''))
+                        next.push(cap ? applyWsHandshake(entry, cap) : entry)
+                    }
+                    sendResponse({ entries: next })
+                } catch (e) {
+                    console.error('[background] NETWORK_MERGE_WEBREQUEST_ENTRIES failed:', e)
+                    sendResponse({ entries })
                 }
             })()
             return true

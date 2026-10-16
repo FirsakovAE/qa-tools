@@ -86,11 +86,13 @@ function storeEventsData(events: LogEvent[], source: LogsSource): Map<LogEvent, 
 function networkSubset(events: LogEvent[], source: LogsSource): NonNullable<LogsReportPayload['network']> {
   const halves = new Map<string, { request: boolean; response: boolean }>()
   for (const event of events) {
-    if (event.kind !== 'request' && event.kind !== 'response') continue
+    const ws = event.kind === 'ws' || event.kind === 'ws-sent' || event.kind === 'ws-received' || event.kind === 'ws-closed'
+    if (event.kind !== 'request' && event.kind !== 'response' && !ws) continue
     const id = event.data?.entryId
     if (typeof id !== 'string') continue
     const h = halves.get(id) ?? { request: false, response: false }
-    h[event.kind] = true
+    if (ws || event.kind === 'request') h.request = true
+    if (ws || event.kind === 'response') h.response = true
     halves.set(id, h)
   }
 
@@ -105,7 +107,7 @@ function networkSubset(events: LogEvent[], source: LogsSource): NonNullable<Logs
       if (!body) return undefined
       next = `b${renumbered.size + 1}`
       renumbered.set(ref, next)
-      bodies[next] = body
+      bodies[next] = reportBody(body)
     }
     return next
   }
@@ -125,6 +127,17 @@ function networkSubset(events: LogEvent[], source: LogsSource): NonNullable<Logs
     entries[id] = entry
   }
   return { entries, bodies }
+}
+
+/** Live preview bytes stay in the app. The report keeps format, size and pixel size. */
+function reportBody(body: BodyContent): BodyContent {
+  if (!body.isBinary && !body.media) return body
+  const media = body.media
+  return {
+    ...body,
+    text: body.isBinary ? '' : body.text,
+    media: media ? { format: media.format, width: media.width, height: media.height } : undefined,
+  }
 }
 
 function asData(value: unknown): Record<string, unknown> {

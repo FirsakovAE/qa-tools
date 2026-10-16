@@ -73,6 +73,7 @@ button { cursor: pointer; }
 .search:focus { border-color: rgb(var(--qa-brand) / .7); }
 .check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgb(var(--qa-text-2)); white-space: nowrap; }
 .menu-btn { display: none; border: 0; background: none; padding: 4px 6px; font-size: 18px; }
+.sidebar-backdrop { display: none; }
 
 /* Layout */
 .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px minmax(0, 1fr) minmax(0, 1fr); }
@@ -144,6 +145,10 @@ button { cursor: pointer; }
 /* Kind colors */
 .k-request { --c: var(--qa-sky); }
 .k-response { --c: var(--qa-green); }
+.k-ws { --c: var(--qa-sky); }
+.k-ws-sent { --c: var(--qa-sky); }
+.k-ws-received { --c: var(--qa-green); }
+.k-ws-closed { --c: var(--qa-orange); }
 .k-props { --c: var(--qa-teal); }
 .k-emit { --c: var(--qa-pink); }
 .k-store { --c: var(--qa-yellow); }
@@ -282,10 +287,11 @@ button { cursor: pointer; }
 .d-head { flex: none; display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-bottom: 1px solid rgb(var(--qa-divider)); }
 .d-head-main { flex: 1; min-width: 0; }
 .d-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.d-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-title { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .d-sub { margin-top: 2px; font-size: 12px; color: rgb(var(--qa-text-3)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid transparent; border-radius: 6px; background: none; color: rgb(var(--qa-text-2)); font-size: 15px; line-height: 1; }
 .icon-btn:hover { background: rgb(var(--qa-bg-mute)); color: rgb(var(--qa-text-1)); }
+.back-icon { display: block; }
 .d-actions { flex: none; display: flex; align-items: center; gap: 6px; }
 .pair-btn { flex: none; display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid rgb(var(--qa-border)); border-radius: 6px; color: rgb(var(--qa-text-2)); font-size: 12px; font-weight: 500; white-space: nowrap; }
 .pair-btn:hover { border-color: rgb(var(--qa-brand) / .6); background: rgb(var(--qa-brand) / .1); color: rgb(var(--qa-brand)); }
@@ -327,6 +333,26 @@ button { cursor: pointer; }
 
 noscript { display: block; padding: 24px; color: rgb(var(--qa-text-2)); }
 
+.ws-frame { margin: 0 0 16px; }
+.ws-frame:last-child { margin-bottom: 0; }
+.ws-frame .media-bar { margin: 0 0 8px; }
+.media-card { display: flex; flex-direction: column; }
+.media-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  color: rgb(var(--qa-text-2));
+  font-size: 14px;
+}
+.media-size { font-size: 12px; color: rgb(var(--qa-text-3)); }
+.media-missing {
+  margin: 0;
+  padding: 16px 12px;
+  color: rgb(var(--qa-text-3));
+  font-size: 13px;
+}
+
 @media (max-width: 1200px) {
   .layout { grid-template-columns: 230px minmax(0, 1fr); }
   .details { display: none; }
@@ -340,6 +366,7 @@ noscript { display: block; padding: 24px; color: rgb(var(--qa-text-2)); }
     background: rgb(var(--qa-bg));
     box-shadow: -12px 0 32px rgb(0 0 0 / .45);
   }
+  .list-focus.has-selection .details { display: none; }
 }
 @media (max-width: 760px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
@@ -348,7 +375,19 @@ noscript { display: block; padding: 24px; color: rgb(var(--qa-text-2)); }
   .search { width: 100%; }
   .sidebar { display: none; position: fixed; top: var(--qa-nav-h); left: 0; bottom: 0; width: 260px; z-index: 5; }
   .show-sidebar .sidebar { display: flex; }
+  .sidebar-backdrop {
+    position: fixed;
+    top: var(--qa-nav-h);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 4;
+    background: rgb(0 0 0 / .45);
+  }
+  .show-sidebar .sidebar-backdrop { display: block; }
   .main { padding: 16px 12px 32px; }
   .list-head, .row { grid-template-columns: 84px minmax(0, 1fr); }
   .list-head > :nth-child(2), .row > .badge { display: none; }
+  .row { box-shadow: inset 3px 0 rgb(var(--c, var(--qa-gray))); }
+  .row.active { box-shadow: inset 3px 0 rgb(var(--c, var(--qa-gray))); }
 }

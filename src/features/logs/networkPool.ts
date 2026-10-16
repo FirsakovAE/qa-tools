@@ -59,11 +59,18 @@ function formDataJson(body: BodyContent): string {
   return body.formData?.length ? JSON.stringify(body.formData) : ''
 }
 
+function mediaKey(body: BodyContent): string {
+  const media = body.media
+  if (!media) return ''
+  const url = media.dataUrl ?? ''
+  return `${media.format}|${media.width ?? ''}|${media.height ?? ''}|${url.length}|${url ? fnv1a(url) : ''}`
+}
+
 function bodySignature(body: BodyContent): string {
   const form = formDataJson(body)
   return [
     fnv1a(body.text ?? ''), body.text?.length ?? 0, body.contentType ?? '', body.isBinary ? 1 : 0,
-    body.truncated ? 1 : 0, body.originalSize ?? 0, form ? fnv1a(form) : '',
+    body.truncated ? 1 : 0, body.originalSize ?? 0, form ? fnv1a(form) : '', mediaKey(body),
   ].join(':')
 }
 
@@ -74,10 +81,11 @@ function sameBody(a: BodyContent, b: BodyContent): boolean {
     && !!a.truncated === !!b.truncated
     && a.originalSize === b.originalSize
     && formDataJson(a) === formDataJson(b)
+    && mediaKey(a) === mediaKey(b)
 }
 
 function bodySize(body: BodyContent): number {
-  return (body.text?.length ?? 0) + (body.contentType?.length ?? 0) + formDataJson(body).length + 80
+  return (body.text?.length ?? 0) + (body.contentType?.length ?? 0) + formDataJson(body).length + (body.media?.dataUrl?.length ?? 0) + 80
 }
 
 /** Page-visible headers as references into the full list (same name and value) */

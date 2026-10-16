@@ -54,6 +54,10 @@ function sendCommand(type: string, data: Record<string, any> = {}): void {
   })
 }
 
+export function sendNetworkCommand(type: string, data: Record<string, any> = {}): void {
+  sendCommand(type, data)
+}
+
 function normalizeEntry(entry: any): NetworkEntry {
   return { ...entry, version: entry.version ?? 1 }
 }

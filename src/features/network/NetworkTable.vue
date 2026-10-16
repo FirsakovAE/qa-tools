@@ -75,9 +75,29 @@ function getMethodVariant(method: string): 'default' | 'secondary' | 'destructiv
 
 // Format status display
 function formatStatus(entry: NetworkEntry): string {
+  if (entry.initiator === 'websocket') {
+    const socket = entry.websocket
+    if (socket?.state === 'open') return 'Open'
+    if (entry.pending || socket?.state === 'connecting') return '⏳'
+    if (entry.error && socket?.state !== 'closed') return '✗'
+    if (socket?.closeCode && socket.closeCode !== 1005) return String(socket.closeCode)
+    return 'Closed'
+  }
   if (entry.pending) return '⏳'
   if (entry.error) return '✗'
   return String(entry.status)
+}
+
+function statusClassFor(entry: NetworkEntry): string {
+  if (entry.initiator !== 'websocket') return getStatusClass(entry.status, entry.pending)
+  const socket = entry.websocket
+  if (socket?.state === 'open') return 'bg-green-500/20 text-green-500 border-green-500/30'
+  if (entry.pending || socket?.state === 'connecting') return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30'
+  const code = socket?.closeCode
+  const abnormal = !!entry.error || (socket?.state === 'closed' && code != null && code !== 1000 && code !== 1001 && code !== 1005)
+  if (abnormal) return 'bg-red-500/20 text-red-500 border-red-500/30'
+  if (socket?.state === 'closed') return 'bg-muted text-muted-foreground border-border'
+  return 'bg-green-500/20 text-green-500 border-green-500/30'
 }
 
 // Column visibility from settings
@@ -143,14 +163,20 @@ function matchesMockPattern(entryId: string): boolean {
   return props.mockMatchingIds?.has(entryId) ?? false
 }
 
-function onRowClick(id: string, event: MouseEvent) {
-  if (event.shiftKey || event.ctrlKey || event.metaKey) emit('check', id, event)
-  else emit('select', id)
+function onRowClick(entry: NetworkEntry, event: MouseEvent) {
+  if (event.shiftKey || event.ctrlKey || event.metaKey) {
+    if (entry.initiator === 'websocket') return
+    emit('check', entry.id, event)
+    return
+  }
+  emit('select', entry.id)
 }
 
 function onRowMousedown(event: MouseEvent) {
   if (event.shiftKey) event.preventDefault()
 }
+
+const headerCheckDisabled = computed(() => props.entries.every(entry => entry.initiator === 'websocket'))
 
 const ROW_HEIGHT = 40
 </script>
@@ -167,7 +193,8 @@ const ROW_HEIGHT = 40
       <RowCheckCell
         header
         :state="headerCheckState"
-        :title="headerCheckState === true ? 'Unselect all' : 'Select all for export (Ctrl+A)'"
+        :disabled="headerCheckDisabled"
+        :title="headerCheckDisabled ? 'WebSocket is not included in Export Collection' : (headerCheckState === true ? 'Unselect all' : 'Select all for export')"
         @toggle="emit('checkAll')"
       />
       <div v-if="columns.status" class="network-cell network-cell-status">Status</div>
@@ -204,18 +231,19 @@ const ROW_HEIGHT = 40
                     'network-row-mock-match-muted': matchesMockPattern(entry.id) && selectedId !== entry.id && !hasBreakpoint(entry.id) && !props.mocksRulesActive,
                   }"
                   @mousedown="onRowMousedown"
-                  @click="onRowClick(entry.id, $event)"
+                  @click="onRowClick(entry, $event)"
                 >
                   <RowCheckCell
                     :state="checkedIds.has(entry.id)"
-                    title="Select for export (Shift — range, Ctrl/Cmd+click on row — toggle)"
+                    :disabled="entry.initiator === 'websocket'"
+                    :title="entry.initiator === 'websocket' ? 'WebSocket is not included in Export Collection' : 'Select for export (Shift — range, Ctrl/Cmd+click on row — toggle)'"
                     @toggle="emit('check', entry.id, $event)"
                   />
                   <div v-if="columns.status" class="network-cell network-cell-status">
                     <Badge
                       variant="outline"
                       class="text-xs font-mono px-1.5 py-0"
-                      :class="getStatusClass(entry.status, entry.pending)"
+                      :class="statusClassFor(entry)"
                     >
                       {{ formatStatus(entry) }}
                     </Badge>
@@ -225,6 +253,7 @@ const ROW_HEIGHT = 40
                     <Badge
                       :variant="getMethodVariant(entry.method)"
                       class="text-xs font-mono px-1.5 py-0"
+                      :class="entry.method === 'WS' ? 'text-sky-400 border-sky-400/40' : ''"
                     >
                       {{ entry.method }}
                     </Badge>
@@ -260,11 +289,19 @@ const ROW_HEIGHT = 40
                   <div class="network-cell network-cell-actions virtual-table__cell-actions">
                     <DropdownMenu>
                       <DropdownMenuTrigger as-child>
-                        <Button variant="ghost" size="icon" class="h-6 w-6 p-0" @click.stop>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-6 w-6 p-0"
+                          :disabled="entry.initiator === 'websocket'"
+                          :title="entry.initiator === 'websocket' ? 'No actions for WebSocket' : undefined"
+                          @click.stop
+                        >
                           <MoreHorizontal class="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <NetworkActionsMenuContent
+                        v-if="entry.initiator !== 'websocket'"
                         variant="dropdown"
                         :entry="entry"
                         :breakpoint-matching-ids="breakpointMatchingIds"
@@ -285,6 +322,7 @@ const ROW_HEIGHT = 40
               </ContextMenuTrigger>
 
               <NetworkActionsMenuContent
+                v-if="entry.initiator !== 'websocket'"
                 variant="context"
                 :entry="entry"
                 :breakpoint-matching-ids="breakpointMatchingIds"

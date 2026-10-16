@@ -45,7 +45,7 @@ function context(source: LogsSource) {
 }
 
 export function networkEntryOf(event: LogEvent, source: LogsSource): NetworkEntry | undefined {
-  if (event.kind !== 'request' && event.kind !== 'response') return undefined
+  if (event.kind !== 'request' && event.kind !== 'response' && event.kind !== 'ws' && event.kind !== 'ws-sent' && event.kind !== 'ws-received' && event.kind !== 'ws-closed') return undefined
   const id = event.data?.entryId
   return typeof id === 'string' ? source.pool.get(id) : undefined
 }
@@ -98,9 +98,14 @@ export function pairedNetworkEvent(
   source: LogsSource,
   getEvent: (id: string) => LogEvent | undefined,
 ): LogEvent | null {
-  if (!event || (event.kind !== 'request' && event.kind !== 'response')) return null
+  if (!event) return null
   const entryId = event.data?.entryId
   if (typeof entryId !== 'string') return null
+  if (event.kind === 'ws' || event.kind === 'ws-sent' || event.kind === 'ws-received') {
+    return getEvent(`net-ws-close-${entryId}`) ?? null
+  }
+  if (event.kind === 'ws-closed') return getEvent(`net-ws-${entryId}`) ?? null
+  if (event.kind !== 'request' && event.kind !== 'response') return null
   const pairKind = event.kind === 'request' ? 'response' : 'request'
   const byConvention = getEvent(`net-${pairKind === 'request' ? 'req' : 'res'}-${entryId}`)
   if (byConvention?.kind === pairKind && byConvention.data?.entryId === entryId) return byConvention

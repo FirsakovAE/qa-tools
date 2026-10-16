@@ -9,7 +9,7 @@ The **Network** tab and **Options → Network** provide two interception mechani
 * **Breakpoint** — pause an outgoing request **before it hits the network**, edit parameters, then continue;
 * **Mock response** — return a crafted response **without calling the server**.
 
-Both apply only to **`fetch`** and **`XMLHttpRequest`** on the current page.
+Both apply to **`fetch`** and **`XMLHttpRequest`** on the current page. WebSocket rows are observed only: breakpoint and mock rules do not apply to them.
 
 On a narrow panel the list and the request details share one screen. Saving a breakpoint or mock, or leaving that form with the back button, closes the details. On a wide panel the details stay open.
 

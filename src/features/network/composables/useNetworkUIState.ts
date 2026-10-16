@@ -18,6 +18,7 @@ export type NetworkDetailsSectionId =
   | 'headers'
   | 'request'
   | 'response'
+  | 'messages'
 
 /** Last Network details sub-tab (Params, Headers, …) for this session */
 const lastNetworkDetailsSection = ref<NetworkDetailsSectionId>('response')
@@ -33,11 +34,19 @@ const networkHeadersCollapse = reactive({
 export function resolveNetworkDetailsSection(
   preferred: NetworkDetailsSectionId,
   hasUrlTab: boolean,
+  websocket = false,
+  editingMessage = false,
 ): NetworkDetailsSectionId {
-  const allowed: NetworkDetailsSectionId[] = hasUrlTab
-    ? ['url', 'params', 'headers', 'request', 'response']
-    : ['params', 'headers', 'request', 'response']
-  return allowed.includes(preferred) ? preferred : 'response'
+  const allowed: NetworkDetailsSectionId[] = editingMessage
+    ? ['request']
+    : websocket
+      ? ['headers', 'messages']
+      : hasUrlTab
+        ? ['url', 'params', 'headers', 'request', 'response']
+        : ['params', 'headers', 'request', 'response']
+  if (allowed.includes(preferred)) return preferred
+  if (editingMessage) return 'request'
+  return websocket ? 'messages' : 'response'
 }
 
 /**

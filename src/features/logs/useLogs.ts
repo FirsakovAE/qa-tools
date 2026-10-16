@@ -36,6 +36,7 @@ import { logsRuntime as rt } from '@/injected/logs/runtime'
 import { createSnapshotStore } from '@/injected/logs/snapshots'
 import { sanitizeNetworkEntry } from './sanitizeNetwork'
 import { createNetworkPool } from './networkPool'
+import { centrifugeWillReconnect } from '@/features/network/centrifuge'
 import type { LogsSource } from './view'
 
 const COMMIT_DELAY_MS = 100
@@ -99,8 +100,12 @@ function syncConfig(): void {
 // Event list (sorted by timestamp, ring per group + memory budget)
 // ============================================================================
 
+function isWsKind(kind: string): boolean {
+  return kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed'
+}
+
 function isNetworkEvent(event: LogEvent): boolean {
-  return event.kind === 'request' || event.kind === 'response'
+  return event.kind === 'request' || event.kind === 'response' || isWsKind(event.kind)
 }
 
 function eventSize(event: LogEvent): number {
@@ -233,15 +238,89 @@ function requestEvent(entry: NetworkEntry, key: string): LogEvent {
 
 function responseEvent(entry: NetworkEntry, key: string): LogEvent {
   const failed = !!entry.error || entry.status === 0 || entry.status >= 400
+  const level: LogEvent['level'] = failed ? (entry.status >= 400 && entry.status < 500 ? 'warn' : 'error') : 'info'
   return {
     id: `net-res-${entry.id}`,
     kind: 'response',
     timestamp: entryTimestamp(entry) + (entry.duration || 0),
     key,
-    level: failed ? (entry.status >= 400 && entry.status < 500 ? 'warn' : 'error') : 'info',
+    level,
     data: { entryId: entry.id },
     size: NETWORK_EVENT_SIZE,
   }
+}
+
+function withReconnect(entry: NetworkEntry): NetworkEntry {
+  const reconnect = centrifugeWillReconnect(entry)
+  if (reconnect !== false || !entry.websocket) return entry
+  return { ...entry, websocket: { ...entry.websocket, reconnect: false } }
+}
+
+function wsLevel(entry: NetworkEntry): LogEvent['level'] {
+  const code = entry.websocket?.closeCode
+  const clean = code === 1000 || code === 1001 || code === 1005 || code == null
+  if (entry.websocket?.reconnect === false || entry.error) return 'error'
+  return clean ? 'info' : 'warn'
+}
+
+/**
+ * One pooled connection. Opening, each frame and the close are their own events and all
+ * point at that entry. A duration tick while the socket stays quiet does not add a row.
+ */
+function ingestWebSocket(raw: NetworkEntry): void {
+  if (!isCaptured(limits.value, 'ws')) return
+  const prepared = withReconnect(raw)
+  const key = networkLogKey({ ...prepared, url: sanitizer.value.maskString(prepared.url ?? ''), path: sanitizer.value.maskString(prepared.path ?? '') })
+  const openId = `net-ws-${prepared.id}`
+  const closeId = `net-ws-close-${prepared.id}`
+  const closed = prepared.websocket?.state === 'closed'
+  const frames = prepared.websocket?.frames ?? []
+  const needOpen = !byId.has(openId) && !isIgnored({ kind: 'ws', key })
+  const needClose = closed && !byId.has(closeId) && !isIgnored({ kind: 'ws-closed', key })
+  const freshFrames = frames.filter(frame => {
+    const kind: LogKind = frame.direction === 'sent' ? 'ws-sent' : 'ws-received'
+    return !byId.has(`net-ws-${prepared.id}-${frame.id}`) && !isIgnored({ kind, key })
+  })
+  if (!needOpen && !needClose && freshFrames.length === 0) return
+
+  const { entry, fixedSize } = sanitizeNetworkEntry(prepared, sanitizer.value, maxEventChars(limits.value))
+  pool.put(entry, fixedSize)
+  if (needOpen) {
+    upsertEvent({
+      id: openId,
+      kind: 'ws',
+      timestamp: entryTimestamp(entry),
+      key,
+      level: 'info',
+      data: { entryId: entry.id },
+      size: NETWORK_EVENT_SIZE,
+    })
+  }
+  for (const frame of freshFrames) {
+    upsertEvent({
+      id: `net-ws-${entry.id}-${frame.id}`,
+      kind: frame.direction === 'sent' ? 'ws-sent' : 'ws-received',
+      timestamp: frame.time || entryTimestamp(entry),
+      key,
+      level: 'info',
+      data: { entryId: entry.id, frameId: frame.id },
+      size: NETWORK_EVENT_SIZE,
+    })
+  }
+  if (needClose) {
+    upsertEvent({
+      id: closeId,
+      kind: 'ws-closed',
+      timestamp: entryTimestamp(entry) + (entry.duration || 0),
+      key,
+      level: wsLevel(entry),
+      data: { entryId: entry.id },
+      size: NETWORK_EVENT_SIZE,
+    })
+  }
+  pool.collect(entry.id)
+  poolChanged = true
+  scheduleCommit()
 }
 
 /**
@@ -268,6 +347,10 @@ function ingestNetworkEntry(raw: NetworkEntry, request: 'add' | 'upsert' | null,
 
 function processNetworkMessage(msg: any): void {
   if (paused.value) return
+  if (msg.entry?.initiator === 'websocket') {
+    if (msg.type === 'NETWORK_ENTRY_CAPTURED' || msg.type === 'NETWORK_ENTRY_UPDATED') ingestWebSocket(msg.entry)
+    return
+  }
 
   switch (msg.type) {
     case 'NETWORK_ENTRY_CAPTURED':
@@ -288,6 +371,10 @@ function processNetworkMessage(msg: any): void {
       if (Array.isArray(msg.entries)) {
         for (const entry of msg.entries as NetworkEntry[]) {
           if (entryTimestamp(entry) < clearedAt) continue
+          if (entry.initiator === 'websocket') {
+            ingestWebSocket(entry)
+            continue
+          }
           ingestNetworkEntry(entry, 'add', entry.pending ? null : 'add')
         }
       }

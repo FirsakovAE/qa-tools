@@ -21,6 +21,8 @@ import type {
   MockMatch
 } from './types'
 import { looksLikeFormDataDraftJson } from '../../utils/jsonGuards'
+import { captureResponseMedia, isBinaryContentType, isPreviewableImage, mediaFormatLabel, resolveMime, type MediaInfo } from './media-preview'
+import { installWebSocketCapture, restoreWebSocketCapture } from './websocket'
 
 // Store original implementations
 const originalFetch = window.fetch
@@ -261,6 +263,52 @@ async function readResponseBody(response: Response, clone: Response): Promise<st
     }
     return null
   }
+}
+
+/**
+ * Text body, or a binary summary (format, pixel size, image data URL).
+ * The clone is consumed.
+ */
+async function takeResponseBody(response: Response, clone: Response): Promise<{
+  body: string | null
+  truncated: boolean
+  originalSize: number
+  media?: MediaInfo
+}> {
+  const contentType = response.headers.get('content-type') || ''
+  if (isBinaryContentType(contentType)) {
+    const mime = resolveMime(contentType)
+    const contentLength = Number(response.headers.get('content-length')) || 0
+    if (!isPreviewableImage(mime) && mime !== 'application/octet-stream') {
+      try { await clone.body?.cancel() } catch { /* already consumed */ }
+      return { body: null, truncated: false, originalSize: contentLength, media: { format: mediaFormatLabel(contentType) } }
+    }
+    try {
+      const blob = await clone.blob()
+      const captured = await captureResponseMedia(blob, contentType)
+      return { body: null, truncated: false, originalSize: captured.byteLength || contentLength, media: captured.media }
+    } catch (error) {
+      console.error('[injected/network] capture media failed:', error)
+      return { body: null, truncated: false, originalSize: contentLength, media: { format: mediaFormatLabel(contentType) } }
+    }
+  }
+  const text = await readResponseBody(response, clone)
+  const trunc = truncateBody(text)
+  return {
+    body: trunc.truncated ? trunc.text : text,
+    truncated: trunc.truncated,
+    originalSize: trunc.originalSize,
+  }
+}
+
+async function xhrResponseBlob(xhr: XMLHttpRequest, contentType: string): Promise<Blob | null> {
+  try {
+    if (xhr.responseType === 'blob' && xhr.response instanceof Blob) return xhr.response
+    if (xhr.responseType === 'arraybuffer' && xhr.response instanceof ArrayBuffer) {
+      return new Blob([xhr.response], { type: contentType })
+    }
+  } catch { /* responseType may throw while the request is still loading */ }
+  return null
 }
 
 /**
@@ -891,11 +939,10 @@ function interceptFetch(): void {
         if (match) {
           
           // Read response body BEFORE waiting for resume (so UI can show it)
-          responseBody = await readResponseBody(response, clone)
-          const trunc = truncateBody(responseBody)
-          let bodyText = trunc.text
-          let truncated = trunc.truncated
-          let originalSize = trunc.originalSize
+          const taken = await takeResponseBody(response, clone)
+          responseBody = taken.body
+          const media = taken.media
+          const originalSize = taken.originalSize
 
           // Calculate size
           const contentLength = getContentLength(responseHeaders)
@@ -908,9 +955,10 @@ function interceptFetch(): void {
               status: response.status,
               statusText: response.statusText,
               headers: responseHeaders,
-              body: truncated ? bodyText : responseBody,
+              body: responseBody,
               size,
-              duration
+              duration,
+              media
             })
           }
 
@@ -965,11 +1013,10 @@ function interceptFetch(): void {
       }
 
       // No response breakpoint - read body normally from the existing clone
-      responseBody = await readResponseBody(response, clone)
-      const trunc = truncateBody(responseBody)
-      let bodyText = trunc.text
-      let truncated = trunc.truncated
-      let originalSize = trunc.originalSize
+      const taken = await takeResponseBody(response, clone)
+      responseBody = taken.body
+      const media = taken.media
+      const originalSize = taken.originalSize
 
       // Calculate size
       const contentLength = getContentLength(responseHeaders)
@@ -981,9 +1028,10 @@ function interceptFetch(): void {
           status: response.status,
           statusText: response.statusText,
           headers: responseHeaders,
-          body: truncated ? bodyText : responseBody,
+          body: responseBody,
           size,
-          duration
+          duration,
+          media
         })
       }
       
@@ -1561,20 +1609,43 @@ function interceptXHR(): void {
         }
       })
       
-      // Get response body
+      // Get response body. Binary XHR bytes are available only when the page
+      // already asked for a blob or arraybuffer; responseText would corrupt them.
       let responseBody: string | null = null
+      let media: MediaInfo | undefined
       const contentType = this.getResponseHeader('content-type') || ''
-      const binaryTypes = ['image/', 'audio/', 'video/', 'application/octet-stream']
-      
-      if (!binaryTypes.some(type => contentType.toLowerCase().startsWith(type))) {
+      let originalSize = 0
+
+      if (isBinaryContentType(contentType)) {
+        const mime = resolveMime(contentType)
+        if (!isPreviewableImage(mime) && mime !== 'application/octet-stream') {
+          media = { format: mediaFormatLabel(contentType) }
+        } else {
+          const blob = await xhrResponseBlob(this, contentType)
+          if (blob) {
+            try {
+              const captured = await captureResponseMedia(blob, contentType)
+              media = captured.media
+              originalSize = captured.byteLength
+            } catch (error) {
+              console.error('[injected/network] capture xhr media failed:', error)
+              media = { format: mediaFormatLabel(contentType) }
+            }
+          } else {
+            media = { format: mediaFormatLabel(contentType) }
+          }
+        }
+      } else {
         try {
           responseBody = this.responseText
         } catch {
           responseBody = null
         }
+        const trunc = truncateBody(responseBody)
+        responseBody = trunc.truncated ? trunc.text : responseBody
+        originalSize = trunc.originalSize
       }
-      
-      const { text: bodyText, truncated, originalSize } = truncateBody(responseBody)
+
       const contentLength = parseInt(this.getResponseHeader('content-length') || '0', 10)
       const size = contentLength || originalSize
       
@@ -1594,7 +1665,8 @@ function interceptXHR(): void {
               status: this.status,
               statusText: this.statusText,
               headers: responseHeaders,
-              body: truncated ? bodyText : responseBody,
+              body: responseBody,
+              media,
               size,
               duration
             })
@@ -1683,7 +1755,8 @@ function interceptXHR(): void {
               status: this.status,
               statusText: this.statusText,
               headers: responseHeaders,
-              body: truncated ? bodyText : responseBody,
+              body: responseBody,
+              media,
               size,
               duration
             })
@@ -1701,7 +1774,8 @@ function interceptXHR(): void {
             status: this.status,
             statusText: this.statusText,
             headers: responseHeaders,
-            body: truncated ? bodyText : responseBody,
+            body: responseBody,
+            media,
             size,
             duration
           })
@@ -1823,6 +1897,7 @@ function restoreNativeNetworkAPIs(): void {
   XMLHttpRequest.prototype.open = originalXHROpen
   XMLHttpRequest.prototype.send = originalXHRSend
   XMLHttpRequest.prototype.setRequestHeader = originalXHRSetRequestHeader
+  restoreWebSocketCapture()
 
   if (originalXHRResponseTypeDescriptor) {
     Object.defineProperty(XMLHttpRequest.prototype, 'responseType', originalXHRResponseTypeDescriptor)
@@ -1835,6 +1910,10 @@ function restoreNativeNetworkAPIs(): void {
 function installNetworkPatches(): void {
   interceptFetch()
   interceptXHR()
+  installWebSocketCapture({
+    isPaused: () => isPaused,
+    onUpdate: (snapshot, isNew) => callbacks?.onWebSocket?.(snapshot, isNew),
+  })
 }
 
 // ============================================================================

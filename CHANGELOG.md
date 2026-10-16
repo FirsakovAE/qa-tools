@@ -342,119 +342,94 @@ The **Classic / Advanced** choice selects the JSON implementation across the UI 
 
 ### Logs
 
-A new **Logs** tab: one chronological journal of what happens on the page. The tab is always visible, comes after **Pinia Store**, and works in both the extension and **Bookmark** (Standalone) modes.
+A new **Logs** tab: one chronological journal of page events. Available in the extension and in **Bookmark** (Standalone) mode, always placed after **Pinia Store**.
 
 #### Event types
 
-* **Send request** / **Receive response** — every **fetch** / **XMLHttpRequest** call is logged as two events that share one network entry. The request event shows **Params**, **Headers**, **Authorization** and **Body** of the request, the response event shows **Status**, **Duration**, **Size**, **Headers** and **Body** of the response.
-* **Change props** — changed props of a component with the list of changes and full **Before** / **After** snapshots.
-* **Emit** — component events: component, event name, arguments, listener type (**regular** / **once**), parent chain.
-* **Change store** — changed **Pinia** state with the list of changes and full **Before** / **After** snapshots. A store created while logging gets a **Store initialized** event with its full state, a store that already existed when logging started gets a **Store snapshot**; later events store only the changes, and **Before** / **After** are restored from them. A recorded store state is split like on the **Pinia Store** tab: `state` holds the declared state, `getters` holds getters and data the store keeps outside its declared state (for example, fields assigned in actions of an options store with an empty `state()`); changes of both are logged.
-* **Store action** — **Pinia** action calls: arguments, result or error, status and duration.
-* **Navigation** — SPA navigation (**pushState**, **replaceState**, **popstate**, **hashchange**) with **From** / **To**.
-* **JS error** — uncaught errors, unhandled promise rejections and `console.error` calls of the page, with message, source, location and a compact stack (the top 10 frames; a cut is marked). Messages of Vue Inspector itself and of other browser extensions are not logged, including its internal reports of failed fetch / XHR requests (they are already **Network** events); the app’s own error messages about requests are kept. Errors of the inspected page are not listed in the extension error list (`chrome://extensions`); that list shows only failures of Vue Inspector itself.
+* **Send request** / **Receive response** — `fetch` / `XMLHttpRequest` requests and responses with parameters, headers, body, status, duration and size.
+* **WebSocket open** / **WebSocket sent** / **WebSocket received** / **WebSocket closed** — opening and closing connections, sent and received messages, headers, duration and the close reason.
+* **Change props** — component prop changes with a **Before** / **After** comparison.
+* **Emit** — component events, arguments, listener type and the parent chain.
+* **Change store** — Pinia state changes with a **Before** / **After** comparison. An existing store keeps an initial snapshot; a new store keeps its full state at creation.
+* **Store action** — arguments, result or error, status and duration of Pinia actions.
+* **Navigation** — SPA navigation with **From** / **To**. The current page is saved when recording starts and after **Clear**.
+* **JS error** — uncaught errors, unhandled promise rejections and page `console.error` calls. The message, source, location and stack are shown. Messages of Vue Inspector itself and of other browser extensions are not recorded.
 
-#### Logs table
+#### Table and details
 
-* Columns: **Time**, **Type**, **Event**; failed requests and errors are highlighted (**4xx** — warning, **5xx** / network errors / failed actions / JS errors — error).
-* **Type** filter: all types are enabled by default; when every type is turned off, nothing is shown.
-* Search by event name (title, component, store, URL), by key (payload keys and changed paths) and by value; the modes are preset in **Options → Logs → Search Settings**. Quoted queries use exact matching.
-* **Pause** / resume recording and **Clear**.
-* Events are recorded in the page from the moment the inspector loads, so the history is available when the tab is opened later.
+* Columns **Time**, **Type**, **Event**, with highlighting for errors and failed requests: **4xx** is a warning, **5xx** and errors are a critical status.
+* Filter by event type and search by names, keys and values. Search modes are set in **Options → Logs → Search Settings**; a quoted query matches exactly.
+* **Pause** stops recording, **Clear** empties the journal. Events are collected from the moment the inspector starts, even if the **Logs** tab is opened later.
+* Details depend on the event type and include the relevant data: request parameters, headers, JSON, WebSocket messages, event arguments and state snapshots.
+* Prop and Pinia changes include a **diff** of added, removed and changed paths.
+* Actions menu: **Export event**, **Copy cURL**, jump to the paired request or response, **Ignore** to stop recording the selected group of events.
 
-#### Event details
+#### Selection and export
 
-* Details use the same layout as **Network**: tab strip, tables of name/value pairs and **JSON** blocks with the selected JSON mode.
-* Tabs depend on the type:
+* Select events with checkboxes, **Shift + click** for a range, **Ctrl / Cmd + click** to toggle individual rows.
+* **Export Logs (n)** exports the selected events. With nothing selected, every event that matches the current filters is exported.
+* Requests and responses are always exported together.
+* **Export Logs** and a single-event export create a self-contained HTML report, format version 1, that opens offline.
+* Pinia changes in the report keep the data needed to view **Before** / **After**, even when earlier events were not exported.
 
-  * **Send request** — **Overview**, **Params (n)**, **Headers**, **Body**, **Raw**;
-  * **Receive response** — **Overview**, **Headers**, **Body**, **Raw**;
-  * **Change props** / **Change store** — **Changes (n)** (diff with added / removed / changed paths), **Before**, **After**, **Raw**;
-  * **Store initialized** / **Store snapshot** / **Store checkpoint** — **State**, **Overview**, **Raw**;
-  * **Store action** — **Overview**, **Arguments**, **Result** / **Error**, **Raw**;
-  * **Emit** — **Arguments (n)**, **Overview**, **Raw**;
-  * **Navigation** / **JS error** — **Overview**, **Stack** (for errors), **Raw**.
+### HTML report
 
-* Actions are collected in the **⋮** menu of the details header and in the row context menu:
+A self-contained HTML report with a dark theme and no external resources.
 
-  * **Export event** — single-event export; for **Send request** / **Receive response** it is **Export request & response** and exports both events of the request in one file;
-  * **Copy cURL** — for both network events (they share the request data);
-  * **Open request event** / **Open response event** — jump to the paired network event;
-  * **Ignore** — stop logging this group of events (same request, component, store, etc.).
-
-#### Selection for export
-
-* A checkbox column was added at the start of the **Logs** table (same position as the favorites star in **Props** and **Pinia**).
-* Hotkeys: **Shift + click** — select a range, **Ctrl / Cmd + click** on a row — toggle a row, **Ctrl / Cmd + A** — select all filtered rows; the header checkbox selects or clears everything.
-* When rows are selected, **Export Logs (n)** exports only them; otherwise all filtered events are exported. Network events are always exported with their pair (request + response).
-
-#### Export
-
-* **Export Logs** and single-event exports download an **HTML** report (format version 1) that opens offline. A **Change store** event whose previous store event is not exported carries its full state, so **Before** / **After** stay available in the file.
-* The report is static and self-contained (dark theme, no external resources) and repeats the **Logs** tab:
-
-  * sidebar navigation by sections (**Report**, **Network**, **Components**, **Pinia**, **Page**) with event counters;
-  * **Overview** with summary cards; **Events**, **Errors** and **Failed requests** open **All events** with the matching filter;
-  * search across titles or inside data (**in data**), keyboard navigation (**↑ / ↓**, **Esc**), deep links to a selected event;
-  * event details with the same tabs as in the app, a button that jumps between a request and its response, and **All events →**, which opens **All events** with this event at the top of the list;
-  * **Support Vue Inspector** above **Download Vue Inspector**: **Monthly support** opens Boosty, **Donate with USDT** shows the Tron (TRC-20) address, a QR code and **Copy address**.
-
-#### Data safety and limits
-
-* Sensitive data is masked when an event is captured, so it never reaches the view or exports:
-
-  * by key: password, token, secret, authorization, cookie, apikey, card number, cvv, otp and others (list is editable);
-  * by value: **JWT**, **Bearer** / **Basic** credentials and card numbers inside any text.
-
-* Every event group (**Network**, **Props changes**, **Emits**, **Pinia changes**, **Store actions**, **Navigation**, **JS errors**) can be turned off with a checkbox: it is not logged at all.
-* Old **Change store** events are compacted into a **Store checkpoint** (*initial state → checkpoint → recent changes*) instead of being dropped, so the remaining changes keep their **Before** / **After**.
-* A shared **memory budget** (20 MB by default): when it is reached, the oldest events are dropped; the newest event is always kept. A network entry shared by a request and its response, and equal bodies, are counted once. A budget already saved in settings stays until **Defaults**.
-* Identical values inside any event are stored once; later copies are references. The **Logs** tab and the HTML report restore the full value, and **Export Logs** no longer expands those copies on the main thread.
-* Events are kept whole by default (store states, props, emit arguments, network bodies), so an exported report has complete data. An optional **max event size** (512 KB by default) drops large parts of an event and truncates network bodies with a notice in the details.
-
-#### Options → Logs
-
-* **Search Settings** — default search modes.
-* **Ignore list** — ignored event groups with **Log again** and **Log all again**.
-* **Logs and limits** — checkboxes for event groups, memory budget, optional max event size (the size field is shown only when **Limit event size** is on), current usage (**Used X of Y**) and **Defaults**.
-* **Data masking** — enable masking, value patterns, own key list and **Default keys**. The description states that values are masked when an event is captured.
-
----
+* Sections **Report**, **Network**, **WebSocket**, **Components**, **Pinia**, **Page** with event counters.
+* **Overview** summary, and **Events**, **Errors** and **Failed requests** cards that open the matching events.
+* Search by titles and inside data (**in data**).
+* Keyboard navigation (**↑ / ↓**, **Esc**) and direct links to events.
+* Details with the same tabs as **Logs**, and a jump between a request and its response.
+* **Locate** opens the event list and brings the selected event into view.
+* A **Support Vue Inspector** section with links to Boosty and a USDT donation over Tron (TRC-20).
 
 ### Network
 
-* A checkbox column was added at the start of the **Network** table with the same hotkeys as in **Logs**; **Export Collection (n)** exports only the selected requests. The header checkbox uses the header text color; checkboxes in the rows stay as they are (the same in **Logs**).
-* **bp** and **mock** counts open a list of the active rules, in the same way as **ignored** on the **Logs** tab. **Pause** disables a rule without deleting it; **×** deletes it. Only active rules are listed. The pulsing **bp** chip still selects the request that is waiting.
-* On a narrow panel, saving a breakpoint or mock, or leaving that form with the back button, closes the request details. On a wide panel the details stay open.
-* After a request is edited at a **Breakpoint**, **Network** and **Logs** show the data that was actually sent (URL, method, headers, body), not the data captured before the pause.
-
----
+* Select requests with checkboxes and export only the selected rows with **Export Collection (n)**.
+* **bp** and **mock** counts open the list of active rules. **Pause** suspends a rule, **×** deletes it.
+* On a narrow panel, saving a **Breakpoint** / **Mock** or leaving the form with the back button closes the request details. On a wide panel they stay open.
+* After a request or response is edited at a **Breakpoint**, the data that was actually sent is shown.
+* WebSocket connections are listed as separate **WS** rows, including ones already open when the inspector starts.
+* **Headers** shows the handshake headers, **Messages** shows sent and received frames, newest first. JSON is formatted; direction and size are shown.
+* The latest 200 messages of a connection are kept. WebSocket is not included in **Export Collection**; **Breakpoint** and **Mock** stay available for HTTP.
+* **Logs** and the HTML report record WebSocket events separately: **open**, **sent**, **received**, **closed**.
+* A recognized Centrifuge close, for example **3501**, shows the reason and **No automatic reconnect**. Sending `{}` on that connection shows a warning that the socket may close.
+* Binary responses show a notice with the content type; in the HTML report it uses the same styling as the truncated-data warning.
 
 ### Props / Pinia Store
 
-* Removing keys in **Edit** mode is now saved:
+Saving removed keys in **Edit** mode is fixed.
 
-  * **Pinia** — removed nested keys are deleted from the store; removed top-level state keys are deleted (options stores) or set to `undefined` while keeping the ref link (setup stores);
-  * **Props** — a removed prop gets the value Vue uses for a prop that is not passed: its **default**, `false` for **Boolean** props, otherwise `undefined`; removed keys inside an object prop are deleted.
+* **Pinia** — nested keys are deleted from the store; removing top-level keys is handled for both options stores and setup stores.
+* **Props** — a removed prop gets the value Vue uses for a prop that is not passed: its **default**, `false` for **Boolean**, otherwise `undefined`. Nested keys of object props are deleted.
 
----
+### Options → Logs
+
+* **Search Settings** — default search modes.
+* **Ignore list** — ignored event groups, with **Log again** and **Log all again**.
+* **Logs and limits** — turn event types on and off, memory budget, event size limit and the **Used X of Y** indicator.
+* **Data masking** — masking of sensitive data, patterns and the key list.
+
+#### Data storage and limits
+
+* Sensitive data is masked when an event is recorded, by keys and by value patterns, including JWT, **Bearer** / **Basic** and card numbers.
+* The default memory budget is **20 MB**. When the limit is reached, older events are dropped.
+* Pinia change history is compacted into a **Store checkpoint**, so the remaining changes can still be viewed.
+* Repeated values are stored once and restored in full in the UI and in the HTML report.
+* Events are stored whole by default. An optional event size limit of **512 KB** limits the volume by dropping large parts of events and truncating network bodies.
 
 ### UI / UX
 
-* **Support Vue Inspector** sits at the bottom of the Options sidebar: **Monthly support** opens Boosty, **Donate with USDT** opens a dialog with the Tron (TRC-20) address, a QR code and **Copy address**. The two actions keep their own frames.
-* The project page has the same support actions under **Support Vue Inspector**, laid out like the closing call to action. **Donate with USDT** opens a dialog with the address and QR. The README ends with the same details.
-* Filter lists (**Search by** in **Network**, **Props**, **Pinia** and **Type** / **Search by** in **Logs**) use the UI kit scrollbar instead of the default browser one.
-* The favorites star column in **Pinia** is aligned with the first column of **Props**, **Network** and **Logs**.
-
----
+* **Options** has a **Support Vue Inspector** section with links to Boosty and a USDT donation over Tron (TRC-20).
+* Filter dropdowns use the UI kit scrollbar instead of the browser scrollbar.
+* The favorites column in **Pinia** is aligned with the columns in **Props**, **Network** and **Logs**.
 
 ### Fixes
 
-* Fixed the inspector failing to start on pages whose global variables clashed with names from the injected scripts (`Identifier '…' has already been declared`).
-* Fixed **Breakpoint** rules never matching requests made with relative URLs.
-* Fixed **Network** showing request data from before a **Breakpoint** edit.
-* Fixed response **Breakpoint** rules being checked against the original URL instead of the edited one.
-* Fixed **XMLHttpRequest** header edits at a **Breakpoint** not being applied when the URL and method stayed the same.
-* Fixed edited relative URLs at a **Breakpoint** not being resolved against the page address.
-* Fixed **Network** keeping the original response after the response was edited at a response **Breakpoint**.
-* Fixed removal of keys not being saved in **Pinia** and **Props** edit modes.
+* Fixed the inspector failing to start when page global names clashed with names in the injected scripts.
+* Fixed **Breakpoint** with relative request and response URLs.
+* Fixed the display of the request and response data that was actually sent after a **Breakpoint** edit.
+* Fixed applying edited `XMLHttpRequest` headers when the URL and method did not change.
+* Fixed resolving relative URLs that were edited at a **Breakpoint**.
+* Fixed saving removed keys when editing **Pinia** and **Props**.

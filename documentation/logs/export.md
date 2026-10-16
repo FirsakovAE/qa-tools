@@ -26,7 +26,7 @@ The embedded data uses format version 1.
 
 * Without a selection — all events visible in the table after **Search** and **Type** filters.
 * With a selection — only the rows ticked in the checkbox column; the button shows **Export Logs (n)**.
-* Network events are always exported as a pair: when only **Send request** or only **Receive response** of a request is filtered or selected, the other event is added to the file too.
+* Network events are always exported as a pair: when only **Send request** or only **Receive response** of a request is filtered or selected, the other event is added to the file too. A WebSocket frame stays the event that was selected.
 
 The button is disabled while the filtered list is empty.
 
@@ -34,7 +34,7 @@ The button is disabled while the filtered list is empty.
 
 **Export event** in the **⋮** menu of the details header or in the row context menu exports one event.
 
-For network events the item is called **Export request & response**: the **Send request** and **Receive response** events of the same request are exported together in one file, so the request and its response are never separated.
+For network events the item is called **Export request & response**: the **Send request** and **Receive response** events of the same request are exported together in one file, so the request and its response are never separated. A WebSocket event is exported on its own.
 
 ### Pinia changes in a partial export
 
@@ -59,7 +59,7 @@ The **HTML** report is one self-contained file: styles, scripts, the application
 ### Sidebar
 
 * **Report** — **Overview** and **All events** with the total count;
-* sections by type with counters: **Network** (**Send request**, **Receive response**), **Components** (**Change props**, **Emit**), **Pinia** (**Change store**, **Store action**), **Page** (**Navigation**, **JS error**);
+* sections by type with counters: **Network** (**Send request**, **Receive response**), **WebSocket** (**WebSocket open**, **WebSocket sent**, **WebSocket received**, **WebSocket closed**), **Components** (**Change props**, **Emit**), **Pinia** (**Change store**, **Store action**), **Page** (**Navigation**, **JS error**);
 * **Download Vue Inspector** at the bottom — link to the project page.
 * **Support Vue Inspector** above it: **Monthly support** opens Boosty, **Donate with USDT** shows the Tron (TRC-20) address, a QR code and **Copy address**.
 
@@ -74,10 +74,14 @@ Summary cards: **Events**, **Errors**, **Failed requests**, first and last event
 * Search in the top bar; with **in data** enabled the search also looks inside event data.
 * **All events** has a **Type** dropdown with checkboxes, the same control as on the **Logs** tab. Every type is on by default. **Select all** and **Clear** turn the whole list on or off. With every type off, the list is empty. The filter stays on this page while you search or use the **Errors** / **Failed requests** chip, and does not change the sidebar sections.
 * Clicking a row opens details with the same tabs as in the app (**Overview**, **Params**, **Headers**, **Body**, **Changes**, **Before** / **After**, **State**, **Raw**, etc.).
-* For network events, the button next to **Close** jumps between the request and its response.
-* **All events →** in the details header opens **All events** and places this event at the top of the list. If its type was switched off, that type is switched on so the event stays in the list.
-* **↑ / ↓** move between events, **Esc** closes details.
+* A binary response shows the same yellow notice as a truncated body, *Binary response received. Body not included in report.*, above the type line (`image/jpeg (986.2 KB)` and **Binary**). The picture itself is not embedded in the file.
+* **WebSocket open**, **WebSocket sent**, **WebSocket received** and **WebSocket closed** are a separate **WebSocket** section. A message is pretty-printed JSON when the frame is JSON. **Sent** or **Received** and the size sit above that block, in the same type-and-size line as a binary file. **WebSocket closed** lists each frame the same way. **Overview** shows the close code, the reason and **No automatic reconnect** when that was determined.
+* For network events, **Request** or **Response** in the details header jumps between the request and its response. A WebSocket frame or the open event uses **Closed**; the close event uses **Opened**.
+* **Locate** opens **All events** and scrolls so this event is in view, the same way **Request** / **Response** brings its pair into view. If its type was switched off, that type is switched on so the event stays in the list. When the details panel covers the list, **Locate** also closes the panel so the event stays visible in the list.
+* The details panel closes with the back arrow on the left (the same control as in the app) or with **Esc**.
+* **↑ / ↓** move between events.
 * The selected section and event are kept in the address (`#…`), so a link to a specific event can be shared and survives a reload.
+* On a narrow screen the section list opens from the menu button. Choosing a section closes it, and a tap outside it closes it. Event rows show a colored bar for the event type.
 
 ---
 

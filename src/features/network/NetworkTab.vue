@@ -266,15 +266,34 @@ const selectedEntry = computed(() => {
   return null
 })
 
-const entriesCount = computed(() => filteredEntries.value.length)
+type TrafficFilter = 'all' | 'xhr' | 'ws'
+const trafficFilter = ref<TrafficFilter>('all')
+const trafficOptions: { id: TrafficFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'xhr', label: 'XHR' },
+  { id: 'ws', label: 'WS' },
+]
 
-const rowSelection = useRowSelection(() => filteredEntries.value.map(e => e.id))
+/** Search results narrowed to HTTP or WebSocket. The store itself keeps every row. */
+const listedEntries = computed(() => {
+  const list = filteredEntries.value
+  if (trafficFilter.value === 'ws') return list.filter(entry => entry.initiator === 'websocket')
+  if (trafficFilter.value === 'xhr') return list.filter(entry => entry.initiator !== 'websocket')
+  return list
+})
 
-/** Ticked rows when there are any, otherwise everything that passes the search */
+const entriesCount = computed(() => listedEntries.value.length)
+
+/** HTTP rows only. WebSocket is listed in the table and left out of Postman export and its checkboxes. */
+const exportableEntries = computed(() => listedEntries.value.filter(entry => entry.initiator !== 'websocket'))
+
+const rowSelection = useRowSelection(() => exportableEntries.value.map(e => e.id))
+
+/** Ticked HTTP rows when there are any, otherwise every HTTP row that passes the search and the traffic filter */
 const entriesToExport = computed(() => {
-  if (rowSelection.count.value === 0) return filteredEntries.value
+  if (rowSelection.count.value === 0) return exportableEntries.value
   const ids = new Set(rowSelection.checkedIds.value)
-  return filteredEntries.value.filter(e => ids.has(e.id))
+  return exportableEntries.value.filter(e => ids.has(e.id))
 })
 
 const exportLabel = computed(() =>
@@ -284,7 +303,7 @@ const exportLabel = computed(() =>
 const exportTooltip = computed(() =>
   rowSelection.count.value
     ? `Export ${rowSelection.count.value} selected requests as Postman collection`
-    : 'Export filtered requests as Postman collection (tick rows to export only them)',
+    : 'Export filtered HTTP requests as Postman collection. WebSocket rows are skipped.',
 )
 
 const entriesForPostmanExport = computed(() =>
@@ -472,6 +491,19 @@ watch(settings, (s) => {
             :options="searchTypeOptions"
           />
 
+          <div class="traffic-inline inline-flex h-8 items-center rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Traffic">
+            <button
+              v-for="option in trafficOptions"
+              :key="option.id"
+              type="button"
+              class="h-7 px-2 text-xs font-medium rounded-sm transition-colors"
+              :class="trafficFilter === option.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+              @click="trafficFilter = option.id"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+
           <!-- Export (inline — hidden when toolbar is narrow) -->
           <div class="export-inline">
             <TooltipProvider>
@@ -481,7 +513,7 @@ watch(settings, (s) => {
                   variant="outline"
                   size="sm"
                   class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
-                  :disabled="filteredEntries.length === 0"
+                  :disabled="exportableEntries.length === 0"
                   @click="downloadPostmanCollection(entriesForPostmanExport)"
                 >
                   <Upload class="h-3.5 w-3.5" />
@@ -499,6 +531,19 @@ watch(settings, (s) => {
       
       <!-- Right block: Status badges and controls -->
       <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
+        <div class="traffic-wrapped hidden inline-flex h-8 items-center rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Traffic">
+          <button
+            v-for="option in trafficOptions"
+            :key="'wrapped-' + option.id"
+            type="button"
+            class="h-7 px-2 text-xs font-medium rounded-sm transition-colors"
+            :class="trafficFilter === option.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+            @click="trafficFilter = option.id"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+
         <!-- Export (wrapped — shown when toolbar is narrow) -->
         <div class="hidden export-wrapped">
           <TooltipProvider>
@@ -508,7 +553,7 @@ watch(settings, (s) => {
                   variant="outline"
                   size="sm"
                   class="h-8 gap-1.5 border-orange-500/40 bg-transparent text-orange-600 hover:bg-transparent hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
-                  :disabled="filteredEntries.length === 0"
+                  :disabled="exportableEntries.length === 0"
                   @click="downloadPostmanCollection(entriesForPostmanExport)"
                 >
                   <Upload class="h-3.5 w-3.5" />
@@ -524,7 +569,7 @@ watch(settings, (s) => {
         <div class="hidden flex-1 export-spacer" />
 
         <Badge variant="secondary" class="font-mono">
-          {{ entriesCount }}<span v-if="searchTerm && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
+          {{ entriesCount }}<span v-if="(searchTerm || trafficFilter !== 'all') && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
         </Badge>
         <Badge v-if="pendingCount > 0" variant="outline" class="whitespace-nowrap text-yellow-500 border-yellow-500/30">
           {{ pendingCount }}<span class="badge-label">pending</span>
@@ -726,9 +771,9 @@ watch(settings, (s) => {
     <!-- Content -->
     <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden responsive-panels">
       <!-- Left: Table -->
-      <div class="h-full min-h-0 overflow-hidden outline-none" tabindex="-1" @keydown="rowSelection.handleKeydown">
+      <div class="h-full min-h-0 overflow-hidden">
         <NetworkTable
-          :entries="filteredEntries"
+          :entries="listedEntries"
           :selected-id="selectedEntryId"
           :checked-ids="rowSelection.checked.value"
           :header-check-state="rowSelection.headerState.value"
