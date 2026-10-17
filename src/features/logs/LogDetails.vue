@@ -22,7 +22,6 @@ import type { LogChange, LogEvent } from '@/types/logs'
 import type { BodyContent, NetworkEntry } from '@/types/network'
 import { formatBytes, formatDurationMs } from '@/types/network'
 import { formatJsonPayload } from '@/utils/jsonGuards'
-import MediaPreview from '@/features/network/MediaPreview.vue'
 import { isOmittedValue, type OmittedValue } from '@/injected/logs/sanitize'
 import LogActionsMenuContent from './LogActionsMenuContent.vue'
 import { formatLogDateTime, previewValue, toPrettyJson } from './format'
@@ -473,17 +472,10 @@ function changeTypeClass(type: LogChange['type']): string {
           </div>
         </ScrollArea>
 
-        <div v-else-if="binaryPreview" class="h-full flex flex-col">
-          <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b">
-            <span class="text-sm text-muted-foreground">{{ binaryPreview.contentType || 'application/octet-stream' }}</span>
-            <span class="text-xs text-muted-foreground">({{ formatBytes(binaryPreview.originalSize) }})</span>
-            <Badge variant="outline" class="text-xs">Binary</Badge>
-          </div>
-          <ScrollArea class="flex-1">
-            <div class="p-6">
-              <MediaPreview :body="binaryPreview" />
-            </div>
-          </ScrollArea>
+        <div v-else-if="binaryPreview" class="shrink-0 flex items-center gap-2 px-3 py-2 border-b">
+          <span class="text-sm text-muted-foreground">{{ binaryPreview.contentType || 'application/octet-stream' }}</span>
+          <span class="text-xs text-muted-foreground">({{ formatBytes(binaryPreview.originalSize) }})</span>
+          <Badge variant="outline" class="text-xs">Binary</Badge>
         </div>
 
         <!-- Body that can't be shown -->

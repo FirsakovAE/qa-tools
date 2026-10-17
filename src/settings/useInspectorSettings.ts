@@ -5,6 +5,7 @@ import { getRuntimeAdapter } from '@/runtime'
 import { initMediaStore, initWallpapersStore, getMediaBlob, getWallpaperBlob, blobToDataUri, clearAllMedia } from '@/settings/mediaStore'
 import { newPinnedHeaderId } from '@/utils/networkHeaderLinks'
 import type { NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
+import { normalizeNetworkMaxEntries } from '@/types/network'
 
 const SETTINGS_STORAGE_KEY = 'inspector-settings'
 const STANDALONE_STORAGE_KEY = '__vue_inspector_storage__'
@@ -437,7 +438,14 @@ function migrateNetworkHeaderLinksLegacy(saved: Partial<InspectorSettings>) {
 }
 
 // Мердж настроек
+function migrateNetworkRingLimits(saved: Partial<InspectorSettings> & { networkMaxEntries?: unknown }): void {
+    if (saved.networkMaxHttpRequests == null && saved.networkMaxEntries != null) {
+        saved.networkMaxHttpRequests = normalizeNetworkMaxEntries(saved.networkMaxEntries)
+    }
+}
+
 function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSettings>) {
+    migrateNetworkRingLimits(saved)
     migrateNetworkHeaderLinksLegacy(saved)
     migrateSearchSettings(saved)
     migrateJsonMode(saved)
@@ -474,6 +482,8 @@ function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSett
     }
 
     mergeDeep(result, saved)
+    result.networkMaxHttpRequests = normalizeNetworkMaxEntries(result.networkMaxHttpRequests)
+    result.networkMaxWebSocketEvents = normalizeNetworkMaxEntries(result.networkMaxWebSocketEvents)
     return result
 }
 

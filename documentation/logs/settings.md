@@ -59,11 +59,11 @@ The number next to a checkbox shows how many events of the group are currently s
 
 | Setting | Default | Range | Meaning |
 | ------- | ------- | ----- | ------- |
-| **Memory budget** | 20 MB | 8 – 1024 MB | Total size of all buffered events (approximate serialized size). A network entry shared by a request and its response, and equal bodies, are counted once |
+| **Memory budget** | 20 MB | 8 – 1024 MB | Total size of all buffered events (approximate serialized size). A network entry shared by a request and its response, and equal bodies, are counted once. A binary response counts as its format and size, not the file |
 | **Limit event size** | off | — | Off: events are kept whole and nothing is cut, so an exported report keeps complete data |
 | **Max event size** | 512 KB | 16 – 16 384 KB | Only with **Limit event size**: larger parts of an event (store snapshots, arguments, results) are dropped, network bodies are cut to this size |
 
-When the memory budget is reached, the oldest events are dropped. **Pinia changes** are compacted into a **Store checkpoint** instead, so the remaining changes keep their **Before** / **After**; the initial state of a store and its checkpoint go last (see [How events are stored](./general.md#how-events-are-stored)). The newest event is always kept, even if it alone exceeds the budget.
+When the memory budget is reached, the log is cut at a **Navigation** and every event before it is removed. **Pinia** changes up to that cut are rebuilt into a **Store checkpoint**, so the remaining changes keep their **Before** / **After**; the previous base and the diffs it was built from are removed (see [How events are stored](./general.md#how-events-are-stored)). The last navigation is rewritten as a page snapshot, and if the log is still over the budget the oldest remaining events are removed. The newest event is always kept, even if it alone exceeds the budget. **Send request** and **Receive response** are also capped at **Maximum HTTP requests**, the same ring as HTTP rows on the Network tab (**Options → Network**, default **500**): the request and its response leave together. WebSocket log events are capped at **Maximum WebSocket events** (default **500**): open, sent, received and closed each count as one.
 
 The bar under the fields shows current usage (**Used X of Y**); it turns orange above 90 %.
 

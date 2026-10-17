@@ -114,7 +114,7 @@ Clicking a row opens details on the right. The layout follows **Network**: a tab
 
 If a network body was larger than the configured event size, **Body** shows a notice with the original size.
 
-A binary **Receive response** uses the same bar as **Network**, directly under the section tabs: content type, size and a **Binary** badge, for example `image/jpeg (986.2 KB)`. A supported image is shown under that bar. A type that cannot be shown has **Preview unavailable** and **Preview is not supported for this file format.** **Duration** on **Store action** and **Receive response** is shown with two digits after the decimal point (`635.90 ms`).
+A binary **Receive response** uses the same bar as **Network**, directly under the section tabs: content type, size and a **Binary** badge, for example `image/jpeg (986.2 KB)`. The file itself is not stored. **Duration** on **Store action** and **Receive response** is shown with two digits after the decimal point (`635.90 ms`).
 
 ### Event actions
 
@@ -145,9 +145,11 @@ Events keep only primary data; titles, descriptions and full states are derived 
 
 ### Limits
 
-A shared memory budget keeps long sessions stable: when it is reached, the oldest events are dropped. Events are kept whole by default; a maximum event size can be switched on. Groups of events can be switched off completely. Defaults and settings are described in [Logs settings](./settings.md).
+A shared memory budget keeps long sessions stable. When it is reached, the log is cut at a **Navigation**: every event recorded before that navigation is removed, whatever its type — network requests and responses, WebSocket, props, Pinia, emits, store actions and errors. Events from the navigation onward stay. Each earlier navigation is a cut in turn, so the oldest period goes first. The last navigation is rewritten as a snapshot of the page at that moment (`from` is cleared), and events before it are removed the same way. If the log is still over the budget, the oldest remaining events are removed by age. The newest event is always kept, even if it alone exceeds the budget. Events are kept whole by default; a maximum event size can be switched on. Groups of events can be switched off completely. Defaults and settings are described in [Logs settings](./settings.md).
 
-Old **Change store** events are not simply dropped: they are compacted into a **Store checkpoint** with the store state at that point, so the history becomes *initial state → checkpoint → recent changes*. The initial state is kept, every remaining change can still be restored, and the compacted changes are no longer listed one by one (the checkpoint shows how many were compacted).
+**Send request** and **Receive response** follow **Maximum HTTP requests** (**Options → Network**, default **500**): an older request leaves the log together with its response. **WebSocket open**, **WebSocket sent**, **WebSocket received** and **WebSocket closed** follow **Maximum WebSocket events** (the same screen, default **500**): each of those records counts as one, and the oldest are dropped. Both rings are separate from the memory budget.
+
+A **Pinia** chain is not broken by a cut. Changes up to the cut are rebuilt into one **Store checkpoint** with the store state at that point, placed before the events that remain. The previous base and the diffs that produced it are deleted. Later **Change store** events still restore **Before** / **After** from that checkpoint. A store whose next remaining event is already a full state does not get a checkpoint; its older events are removed.
 
 ### JS errors {#js-errors}
 
@@ -157,7 +159,7 @@ Old **Change store** events are not simply dropped: they are compacted into a **
 * **console.error.** The message is built like in the browser console (`%s`, `%d`, `%o` and similar are applied, objects are shown as a short preview); object arguments are kept in **Raw**. **Location** points to the line of the app that called `console.error`, or to the top frame of an error passed to it. More than 50 messages per second are not logged; the next event shows how many were skipped (**Suppressed**).
 * **Compact stack.** The message is kept. A stack longer than 10 frames keeps the first 5 and the last 5; the middle is replaced by *… N more frames (stack truncated)*. **Overview** shows **Stack: Truncated** with how many frames were kept from each end.
 
-Errors of the inspected page stay in the page console and in **Logs**. They are not added to the extension error list (`chrome://extensions`); that list shows only failures of Vue Inspector itself. A page exception from **WebSocket** `send` or `close`, such as **WebSocket is already in CLOSING or CLOSED state**, is included: the wrapper that records the frame runs in the page. While logging runs, a page `console.error` passes through a small page-side bridge, so the browser console may attribute that line to the bridge. The message and the stack are unchanged.
+Errors of the inspected page stay in the page console and in **Logs**. They are not added to the extension error list (`chrome://extensions`); that list shows only failures of Vue Inspector itself. A page exception from **WebSocket** `send` or `close`, such as **WebSocket is already in CLOSING or CLOSED state**, is included: the wrapper that records the frame runs in the page. A failed **fetch**, an aborted or timed-out request, and a response body that could not be read because the connection dropped (**Failed to fetch**, **network error**) are recorded only as a Network row. While logging runs, a page `console.error` passes through a small page-side bridge, so the browser console may attribute that line to the bridge. The message and the stack are unchanged.
 
 ### Data masking
 

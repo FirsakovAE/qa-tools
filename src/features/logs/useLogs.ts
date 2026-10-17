@@ -11,12 +11,14 @@
  *    reference one masked network entry in the network pool (see networkPool.ts).
  *
  * Memory: incoming events are committed in batches; the total approximate size (events +
- * network pool + snapshot pool, shared data counted once) is kept within the budget by dropping
- * the oldest events, old store changes are folded into checkpoints (Options > Logs).
+ * network pool + snapshot pool, shared data counted once) is kept within the budget by cutting
+ * the log at Navigation records. Pinia chains that continue past a cut are sealed into a
+ * checkpoint (Options > Logs). HTTP requests and WebSocket events also follow the separate
+ * rings from Options → Network (each defaults to 500).
  */
 
 import { ref, shallowRef, computed, watch } from 'vue'
-import type { NetworkEntry } from '@/types/network'
+import { normalizeNetworkMaxEntries, type NetworkEntry } from '@/types/network'
 import type { LogEvent, LogIgnoreRule, LogKind } from '@/types/logs'
 import { LOG_KIND_META } from '@/types/logs'
 import { inspectorState, useInspectorSettings } from '@/settings/useInspectorSettings'
@@ -36,6 +38,7 @@ import { logsRuntime as rt } from '@/injected/logs/runtime'
 import { createSnapshotStore } from '@/injected/logs/snapshots'
 import { sanitizeNetworkEntry } from './sanitizeNetwork'
 import { createNetworkPool } from './networkPool'
+import { syncNetworkRingLimits } from '@/features/network/composables/useNetworkEntries'
 import { centrifugeWillReconnect } from '@/features/network/centrifuge'
 import type { LogsSource } from './view'
 
@@ -118,8 +121,67 @@ function releaseEvent(event: LogEvent): void {
   if (isNetworkEvent(event) && typeof event.data?.entryId === 'string') pool.release(event.data.entryId)
 }
 
+/**
+ * Same ring as the Network HTTP list: the last Maximum HTTP requests stay
+ * (Options → Network, default 500). Each request is one entry (Send request and
+ * Receive response together). Older HTTP events are dropped and their pooled bodies
+ * go with the last reference.
+ */
+function trimHttpRequestLogs(list: LogEvent[]): LogEvent[] {
+  const limit = normalizeNetworkMaxEntries(inspectorState.networkMaxHttpRequests)
+  const seen = new Set<string>()
+  const dropIds = new Set<string>()
+  let kept = 0
+  for (let i = list.length - 1; i >= 0; i--) {
+    const event = list[i]
+    if (event.kind !== 'request' && event.kind !== 'response') continue
+    const id = event.data?.entryId
+    if (typeof id !== 'string' || seen.has(id)) continue
+    seen.add(id)
+    if (++kept > limit) dropIds.add(id)
+  }
+  if (dropIds.size === 0) return list
+  const next: LogEvent[] = []
+  for (const event of list) {
+    const id = event.data?.entryId
+    if ((event.kind === 'request' || event.kind === 'response') && typeof id === 'string' && dropIds.has(id)) {
+      releaseEvent(event)
+      continue
+    }
+    next.push(event)
+  }
+  return next
+}
+
+/**
+ * Same number as the Network WebSocket list (Options → Network, default 500).
+ * Each open, sent, received and closed record counts as one event. Older events
+ * are dropped and their pooled connection goes with the last reference.
+ */
+function trimWebSocketLogs(list: LogEvent[]): LogEvent[] {
+  const limit = normalizeNetworkMaxEntries(inspectorState.networkMaxWebSocketEvents)
+  let kept = 0
+  const drop = new Set<LogEvent>()
+  for (let i = list.length - 1; i >= 0; i--) {
+    const event = list[i]
+    if (!isWsKind(event.kind)) continue
+    if (++kept > limit) drop.add(event)
+  }
+  if (drop.size === 0) return list
+  const next: LogEvent[] = []
+  for (const event of list) {
+    if (drop.has(event)) {
+      releaseEvent(event)
+      continue
+    }
+    next.push(event)
+  }
+  return next
+}
+
 /** Drops / folds the oldest events beyond the memory budget */
 function applyLimits(list: LogEvent[]): LogEvent[] {
+  list = trimWebSocketLogs(trimHttpRequestLogs(list))
   const result = enforceLogLimits(list, limits.value, {
     extraSize: () => pool.size + snapshots.bytes,
     onDrop: releaseEvent,
@@ -397,6 +459,7 @@ function markReady(): void {
 function requestHistory(): void {
   syncConfig()
   syncIgnoreRules()
+  syncNetworkRingLimits(inspectorState.networkMaxHttpRequests, inspectorState.networkMaxWebSocketEvents)
   sendCommand('LOGS_GET_EVENTS')
 }
 
@@ -454,6 +517,14 @@ export function initLogsCollector(): void {
     syncConfig()
     reapplyLimits()
   }, { deep: true })
+  watch(
+    () => [inspectorState.networkMaxHttpRequests, inspectorState.networkMaxWebSocketEvents] as const,
+    ([http, websocket]) => {
+      syncNetworkRingLimits(http, websocket)
+      reapplyLimits()
+    },
+    { immediate: true },
+  )
 
   void useInspectorSettings().catch(() => { /* defaults stay in effect */ })
 

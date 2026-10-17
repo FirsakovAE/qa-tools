@@ -70,14 +70,9 @@ export interface BodyContent {
   isBinary: boolean
   /** Parsed form-data entries (when contentType is multipart/form-data) */
   formData?: FormDataEntry[]
-  /**
-   * Binary response summary. `dataUrl` is the live image preview and is omitted from the HTML report.
-   */
+  /** Binary response summary: format label. The byte size is `originalSize`. */
   media?: {
     format: string
-    width?: number
-    height?: number
-    dataUrl?: string
   }
 }
 
@@ -189,8 +184,10 @@ export interface WebSocketInfo {
  * Network store configuration
  */
 export interface NetworkConfig {
-  /** Maximum number of entries to keep (FIFO) */
+  /** Maximum HTTP requests to keep (FIFO) */
   maxEntries: number
+  /** Maximum WebSocket rows to keep (FIFO). Logs counts each WebSocket event toward the same number. */
+  maxWebSocketEntries: number
   /** Maximum body size in bytes before truncation */
   maxBodySize: number
   /** Whether to capture request bodies */
@@ -199,11 +196,22 @@ export interface NetworkConfig {
   captureResponseBody: boolean
 }
 
+/** Shared bounds for Maximum HTTP requests and Maximum WebSocket events. */
+export const NETWORK_ENTRY_LIMIT = { min: 50, max: 5000, default: 500 } as const
+
+/** Clamps a stored or typed request-limit to {@link NETWORK_ENTRY_LIMIT}. */
+export function normalizeNetworkMaxEntries(value: unknown): number {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n)) return NETWORK_ENTRY_LIMIT.default
+  return Math.min(NETWORK_ENTRY_LIMIT.max, Math.max(NETWORK_ENTRY_LIMIT.min, n))
+}
+
 /**
  * Default network configuration values
  */
 export const DEFAULT_NETWORK_CONFIG: NetworkConfig = {
-  maxEntries: 500,
+  maxEntries: NETWORK_ENTRY_LIMIT.default,
+  maxWebSocketEntries: NETWORK_ENTRY_LIMIT.default,
   maxBodySize: 20 * 1024 * 1024, // 20MB
   captureRequestBody: true,
   captureResponseBody: true

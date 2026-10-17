@@ -80,7 +80,7 @@ Clears accumulated rows next to **Pause**.
 
 ### Export Collection
 
-**All** / **XHR** / **WS**, next to **Export Collection**, limits the table to every row, to `fetch` / XHR, or to WebSocket. **All** is the default. The switch does not remove rows from the buffer.
+**All** / **XHR** / **WS**, next to **Export Collection**, limits the table to every row, to `fetch` / XHR, or to WebSocket. **All** is the default. The switch does not remove rows from the buffer. On a narrow toolbar the switch and **Export Collection** move together to the next line.
 
 **Export Collection** saves the current **filtered** HTTP list, or only the ticked HTTP requests. **WebSocket** rows are left out of the file. Their checkboxes stay disabled, and select all and a **Shift** range skip them. On **WS** the button stays disabled (see [Export collections](./export.md)).
 
@@ -147,13 +147,13 @@ In the **Vue Inspector extension** for Chrome / Edge, **Advanced mode** (capture
 
 Very large bodies may be truncated (roughly **20 MB** captured text in code).
 
-An image response (**PNG**, **JPEG**, **GIF**, **WEBP**, **BMP**, **SVG**, **AVIF**, **ICO**) shows the picture under the content-type bar, for example `image/jpeg (986.2 KB)` with a **Binary** badge. Other binary types use the same bar, then **Preview unavailable** and **Preview is not supported for this file format.** A picture larger than **8 MB** keeps the bar without the picture. Durations under one second are shown with two digits after the decimal point (`635.90 ms`).
+A binary response shows the content type, the size and a **Binary** badge, for example `image/jpeg (986.2 KB)`. The file itself is not stored. Durations under one second are shown with two digits after the decimal point (`635.90 ms`).
 
 ### Storage cap
 
-At most **500** requests are kept.
+The Network list keeps HTTP rows and WebSocket rows on separate rings. Each default is **500**, and each is changed under **Options → Network → Request history** (50–5000): **Maximum HTTP requests** and **Maximum WebSocket events**.
 
-When the cap is reached, oldest entries are dropped so recent activity remains visible.
+When a cap is reached, the oldest rows of that kind are dropped. Logs keeps the same number of HTTP requests (a request leaves together with its response) and the same number of WebSocket events (open, sent, received and closed each count as one). Both rings are separate from the memory budget.
 
 ## How it works
 
@@ -161,7 +161,7 @@ When the cap is reached, oldest entries are dropped so recent activity remains v
 
 The network module loads with the rest of Vue Inspector in the **tab context** when you open the inspector overlay or attach the DevTools panel. Until that script runs, `fetch` / `XMLHttpRequest` are not patched. A small page script runs at document start and remembers WebSocket objects the page opens, so **Network** can attach to sockets that are already connected when the inspector starts.
 
-The buffer lives in the page after load; **Network** reads it whenever the panel is open. Without reload, history remains available when you open **Network** later (subject to the **500** entry cap).
+The buffer lives in the page after load; **Network** reads it whenever the panel is open. Without reload, history remains available when you open **Network** later (subject to the request limit above).
 
 ### What is monitored
 
@@ -169,7 +169,7 @@ Calls through:
 
 * **`fetch`**
 * **`XMLHttpRequest` (XHR)**
-* **`WebSocket`** — one row per connection, including a socket that was already open when the inspector started. The method column shows **WS**. While the socket is open the status is **Open**; after a normal close it shows the close code (**1000** / **1001**) or **Closed**. **Headers** shows the HTTP upgrade request and response recorded by the extension. **Messages** lists each sent and received frame with its time, direction and size, newest first. Text is shown as text. One JSON value is formatted with indents; several JSON values in one frame, separated by newlines, are formatted as separate objects. Binary is a short hex preview. The row keeps the latest **200** messages, and a single message is stored up to **64 KB**. **Sent** sends the composed text on the open socket. **Received** delivers that text to the page. There is no **Params** tab. Breakpoint, mock and **Copy cURL** stay on `fetch` / XHR; the row menu is disabled. **Logs** records **WebSocket open**, **WebSocket sent**, **WebSocket received** and **WebSocket closed** as separate events that share one connection. A JSON frame is shown formatted, including several JSON values separated by newlines in one frame. Those types are in the **Type** filter. When the protocol can be recognized as Centrifuge and the close code means the client will not reconnect (for example **3501**), the close event says **No automatic reconnect** and keeps the reason. Typing `{}` for such a socket shows *This frame may trigger a protocol error and disconnect the WebSocket.* **Sent** and **Received** still send that text.
+* **`WebSocket`** — one row per connection, including a socket that was already open when the inspector started. The method column shows **WS**. While the socket is open the status is **Open**; after a normal close it shows the close code (**1000** / **1001**) or **Closed**. **Headers** in the extension shows the HTTP upgrade recorded by the browser. Bookmark mode cannot see that exchange: the tab shows **Host**, **Origin**, **User-Agent**, **Connection**, **Upgrade** and **Sec-WebSocket-Version**, plus **Sec-WebSocket-Protocol** and **Sec-WebSocket-Extensions** when the socket reports them. **Sec-WebSocket-Key**, **Sec-WebSocket-Accept** and **Cookie** stay unavailable. **Messages** lists each sent and received frame with its time, direction and size, newest first. Text is shown as text. One JSON value is formatted with indents; several JSON values in one frame, separated by newlines, are formatted as separate objects. Binary is a short hex preview. The row keeps the latest **200** messages, and a single message is stored up to **64 KB**. **Sent** sends the composed text on the open socket. **Received** delivers that text to the page. There is no **Params** tab. Breakpoint, mock and **Copy cURL** stay on `fetch` / XHR; the row menu is disabled. **Logs** records **WebSocket open**, **WebSocket sent**, **WebSocket received** and **WebSocket closed** as separate events that share one connection. A JSON frame is shown formatted, including several JSON values separated by newlines in one frame. Those types are in the **Type** filter. When the protocol can be recognized as Centrifuge and the close code means the client will not reconnect (for example **3501**), the close event says **No automatic reconnect** and keeps the reason. Typing `{}` for such a socket shows *This frame may trigger a protocol error and disconnect the WebSocket.* **Sent** and **Received** still send that text.
 
 Not captured, among others:
 

@@ -359,8 +359,9 @@ function observe(socket: WebSocket, protocols?: string | string[]): Connection |
       try {
         socket.send(text)
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        if (message.includes('CLOSING or CLOSED')) return
+        // The socket refused the frame (already closing, still connecting). That is the page
+        // connection, and the throw already happened in the page script.
+        if (err instanceof DOMException) return
         console.error('[injected/network] WebSocket send failed:', err)
       }
     },

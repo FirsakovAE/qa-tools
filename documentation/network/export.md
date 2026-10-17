@@ -14,7 +14,7 @@ What appears in the list and possible data visibility limitations are described 
 
 ## Where to find the command
 
-**Export Collection** is located on the **Network** toolbar, next to **All** / **XHR** / **WS** (next to search and filters; on narrow layouts it may appear in a different header section, but the action remains the same). **All** lists every row, **XHR** lists `fetch` / XHR, **WS** lists WebSocket. The export follows that switch for HTTP requests and always skips WebSocket.
+**Export Collection** is located on the **Network** toolbar, next to **All** / **XHR** / **WS** (next to search and filters). On a narrow toolbar the switch and the button move together to the next line. **All** lists every row, **XHR** lists `fetch` / XHR, **WS** lists WebSocket. The export follows that switch for HTTP requests and always skips WebSocket.
 
 The tooltip indicates that the **currently filtered** HTTP requests will be exported.
 

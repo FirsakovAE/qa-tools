@@ -11,6 +11,13 @@ import {
   type ReportEvent,
 } from './report/template'
 import type { LogsSource } from './view'
+import { getRuntimeAdapter } from '@/runtime'
+
+function reportGeneratorName(): string {
+  return getRuntimeAdapter()?.capabilities.mode === 'standalone'
+    ? 'Vue Inspector Bookmarklet'
+    : 'Vue Inspector Extension'
+}
 
 function fileStamp(ts: number): string {
   const d = new Date(ts)
@@ -129,14 +136,13 @@ function networkSubset(events: LogEvent[], source: LogsSource): NonNullable<Logs
   return { entries, bodies }
 }
 
-/** Live preview bytes stay in the app. The report keeps format, size and pixel size. */
+/** Binary responses keep the format label. The file bytes are not part of the report. */
 function reportBody(body: BodyContent): BodyContent {
   if (!body.isBinary && !body.media) return body
-  const media = body.media
   return {
     ...body,
     text: body.isBinary ? '' : body.text,
-    media: media ? { format: media.format, width: media.width, height: media.height } : undefined,
+    media: body.media ? { format: body.media.format } : undefined,
   }
 }
 
@@ -176,6 +182,7 @@ export function buildLogsReport(events: LogEvent[], source: LogsSource, now = Da
     version: LOGS_REPORT_VERSION,
     info: {
       name: 'Vue Inspector Logs',
+      generator: reportGeneratorName(),
       exportedAt: new Date(now).toISOString(),
       count: items.length,
       kinds: Object.fromEntries(LOG_KINDS.map(k => [k, { label: LOG_KIND_META[k].label }])),

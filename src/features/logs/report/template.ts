@@ -95,8 +95,17 @@ function embedScript(source: string): string {
 const STYLE = minifyCss(css)
 const SCRIPT = embedScript(`var LogsRuntime=(${createLogsRuntime.toString()})();\n${compactJs(client)}`)
 
+function sourceTag(info: LogsReportPayload['info']): string {
+  const source = typeof info.generator === 'string' ? info.generator : info.name
+  if (source.includes('Bookmarklet')) return 'Bookmarklet'
+  if (source.includes('Extension')) return 'Extension'
+  return ''
+}
+
 export function renderLogsReport(payload: LogsReportPayload): string {
   const title = `${payload.info.name} - ${payload.info.exportedAt}`
+  const tag = sourceTag(payload.info)
+  const tagHtml = tag ? `<span class="badge">${escapeHtml(tag)}</span>` : ''
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -109,7 +118,7 @@ export function renderLogsReport(payload: LogsReportPayload): string {
 <body>
 <header class="nav">
 <button id="menu" class="menu-btn" type="button" aria-label="Sections">&#9776;</button>
-<div class="brand"><img id="brand-icon" class="brand-mark" src="${icon}" alt="">Vue Inspector <small>Logs report</small></div>
+<div class="brand"><img id="brand-icon" class="brand-mark" src="${icon}" alt=""><span class="brand-copy"><span class="brand-line">Vue Inspector${tagHtml}</span><span class="brand-sub">Logs report</span></span></div>
 <span id="nav-meta" class="nav-meta"></span>
 <span class="nav-spacer"></span>
 <label class="check"><input id="in-data" type="checkbox"> in data</label>

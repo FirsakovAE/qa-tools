@@ -1,6 +1,7 @@
 import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
 
 import { DEFAULT_LOGS_LIMITS, DEFAULT_LOGS_MASKING } from '@/injected/logs/config'
+import { NETWORK_ENTRY_LIMIT } from '@/types/network'
 
 export type InspectorSettings = BaseInspectorSettings
 export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope }
@@ -76,6 +77,8 @@ export const defaultInspectorSettings: InspectorSettings = {
     propsTableColumns: { ...defaultPropsTableColumns },
     piniaTableColumns: { ...defaultPiniaTableColumns },
     networkSearch: { ...defaultNetworkSearchSettings },
+    networkMaxHttpRequests: NETWORK_ENTRY_LIMIT.default,
+    networkMaxWebSocketEvents: NETWORK_ENTRY_LIMIT.default,
     networkCaptureMode: 'saved',
     networkAdvancedHeaderPolicy: {
         showInDetails: true,

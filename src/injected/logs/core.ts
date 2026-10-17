@@ -4,8 +4,8 @@
  * Events are buffered in page context so the UI can fetch history when it connects
  * later (overlay opened, DevTools panel reconnected). The buffer is one chronological list
  * within a total memory budget; event groups can be switched off and the per-event size limit
- * is optional (settings come from the UI via LOGS_CONFIG_SYNC). Old store changes are folded
- * into checkpoints (see limits.ts).
+ * is optional (settings come from the UI via LOGS_CONFIG_SYNC). Past the budget the log is cut
+ * at Navigation records; a Pinia chain that continues is sealed into a checkpoint (see limits.ts).
  *
  * Every payload is sanitized here (safe plain JSON + masking) before it is stored or posted.
  * Identical values are then stored once in a snapshot pool; events keep references, and the

@@ -109,6 +109,7 @@ interface NetworkEntry {
 
 interface NetworkConfig {
   maxEntries: number
+  maxWebSocketEntries: number
   maxBodySize: number
   captureRequestBody: boolean
   captureResponseBody: boolean
@@ -215,13 +216,47 @@ function patternToRegex(pattern: string): RegExp {
 // Module State
 // ============================================================================
 
+/** Same bounds as NETWORK_ENTRY_LIMIT in src/types/network.ts (this module cannot import it). */
+function clampMaxEntries(value: unknown, fallback: number): number {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(5000, Math.max(50, n))
+}
+
 const pendingRequests = new Map<string, Partial<NetworkEntry>>()
 let entries: NetworkEntry[] = []
 let config: NetworkConfig = {
-  maxEntries: 500,
+  maxEntries: 500, // HTTP; Options → Network overrides via NETWORK_CONFIG_UPDATE
+  maxWebSocketEntries: 500,
   maxBodySize: 20 * 1024 * 1024,
   captureRequestBody: true,
   captureResponseBody: true
+}
+
+function isWebSocketEntry(entry: { initiator?: string }): boolean {
+  return entry.initiator === 'websocket'
+}
+
+/** Drops the oldest HTTP rows and the oldest WebSocket rows past their own limits. */
+function trimEntries(): boolean {
+  let http = 0
+  let ws = 0
+  const keep = new Array<boolean>(entries.length)
+  let dropped = false
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const room = isWebSocketEntry(entries[i])
+      ? ws < config.maxWebSocketEntries
+      : http < config.maxEntries
+    if (!room) {
+      dropped = true
+      continue
+    }
+    keep[i] = true
+    if (isWebSocketEntry(entries[i])) ws++
+    else http++
+  }
+  if (dropped) entries = entries.filter((_, i) => keep[i])
+  return dropped
 }
 
 let activeBreakpoints: BreakpointConfig[] = []
@@ -442,9 +477,7 @@ function handleResponse(id: string, response: ResponseData): void {
   } else {
     pendingRequests.delete(id)
     entries.push(completedEntry)
-    if (entries.length > config.maxEntries) {
-      entries = entries.slice(-config.maxEntries)
-    }
+    trimEntries()
   }
   sendToContentScript('NETWORK_ENTRY_UPDATED', { entry: completedEntry })
 }
@@ -479,20 +512,51 @@ function handleError(id: string, errorMessage: string): void {
   
   pendingRequests.delete(id)
   entries.push(errorEntry)
-  if (entries.length > config.maxEntries) {
-    entries = entries.slice(-config.maxEntries)
-  }
+  trimEntries()
   sendToContentScript('NETWORK_ENTRY_UPDATED', { entry: errorEntry })
+}
+
+function header(name: string, value: string): HeaderEntry {
+  return { name, value }
+}
+
+/**
+ * Headers a page script can know without chrome.webRequest.
+ * The extension replaces this list with the real handshake. Sec-WebSocket-Key,
+ * Sec-WebSocket-Accept and Cookie are not visible here.
+ */
+function pageWebSocketHeaders(snapshot: WebSocketSnapshot): {
+  requestHeaders: HeaderEntry[]
+  responseHeaders: HeaderEntry[]
+} {
+  const requestHeaders: HeaderEntry[] = []
+  try {
+    const host = new URL(snapshot.url).host
+    if (host) requestHeaders.push(header('Host', host))
+  } catch { /* keep the row even when the URL cannot be parsed */ }
+  requestHeaders.push(header('Connection', 'Upgrade'))
+  if (location.origin && location.origin !== 'null') requestHeaders.push(header('Origin', location.origin))
+  requestHeaders.push(header('Upgrade', 'websocket'))
+  if (navigator.userAgent) requestHeaders.push(header('User-Agent', navigator.userAgent))
+  requestHeaders.push(header('Sec-WebSocket-Version', '13'))
+  if (snapshot.protocols.length) {
+    requestHeaders.push(header('Sec-WebSocket-Protocol', snapshot.protocols.join(', ')))
+  }
+
+  const handshakeDone = snapshot.state === 'open' || (snapshot.state === 'closed' && !snapshot.error)
+  const responseHeaders: HeaderEntry[] = []
+  if (handshakeDone) {
+    responseHeaders.push(header('Connection', 'Upgrade'))
+    responseHeaders.push(header('Upgrade', 'websocket'))
+    if (snapshot.protocol) responseHeaders.push(header('Sec-WebSocket-Protocol', snapshot.protocol))
+    if (snapshot.extensions) responseHeaders.push(header('Sec-WebSocket-Extensions', snapshot.extensions))
+  }
+  return { requestHeaders, responseHeaders }
 }
 
 function websocketEntry(snapshot: WebSocketSnapshot): NetworkEntry {
   const failed = snapshot.state === 'closed' && !!snapshot.error
-  const requestHeaders = snapshot.protocols.length
-    ? [{ name: 'Sec-WebSocket-Protocol', value: snapshot.protocols.join(', ') }]
-    : []
-  const responseHeaders: Array<{ name: string; value: string }> = []
-  if (snapshot.protocol) responseHeaders.push({ name: 'Sec-WebSocket-Protocol', value: snapshot.protocol })
-  if (snapshot.extensions) responseHeaders.push({ name: 'Sec-WebSocket-Extensions', value: snapshot.extensions })
+  const { requestHeaders, responseHeaders } = pageWebSocketHeaders(snapshot)
   let statusText = 'Connecting'
   if (snapshot.state === 'open') statusText = 'Open'
   else if (snapshot.state === 'closed') {
@@ -536,7 +600,7 @@ function handleWebSocket(snapshot: WebSocketSnapshot, isNew: boolean): void {
   const idx = entries.findIndex((item) => item.id === entry.id)
   if (idx === -1) {
     entries.push(entry)
-    if (entries.length > config.maxEntries) entries = entries.slice(-config.maxEntries)
+    trimEntries()
     sendToContentScript(isNew ? 'NETWORK_ENTRY_CAPTURED' : 'NETWORK_ENTRY_UPDATED', { entry })
     return
   }
@@ -585,8 +649,16 @@ function handleMessage(event: MessageEvent): void {
       break
       
     case 'NETWORK_CONFIG_UPDATE':
-      if (event.data.config) {
-        config = { ...config, ...event.data.config }
+      if (event.data.config && typeof event.data.config === 'object') {
+        const patch = event.data.config
+        const maxEntries = 'maxEntries' in patch
+          ? clampMaxEntries(patch.maxEntries, config.maxEntries)
+          : config.maxEntries
+        const maxWebSocketEntries = 'maxWebSocketEntries' in patch
+          ? clampMaxEntries(patch.maxWebSocketEntries, config.maxWebSocketEntries)
+          : config.maxWebSocketEntries
+        config = { ...config, ...patch, maxEntries, maxWebSocketEntries }
+        if (trimEntries()) sendToContentScript('NETWORK_ENTRIES_DATA', { entries })
       }
       break
       

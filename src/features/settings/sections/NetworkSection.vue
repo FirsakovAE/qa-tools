@@ -9,7 +9,9 @@ import type { TableColumn } from '../components/SettingsTableSection.vue'
 import type { MenuAction } from '@/components/OptionsItemActionsMenu'
 import { Power, Trash, Pencil, Info } from 'lucide-vue-next'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { NETWORK_ENTRY_LIMIT, normalizeNetworkMaxEntries } from '@/types/network'
 import RadioGroup from '@/components/ui/RadioGroup/RadioGroup.vue'
 import RadioGroupItem from '@/components/ui/RadioGroup/RadioGroupItem.vue'
 import { getRuntimeAdapter } from '@/runtime'
@@ -28,6 +30,13 @@ const emit = defineEmits<{
 
 const runtime = getRuntimeAdapter()
 const isStandalone = runtime?.capabilities.mode === 'standalone'
+
+function setRingLimit(event: Event, key: 'networkMaxHttpRequests' | 'networkMaxWebSocketEvents') {
+  const input = event.target as HTMLInputElement
+  const next = normalizeNetworkMaxEntries(input.value)
+  props.settings[key] = next
+  input.value = String(next)
+}
 
 const networkCaptureMode = computed({
   get: (): NetworkCaptureMode => props.settings.networkCaptureMode ?? 'saved',
@@ -244,6 +253,32 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
       id-prefix="network-search"
       @toggle="(k) => toggleSearch(k as SearchKey)"
     />
+
+    <div class="space-y-3 border-t border-border pt-4">
+      <h3 class="text-sm font-medium">Request history</h3>
+      <div class="grid grid-cols-[auto_auto] items-center justify-start gap-x-3 gap-y-2">
+        <Label for="network-max-http" class="text-sm font-normal">Maximum HTTP requests</Label>
+        <Input
+          id="network-max-http"
+          type="number"
+          class="h-8 w-24 text-right tabular-nums"
+          :min="NETWORK_ENTRY_LIMIT.min"
+          :max="NETWORK_ENTRY_LIMIT.max"
+          :model-value="normalizeNetworkMaxEntries(settings.networkMaxHttpRequests)"
+          @change="setRingLimit($event, 'networkMaxHttpRequests')"
+        />
+        <Label for="network-max-ws" class="text-sm font-normal">Maximum WebSocket events</Label>
+        <Input
+          id="network-max-ws"
+          type="number"
+          class="h-8 w-24 text-right tabular-nums"
+          :min="NETWORK_ENTRY_LIMIT.min"
+          :max="NETWORK_ENTRY_LIMIT.max"
+          :model-value="normalizeNetworkMaxEntries(settings.networkMaxWebSocketEvents)"
+          @change="setRingLimit($event, 'networkMaxWebSocketEvents')"
+        />
+      </div>
+    </div>
 
     <div class="space-y-3 border-t border-border pt-4">
       <div>

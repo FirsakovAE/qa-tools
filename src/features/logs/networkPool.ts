@@ -10,6 +10,7 @@
  *
  * The entries are masked copies of the Network tab entries; when masking changes nothing they
  * reuse the Network tab's header lists and body strings instead of copying them.
+ * A binary body keeps the format label and the byte size. The file itself is not stored.
  */
 
 import type { BodyContent, HeaderEntry, NetworkEntry } from '@/types/network'
@@ -60,10 +61,7 @@ function formDataJson(body: BodyContent): string {
 }
 
 function mediaKey(body: BodyContent): string {
-  const media = body.media
-  if (!media) return ''
-  const url = media.dataUrl ?? ''
-  return `${media.format}|${media.width ?? ''}|${media.height ?? ''}|${url.length}|${url ? fnv1a(url) : ''}`
+  return body.media?.format ?? ''
 }
 
 function bodySignature(body: BodyContent): string {
@@ -85,7 +83,7 @@ function sameBody(a: BodyContent, b: BodyContent): boolean {
 }
 
 function bodySize(body: BodyContent): number {
-  return (body.text?.length ?? 0) + (body.contentType?.length ?? 0) + formDataJson(body).length + (body.media?.dataUrl?.length ?? 0) + 80
+  return (body.text?.length ?? 0) + (body.contentType?.length ?? 0) + formDataJson(body).length + 80
 }
 
 /** Page-visible headers as references into the full list (same name and value) */

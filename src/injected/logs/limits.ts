@@ -1,11 +1,13 @@
 /**
  * Logs limits shared by the page buffer and the Logs tab.
  *
- * Beyond the memory budget events are dropped oldest-first, except Pinia store changes: they are
- * folded into a per-store checkpoint, so the history keeps `initial state -> checkpoint -> recent
- * diffs` and every remaining change can still be restored. Store bases (initial snapshot,
- * checkpoint) go only when nothing else is left. The newest event is always kept, even when it
- * alone exceeds the budget.
+ * Beyond the memory budget the log is cut at a Navigation. Everything recorded before that
+ * Navigation is removed (network, WebSocket, props, Pinia, emit, store actions, errors).
+ * A Pinia chain that still has changes after the cut is sealed into one checkpoint at the cut,
+ * and the older base and diffs are deleted. While an earlier Navigation remains, the cut moves
+ * to the next one. The last Navigation is rewritten as a snapshot of the page at that moment,
+ * data before it is removed the same way, and anything still over the budget is dropped
+ * oldest-first. The newest event is always kept, even when it alone exceeds the budget.
  */
 
 import type { LogEvent } from './types'
@@ -138,7 +140,7 @@ export function foldStoreChanges(
     } else {
       s.known = false
     }
-    s.compacted++
+    if (op === 'change') s.compacted++
     s.foldedSize += sizeOf(event)
     if (s.last) s.superseded.push(s.last)
     s.last = event
@@ -196,14 +198,53 @@ function totalSize(list: LogEvent[], extra?: () => number): number {
   return total
 }
 
+function navigationIndexes(list: LogEvent[]): number[] {
+  const out: number[] = []
+  for (let i = 0; i < list.length; i++) if (list[i].kind === 'navigation') out.push(i)
+  return out
+}
+
+/** Second Navigation: the oldest period, including the previous Navigation, is the next cut. */
+function segmentCutoff(list: LogEvent[]): number {
+  const navs = navigationIndexes(list)
+  return navs.length >= 2 ? navs[1] : -1
+}
+
+/** A later change of this store still needs the state from before `cut`. */
+function storeContinues(list: LogEvent[], key: string, cut: number): boolean {
+  for (let i = cut; i < list.length; i++) {
+    const event = list[i]
+    if (event.kind !== 'store' || event.key !== key) continue
+    return rt.storeOp(event) === 'change'
+  }
+  return false
+}
+
+/** The first kept store event after the dropped prefix is a change, so the prefix must be sealed. */
+function keptChangeFollows(list: LogEvent[], key: string, chosen: Set<LogEvent>): boolean {
+  let passed = false
+  for (const event of list) {
+    if (event.kind !== 'store' || event.key !== key) continue
+    if (chosen.has(event)) {
+      passed = true
+      continue
+    }
+    if (!passed) return false
+    return rt.storeOp(event) === 'change'
+  }
+  return false
+}
+
 /** Applies the memory budget to a chronologically sorted list */
 export function enforceLogLimits(input: LogEvent[], limits: LogsLimits, options: EnforceOptions = {}): EnforceResult {
   let list = input
   let changed = false
   const removed: LogEvent[] = []
   const added: LogEvent[] = []
+  let sealedLast = false
 
   const apply = (drop: Set<LogEvent>, fold: Set<LogEvent>) => {
+    if (drop.size === 0 && fold.size === 0) return
     if (drop.size > 0) {
       list = list.filter(e => !drop.has(e))
       for (const event of drop) {
@@ -220,28 +261,95 @@ export function enforceLogLimits(input: LogEvent[], limits: LogsLimits, options:
     changed = true
   }
 
+  /** Removes every event before `cut`. Store chains that continue afterwards become one checkpoint. */
+  const cutBefore = (cut: number) => {
+    const drop = new Set<LogEvent>()
+    const fold = new Set<LogEvent>()
+    const continuing = new Set<string>()
+    for (let i = 0; i < cut; i++) {
+      const event = list[i]
+      if (event.kind === 'store' && !continuing.has(event.key) && storeContinues(list, event.key, cut)) {
+        continuing.add(event.key)
+      }
+    }
+    for (let i = 0; i < cut; i++) {
+      const event = list[i]
+      if (event.kind === 'store' && continuing.has(event.key)) fold.add(event)
+      else drop.add(event)
+    }
+    apply(drop, fold)
+  }
+
+  const rewriteNavigation = (index: number) => {
+    const event = list[index]
+    const prev = rt.payload(event)
+    if (prev.navType === 'snapshot' && !prev.from) return
+    const data: Record<string, any> = { ...prev, navType: 'snapshot', from: '' }
+    let stored = data
+    let size = measureJson(data) + event.key.length + 80
+    if (options.compactData) {
+      const compacted = options.compactData(data)
+      stored = compacted.data
+      size = compacted.size + event.key.length + 80
+    }
+    const rewritten: LogEvent = { ...event, data: stored, size }
+    list = list.slice()
+    list[index] = rewritten
+    removed.push(event)
+    added.push(rewritten)
+    changed = true
+  }
+
+  /** Oldest events go. A store prefix that a later change still replays is sealed, not dropped raw. */
+  const evictOldest = (): boolean => {
+    const newest = list[list.length - 1]
+    const chosen: LogEvent[] = []
+    let projected = totalSize(list, options.extraSize)
+    for (const event of list) {
+      if (projected <= budget || event === newest) break
+      chosen.push(event)
+      projected -= sizeOf(event)
+    }
+    if (chosen.length === 0) return false
+    const chosenSet = new Set(chosen)
+    const drop = new Set<LogEvent>()
+    const fold = new Set<LogEvent>()
+    const sealThrough = new Map<string, number>()
+    for (let i = 0; i < list.length; i++) {
+      const event = list[i]
+      if (event.kind === 'store' && chosenSet.has(event)) sealThrough.set(event.key, i)
+    }
+    for (const key of [...sealThrough.keys()]) {
+      if (!keptChangeFollows(list, key, chosenSet)) sealThrough.delete(key)
+    }
+    for (let i = 0; i < list.length; i++) {
+      const event = list[i]
+      const end = event.kind === 'store' ? sealThrough.get(event.key) : undefined
+      if (end !== undefined && i <= end) fold.add(event)
+      else if (chosenSet.has(event)) drop.add(event)
+    }
+    const before = totalSize(list, options.extraSize)
+    apply(drop, fold)
+    return totalSize(list, options.extraSize) < before
+  }
+
   const budget = limits.maxMemoryMB * 1024 * 1024
   let total = totalSize(list, options.extraSize)
   while (total > budget && list.length > 1) {
-    const drop = new Set<LogEvent>()
-    const fold = new Set<LogEvent>()
-    const newest = list[list.length - 1]
-    let projected = total
-    for (const event of list) {
-      if (projected <= budget || event === newest) break
-      if (!countsTowardLimit(event)) continue
-      ;(event.kind === 'store' ? fold : drop).add(event)
-      projected -= sizeOf(event)
+    const segment = segmentCutoff(list)
+    if (segment !== -1) {
+      cutBefore(segment)
+      sealedLast = false
+    } else if (!sealedLast) {
+      const navs = navigationIndexes(list)
+      const last = navs.length > 0 ? navs[navs.length - 1] : -1
+      if (last !== -1) rewriteNavigation(last)
+      if (last > 0) cutBefore(last)
+      sealedLast = true
+    } else if (!evictOldest()) {
+      break
     }
-    // Only store bases are left and nothing depends on them any more; initial snapshots go last
-    if (drop.size === 0 && fold.size === 0) {
-      const bases = list.slice(0, -1)
-      drop.add(bases.find(e => rt.storeOp(e) === 'checkpoint') ?? bases[0])
-    }
-    const before = list.length
-    apply(drop, fold)
     total = totalSize(list, options.extraSize)
-    if (list.length === before && fold.size === 0) break
   }
 
   return { list, changed, removed, added, total }

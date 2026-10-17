@@ -531,10 +531,11 @@ watch(settings, (s) => {
       
       <!-- Right block: Status badges and controls -->
       <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
-        <div class="traffic-wrapped hidden inline-flex h-8 items-center rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Traffic">
+        <!-- All / XHR / WS and Export move to this row together when the toolbar is narrow -->
+        <div class="traffic-wrapped hidden h-8 items-center rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Traffic">
           <button
             v-for="option in trafficOptions"
-            :key="'wrapped-' + option.id"
+            :key="option.id"
             type="button"
             class="h-7 px-2 text-xs font-medium rounded-sm transition-colors"
             :class="trafficFilter === option.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
@@ -543,8 +544,6 @@ watch(settings, (s) => {
             {{ option.label }}
           </button>
         </div>
-
-        <!-- Export (wrapped — shown when toolbar is narrow) -->
         <div class="hidden export-wrapped">
           <TooltipProvider>
             <Tooltip>

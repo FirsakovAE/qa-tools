@@ -73,7 +73,6 @@ const JsonEditor = defineAsyncComponent({
 })
 import type { NetworkEntry } from '@/types/network'
 import { getStatusCategory, formatBytes, formatDuration } from '@/types/network'
-import MediaPreview from '@/features/network/MediaPreview.vue'
 import { copyToClipboard } from '@/utils/networkUtils'
 import { formatJsonPayload } from '@/utils/jsonGuards'
 import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
@@ -1789,13 +1788,8 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 </Badge>
               </div>
             </div>
-            
-            <ScrollArea v-if="entry.responseBody?.isBinary" class="flex-1">
-              <div class="p-6">
-                <MediaPreview :body="entry.responseBody" />
-              </div>
-            </ScrollArea>
-            <div v-else class="flex-1 min-h-0">
+
+            <div v-if="!entry.responseBody?.isBinary" class="flex-1 min-h-0">
               <JsonEditor
                 v-if="canEditResponse"
                 :model-value="editableResponseBody"

@@ -21,7 +21,7 @@ import type {
   MockMatch
 } from './types'
 import { looksLikeFormDataDraftJson } from '../../utils/jsonGuards'
-import { captureResponseMedia, isBinaryContentType, isPreviewableImage, mediaFormatLabel, resolveMime, type MediaInfo } from './media-preview'
+import { isBinaryContentType, mediaFormatLabel, type MediaInfo } from './media-preview'
 import { installWebSocketCapture, restoreWebSocketCapture } from './websocket'
 
 // Store original implementations
@@ -176,6 +176,25 @@ function shouldExcludeMethod(method: string): boolean {
 }
 
 /**
+ * The browser's own outcome of the page request: offline, VPN down, CORS, abort, timeout,
+ * or a body stream that died while it was being read. Logging it from this extension script
+ * makes Chrome file it under chrome://extensions. The Network row still records the failure.
+ */
+function isPageTransportError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const name = 'name' in error && typeof error.name === 'string' ? error.name : ''
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : ''
+  if (name === 'AbortError' || name === 'NetworkError' || name === 'TimeoutError') return true
+  if (name !== 'TypeError' && name !== 'DOMException') return false
+  return message === 'Failed to fetch'
+    || message === 'network error'
+    || message === 'Load failed'
+    || message === 'NetworkError when attempting to fetch resource.'
+    || message === 'The user aborted a request.'
+    || message.startsWith('The operation was aborted')
+}
+
+/**
  * An app handler called by the interceptor threw: report it as uncaught, as the browser would
  * for a native XHR event (the page's error listeners and the console see the app's error)
  */
@@ -258,7 +277,7 @@ async function readResponseBody(response: Response, clone: Response): Promise<st
   } catch (error) {
     if (error instanceof Error && error.message === 'READ_RESPONSE_BODY_TIMEOUT') {
       console.warn('[injected/network] readResponseBody timed out after', READ_RESPONSE_BODY_TIMEOUT_MS, 'ms', contentType)
-    } else {
+    } else if (!isPageTransportError(error)) {
       console.error('[injected/network] readResponseBody failed:', error)
     }
     return null
@@ -266,7 +285,7 @@ async function readResponseBody(response: Response, clone: Response): Promise<st
 }
 
 /**
- * Text body, or a binary summary (format, pixel size, image data URL).
+ * Text body, or a binary summary (format and byte size). The file bytes are not kept.
  * The clone is consumed.
  */
 async function takeResponseBody(response: Response, clone: Response): Promise<{
@@ -277,19 +296,19 @@ async function takeResponseBody(response: Response, clone: Response): Promise<{
 }> {
   const contentType = response.headers.get('content-type') || ''
   if (isBinaryContentType(contentType)) {
-    const mime = resolveMime(contentType)
     const contentLength = Number(response.headers.get('content-length')) || 0
-    if (!isPreviewableImage(mime) && mime !== 'application/octet-stream') {
+    if (contentLength > 0) {
       try { await clone.body?.cancel() } catch { /* already consumed */ }
       return { body: null, truncated: false, originalSize: contentLength, media: { format: mediaFormatLabel(contentType) } }
     }
     try {
       const blob = await clone.blob()
-      const captured = await captureResponseMedia(blob, contentType)
-      return { body: null, truncated: false, originalSize: captured.byteLength || contentLength, media: captured.media }
+      return { body: null, truncated: false, originalSize: blob.size, media: { format: mediaFormatLabel(contentType) } }
     } catch (error) {
-      console.error('[injected/network] capture media failed:', error)
-      return { body: null, truncated: false, originalSize: contentLength, media: { format: mediaFormatLabel(contentType) } }
+      if (!isPageTransportError(error)) {
+        console.error('[injected/network] binary size failed:', error)
+      }
+      return { body: null, truncated: false, originalSize: 0, media: { format: mediaFormatLabel(contentType) } }
     }
   }
   const text = await readResponseBody(response, clone)
@@ -301,14 +320,13 @@ async function takeResponseBody(response: Response, clone: Response): Promise<{
   }
 }
 
-async function xhrResponseBlob(xhr: XMLHttpRequest, contentType: string): Promise<Blob | null> {
+/** Byte length already held by the page. Does not copy the bytes. */
+function xhrBinarySize(xhr: XMLHttpRequest): number {
   try {
-    if (xhr.responseType === 'blob' && xhr.response instanceof Blob) return xhr.response
-    if (xhr.responseType === 'arraybuffer' && xhr.response instanceof ArrayBuffer) {
-      return new Blob([xhr.response], { type: contentType })
-    }
+    if (xhr.responseType === 'blob' && xhr.response instanceof Blob) return xhr.response.size
+    if (xhr.responseType === 'arraybuffer' && xhr.response instanceof ArrayBuffer) return xhr.response.byteLength
   } catch { /* responseType may throw while the request is still loading */ }
-  return null
+  return 0
 }
 
 /**
@@ -1038,7 +1056,9 @@ function interceptFetch(): void {
       return finalResponse
     } catch (error) {
       originalFormDataBodies.delete(requestId)
-      console.error('[injected/network] Fetch request failed:', requestId, error)
+      if (!isPageTransportError(error)) {
+        console.error('[injected/network] Fetch request failed:', requestId, error)
+      }
       // Notify about error
       if (callbacks?.onError) {
         callbacks.onError(
@@ -1617,24 +1637,8 @@ function interceptXHR(): void {
       let originalSize = 0
 
       if (isBinaryContentType(contentType)) {
-        const mime = resolveMime(contentType)
-        if (!isPreviewableImage(mime) && mime !== 'application/octet-stream') {
-          media = { format: mediaFormatLabel(contentType) }
-        } else {
-          const blob = await xhrResponseBlob(this, contentType)
-          if (blob) {
-            try {
-              const captured = await captureResponseMedia(blob, contentType)
-              media = captured.media
-              originalSize = captured.byteLength
-            } catch (error) {
-              console.error('[injected/network] capture xhr media failed:', error)
-              media = { format: mediaFormatLabel(contentType) }
-            }
-          } else {
-            media = { format: mediaFormatLabel(contentType) }
-          }
-        }
+        media = { format: mediaFormatLabel(contentType) }
+        originalSize = xhrBinarySize(this)
       } else {
         try {
           responseBody = this.responseText

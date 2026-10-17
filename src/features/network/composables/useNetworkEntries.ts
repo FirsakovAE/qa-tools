@@ -8,7 +8,7 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { NetworkEntry, NetworkConfig } from '@/types/network'
-import { DEFAULT_NETWORK_CONFIG } from '@/types/network'
+import { DEFAULT_NETWORK_CONFIG, normalizeNetworkMaxEntries } from '@/types/network'
 import { postToContentScript } from '@/utils/postToContentScript'
 
 export interface NetworkEntriesOptions {
@@ -58,20 +58,47 @@ export function sendNetworkCommand(type: string, data: Record<string, any> = {})
   sendCommand(type, data)
 }
 
+/** Applies the Options → Network HTTP and WebSocket limits to the UI list and the page buffer. */
+export function syncNetworkRingLimits(http: unknown, websocket: unknown): void {
+  const maxEntries = normalizeNetworkMaxEntries(http)
+  const maxWebSocketEntries = normalizeNetworkMaxEntries(websocket)
+  config.value.maxEntries = maxEntries
+  config.value.maxWebSocketEntries = maxWebSocketEntries
+  const before = entries.value.length
+  enforceLimit()
+  if (entries.value.length !== before) entriesVersion.value++
+  sendCommand('NETWORK_CONFIG_UPDATE', { config: { maxEntries, maxWebSocketEntries } })
+}
+
 function normalizeEntry(entry: any): NetworkEntry {
   return { ...entry, version: entry.version ?? 1 }
 }
 
 /**
- * Enforce the max entries limit by trimming from the front.
+ * Drops the oldest HTTP rows and the oldest WebSocket rows past their own limits.
  * Mutates the array in-place and rebuilds the id index.
  */
 function enforceLimit() {
-  const max = config.value.maxEntries
-  if (entries.value.length > max) {
-    entries.value.splice(0, entries.value.length - max)
-    rebuildIdIndex()
+  const httpMax = config.value.maxEntries
+  const wsMax = config.value.maxWebSocketEntries
+  let http = 0
+  let ws = 0
+  const keep = new Array<boolean>(entries.value.length)
+  let dropped = false
+  for (let i = entries.value.length - 1; i >= 0; i--) {
+    const isWs = entries.value[i].initiator === 'websocket'
+    const room = isWs ? ws < wsMax : http < httpMax
+    if (!room) {
+      dropped = true
+      continue
+    }
+    keep[i] = true
+    if (isWs) ws++
+    else http++
   }
+  if (!dropped) return
+  entries.value = entries.value.filter((_, i) => keep[i])
+  rebuildIdIndex()
 }
 
 function processMessage(msg: any): void {
@@ -171,6 +198,7 @@ function processMessage(msg: any): void {
 
         entries.value = mergedEntries
         rebuildIdIndex()
+        enforceLimit()
         entriesVersion.value++
       }
       break

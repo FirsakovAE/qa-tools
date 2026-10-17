@@ -13,7 +13,11 @@
   var USDT_QR_SIZE = 29
   var USDT_QR = '1111111001101111000110111111110000010010111111110001000001101110101011110100100010111011011101011111011010100101110110111010110110011000101011101100000101010100001101010000011111111010101010101010111111100000000100110101011100000000101111100101100001001011111001101110010111111000110011100110101011001101110010111000000111100010010010110100110010010011011010101011100100011111001000000110010000111110111000011101111011100100001101011000001100101000011000100001101001101110100010001000100100010111010000111011000110000110001000011011100111011000000010010011000110001011000110111010101110111010101100001111111000000000011000000110110001100011111110000110011111101011000100000101100101110101000110111011101010011001110011111011010111010110010101010100100111101110101000111110100001101101000001000100110100011111101011111110111100000101000010100'
   var PAGE_SIZE = 300
-  var HIGHLIGHT_MAX = 300000
+  // Above this, skip JSON.parse/pretty-print and mount only the visible rows.
+  // A multi-megabyte body in one <pre> blocks the page for seconds.
+  var LARGE_TEXT = 200 * 1024
+  var VROW_H = 18
+  var VOVERSCAN = 8
   var GROUPS = [
     { title: 'Network', kinds: ['request', 'response'] },
     { title: 'WebSocket', kinds: ['ws', 'ws-sent', 'ws-received', 'ws-closed'] },
@@ -229,7 +233,12 @@
 
   function pretty(value) {
     if (value === undefined) return ''
-    try { return JSON.stringify(value, null, 2) } catch (e) { return String(value) }
+    try {
+      var compact = JSON.stringify(value)
+      if (compact == null) return ''
+      if (compact.length > LARGE_TEXT) return compact
+      return JSON.stringify(value, null, 2)
+    } catch (e) { return String(value) }
   }
 
   function preview(value, max) {
@@ -247,31 +256,416 @@
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   }
 
-  var TOKEN_RE = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
+  var TOKEN_CLASS = ['', 'j-key', 'j-str', 'j-lit', 'j-num']
 
-  function highlight(text) {
-    var out = ''
-    var last = 0
-    text.replace(TOKEN_RE, function (m, str, colon, lit, offset) {
-      out += escapeHtml(text.slice(last, offset))
-      var cls = str ? (colon ? 'j-key' : 'j-str') : lit ? 'j-lit' : 'j-num'
-      out += '<span class="' + cls + '">' + escapeHtml(str || m) + '</span>' + (colon ? escapeHtml(colon) : '')
-      last = offset + m.length
-      return m
-    })
-    return out + escapeHtml(text.slice(last))
+  /**
+   * Token ranges over the whole text ([start, end) and a TOKEN_CLASS index).
+   * Rows and search marks slice these ranges, so a value split by wrapping keeps its color.
+   * Self-contained: also runs inside the formatting worker.
+   */
+  function tokenizeJson(text) {
+    var re = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
+    var starts = []
+    var ends = []
+    var kinds = []
+    var m
+    while ((m = re.exec(text)) !== null) {
+      if (!m[0]) { re.lastIndex++; continue }
+      starts.push(m.index)
+      ends.push(m.index + (m[1] ? m[1].length : m[0].length))
+      kinds.push(m[1] ? (m[2] ? 1 : 2) : m[3] ? 3 : 4)
+    }
+    return { starts: starts, ends: ends, kinds: kinds }
   }
 
-  function code(text, json) {
-    var pre = h('pre', { class: 'code' })
-    if (json && text.length <= HIGHLIGHT_MAX) pre.innerHTML = highlight(text)
-    else pre.textContent = text
-    var btn = h('button', { class: 'copy', type: 'button', text: 'Copy' })
+  /** First index with arr[i] >= value (arr ascending). */
+  function lowerBound(arr, value) {
+    var lo = 0
+    var hi = arr.length
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1
+      if (arr[mid] < value) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+
+  /** HTML for text[a, b) with token colors and search marks. */
+  function renderRange(text, a, b, tokens, marks, markLen, active) {
+    var n = b - a
+    if (n <= 0) return ''
+    var cls = new Uint8Array(n)
+    if (tokens) {
+      for (var ti = lowerBound(tokens.ends, a + 1); ti < tokens.starts.length && tokens.starts[ti] < b; ti++) {
+        var ts = Math.max(tokens.starts[ti], a) - a
+        var te = Math.min(tokens.ends[ti], b) - a
+        for (var k = ts; k < te; k++) cls[k] = tokens.kinds[ti]
+      }
+    }
+    var hit = null
+    if (marks && marks.length && markLen) {
+      hit = new Uint8Array(n)
+      for (var mi = lowerBound(marks, a - markLen + 1); mi < marks.length && marks[mi] < b; mi++) {
+        var ms = Math.max(marks[mi], a) - a
+        var me = Math.min(marks[mi] + markLen, b) - a
+        for (var q = ms; q < me; q++) hit[q] = mi === active ? 2 : 1
+      }
+    }
+    var html = ''
+    var i = 0
+    while (i < n) {
+      var c = cls[i]
+      var hv = hit ? hit[i] : 0
+      var j = i + 1
+      while (j < n && cls[j] === c && (hit ? hit[j] : 0) === hv) j++
+      var piece = escapeHtml(text.slice(a + i, a + j))
+      if (c) piece = '<span class="' + TOKEN_CLASS[c] + '">' + piece + '</span>'
+      if (hv) piece = '<mark class="code-hit' + (hv === 2 ? ' code-hit-on' : '') + '">' + piece + '</mark>'
+      html += piece
+      i = j
+    }
+    return html
+  }
+
+  function copyButton(text) {
+    var btn = h('button', { class: 'code-btn copy', type: 'button', text: 'Copy' })
     btn.addEventListener('click', function () {
       var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy' }, 1200) }
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {})
     })
-    return h('div', { class: 'code-wrap' }, [btn, pre])
+    return btn
+  }
+
+  /**
+   * Indent JSON without JSON.parse, so a truncated body still wraps.
+   * Self-contained: also runs inside the formatting worker.
+   */
+  function formatLooseJson(text) {
+    var out = []
+    var indent = 0
+    var inStr = false
+    var esc = false
+    var n = text.length
+    function gap(k) {
+      while (k < n) {
+        var code = text.charCodeAt(k)
+        if (code !== 32 && code !== 10 && code !== 13 && code !== 9) return text.charAt(k)
+        k++
+      }
+      return ''
+    }
+    function nl() {
+      var pad = indent > 32 ? 32 : indent
+      var s = '\n'
+      for (var p = 0; p < pad; p++) s += '  '
+      return s
+    }
+    for (var i = 0; i < n; i++) {
+      var c = text.charAt(i)
+      if (inStr) {
+        out.push(c)
+        if (esc) esc = false
+        else if (c === '\\') esc = true
+        else if (c === '"') inStr = false
+        continue
+      }
+      if (c === ' ' || c === '\n' || c === '\r' || c === '\t') continue
+      if (c === '"') { inStr = true; out.push(c); continue }
+      if (c === '{' || c === '[') {
+        var close = c === '{' ? '}' : ']'
+        if (gap(i + 1) === close) { out.push(c); out.push(close); while (i + 1 < n && text.charAt(i + 1) !== close) i++; i++; continue }
+        out.push(c)
+        indent++
+        out.push(nl())
+        continue
+      }
+      if (c === '}' || c === ']') {
+        indent = indent > 0 ? indent - 1 : 0
+        out.push(nl())
+        out.push(c)
+        continue
+      }
+      if (c === ',') { out.push(c); out.push(nl()); continue }
+      if (c === ':') { out.push(': '); continue }
+      out.push(c)
+    }
+    return out.join('')
+  }
+
+  /** Formats and tokenizes a large JSON text off the main thread. */
+  function formatJsonAsync(text, done) {
+    var src = formatLooseJson.toString() + '\n' + tokenizeJson.toString() + '\n'
+      + 'self.onmessage=function(e){var t=formatLooseJson(String(e.data));var k=tokenizeJson(t);'
+      + 'var s=new Int32Array(k.starts),en=new Int32Array(k.ends),kd=new Uint8Array(k.kinds);'
+      + 'self.postMessage({text:t,starts:s,ends:en,kinds:kd},[s.buffer,en.buffer,kd.buffer])}'
+    function inline() {
+      setTimeout(function () {
+        var t = formatLooseJson(text)
+        var k = tokenizeJson(t)
+        done({ text: t, starts: k.starts, ends: k.ends, kinds: k.kinds })
+      }, 0)
+    }
+    var url
+    var worker
+    try {
+      url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }))
+      worker = new Worker(url)
+    } catch (err) {
+      inline()
+      return
+    }
+    worker.onmessage = function (ev) {
+      worker.terminate()
+      URL.revokeObjectURL(url)
+      if (ev.data && typeof ev.data.text === 'string') done(ev.data)
+      else inline()
+    }
+    worker.onerror = function () {
+      worker.terminate()
+      URL.revokeObjectURL(url)
+      inline()
+    }
+    worker.postMessage(text)
+  }
+
+  /** Start offset of each fixed-height row. Long lines wrap to the pane width. */
+  function rowStarts(text, cols) {
+    var starts = [0]
+    var i = 0
+    var n = text.length
+    var width = cols > 8 ? cols : 8
+    while (i < n) {
+      var limit = i + width
+      if (limit > n) limit = n
+      var breakAt = limit
+      for (var j = i; j < limit; j++) {
+        if (text.charCodeAt(j) === 10) { breakAt = j + 1; break }
+      }
+      i = breakAt
+      if (i < n) starts.push(i)
+    }
+    return starts
+  }
+
+  function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+
+  var MATCH_CAP = 5000
+
+  /**
+   * Find field, previous / next arrows and the match count, driven by a search target:
+   * one code block, or several blocks searched as one (WebSocket frames).
+   */
+  function findControls(target) {
+    var find = h('input', { class: 'code-find', type: 'search', placeholder: 'Find', spellcheck: 'false', 'aria-label': 'Find' })
+    var count = h('span', { class: 'code-count' })
+    var prevBtn = h('button', { class: 'code-btn code-step', type: 'button', title: 'Previous match (Shift+Enter)', text: '\u2191' })
+    var nextBtn = h('button', { class: 'code-btn code-step', type: 'button', title: 'Next match (Enter)', text: '\u2193' })
+    var query = ''
+    var total = 0
+    var active = -1
+    function setCount() {
+      count.textContent = !query ? '' : total ? (active + 1) + ' / ' + total : 'No matches'
+    }
+    function run() {
+      query = find.value
+      total = target.setQuery(query)
+      active = total ? 0 : -1
+      setCount()
+      target.setActive(active)
+    }
+    function step(dir) {
+      if (query !== find.value) return run()
+      if (!total) return
+      active = (active + dir + total) % total
+      setCount()
+      target.setActive(active)
+    }
+    target.onUpdate = function () { if (query) run() }
+    find.addEventListener('input', run)
+    find.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault()
+        step(ev.shiftKey ? -1 : 1)
+      } else if (ev.key === 'Escape' && find.value) {
+        ev.stopPropagation()
+        find.value = ''
+        run()
+      }
+    })
+    prevBtn.addEventListener('click', function () { step(-1) })
+    nextBtn.addEventListener('click', function () { step(1) })
+    return [find, prevBtn, nextBtn, count]
+  }
+
+  /** Several code blocks searched as one: match i is counted across the blocks in order. */
+  function groupFind(targets) {
+    var counts = []
+    var group = {
+      onUpdate: null,
+      setQuery: function (q) {
+        var total = 0
+        counts = targets.map(function (t) { var n = t.setQuery(q); total += n; return n })
+        return total
+      },
+      setActive: function (index) {
+        var base = 0
+        targets.forEach(function (t, k) {
+          var n = counts[k] || 0
+          t.setActive(index >= base && index < base + n ? index - base : -1)
+          base += n
+        })
+      },
+    }
+    targets.forEach(function (t) { t.onUpdate = function () { if (group.onUpdate) group.onUpdate() } })
+    return group
+  }
+
+  /**
+   * One code block for every size. Small text is a full <pre>, so the browser find works on it.
+   * Text above LARGE_TEXT keeps only the visible rows in the page; Ctrl+F moves to its Find field.
+   * `shared`: the Find bar is outside (one search for several blocks); the block keeps Copy.
+   * The search target is exposed as box.findTarget.
+   */
+  function code(text, json, shared) {
+    var large = text.length > LARGE_TEXT
+    var shown = large && json ? '' : text
+    var tokens = !large && json ? tokenizeJson(text) : null
+    var ready = !(large && json)
+    var query = ''
+    var matches = []
+    var active = -1
+
+    var pre = null
+    var view = null
+    var spacer = null
+    var win = null
+    var rows = [0]
+    var cols = 0
+    var from = -1
+    var to = -1
+
+    function paintAll() {
+      if (!pre) return
+      if (!tokens && !matches.length) pre.textContent = shown
+      else pre.innerHTML = renderRange(shown, 0, shown.length, tokens, matches, query.length, active)
+    }
+
+    function columnCount() {
+      var probe = view.querySelector('.code-probe')
+      if (!probe) {
+        probe = h('span', { class: 'code-probe', text: '00000000000000000000' })
+        view.appendChild(probe)
+      }
+      var charWidth = probe.getBoundingClientRect().width / 20 || 7.2
+      var c = Math.floor((view.clientWidth - 28) / charWidth)
+      return c > 16 ? c : 16
+    }
+
+    function paintRows(force) {
+      if (!view || !ready || !view.clientHeight) return
+      var nextCols = columnCount()
+      if (nextCols !== cols) {
+        cols = nextCols
+        rows = rowStarts(shown, cols)
+        spacer.style.height = (rows.length * VROW_H + 20) + 'px'
+        force = true
+      }
+      var height = view.clientHeight
+      var top = Math.max(0, view.scrollTop - 10)
+      var nextFrom = Math.max(0, Math.floor(top / VROW_H) - VOVERSCAN)
+      var nextTo = Math.min(rows.length, Math.ceil((top + height) / VROW_H) + VOVERSCAN)
+      if (!force && nextFrom === from && nextTo === to) return
+      from = nextFrom
+      to = nextTo
+      win.style.transform = 'translateY(' + (from * VROW_H + 10) + 'px)'
+      var html = ''
+      for (var r = from; r < to; r++) {
+        var a = rows[r]
+        var b = r + 1 < rows.length ? rows[r + 1] : shown.length
+        if (b > a && shown.charCodeAt(b - 1) === 10) b--
+        html += '<div class="code-row">' + (b > a ? renderRange(shown, a, b, tokens, matches, query.length, active) : ' ') + '</div>'
+      }
+      win.innerHTML = html
+    }
+
+    function repaint() {
+      if (large) paintRows(true)
+      else paintAll()
+    }
+
+    function collect() {
+      matches = []
+      if (!ready || !query) return
+      var re = new RegExp(escapeRegExp(query), 'gi')
+      var m
+      while (matches.length < MATCH_CAP && (m = re.exec(shown)) !== null) {
+        matches.push(m.index)
+        if (!m[0]) re.lastIndex++
+      }
+    }
+
+    function reveal() {
+      repaint()
+      if (active < 0) return
+      if (large) {
+        var row = Math.max(0, lowerBound(rows, matches[active] + 1) - 1)
+        view.scrollTop = Math.max(0, row * VROW_H + 10 - Math.floor(view.clientHeight / 2))
+        paintRows(true)
+      } else {
+        var hit = pre.querySelector('.code-hit-on')
+        if (hit && hit.scrollIntoView) hit.scrollIntoView({ block: 'center', inline: 'nearest' })
+      }
+    }
+
+    var target = {
+      onUpdate: null,
+      setQuery: function (q) {
+        query = q
+        active = -1
+        collect()
+        return matches.length
+      },
+      setActive: function (index) {
+        active = index >= 0 && index < matches.length ? index : -1
+        reveal()
+      },
+    }
+
+    var tools = h('div', { class: 'code-tools' }, (shared ? [] : findControls(target)).concat([copyButton(text)]))
+    var box = h('div', { class: 'code-box' + (large ? ' code-large' : '') }, [tools])
+    box.findTarget = target
+
+    if (!large) {
+      pre = h('pre', { class: 'code-pre' })
+      box.appendChild(pre)
+      paintAll()
+      return box
+    }
+
+    view = h('div', { class: 'code-view' })
+    spacer = h('div', { class: 'code-spacer' })
+    win = h('div', { class: 'code-win' })
+    view.appendChild(spacer)
+    view.appendChild(win)
+    box.appendChild(view)
+    view.addEventListener('scroll', function () { paintRows(false) }, { passive: true })
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(function () { paintRows(false) }).observe(view)
+    }
+    requestAnimationFrame(function () { paintRows(false) })
+    if (json) {
+      formatJsonAsync(text, function (result) {
+        shown = result.text
+        tokens = { starts: result.starts, ends: result.ends, kinds: result.kinds }
+        ready = true
+        cols = 0
+        active = -1
+        collect()
+        repaint()
+        if (target.onUpdate) target.onUpdate()
+      })
+    }
+    return box
   }
 
   function jsonBlock(value) {
@@ -577,7 +971,7 @@
       h('h2', { class: 'h2', text: 'Report' }),
       kv([
         ['Exported', info.exportedAt ? fmtDateTime(Date.parse(info.exportedAt)) : '-'],
-        ['Generator', info.name || 'Vue Inspector Logs'],
+        ['Generator', info.generator || info.name || 'Vue Inspector Logs'],
         ['Format version', payload.version || 1],
         ['Events in file', events.length],
       ]),
@@ -886,8 +1280,12 @@
     var text = String(body.text || '')
     var json = false
     var trimmed = text.trim()
-    if (/json/i.test(body.contentType || '') || trimmed[0] === '{' || trimmed[0] === '[') {
-      try { text = JSON.stringify(JSON.parse(trimmed), null, 2); json = true } catch (err) { /* keep as is */ }
+    var looksJson = /json/i.test(body.contentType || '') || trimmed[0] === '{' || trimmed[0] === '['
+    if (looksJson && text.length <= LARGE_TEXT) {
+      try { text = JSON.stringify(JSON.parse(trimmed), null, 2) } catch (err) { text = formatLooseJson(trimmed) }
+      json = true
+    } else if (looksJson) {
+      json = true
     }
     nodes.push(text ? code(text, json) : h('div', { class: 'muted', text: 'Empty body' }))
     return nodes
@@ -946,16 +1344,28 @@
       if (!frames.length) return h('div', { class: 'muted', text: 'This message is no longer in the connection log.' })
     }
     if (!frames.length) return h('div', { class: 'muted', text: 'No messages' })
-    return frames.map(function (frame) {
+    var shared = frames.length > 1
+    var targets = []
+    var nodes = frames.map(function (frame) {
       var body = frameBody(frame)
+      var block = null
+      if (body.text) {
+        block = code(body.text, body.json, shared)
+        targets.push(block.findTarget)
+      }
       return h('div', { class: 'ws-frame' }, [
         h('div', { class: 'media-bar' }, [
           h('span', { class: 'media-type', text: frame.direction === 'sent' ? 'Sent' : 'Received' }),
           h('span', { class: 'media-size', text: '(' + fmtBytes(frame.size) + ')' }),
         ]),
-        body.text ? code(body.text, body.json) : h('div', { class: 'muted', text: 'Empty message' }),
+        block || h('div', { class: 'muted', text: 'Empty message' }),
       ])
     })
+    if (!shared || !targets.length) return nodes
+    var bar = h('div', { class: 'code-box code-shared' }, [
+      h('div', { class: 'code-tools' }, findControls(groupFind(targets))),
+    ])
+    return [bar].concat(nodes)
   }
 
   function tabContent(e, tab, v) {
@@ -1161,6 +1571,22 @@
     if (root && root.contains(ev.target)) return
     setTypeOpen(false)
   })
+
+  // Ctrl+F goes to the Find field of the open block (a large block keeps only visible rows in
+  // the page, so the browser find cannot see it). A second Ctrl+F opens the browser find.
+  // ev.code is the physical key, so this also works in a non-Latin layout (key is 'а').
+  window.addEventListener('keydown', function (ev) {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey) return
+    if (ev.code !== 'KeyF' && ev.key !== 'f' && ev.key !== 'F') return
+    var active = doc.activeElement
+    if (active && active.classList && active.classList.contains('code-find')) return
+    var target = doc.querySelector('#details .code-large .code-find') || doc.querySelector('#details .code-find')
+    if (!target) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    target.focus()
+    target.select()
+  }, true)
 
   doc.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && donateLayer && !donateLayer.hidden) {

@@ -328,6 +328,16 @@ export interface BaseInspectorSettings {
     search?: any
     /** Network tab search settings */
     networkSearch: NetworkSearchSettings
+    /**
+     * HTTP requests kept in Network and in Logs. Default 500, range 50–5000.
+     * A request and its response count as one.
+     */
+    networkMaxHttpRequests: number
+    /**
+     * WebSocket rows kept in Network, and WebSocket events kept in Logs.
+     * Default 500, range 50–5000.
+     */
+    networkMaxWebSocketEvents: number
     /** Network capture: saved (Classic) = page-visible headers only; advanced = full request/response headers via webRequest */
     networkCaptureMode: NetworkCaptureMode
     /** Advanced-only headers: display and export toggles (extension Advanced mode). */

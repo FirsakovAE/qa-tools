@@ -36,7 +36,7 @@ export interface ResponseData {
   body: string | null
   size: number
   duration: number
-  /** Present for a binary response: format, pixel size, and a live image preview */
+  /** Present for a binary response: the format label. The byte size is `size`. */
   media?: import('./media-preview').MediaInfo
 }
 
