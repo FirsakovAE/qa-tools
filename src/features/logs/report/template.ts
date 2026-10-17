@@ -7,12 +7,18 @@
  *
  * Payload version 1: compact events, a shared network section and a snapshot pool
  * (`snapshots`) for identical values referenced from events as `{ __snap: id }`.
+ *
+ * A compressed report keeps the same JSON as gzip + base64 (`data-encoding="gzip-base64"`);
+ * the loader (`report.boot.js`) unpacks it with DecompressionStream before rendering.
  */
 
 import css from './report.css?raw'
 import client from './report.client.js?raw'
+import boot from './report.boot.js?raw'
 import icon from '../../../../public/icons/icon16.png?inline'
 import { createLogsRuntime } from '@/injected/logs/runtime'
+import { buildAiDigest } from './aiDigest'
+import { canCompressReport } from './compressSupport'
 import type { StoredNetworkEntry } from '@/types/logs'
 import type { BodyContent } from '@/types/network'
 
@@ -21,6 +27,7 @@ export const LOGS_REPORT_FORMAT = 'vue-inspector-logs'
 export const LOGS_REPORT_VERSION = 1
 
 const DATA_OPEN = `<script type="application/json" id="${REPORT_DATA_ID}">`
+const DATA_OPEN_GZIP = `<script type="application/octet-stream" id="${REPORT_DATA_ID}" data-encoding="gzip-base64">`
 const DATA_CLOSE = '</script>'
 
 /** Stored event: titles, subtitles and restorable states are derived when the file is read */
@@ -93,7 +100,30 @@ function embedScript(source: string): string {
 }
 
 const STYLE = minifyCss(css)
-const SCRIPT = embedScript(`var LogsRuntime=(${createLogsRuntime.toString()})();\n${compactJs(client)}`)
+const SCRIPT = embedScript([
+  `var createLogsRuntime=(${createLogsRuntime.toString()});`,
+  'var LogsRuntime=createLogsRuntime();',
+  `var buildAiDigest=(${buildAiDigest.toString()});`,
+  `function runLogsReport(QA_PAYLOAD,QA_PAYLOAD_TEXT){\n${compactJs(client)}\n}`,
+  compactJs(boot),
+].join('\n'))
+
+async function gzipBase64(text: string): Promise<string> {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer())
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(binary)
+}
+
+async function dataBlock(payload: LogsReportPayload, compress: boolean): Promise<string> {
+  if (compress && canCompressReport()) {
+    return `${DATA_OPEN_GZIP}${await gzipBase64(JSON.stringify(payload))}${DATA_CLOSE}`
+  }
+  return `${DATA_OPEN}${embedJson(payload)}${DATA_CLOSE}`
+}
 
 function sourceTag(info: LogsReportPayload['info']): string {
   const source = typeof info.generator === 'string' ? info.generator : info.name
@@ -102,10 +132,16 @@ function sourceTag(info: LogsReportPayload['info']): string {
   return ''
 }
 
-export function renderLogsReport(payload: LogsReportPayload): string {
+export interface RenderReportOptions {
+  /** Store the data block as gzip + base64 (smaller file, needs DecompressionStream to open) */
+  compress?: boolean
+}
+
+export async function renderLogsReport(payload: LogsReportPayload, options: RenderReportOptions = {}): Promise<string> {
   const title = `${payload.info.name} - ${payload.info.exportedAt}`
   const tag = sourceTag(payload.info)
   const tagHtml = tag ? `<span class="badge">${escapeHtml(tag)}</span>` : ''
+  const data = await dataBlock(payload, !!options.compress)
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -123,6 +159,8 @@ export function renderLogsReport(payload: LogsReportPayload): string {
 <span class="nav-spacer"></span>
 <label class="check"><input id="in-data" type="checkbox"> in data</label>
 <input id="search" class="search" type="search" placeholder="Search events..." autocomplete="off">
+<button id="export-ai" class="nav-btn" type="button" title="Download a compact Markdown digest with a guide for an AI assistant (.md)">Export<span class="nav-btn-long"> for</span> AI</button>
+<button id="export-json" class="nav-btn" type="button" title="Download the report data (JSON)"><span class="nav-btn-long">Export </span>JSON</button>
 </header>
 <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 <div class="layout">
@@ -130,7 +168,7 @@ export function renderLogsReport(payload: LogsReportPayload): string {
 <main id="main" class="main"><noscript>This report needs JavaScript to display events.</noscript></main>
 <section id="details" class="details" aria-label="Event details"></section>
 </div>
-${DATA_OPEN}${embedJson(payload)}${DATA_CLOSE}
+${data}
 <script>${SCRIPT}</script>
 </body>
 </html>

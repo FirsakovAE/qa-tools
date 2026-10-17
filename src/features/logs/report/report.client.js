@@ -1,5 +1,6 @@
 // Vue Inspector Logs report renderer. Plain browser JS, embedded verbatim into the report.
-// Reads the JSON block written by the generator and renders the Logs view. Events are stored
+// Runs as the body of `runLogsReport(QA_PAYLOAD, QA_PAYLOAD_TEXT)`, called by the loader
+// (report.boot.js) with the data block, and renders the Logs view. Events are stored
 // compactly; `LogsRuntime` (embedded before this script) restores titles, store states and
 // network entries the same way the Logs tab does.
 // Page data is only ever inserted with textContent (JSON highlighting escapes first).
@@ -28,12 +29,8 @@
   var KNOWN = ['request', 'response', 'ws', 'ws-sent', 'ws-received', 'ws-closed', 'props', 'emit', 'store', 'action', 'navigation', 'error']
 
   var doc = document
-  var payload = { info: {}, events: [] }
-  try {
-    payload = JSON.parse(doc.getElementById('qa-logs-data').textContent || '{}')
-  } catch (e) {
-    console.error('[logs report] data block is not valid JSON', e)
-  }
+  // Parsed (and unpacked) by the loader; QA_PAYLOAD_TEXT is the same data as JSON text
+  var payload = QA_PAYLOAD && typeof QA_PAYLOAD === 'object' ? QA_PAYLOAD : { info: {}, events: [] }
   var info = payload.info || {}
   var kindsMeta = info.kinds || {}
   var kindLabels = {}
@@ -120,9 +117,15 @@
     return networkPairs[(e.kind === 'request' ? 'response:' : 'request:') + e.data.entryId] || null
   }
 
+  function isCleanClose(code) {
+    return code == null || code === 1000 || code === 1001 || code === 1005
+  }
+
   function isFailed(e) {
-    var en = e.kind === 'response' && entryOf(e)
-    return !!en && (!!en.error || Number(en.status) >= 400)
+    var en = (e.kind === 'response' || e.kind === 'ws-closed') && entryOf(e)
+    if (!en) return false
+    if (en.websocket) return !!en.error || en.websocket.reconnect === false || !isCleanClose(en.websocket.closeCode)
+    return !!en.error || Number(en.status) >= 400
   }
 
   // Full views (restored states, change values, entry halves); a few recent ones are kept
@@ -138,7 +141,7 @@
   // Overview cards open "All events" narrowed by one of these (hash "#all:<filter>")
   var FILTERS = {
     errors: { label: 'Errors', test: function (e) { return e.level === 'error' } },
-    failed: { label: 'Failed requests', test: isFailed },
+    failed: { label: 'Failed requests / WS', test: isFailed },
   }
 
   var state = { section: 'overview', filter: '', selected: -1, tab: '', query: '', inData: false, limit: PAGE_SIZE, typeOpen: false }
@@ -251,6 +254,13 @@
   }
 
   function isOmitted(v) { return !!v && typeof v === 'object' && v.__omitted === true }
+
+  // Older exports flagged complete non-ASCII bodies as truncated (characters compared with
+  // Content-Length bytes); such a body is exactly originalSize bytes long in UTF-8.
+  function isCutBody(body) {
+    if (!body.truncated || typeof body.text !== 'string') return false
+    try { return new TextEncoder().encode(body.text).length !== body.originalSize } catch (e) { return true }
+  }
 
   function escapeHtml(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -956,7 +966,7 @@
       h('div', { class: 'cards' }, [
         card('Events', events.length, false, sectionHref('all', -1)),
         card('Errors', errors, false, sectionHref('all', -1, 'errors')),
-        card('Failed requests', failed, false, sectionHref('all', -1, 'failed')),
+        card(FILTERS.failed.label, failed, false, sectionHref('all', -1, 'failed')),
         card('First event', events.length ? fmtDateTime(first) : '-', true),
         card('Last event', events.length ? fmtDateTime(last) : '-', true),
         card('Time span', events.length ? fmtDuration(last - first) : '-', true),
@@ -1272,7 +1282,7 @@
     if (!body) return h('div', { class: 'muted', text: 'No body' })
     if (body.isBinary || body.media) return mediaSummary(body)
     var nodes = []
-    if (body.truncated) nodes.push(h('p', { class: 'notice', text: 'Body truncated (' + fmtBytes(body.originalSize) + ' originally).' }))
+    if (isCutBody(body)) nodes.push(h('p', { class: 'notice', text: 'Body truncated (' + fmtBytes(body.originalSize) + ' originally).' }))
     if (body.formData && body.formData.length) {
       nodes.push(jsonBlock(body.formData))
       return nodes
@@ -1611,6 +1621,57 @@
       }
     }
   })
+
+  // ---------------------------------------------------------------- data export
+
+  function reportBaseName() {
+    var file = decodeURIComponent((location.pathname || '').split('/').pop() || '')
+    file = file.replace(/\.html?$/i, '')
+    return file || 'logs'
+  }
+
+  function saveFile(text, type, name) {
+    var url = URL.createObjectURL(new Blob([text], { type: type }))
+    var a = h('a', { href: url, download: name })
+    doc.body.appendChild(a)
+    a.click()
+    doc.body.removeChild(a)
+    setTimeout(function () { URL.revokeObjectURL(url) }, 1000)
+  }
+
+  function flash(btn, text) {
+    if (!btn.dataset.label) btn.dataset.label = btn.innerHTML
+    btn.textContent = text
+    clearTimeout(btn._flash)
+    btn._flash = setTimeout(function () { btn.innerHTML = btn.dataset.label }, 1600)
+  }
+
+  var aiDigest = null
+  function digest() {
+    if (aiDigest == null) aiDigest = buildAiDigest(JSON.parse(QA_PAYLOAD_TEXT || '{}'), createLogsRuntime())
+    return aiDigest
+  }
+
+  var jsonBtn = $('export-json')
+  if (jsonBtn) {
+    jsonBtn.addEventListener('click', function () {
+      saveFile(QA_PAYLOAD_TEXT || '{}', 'application/json', reportBaseName() + '.json')
+    })
+  }
+  var aiBtn = $('export-ai')
+  if (aiBtn) {
+    aiBtn.addEventListener('click', function () {
+      var text
+      try {
+        text = digest()
+      } catch (err) {
+        console.error('[logs report] AI digest failed', err)
+        flash(aiBtn, 'Failed')
+        return
+      }
+      saveFile(text, 'text/markdown', reportBaseName() + '.ai.md')
+    })
+  }
 
   var meta = $('nav-meta')
   if (meta) {

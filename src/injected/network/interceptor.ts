@@ -976,7 +976,9 @@ function interceptFetch(): void {
               body: responseBody,
               size,
               duration,
-              media
+              media,
+              truncated: taken.truncated,
+              originalSize
             })
           }
 
@@ -1049,7 +1051,9 @@ function interceptFetch(): void {
           body: responseBody,
           size,
           duration,
-          media
+          media,
+          truncated: taken.truncated,
+          originalSize
         })
       }
       
@@ -1635,6 +1639,7 @@ function interceptXHR(): void {
       let media: MediaInfo | undefined
       const contentType = this.getResponseHeader('content-type') || ''
       let originalSize = 0
+      let truncated = false
 
       if (isBinaryContentType(contentType)) {
         media = { format: mediaFormatLabel(contentType) }
@@ -1648,6 +1653,7 @@ function interceptXHR(): void {
         const trunc = truncateBody(responseBody)
         responseBody = trunc.truncated ? trunc.text : responseBody
         originalSize = trunc.originalSize
+        truncated = trunc.truncated
       }
 
       const contentLength = parseInt(this.getResponseHeader('content-length') || '0', 10)
@@ -1672,7 +1678,9 @@ function interceptXHR(): void {
               body: responseBody,
               media,
               size,
-              duration
+              duration,
+              truncated,
+              originalSize
             })
           }
 
@@ -1762,7 +1770,9 @@ function interceptXHR(): void {
               body: responseBody,
               media,
               size,
-              duration
+              duration,
+              truncated,
+              originalSize
             })
           }
           // Call stored app handlers
@@ -1781,7 +1791,9 @@ function interceptXHR(): void {
             body: responseBody,
             media,
             size,
-            duration
+            duration,
+            truncated,
+            originalSize
           })
         }
         // Call stored app handlers

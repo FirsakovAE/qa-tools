@@ -380,4 +380,11 @@ export interface BaseInspectorSettings {
     logsLimits: LogsLimits
     /** Masking of sensitive data in logged payloads (applied at capture, so also in exports) */
     logsMasking: LogsMasking
+    /** HTML report export options */
+    logsExport?: LogsExportSettings
+}
+
+export interface LogsExportSettings {
+    /** Store report data as gzip + base64: several times smaller, unpacked when the report opens */
+    compress: boolean
 }

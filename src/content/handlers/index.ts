@@ -50,6 +50,8 @@ import {
   handleNetworkConfigUpdate
 } from './network'
 
+import { handleAiSourcesList, handleAiSourceFetch } from './sources'
+
 /**
  * Runtime handlers map - message type to handler function
  */
@@ -88,7 +90,11 @@ export const runtimeHandlers: Record<string, RuntimeHandler> = {
   NETWORK_CLEAR: handleNetworkClear,
   NETWORK_GET_ENTRIES: handleNetworkGetEntries,
   NETWORK_GET_STATUS: handleNetworkGetStatus,
-  NETWORK_CONFIG_UPDATE: handleNetworkConfigUpdate
+  NETWORK_CONFIG_UPDATE: handleNetworkConfigUpdate,
+
+  // AI assistant: page sources
+  AI_SOURCES_LIST: handleAiSourcesList,
+  AI_SOURCE_FETCH: handleAiSourceFetch
 }
 
 /**

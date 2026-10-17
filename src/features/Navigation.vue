@@ -7,6 +7,7 @@
     GlobeIcon,
     FileTextIcon,
     SettingsIcon,
+    Sparkles,
   } from 'lucide-vue-next'
   
   import { Button } from '@/components/ui/button'
@@ -22,6 +23,7 @@ import { StoresTab, usePiniaStores } from '@/features/stores'
 import { OptionsTab } from '@/features/settings'
 import { NetworkTab } from '@/features/network'
 import { LogsTab, initLogsCollector } from '@/features/logs'
+import { AiTab } from '@/features/ai'
 import { postToContentScript } from '@/utils/postToContentScript'
 
   // Collect logs from app start, independent of the active tab
@@ -61,6 +63,7 @@ import { postToContentScript } from '@/utils/postToContentScript'
   interface UIFeatureFlags {
     hasNetwork: boolean
     hasLogs: boolean
+    hasAi: boolean
   }
   
   /**
@@ -100,6 +103,7 @@ import { postToContentScript } from '@/utils/postToContentScript'
 const UI_FEATURE_FLAGS: UIFeatureFlags = {
   hasNetwork: true, // 👈 Network tab enabled
   hasLogs: true,
+  hasAi: true,
 }
   
   /**
@@ -340,6 +344,12 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
       icon: FileTextIcon,
       requiresFlag: 'hasLogs' as const,
     },
+    {
+      id: 'ai',
+      title: 'AI assistant',
+      icon: Sparkles,
+      requiresFlag: 'hasAi' as const,
+    },
   ] as const
   
   const tabs = computed(() =>
@@ -357,7 +367,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     icon: SettingsIcon,
   } as const
   
-  type TabId = 'props' | 'stores' | 'network' | 'logs' | 'options'
+  type TabId = 'props' | 'stores' | 'network' | 'logs' | 'ai' | 'options'
   
   const activeTab = ref<TabId>('props')
   
@@ -503,6 +513,14 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           class="h-full overflow-hidden"
         >
           <LogsTab />
+        </div>
+
+        <!-- ===== AI tab ===== -->
+        <div
+          v-else-if="activeTab === 'ai'"
+          class="h-full overflow-hidden"
+        >
+          <AiTab />
         </div>
 
         <!-- ===== Options tab ===== -->

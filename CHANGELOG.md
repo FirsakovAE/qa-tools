@@ -433,3 +433,62 @@ Saving removed keys in **Edit** mode is fixed.
 * Fixed applying edited `XMLHttpRequest` headers when the URL and method did not change.
 * Fixed resolving relative URLs that were edited at a **Breakpoint**.
 * Fixed saving removed keys when editing **Pinia** and **Props**.
+
+## [2.7.0] - 2026-10-17
+
+### AI assistant
+
+* New **AI** tab: a chat that diagnoses the inspected site. Describe the problem, and the assistant explains what went wrong, the likely cause, the evidence (event ids and code locations) and how to fix it.
+* The assistant starts from a short logs digest. When that is not enough, it reads full events (bodies, headers, store states, stacks) and searches the logs. When the logs do not explain the cause, it reads the page code.
+* Page code is read from the scripts the page loaded. When the site ships source maps, stack frames are mapped to the original files (Vue components, stores) and those files can be listed, read and searched.
+* When the assistant reads an error, it gets the code at the first app frames of the stack in the same step. Library and extension frames are skipped. This saves a request per frame on the free tier.
+* The answer appears as the model writes it. A stopped answer keeps the text written so far.
+* The **Reasoning** switch in the message field controls whether thinking models reason before answering. It is off by default to save tokens. Models that always reason (gpt-oss, Gemini Pro) then use the lowest effort.
+* The message field grows with the text up to about five lines. The send / stop button and the **Reasoning** switch sit inside the field.
+* Reasoning is collapsed to one line: the current thought while the model thinks, the first line afterwards. Click it to expand the full text.
+* The chat uses the scrollbars of the inspector theme.
+* The reasoning of thinking models and the notes the assistant writes between tool calls are shown live and kept in the steps of the answer. They are not sent back to the model, so they do not cost tokens in later requests. `<think>` blocks that some models put into the text are moved to the reasoning as well.
+* Tool calls that a model writes into the text (`<tool_call>` and `<function=…>` markup) are run as tool calls. Such markup never shows up in the answer.
+* One question uses at most 6 tool rounds. Near the limit the assistant is told how many rounds are left, and the last request asks for a text answer from the data collected. A repeated identical tool call is not run again: the assistant is pointed to the earlier result, so the same data is not sent twice.
+* Reading minified page code is cheaper. Code search shows the line and column of a match in a minified line, with the code around it. Reading a minified script as a range, or at a line without a column, returns a short hint instead of thousands of characters of minified code. Search results also say when the page has no source maps, so the assistant does not look for original files.
+* The assistant explains common harmless browser notices, such as `ResizeObserver loop completed with undelivered notifications` and `Script error.`, without spending requests on searching the code.
+* Under each answer the tab shows what it cost: requests to the provider, prompt and completion tokens as the provider reports them (with the cached part), and time. The numbers are also shown for a stopped or failed answer.
+* The assistant also answers questions about Vue Inspector itself.
+* **Sign in with OpenRouter** connects your OpenRouter account and uses its free models. The quick-switch list offers three recommended models; the other free models with tool support are listed below them.
+* Models whose providers are down are hidden, and models that fail often are marked **unstable**. The check uses the public OpenRouter status and does not spend your free requests. The refresh button next to the model list repeats it.
+* Each request names two fallback models. When the chosen model is overloaded or rate-limited, a fallback answers, and the answer shows which model gave it. A model that failed is marked **busy** and skipped for 10 minutes.
+* A Gemini or Groq model that is overloaded or rate-limited is replaced with another model of the same provider.
+* When the provider asks to wait a few seconds (a per-minute limit), the assistant waits and repeats the request with the same model.
+* The daily limit of free OpenRouter and Gemini requests is reported separately from a busy model: switching models does not help with it. Groq counts the daily limit per model, so another Groq model answers.
+* As an alternative, add your own **Gemini API key** (free tier from Google AI Studio) or **Groq API key** (free tier from GroqCloud). The bookmarklet works with these keys only.
+* Groq free models accept about 8K tokens a minute, so with Groq the assistant sends a shorter logs digest, cuts long tool results and drops the oldest questions of the chat.
+* Keys are stored in the browser apart from the settings and are not included in settings export.
+* Before the first question the tab shows what is sent to the provider. Values hidden by **Data masking** are never sent.
+* The extension now requests the `identity` permission for the OpenRouter sign-in.
+
+### Logs
+
+* **Export for AI**, next to **Export Logs**, downloads a compact Markdown digest of the selected events, or of every event that matches the filters. It is many times smaller than the full report.
+* The digest begins with a built-in guide for the AI assistant. The guide explains how to read the file, tells the assistant to start from the problems, and to ask for specific events by id instead of the whole report.
+* Next comes a **Summary**: event counts by type, errors, failed requests and WebSocket connections, and the slowest requests.
+* **Problems** groups identical failures and shows their evidence once: the status, error, stack, a shortened response body and the WebSocket close code. An error that came without a stack says so.
+* The **Timeline** has one line per event, with the changed keys of Pinia and props changes. Repeated lines are folded.
+* An event id `#N` opens the same event in the HTML report with the link `#all/N`.
+
+### HTML report
+
+* **Export for AI** downloads the same Markdown digest as an `.md` file.
+* **Export JSON** saves the full report data, also from a compressed report.
+* On a narrow screen the header buttons are shortened to **Export AI** and **JSON**.
+* The **Failed requests / WS** card also counts WebSocket connections that closed with an error code, closed without automatic reconnect, or failed.
+
+### Options → Logs
+
+* **Export → Compress report**, on by default, stores the report data as gzip encoded in base64. The file becomes several times smaller and is unpacked when it opens.
+* In a browser without gzip streams the option is disabled and reports are exported uncompressed.
+* A compressed report needs Chrome / Edge 80+, Firefox 113+ or Safari 16.4+, and its data cannot be read in the file source. Use **Export JSON** or **Export for AI** in the report instead.
+
+### Fixes
+
+* Fixed the false **Body truncated** notice on complete responses with non-ASCII text, such as Cyrillic. The body length in characters was compared with `Content-Length` in bytes. The notice now appears only when the body was actually cut.
+* Reports exported before this fix no longer show the false notice either.

@@ -463,8 +463,8 @@ function handleResponse(id: string, response: ResponseData): void {
       ? createBodyContent(
           response.body,
           contentType,
-          response.size,
-          response.body != null && response.body.length < response.size,
+          response.truncated ? response.originalSize ?? response.size : response.size,
+          !!response.truncated && response.body != null,
           response.media,
         )
       : null,

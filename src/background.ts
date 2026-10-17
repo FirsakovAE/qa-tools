@@ -572,6 +572,40 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 })
 
+// ----- AI: OpenRouter sign-in (OAuth PKCE) -----
+
+function base64Url(bytes: Uint8Array): string {
+    let binary = ''
+    for (const b of bytes) binary += String.fromCharCode(b)
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** Opens the OpenRouter consent page and exchanges the returned code for a key of the user */
+async function openRouterSignIn(): Promise<{ key: string }> {
+    const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)))
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+    const challenge = base64Url(new Uint8Array(digest))
+    const callback = chrome.identity.getRedirectURL('openrouter')
+    const authUrl = `https://openrouter.ai/auth?${new URLSearchParams({
+        callback_url: callback,
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+    })}`
+    const redirected = await chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true })
+    const code = redirected ? new URL(redirected).searchParams.get('code') : null
+    if (!code) throw new Error('Sign-in was cancelled')
+    const res = await fetch('https://openrouter.ai/api/v1/auth/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || typeof data?.key !== 'string') {
+        throw new Error(data?.error?.message || `OpenRouter returned ${res.status}`)
+    }
+    return { key: data.key }
+}
+
 // NOTE: Расширение теперь работает через injected UI без popup
 // Action API больше не используется
 
@@ -779,6 +813,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 }, 'UNHIGHLIGHT_ELEMENT')
             }
             break
+
+        case 'AI_OPENROUTER_SIGN_IN':
+            openRouterSignIn()
+                .then(sendResponse)
+                .catch((error) => sendResponse({ error: String((error as Error)?.message || error) }))
+            return true
 
         case 'RELAY_DEVTOOLS_SEARCH':
             if (devtoolsSearchPort) {

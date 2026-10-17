@@ -36,6 +36,10 @@ export interface ResponseData {
   body: string | null
   size: number
   duration: number
+  /** `body` was cut by the capture size limit; `size` (Content-Length, bytes) cannot tell this */
+  truncated?: boolean
+  /** Length of the body before the cut, when `truncated` */
+  originalSize?: number
   /** Present for a binary response: the format label. The byte size is `size`. */
   media?: import('./media-preview').MediaInfo
 }

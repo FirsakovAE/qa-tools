@@ -23,8 +23,9 @@ import LogDetails from './LogDetails.vue'
 import ExportLogsMenu from './ExportLogsMenu.vue'
 import { useLogs, ignoreRuleLabel } from './useLogs'
 import { useLogsSearch } from './useLogsSearch'
-import { exportLogEvent, exportLogs } from './exportLogs'
+import { exportLogEvent, exportLogs, exportLogsForAi } from './exportLogs'
 import { networkEntryOf, pairedNetworkEvent } from './view'
+import { canCompressReport } from './report/compressSupport'
 
 const settings = useInspectorSettingsSync()
 
@@ -73,13 +74,21 @@ const isFiltered = computed(() => isSearching.value || !allTypesSelected.value)
 
 const rowSelection = useRowSelection(() => filteredEvents.value.map(e => e.id))
 
-function handleExportLogs() {
-  if (rowSelection.count.value === 0) {
-    exportLogs(filteredEvents.value, source.value)
-    return
-  }
+const exportOptions = computed(() => ({ compress: canCompressReport() && settings.value?.logsExport?.compress !== false }))
+
+/** Ticked rows, or every event passing the filters */
+function eventsToExport(): LogEvent[] {
+  if (rowSelection.count.value === 0) return filteredEvents.value
   const ids = new Set(rowSelection.checkedIds.value)
-  exportLogs(filteredEvents.value.filter(e => ids.has(e.id)), source.value)
+  return filteredEvents.value.filter(e => ids.has(e.id))
+}
+
+function handleExportLogs() {
+  void exportLogs(eventsToExport(), source.value, exportOptions.value)
+}
+
+function handleExportForAi() {
+  if (!exportLogsForAi(eventsToExport(), source.value)) toast.error('The AI digest could not be built')
 }
 
 // ============================================================================
@@ -107,7 +116,7 @@ watch(events, list => {
 })
 
 function handleExport(event: LogEvent) {
-  exportLogEvent(event, source.value)
+  void exportLogEvent(event, source.value, exportOptions.value)
 }
 
 function handleCopyCurl(event: LogEvent) {
@@ -181,14 +190,14 @@ function handleClear() {
           </FacetedFilter>
 
           <div class="export-inline flex items-center gap-2">
-            <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
+            <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" @export-ai="handleExportForAi" />
           </div>
         </div>
       </div>
 
       <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
         <div class="hidden export-wrapped space-x-2">
-          <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
+          <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" @export-ai="handleExportForAi" />
         </div>
         <div class="hidden flex-1 export-spacer" />
 

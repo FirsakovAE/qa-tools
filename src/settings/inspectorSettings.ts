@@ -113,6 +113,7 @@ export const defaultInspectorSettings: InspectorSettings = {
     logsSearch: { byName: true, byKey: false, byValue: false },
     logsLimits: structuredClone(DEFAULT_LOGS_LIMITS),
     logsMasking: structuredClone(DEFAULT_LOGS_MASKING),
+    logsExport: { compress: true },
 }
 
 export const defaultCustomizeSettings: CustomizeSettings = defaultInspectorSettings.customize

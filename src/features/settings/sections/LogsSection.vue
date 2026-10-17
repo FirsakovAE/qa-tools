@@ -24,6 +24,7 @@ import {
   type LogLimitKey,
 } from '@/injected/logs/config'
 import { logsStats } from '@/features/logs/useLogs'
+import { canCompressReport } from '@/features/logs/report/compressSupport'
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -144,6 +145,9 @@ function removeMaskKey(key: string) {
 function getMaskKeyActions(row: { key: string }): MenuAction[] {
   return [{ label: 'Delete', icon: Trash, onClick: () => removeMaskKey(row.key), destructiveText: true }]
 }
+
+// -------------------- EXPORT --------------------
+const compressSupported = canCompressReport()
 </script>
 
 <template>
@@ -340,5 +344,36 @@ function getMaskKeyActions(row: { key: string }): MenuAction[] {
         </TableCell>
       </template>
     </SettingsTableSection>
+
+    <!-- Export -->
+    <div id="logs-export-section" class="space-y-3 border-t pt-4">
+      <h4 class="text-sm font-semibold">Export</h4>
+      <div class="flex items-start gap-3">
+        <Checkbox
+          id="logs-export-compress"
+          class="mt-0.5"
+          :disabled="!compressSupported"
+          :model-value="compressSupported && settings.logsExport?.compress !== false"
+          @update:model-value="settings.logsExport = { ...settings.logsExport, compress: !!$event }"
+        />
+        <div class="space-y-1" :class="{ 'opacity-50': !compressSupported }">
+          <Label
+            for="logs-export-compress"
+            class="text-sm font-normal"
+            :class="compressSupported ? 'cursor-pointer' : 'cursor-not-allowed'"
+          >
+            Compress report
+          </Label>
+          <p class="text-xs text-muted-foreground">
+            <template v-if="compressSupported">
+              The HTML report is several times smaller. Needs Chrome / Edge 80+, Firefox 113+ or Safari 16.4+.
+            </template>
+            <template v-else>
+              Not supported in this browser. Needs Chrome / Edge 80+, Firefox 113+ or Safari 16.4+.
+            </template>
+          </p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
