@@ -27,7 +27,7 @@ export const LOG_LIMIT_KEYS: LogLimitKey[] = ['network', 'props', 'emit', 'store
 export const DEFAULT_LOGS_LIMITS: LogsLimits = {
   capture: { network: true, props: true, emit: true, store: true, action: true, navigation: true, error: true },
   maxMemoryMB: 20,
-  limitEventSize: false,
+  limitEventSize: true,
   maxEventKB: 512,
 }
 
@@ -80,7 +80,7 @@ export function normalizeLimits(raw: Partial<LogsLimits> | null | undefined): Lo
   return {
     capture,
     maxMemoryMB: clampInt(raw?.maxMemoryMB, memoryMB.min, memoryMB.max, DEFAULT_LOGS_LIMITS.maxMemoryMB),
-    limitEventSize: raw?.limitEventSize === true,
+    limitEventSize: typeof raw?.limitEventSize === 'boolean' ? raw.limitEventSize : DEFAULT_LOGS_LIMITS.limitEventSize,
     maxEventKB: clampInt(raw?.maxEventKB, eventKB.min, eventKB.max, DEFAULT_LOGS_LIMITS.maxEventKB),
   }
 }
