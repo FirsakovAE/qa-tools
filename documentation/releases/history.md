@@ -329,7 +329,7 @@ Advanced capture and related features are **not available in Standalone**: only 
 
 The **Classic / Advanced** choice selects the JSON implementation across the UI (**Network** and **Mock** bodies, **Pinia** snapshots, JSON on **Props**, etc.). Non-JSON content still uses text view with highlighting where supported.
 
-## [2.6.0] - 2026-10-12
+## [2.6.0] - 2026-10-17
 
 ### Logs
 
