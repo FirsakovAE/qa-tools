@@ -1,13 +1,28 @@
 import type { AiStep, ToolDefinition } from './types'
 import { getEvents, searchLogs } from './logsContext'
 import { listSources, readSource, searchSource } from './sources'
+import { DOCS_INDEX, readDocs } from './docs'
 
 export const AI_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'read_docs',
+      description: `Vue Inspector user documentation: what its tabs, buttons, menus and options do and how to use them. Pages: ${DOCS_INDEX}. Without pages returns the list of pages with their sections.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          pages: { type: 'array', items: { type: 'string' }, description: 'Page ids from the list, up to 3' },
+          section: { type: 'string', description: 'Optional heading text: return only this section of each page' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_events',
-      description: 'Full data of logged events by id (#N from the digest): request/response headers and bodies, WebSocket frames, Pinia changes with the store state, props, emit payloads, error messages and stacks. For an error stack it also shows the code at the first app frames (original files when source maps exist). Pass every id you need in one call.',
+      description: 'Full data of logged events by id (#N from the digest): bodies, headers, store state, props, payloads, stacks. An error also names Page (last navigation), Data later (when store data arrived) and nearby events. Stack frames include page code when source maps exist. Pass every id in one call.',
       parameters: {
         type: 'object',
         properties: {
@@ -92,6 +107,8 @@ function short(value: unknown, max = 60): string {
 
 export function describeToolCall(name: string, args: Record<string, any>): AiStep {
   switch (name) {
+    case 'read_docs':
+      return { tool: 'Docs', summary: Array.isArray(args.pages) && args.pages.length ? `Read ${args.pages.map(p => short(p)).join(', ')}${args.section ? ` § ${short(args.section)}` : ''}` : 'List pages' }
     case 'get_events':
       return { tool: 'Logs', summary: `Event details ${(Array.isArray(args.ids) ? args.ids : [args.ids]).map((id: unknown) => `#${id}`).join(', ')}` }
     case 'search_logs':
@@ -110,6 +127,8 @@ export function describeToolCall(name: string, args: Record<string, any>): AiSte
 export async function runTool(name: string, args: Record<string, any>): Promise<string> {
   try {
     switch (name) {
+      case 'read_docs':
+        return readDocs(args.pages ?? args.page, args.section)
       case 'get_events':
         return await getEvents(args.ids)
       case 'search_logs':

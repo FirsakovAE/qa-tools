@@ -16,6 +16,9 @@ export const PROVIDER_LABELS: Record<AiProviderId, string> = { openrouter: 'Open
 export interface ProviderBudget {
   /** Timeline lines of the logs digest sent with a question */
   digestTimeline: number
+  /** Size of the whole logs digest and of each body in its Problems */
+  digestChars?: number
+  digestBodyChars?: number
   /** One tool result is cut to this size */
   toolResultChars: number
   /** Conversation size per request (without the system prompt and tool definitions) */
@@ -24,13 +27,13 @@ export interface ProviderBudget {
 }
 
 /**
- * Groq free tier counts about 8K tokens a minute per model, the whole request included,
- * so it gets a short digest and a small context.
+ * Groq free tier rejects a single request above ~8K tokens (the minute cap). The system
+ * prompt and tool definitions take about 2.5K tokens; the conversation stays under 10K chars.
  */
 export const PROVIDER_BUDGET: Record<AiProviderId, ProviderBudget> = {
   openrouter: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity },
   gemini: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity },
-  groq: { digestTimeline: 40, toolResultChars: 5000, contextChars: 12_000, maxTokens: 2500 },
+  groq: { digestTimeline: 40, digestChars: 5500, digestBodyChars: 500, toolResultChars: 3500, contextChars: 10_000, maxTokens: 2500 },
 }
 
 /**

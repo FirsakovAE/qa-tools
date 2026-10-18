@@ -115,7 +115,8 @@ export function useAiChat() {
     controller = new AbortController()
 
     resetLogsSnapshot()
-    const snapshot = takeLogsSnapshot(PROVIDER_BUDGET[aiCredentials.provider].digestTimeline)
+    const budget = PROVIDER_BUDGET[aiCredentials.provider]
+    const snapshot = takeLogsSnapshot({ maxTimeline: budget.digestTimeline, maxChars: budget.digestChars, bodyChars: budget.digestBodyChars })
     const digest = snapshot.signature !== sentSignature ? snapshot.digest : undefined
     const usage: AiUsage = { requests: 0, prompt: 0, completion: 0, cached: 0, unreported: 0, ms: 0 }
     const started = Date.now()

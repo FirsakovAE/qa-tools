@@ -683,6 +683,29 @@ export function createLogsRuntime() {
     return `${Number.isFinite(n) ? n.toFixed(2) : '0.00'} ms`
   }
 
+  /** Null / empty / still-loading results, so a timeline line shows why a later error happened */
+  function actionResultHint(data: Record<string, any>): string {
+    const bits: string[] = []
+    const args = data.args
+    if (Array.isArray(args) && (args.length === 0 || args.every(a => a == null || a === ''))) bits.push('args: empty')
+    if (!Object.prototype.hasOwnProperty.call(data, 'result')) return bits.join(', ')
+    const result = data.result
+    if (result == null) {
+      bits.push('result: null')
+      return bits.join(', ')
+    }
+    if (isObject(result)) {
+      if (Object.prototype.hasOwnProperty.call(result, 'data') && result.data == null) bits.push('data: null')
+      const perm = isObject(result.permissions) ? result.permissions : null
+      if (perm) {
+        if (perm.isLoading) bits.push('loading')
+        else if (perm.isLoaded === false) bits.push('not loaded')
+        if (perm.isError) bits.push('store error')
+      }
+    }
+    return bits.join(', ')
+  }
+
   function describe(event: RuntimeEvent, ctx: HydrateContext): { title: string; subtitle?: string } {
     const data = payload(event)
     const key = String(event.key || '')
@@ -699,7 +722,9 @@ export function createLogsRuntime() {
         return { title: key, subtitle: summarizeChanges(restoreProps(event).changes) }
       case 'action': {
         const error = isObject(data.error) ? data.error : null
-        return { title: `${key}()`, subtitle: event.level === 'error' || error ? `Error: ${error ? error.message : ''}` : formatDurationMs(data.duration) }
+        if (event.level === 'error' || error) return { title: `${key}()`, subtitle: `Error: ${error ? error.message : ''}` }
+        const hint = actionResultHint(data)
+        return { title: `${key}()`, subtitle: hint || formatDurationMs(data.duration) }
       }
       case 'emit':
         return { title: `${emitComponent(event)} @${data.event}`, subtitle: previewArgs(data.args) }

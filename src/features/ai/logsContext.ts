@@ -8,7 +8,7 @@
 import { createLogsRuntime, type LogsRuntime, type RuntimeEvent } from '@/injected/logs/runtime'
 import { useLogs } from '@/features/logs/useLogs'
 import { buildLogsReport, withNetworkPairs } from '@/features/logs/exportLogs'
-import { buildAiDigest } from '@/features/logs/report/aiDigest'
+import { buildAiDigest, type AiDigestOptions } from '@/features/logs/report/aiDigest'
 import type { LogsReportPayload } from '@/features/logs/report/template'
 import { stackCode } from './sources'
 
@@ -20,6 +20,11 @@ const RESULT_CHARS = 24000
 const MAX_EVENTS_PER_CALL = 6
 const MAX_SEARCH_RESULTS = 40
 const STACK_CODE_CHARS = 5000
+/** Events before / after an error that get_events lists so a race is visible without another call */
+const ERROR_BEFORE = 6
+const ERROR_AFTER = 12
+const ERROR_LATER = 50
+const SKIP_AROUND = new Set(['ws-sent', 'ws-received'])
 
 interface Row {
   index: number
@@ -77,16 +82,16 @@ export function resetLogsSnapshot(): void {
 }
 
 /** Snapshot of the current logs; reused while no event was added or dropped */
-export function takeLogsSnapshot(maxTimeline = DIGEST_TIMELINE): LogsSnapshot {
+export function takeLogsSnapshot(budget: Omit<AiDigestOptions, 'noGuide'> = { maxTimeline: DIGEST_TIMELINE }): LogsSnapshot {
   logs ??= useLogs()
   const { events, source } = logs
   const list = events.value
-  const signature = `${list.length}:${list[0]?.id ?? ''}:${list[list.length - 1]?.id ?? ''}:${maxTimeline}`
+  const signature = `${list.length}:${list[0]?.id ?? ''}:${list[list.length - 1]?.id ?? ''}:${budget.maxTimeline}:${budget.maxChars}:${budget.bodyChars}`
   if (cached && cached.signature === signature) return cached
 
   const payload = buildLogsReport(withNetworkPairs(list, source.value), source.value)
   const rt = createLogsRuntime()
-  const digest = buildAiDigest(payload, rt, { maxTimeline })
+  const digest = buildAiDigest(payload, rt, { ...budget, noGuide: true })
 
   const network = payload.network ?? { entries: {}, bodies: {} }
   const entryCache = new Map<string, Record<string, any> | undefined>()
@@ -161,6 +166,10 @@ function eventDetails(snapshot: LogsSnapshot, row: Row): string {
   const { event } = row
   const t0 = snapshot.rows[0]?.event.timestamp ?? 0
   const lines = [`## ${rowLine(row, t0)}`, `- time: ${new Date(event.timestamp).toISOString()}, level: ${event.level}, key: ${event.key}`]
+  if (event.kind === 'error') {
+    const nearby = aroundError(snapshot, row.index)
+    if (nearby) lines.push(nearby)
+  }
   const entryId = event.data?.entryId
   if (typeof entryId === 'string') {
     const entry = snapshot.getEntry(entryId)
@@ -181,6 +190,85 @@ function eventDetails(snapshot: LogsSnapshot, row: Row): string {
   }
   lines.push(`- data: ${cut(json(event.data), VALUE_CHARS)}`)
   return lines.join('\n')
+}
+
+function lastNavigation(snapshot: LogsSnapshot, index: number): Row | undefined {
+  for (let i = index - 1; i >= 0; i--) {
+    if (snapshot.rows[i].event.kind === 'navigation') return snapshot.rows[i]
+  }
+}
+
+function actionStore(row: Row): string {
+  const key = String(row.event.key || '')
+  const dot = key.lastIndexOf('.')
+  return dot > 0 ? key.slice(0, dot) : key
+}
+
+function isEmptyAction(row: Row): boolean {
+  const result = row.event.data?.result
+  if (result == null) return true
+  return typeof result === 'object' && result.data == null
+}
+
+function rowRef(row: Row): string {
+  return `#${row.index} ${row.label} ${row.title}${row.subtitle ? ` | ${row.subtitle}` : ''}`
+}
+
+/** First later actions / store changes where the same store's data is no longer null */
+function laterFilled(snapshot: LogsSnapshot, index: number): Row[] {
+  const stores = new Set<string>()
+  for (let i = Math.max(0, index - ERROR_BEFORE); i < index; i++) {
+    if (snapshot.rows[i].event.kind === 'action') stores.add(actionStore(snapshot.rows[i]))
+  }
+  const found: Row[] = []
+  const seen = new Set<string>()
+  const end = Math.min(snapshot.count, index + ERROR_LATER)
+  for (let i = index + 1; i < end && found.length < 4; i++) {
+    const row = snapshot.rows[i]
+    const kind = row.event.kind === 'action' && stores.has(actionStore(row)) && !isEmptyAction(row)
+      ? `action:${actionStore(row)}`
+      : row.event.kind === 'store' && stores.has(row.event.key) && /\.data\b/.test(row.subtitle)
+        ? `store:${row.event.key}`
+        : ''
+    if (!kind || seen.has(kind)) continue
+    seen.add(kind)
+    found.push(row)
+  }
+  return found
+}
+
+function aroundIds(snapshot: LogsSnapshot, index: number, extra: number[]): Set<number> {
+  const ids = new Set<number>(extra)
+  const from = Math.max(0, index - ERROR_BEFORE)
+  const to = Math.min(snapshot.count - 1, index + ERROR_AFTER)
+  for (let i = from; i <= to; i++) {
+    if (i !== index && !SKIP_AROUND.has(snapshot.rows[i].event.kind)) ids.add(i)
+  }
+  for (const i of [...ids]) {
+    const entryId = snapshot.rows[i].event.kind === 'request' ? snapshot.rows[i].event.data?.entryId : undefined
+    if (typeof entryId !== 'string') continue
+    const resp = snapshot.rows.findIndex((r, j) => j > i && r.event.kind === 'response' && r.event.data?.entryId === entryId)
+    if (resp >= 0) ids.add(resp)
+  }
+  return ids
+}
+
+function aroundError(snapshot: LogsSnapshot, index: number): string {
+  const page = lastNavigation(snapshot, index)
+  const filled = laterFilled(snapshot, index)
+  const filledIds = new Set(filled.map(r => r.index))
+  const ids = aroundIds(snapshot, index, [page?.index, ...filledIds].filter((n): n is number => n != null))
+  const t0 = snapshot.rows[0]?.event.timestamp ?? 0
+  const head = [
+    page && `- Page: #${page.index} ${page.title} (last navigation before this error)`,
+    filled.length && `- Data later: ${filled.map(rowRef).join('; ')}`,
+  ].filter(Boolean) as string[]
+  const lines = [...ids].sort((a, b) => a - b).map(i => {
+    const mark = i === page?.index ? 'page' : filledIds.has(i) ? 'filled' : i > index ? 'after' : 'before'
+    return `${rowLine(snapshot.rows[i], t0)}  [${mark}]`
+  })
+  if (!head.length && !lines.length) return ''
+  return `${head.join('\n')}${lines.length ? `\n- around #${index}:\n${lines.join('\n')}` : ''}`
 }
 
 function eventStack(event: RuntimeEvent): string {
@@ -212,9 +300,11 @@ export async function getEvents(ids: unknown): Promise<string> {
   const parts: string[] = []
   for (const n of list) {
     const row = snapshot.rows[n]
-    parts.push(row
-      ? await withStackCode(eventDetails(snapshot, row), eventStack(row.event), stacks)
-      : `## #${n}\nNo such event (the logs have #0..#${snapshot.count - 1}).`)
+    if (!row) {
+      parts.push(`## #${n}\nNo such event (the logs have #0..#${snapshot.count - 1}).`)
+      continue
+    }
+    parts.push(await withStackCode(eventDetails(snapshot, row), eventStack(row.event), stacks))
   }
   return cut(parts.join('\n\n'), RESULT_CHARS)
 }
