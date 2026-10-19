@@ -87,7 +87,7 @@ The first column contains checkboxes, in the same position as the favorites star
 | **Ctrl / Cmd** + click on a row | Toggle a row without opening details |
 | Header checkbox | Select all / clear selection |
 
-When rows are selected, the button shows **Export Logs (n)** and exports only them. Without a selection, all filtered events are exported.
+When rows are selected, the button shows **Export Logs (n)** and exports only them as an **HTML** report. Without a selection, all filtered events are exported.
 
 ### Event details
 
