@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { Trash2, Pause, Play, SearchIcon, EyeOff, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,9 +23,10 @@ import LogDetails from './LogDetails.vue'
 import ExportLogsMenu from './ExportLogsMenu.vue'
 import { useLogs, ignoreRuleLabel } from './useLogs'
 import { useLogsSearch } from './useLogsSearch'
-import { exportLogEvent, exportLogs, exportLogsForAi } from './exportLogs'
+import { exportLogEvent, exportLogs } from './exportLogs'
 import { networkEntryOf, pairedNetworkEvent } from './view'
 import { canCompressReport } from './report/compressSupport'
+import { pendingLogsEvent } from './logsNavigation'
 
 const settings = useInspectorSettingsSync()
 
@@ -87,10 +88,6 @@ function handleExportLogs() {
   void exportLogs(eventsToExport(), source.value, exportOptions.value)
 }
 
-function handleExportForAi() {
-  if (!exportLogsForAi(eventsToExport(), source.value)) toast.error('The AI digest could not be built')
-}
-
 // ============================================================================
 // Selection & actions
 // ============================================================================
@@ -114,6 +111,32 @@ const emptyMessage = computed(() => {
 watch(events, list => {
   if (selectedId.value && !list.some(e => e.id === selectedId.value)) selectedId.value = null
 })
+
+const table = ref<InstanceType<typeof LogsTable> | null>(null)
+
+// An event opened from another tab (AI answers): filters that hide it are cleared
+watch(pendingLogsEvent, id => {
+  if (!id) return
+  pendingLogsEvent.value = null
+  if (!getEvent(id)) {
+    toast.error('The event is no longer in the logs')
+    return
+  }
+  selectedId.value = id
+  const shown = () => filteredEvents.value.some(e => e.id === id)
+  if (shown()) {
+    void nextTick(() => table.value?.reveal(id))
+    return
+  }
+  searchTerm.value = ''
+  selectedTypes.value = [...typeOptions]
+  // The search term is applied after its debounce
+  const stop = watch(filteredEvents, () => {
+    if (!shown()) return
+    stop()
+    void nextTick(() => table.value?.reveal(id))
+  })
+}, { immediate: true })
 
 function handleExport(event: LogEvent) {
   void exportLogEvent(event, source.value, exportOptions.value)
@@ -190,14 +213,14 @@ function handleClear() {
           </FacetedFilter>
 
           <div class="export-inline flex items-center gap-2">
-            <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" @export-ai="handleExportForAi" />
+            <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
           </div>
         </div>
       </div>
 
       <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
         <div class="hidden export-wrapped space-x-2">
-          <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" @export-ai="handleExportForAi" />
+          <ExportLogsMenu :count="filteredEvents.length" :selected="rowSelection.count.value" @export="handleExportLogs" />
         </div>
         <div class="hidden flex-1 export-spacer" />
 
@@ -299,6 +322,7 @@ function handleClear() {
     <div class="flex-1 min-h-0 grid grid-cols-2 gap-2 p-2 overflow-hidden responsive-panels">
       <div class="h-full min-h-0 overflow-hidden">
         <LogsTable
+          ref="table"
           :events="filteredEvents"
           :source="source"
           :selected-id="selectedId"

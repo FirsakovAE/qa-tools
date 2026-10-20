@@ -31,24 +31,9 @@ const brief = computed(() => {
     <!-- column-reverse keeps the scroll at the newest text while it streams -->
     <div
       v-if="open"
-      class="ai-thought-scroll mt-1 ml-4 flex max-h-48 flex-col-reverse overflow-y-auto border-l-2 pl-2 italic whitespace-pre-wrap break-words"
+      class="ai-scroll mt-1 ml-4 flex max-h-48 flex-col-reverse overflow-y-auto border-l-2 pl-2 italic whitespace-pre-wrap break-words"
     >
       <div>{{ text }}</div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.ai-thought-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
-}
-.ai-thought-scroll::-webkit-scrollbar { width: 8px; }
-.ai-thought-scroll::-webkit-scrollbar-track { background: transparent; }
-.ai-thought-scroll::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-</style>

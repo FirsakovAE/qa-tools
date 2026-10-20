@@ -1,14 +1,15 @@
 import type { AiStep, ToolDefinition } from './types'
+import type { AiAccess, AiToolGroup } from './credentials'
 import { getEvents, searchLogs } from './logsContext'
 import { listSources, readSource, searchSource } from './sources'
-import { DOCS_INDEX, readDocs } from './docs'
+import { readDocs } from './docs'
 
 export const AI_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
       name: 'read_docs',
-      description: `Vue Inspector user documentation: what its tabs, buttons, menus and options do and how to use them. Pages: ${DOCS_INDEX}. Without pages returns the list of pages with their sections.`,
+      description: 'Vue Inspector user documentation: what its tabs, buttons, menus and options do and how to use them. Call without pages for the list of page ids and their sections, then pass up to 3 page ids (optionally a section heading).',
       parameters: {
         type: 'object',
         properties: {
@@ -36,15 +37,18 @@ export const AI_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'search_logs',
-      description: 'Find logged events whose title, URL, key or full data (bodies, headers, states, payloads) contains the text. Returns timeline lines with ids.',
+      description: 'Find logged events by text and / or by property. Searches whole request and response bodies, headers, URL params, WebSocket messages, store state, props and payloads. `key` and `value` match single values (key alone: events that have the property; value alone: any property with that value). Every match lists `path = value`, so one call shows which requests carry a value. Many matches are grouped by endpoint; page with offset. Search before saying a value is not in the logs.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Case-insensitive text' },
+          query: { type: 'string', description: 'Case-insensitive text in titles, URLs, property names or values' },
+          key: { type: 'string', description: 'Property, header or param name, exact and case-insensitive (dealId); a path ending (data.items.id); or ~text for names containing the text' },
+          value: { type: 'string', description: 'Text the value contains (case-insensitive); with exact: true the whole value' },
+          exact: { type: 'boolean', description: 'value must equal the whole value' },
           kind: { type: 'string', description: 'Optional event kind: request, response, ws, ws-sent, ws-received, ws-closed, props, emit, store, action, navigation, error' },
-          limit: { type: 'integer', description: 'Max results, default 20' },
+          limit: { type: 'integer', description: 'Max results, default 20, up to 40' },
+          offset: { type: 'integer', description: 'Skip this many results (next page)' },
         },
-        required: ['query'],
       },
     },
   },
@@ -100,6 +104,23 @@ export const AI_TOOLS: ToolDefinition[] = [
   },
 ]
 
+/** Access group of a tool; documentation is always available */
+export const TOOL_GROUPS: Record<string, AiToolGroup | undefined> = {
+  get_events: 'logs',
+  search_logs: 'logs',
+  list_sources: 'sources',
+  read_source: 'sources',
+  search_source: 'sources',
+}
+
+/** Tools the user did not turn off */
+export function allowedTools(access: AiAccess): ToolDefinition[] {
+  return AI_TOOLS.filter(t => {
+    const group = TOOL_GROUPS[t.function.name]
+    return !group || access.tools[group] !== 'deny'
+  })
+}
+
 function short(value: unknown, max = 60): string {
   const text = String(value ?? '')
   return text.length > max ? `${text.slice(0, max)}...` : text
@@ -111,8 +132,14 @@ export function describeToolCall(name: string, args: Record<string, any>): AiSte
       return { tool: 'Docs', summary: Array.isArray(args.pages) && args.pages.length ? `Read ${args.pages.map(p => short(p)).join(', ')}${args.section ? ` § ${short(args.section)}` : ''}` : 'List pages' }
     case 'get_events':
       return { tool: 'Logs', summary: `Event details ${(Array.isArray(args.ids) ? args.ids : [args.ids]).map((id: unknown) => `#${id}`).join(', ')}` }
-    case 'search_logs':
-      return { tool: 'Logs', summary: `Search "${short(args.query)}"${args.kind ? ` in ${args.kind}` : ''}` }
+    case 'search_logs': {
+      const parts = [
+        args.query && `"${short(args.query)}"`,
+        args.key && `key ${short(args.key)}`,
+        args.value && `value ${args.exact ? '=' : '~'} "${short(args.value)}"`,
+      ].filter(Boolean)
+      return { tool: 'Logs', summary: `Search ${parts.join(', ') || '(empty)'}${args.kind ? ` in ${args.kind}` : ''}${Number(args.offset) > 0 ? `, from ${args.offset}` : ''}` }
+    }
     case 'list_sources':
       return { tool: 'Sources', summary: `List files${args.filter ? ` matching "${short(args.filter)}"` : ''}` }
     case 'read_source':
@@ -128,11 +155,11 @@ export async function runTool(name: string, args: Record<string, any>): Promise<
   try {
     switch (name) {
       case 'read_docs':
-        return readDocs(args.pages ?? args.page, args.section)
+        return await readDocs(args.pages ?? args.page, args.section)
       case 'get_events':
         return await getEvents(args.ids)
       case 'search_logs':
-        return searchLogs(args.query, args.kind, args.limit)
+        return searchLogs(args)
       case 'list_sources':
         return await listSources(args.filter, args.include_libraries)
       case 'read_source':

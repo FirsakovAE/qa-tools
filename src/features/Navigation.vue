@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+  import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
   import type { GitHubRelease } from '@/services/githubReleaseService'
   import {
     Box,
@@ -23,8 +23,10 @@ import { StoresTab, usePiniaStores } from '@/features/stores'
 import { OptionsTab } from '@/features/settings'
 import { NetworkTab } from '@/features/network'
 import { LogsTab, initLogsCollector } from '@/features/logs'
-import { AiTab } from '@/features/ai'
+import { pendingLogsEvent } from '@/features/logs/logsNavigation'
 import { postToContentScript } from '@/utils/postToContentScript'
+
+const AiTab = defineAsyncComponent(() => import('@/features/ai/AiTab.vue'))
 
   // Collect logs from app start, independent of the active tab
   initLogsCollector()
@@ -387,6 +389,10 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     activeTab.value = 'options'
   }
 
+  watch(pendingLogsEvent, id => {
+    if (id) activeTab.value = 'logs'
+  })
+
   function clearScrollAnchor() {
     optionsScrollAnchor.value = null
   }
@@ -520,7 +526,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           v-else-if="activeTab === 'ai'"
           class="h-full overflow-hidden"
         >
-          <AiTab />
+          <AiTab @navigate-to-options="handleNavigateToOptions" />
         </div>
 
         <!-- ===== Options tab ===== -->

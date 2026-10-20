@@ -456,14 +456,22 @@ Saving removed keys in **Edit** mode is fixed.
 * The assistant also answers questions about Vue Inspector itself.
 * **Sign in with OpenRouter** connects your OpenRouter account and uses its free models. The quick-switch list offers three recommended models; the other free models with tool support are listed below them.
 * Models whose providers are down are hidden, and models that fail often are marked **unstable**. The check uses the public OpenRouter status and does not spend your free requests. The refresh button next to the model list repeats it.
-* Each request names two fallback models. When the chosen model is overloaded or rate-limited, a fallback answers, and the answer shows which model gave it. A model that failed is marked **busy** and skipped for 10 minutes.
-* A Gemini or Groq model that is overloaded or rate-limited is replaced with another model of the same provider.
+* The model list starts with **Auto** (the default). Auto picks an available model and moves to the next one when a model runs out of quota, is no longer available for the key, or is overloaded; the steps of the answer say which model was skipped and why. The answer shows which model gave it.
+* Auto remembers these problems across sessions: a model out of quota is skipped until its quota resets (the time the provider names, e.g. "retry in 14h57m"), a model the key cannot use is skipped until the key changes, an overloaded model for a few minutes. **Reset limits** in Options → AI → Models makes Auto try them again.
+* A hand-picked model is always used as chosen, without fallbacks. When it fails, the error says why and offers **Switch to Auto and try again**. The provider's own message is available under **Provider message**.
 * When the provider asks to wait a few seconds (a per-minute limit), the assistant waits and repeats the request with the same model.
-* The daily limit of free OpenRouter and Gemini requests is reported separately from a busy model: switching models does not help with it. Groq counts the daily limit per model, so another Groq model answers.
+* The line under the message field shows today's requests: of the 50 (or 1000) free OpenRouter requests of the key, the requests left for the Groq model as Groq reports them, and how many models Auto skips. The model list and Options → AI → Models show the state of each model and its requests today.
+* The daily limit of free OpenRouter requests applies to the whole account, so the assistant reports it instead of switching models.
 * As an alternative, add your own **Gemini API key** (free tier from Google AI Studio) or **Groq API key** (free tier from GroqCloud). The bookmarklet works with these keys only.
 * Groq free models accept about 8K tokens a minute, so with Groq the assistant sends a shorter logs digest, cuts long tool results and drops the oldest questions of the chat.
 * Keys are stored in the browser apart from the settings and are not included in settings export.
 * Before the first question the tab shows what is sent to the provider. Values hidden by **Data masking** are never sent.
+* **Data masking for AI** in Options → AI: an own list of key fragments (passwords, tokens, API keys, `authorization`, `x-api-key`, cookies, sessions, CSRF, signatures and more by default) plus token-like values (JWT, Bearer / Basic credentials, card numbers). It applies to everything the assistant sends: the logs digest, event data, headers, bodies, WebSocket messages and `name: "value"` pairs in the page code. It works on top of the Logs masking and does not change the Logs view or exports.
+* **Agent access** in Options → AI sets what the assistant may use: the logs digest on or off; logs tools and page code tools **Allowed**, **Ask each time** or **Off**; and whether headers, bodies and WebSocket messages, and values of store state, props, emits and actions are shared. Turned-off tools are not offered to the model at all, and the model is told what is hidden.
+* With **Ask each time** the AI tab shows the call the assistant wants to make and waits for **Allow**, **Allow in this chat** or **Deny**. A declined call is marked in the steps of the answer.
+* Every answer starts with a **Context** step: what was sent to the provider (the digest and its size), the access settings in force and how many values were masked.
+* Logs search reads whole request and response bodies, headers, URL params, WebSocket messages and app data, and searches by property: by name (`dealId`, a path ending such as `data.items.id`, or a part of the name) and by value, exact or partial. Each match shows the path and the value, many matches are grouped by endpoint, and the results are paged.
+* Opening the AI tab scrolls the chat to the latest message.
 * The extension now requests the `identity` permission for the OpenRouter sign-in.
 
 ### Logs

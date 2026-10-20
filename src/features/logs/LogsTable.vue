@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { MoreHorizontal } from 'lucide-vue-next'
 import VirtualTable from '@/components/VirtualTable.vue'
 import RowCheckCell from '@/components/RowCheckCell.vue'
@@ -37,6 +37,15 @@ const emit = defineEmits<{
 // Newest first
 const sortedEvents = computed(() => [...props.events].reverse())
 
+const table = ref<InstanceType<typeof VirtualTable> | null>(null)
+
+defineExpose({
+  reveal(id: string) {
+    const index = sortedEvents.value.findIndex(e => e.id === id)
+    if (index !== -1) table.value?.scrollToItem(index)
+  },
+})
+
 function describe(event: LogEvent) {
   return describeLog(event, props.source)
 }
@@ -55,6 +64,7 @@ const ROW_HEIGHT = 40
 
 <template>
   <VirtualTable
+    ref="table"
     :items="sortedEvents"
     key-field="id"
     :item-size="ROW_HEIGHT"

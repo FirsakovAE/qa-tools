@@ -3,7 +3,7 @@
  * and the free models each of them offers.
  */
 
-import { reactive } from 'vue'
+import { formatDuration } from './modelStatus'
 import { GITHUB_REPO_SLUG } from '@/services/githubReleaseService'
 import type { AiModel, AiProviderId, AiTokens, ChatMessage, ChatToolCall, ToolDefinition } from './types'
 
@@ -65,52 +65,42 @@ const GROQ_FALLBACK: AiModel[] = [
   { id: 'openai/gpt-oss-20b', name: 'gpt-oss-20b', recommended: true },
 ]
 /** Waits for a per-minute limit up to this long instead of switching models */
-export const MAX_RATE_WAIT_MS = 20_000
+const MAX_RATE_WAIT_MS = 20_000
 const RECOMMENDED_COUNT = 3
-/** Models tried in one request: the chosen one and the fallbacks */
-const CHAIN_SIZE = 3
-/** A model that failed is skipped for this long */
-const BUSY_MS = 10 * 60_000
+/** Models OpenRouter tries in one request: the first one and its fallbacks */
+export const CHAIN_SIZE = 3
+/** A limit that resets within this time makes the model busy; a longer one means its quota is used up */
+const BUSY_LIMIT_MS = 5 * 60_000
+/** Quota error without a reset time: the model is skipped this long */
+const QUOTA_DEFAULT_MS = 60 * 60_000
 const HEALTH_PARALLEL = 6
 /** Uptime (%) of the best endpoint below which a model is hidden / marked unstable */
 const HIDDEN_UPTIME = 20
 const UNSTABLE_UPTIME = 80
 
+/**
+ * auth / credits / size / account-quota: no model of the provider helps.
+ * quota / gone / rate / busy / empty: the error is about this model; another one may answer.
+ */
+export type AiErrorKind = 'auth' | 'credits' | 'size' | 'account-quota' | 'quota' | 'gone' | 'rate' | 'busy' | 'empty' | 'other'
+const MODEL_ERRORS = new Set<AiErrorKind>(['quota', 'gone', 'rate', 'busy', 'empty'])
+
 export class AiProviderError extends Error {
   constructor(
     message: string,
     readonly status?: number,
-    readonly retryable = false,
+    readonly kind: AiErrorKind = 'other',
     /** The provider asked to repeat the request after this delay */
     readonly retryAfterMs?: number,
+    /** Provider's own text, shown on demand */
+    readonly details?: string,
   ) {
     super(message)
   }
-}
 
-/** Model id → time until which it is skipped after an error */
-export const busyModels = reactive<Record<string, number>>({})
-
-export function markModelBusy(id: string): void {
-  busyModels[id] = Date.now() + BUSY_MS
-}
-
-export function isModelBusy(id: string): boolean {
-  return (busyModels[id] ?? 0) > Date.now()
-}
-
-/**
- * Models for one request: the chosen model first (unless it failed recently and others are
- * available), then healthy recommended and other models that did not fail recently.
- */
-export function modelChain(selected: string, models: AiModel[], exclude: Set<string> = new Set()): string[] {
-  const usable = (id: string) => !exclude.has(id) && !isModelBusy(id)
-  const fallbacks = models
-    .filter(m => m.id !== selected && !m.unstable && usable(m.id))
-    .sort((a, b) => Number(!!b.recommended) - Number(!!a.recommended))
-    .map(m => m.id)
-  const chain = !exclude.has(selected) && (usable(selected) || !fallbacks.length) ? [selected, ...fallbacks] : fallbacks
-  return chain.slice(0, CHAIN_SIZE)
+  get modelSpecific(): boolean {
+    return MODEL_ERRORS.has(this.kind)
+  }
 }
 
 function rank(id: string, preferred: RegExp[]): number {
@@ -234,16 +224,27 @@ async function listGroqModels(key: string): Promise<AiModel[]> {
   }
 }
 
-export function listModels(provider: AiProviderId, key: string): Promise<AiModel[]> {
-  if (provider === 'openrouter') return listOpenRouterModels()
-  return provider === 'groq' ? listGroqModels(key) : listGeminiModels(key)
+/** The list is shared by the AI tab and Options; OpenRouter health checks cost one fetch per model */
+const MODELS_TTL_MS = 10 * 60_000
+const modelLists = new Map<string, { at: number; list: Promise<AiModel[]> }>()
+
+/** Free models of the provider, cached per key for a while; `force` asks the provider again */
+export function listModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
+  const id = `${provider}\u0000${key}`
+  const hit = modelLists.get(id)
+  if (!force && hit && Date.now() - hit.at < MODELS_TTL_MS) return hit.list
+  const list = provider === 'openrouter' ? listOpenRouterModels() : provider === 'groq' ? listGroqModels(key) : listGeminiModels(key)
+  modelLists.set(id, { at: Date.now(), list })
+  list.catch(() => modelLists.delete(id))
+  return list
 }
 
-/** `retry-after` header or "try again in 1m2.5s" / "in 450ms" in the message */
+/** `retry-after` header, "try again in 1m2.5s" / "retry in 14h57m29s" / "in 450ms" or Gemini's `"retryDelay": "53s"` */
 function retryAfter(res: Response | null, message: string): number | undefined {
   const header = Number(res?.headers.get('retry-after'))
   if (header > 0) return header * 1000
-  const match = /try again in\s+((?:\d+h)?(?:\d+m(?!s))?(?:[\d.]+s)?(?:[\d.]+ms)?)/i.exec(message)
+  const match = /(?:try again|retry) in\s+((?:\d+h)?(?:\d+m(?!s))?(?:[\d.]+s)?(?:[\d.]+ms)?)/i.exec(message)
+    ?? /retryDelay["']?\s*:\s*["']([\d.]+s)/i.exec(message)
   if (!match?.[1]) return undefined
   let ms = 0
   for (const [, value, unit] of match[1].matchAll(/([\d.]+)(h|ms|m|s)/g)) {
@@ -263,32 +264,55 @@ async function errorMessage(res: Response): Promise<string> {
   return text.slice(0, 300) || `HTTP ${res.status}`
 }
 
-/** The account-wide daily cap: switching models does not help */
+/** OpenRouter's account-wide daily cap on free models: switching models does not help */
 const DAILY_LIMIT = /per[- ]day|free-models-per-day|daily/i
+/** Gemini / Groq quota of one model (per day, per minute or a tier without access) */
+const QUOTA = /quota|resource[_ ]exhausted|limit:\s*0\b|per[- ]day|daily|\b(rpd|tpd)\b/i
+/** The key cannot use this model at all */
+const GONE = /no longer available|not found|does not exist|deprecated|decommissioned|not supported for|unsupported model|model.*not available|not enabled for/i
 /** One model or its provider is overloaded / rate-limited: another model may answer */
 const MODEL_BUSY = /upstream|overload|temporar|rate[- ]limit|unavailable|capacity|timeout|try again|retry/i
 
 function providerError(status: number, message: string, provider: AiProviderId, res: Response | null = null): AiProviderError {
+  const label = PROVIDER_LABELS[provider]
   if (status === 401 || status === 403) {
-    return new AiProviderError(provider === 'openrouter'
-      ? `OpenRouter rejected the key. Sign in again. (${message})`
-      : `${PROVIDER_LABELS[provider]} rejected the API key. (${message})`, status)
+    return new AiProviderError(provider === 'openrouter' ? 'OpenRouter rejected the key. Sign in again.' : `${label} rejected the API key.`, status, 'auth', undefined, message)
   }
-  if (status === 402) return new AiProviderError(`The provider requires credits for this request. (${message})`, status)
+  if (status === 402) return new AiProviderError('The provider requires credits for this request.', status, 'credits', undefined, message)
   if (status === 413) {
-    return new AiProviderError(`The request is larger than the model accepts on the free tier. Start a new chat or ask a narrower question. (${message})`, status)
+    return new AiProviderError('The request is larger than the model accepts on the free tier. Start a new chat or ask a narrower question.', status, 'size', undefined, message)
   }
-  if (status === 429 && DAILY_LIMIT.test(message)) {
-    // Groq limits each model separately: another model still has its own daily quota
-    if (provider === 'groq') return new AiProviderError(`Daily limit of this Groq model reached. (${message})`, status, true)
-    return new AiProviderError(provider === 'openrouter'
-      ? `Daily limit of free requests reached (OpenRouter allows 50 a day on free models). Try again tomorrow. (${message})`
-      : `Gemini free tier daily limit reached. Try again tomorrow. (${message})`, status)
+  if (status === 404 || ((status === 400 || status === 403) && GONE.test(message))) {
+    return new AiProviderError('The model is not available for this key.', status, 'gone', undefined, message)
   }
-  if (status === 429 || status === 408 || status >= 500 || MODEL_BUSY.test(message)) {
-    return new AiProviderError(`The model is temporarily unavailable. (${message})`, status, true, retryAfter(res, message))
+  if (status === 429) {
+    const wait = retryAfter(res, message)
+    if (provider === 'openrouter' && DAILY_LIMIT.test(message)) {
+      return new AiProviderError('The daily limit of free OpenRouter requests is reached (50 a day; 1000 after buying $10 of credits). It resets at 00:00 UTC.', status, 'account-quota', wait, message)
+    }
+    if (wait !== undefined && wait <= MAX_RATE_WAIT_MS) return new AiProviderError('The model is rate-limited.', status, 'rate', wait, message)
+    if (provider !== 'openrouter' && QUOTA.test(message) && (wait === undefined || wait > BUSY_LIMIT_MS)) {
+      const until = wait ?? QUOTA_DEFAULT_MS
+      return new AiProviderError(`The quota of this model is used up${wait ? `; it resets in ${formatDuration(until)}` : ''}.`, status, 'quota', until, message)
+    }
+    return new AiProviderError('The model is rate-limited.', status, 'busy', wait, message)
   }
-  return new AiProviderError(message, status)
+  if (status === 408 || status >= 500 || MODEL_BUSY.test(message)) {
+    return new AiProviderError('The model is temporarily unavailable.', status, 'busy', retryAfter(res, message), message)
+  }
+  return new AiProviderError(message, status, 'other')
+}
+
+/** Daily request limit of an OpenRouter key on free models: 50, or 1000 once $10 of credits were bought */
+export async function openRouterDailyLimit(key: string): Promise<number | null> {
+  try {
+    const res = await fetch(`${OPENROUTER_API}/key`, { headers: { Authorization: `Bearer ${key}` } })
+    if (!res.ok) return null
+    const data = (await res.json())?.data
+    return typeof data?.is_free_tier === 'boolean' ? (data.is_free_tier ? 50 : 1000) : null
+  } catch {
+    return null
+  }
 }
 
 export interface ChatRequest {
@@ -321,6 +345,14 @@ export interface ChatResult {
   /** Model that answered (a fallback when the chosen one failed) */
   model: string
   tokens?: AiTokens
+  /** Requests per day of the model and what is left, when the provider reports them (Groq) */
+  dailyRequests?: { limit: number; remaining: number }
+}
+
+function dailyRequests(res: Response): ChatResult['dailyRequests'] {
+  const limit = Number(res.headers.get('x-ratelimit-limit-requests'))
+  const remaining = Number(res.headers.get('x-ratelimit-remaining-requests'))
+  return limit > 0 && Number.isFinite(remaining) && res.headers.has('x-ratelimit-remaining-requests') ? { limit, remaining } : undefined
 }
 
 function readTokens(usage: any): AiTokens | undefined {
@@ -374,7 +406,7 @@ function upstreamError(data: any, provider: AiProviderId): AiProviderError {
 function parseJson(data: any, req: ChatRequest): ChatResult {
   if (data?.error) throw upstreamError(data, req.provider)
   const message = data?.choices?.[0]?.message
-  if (!message) throw new AiProviderError('The model returned an empty response', undefined, true)
+  if (!message) throw new AiProviderError('The model returned an empty response', undefined, 'empty')
   const split = splitThink(typeof message.content === 'string' ? message.content : '')
   const field = typeof message.reasoning === 'string' ? message.reasoning : typeof message.reasoning_content === 'string' ? message.reasoning_content : ''
   return {
@@ -460,7 +492,7 @@ async function readStream(res: Response, req: ChatRequest): Promise<ChatResult> 
   }
   onLine(buffer.trim())
 
-  if (!received) throw new AiProviderError('The model returned an empty response', undefined, true)
+  if (!received) throw new AiProviderError('The model returned an empty response', undefined, 'empty')
   const split = splitThink(content)
   return { content: split.content, reasoning: joinReasoning(reasoning, split.reasoning), toolCalls: calls, model, tokens }
 }
@@ -502,6 +534,8 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
 
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: req.signal })
   if (!res.ok) throw providerError(res.status, await errorMessage(res), req.provider, res)
-  if (req.onDelta && res.body && res.headers.get('content-type')?.includes('text/event-stream')) return readStream(res, req)
-  return parseJson(await res.json(), req)
+  const result = req.onDelta && res.body && res.headers.get('content-type')?.includes('text/event-stream')
+    ? await readStream(res, req)
+    : parseJson(await res.json(), req)
+  return { ...result, dailyRequests: dailyRequests(res) }
 }

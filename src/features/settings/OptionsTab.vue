@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick, defineAsyncComponent } from 'vue'
 import { useInspectorSettings, resetInspectorSettings, exportSettings, importSettings } from '@/settings/useInspectorSettings'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,6 +22,7 @@ import {
   Info,
   MenuIcon,
   FileText,
+  Sparkles,
 } from 'lucide-vue-next'
 
 import GeneralSection from './sections/GeneralSection.vue'
@@ -43,6 +44,8 @@ import { ignoreVersion } from '@/composables/useUpdateChecker'
 import { useRuntime } from '@/runtime'
 import { postToContentScript } from '@/utils/postToContentScript'
 
+const AiSection = defineAsyncComponent(() => import('@/features/ai/AiSection.vue'))
+
 // -------------------- PROPS --------------------
 const props = defineProps<{
   scrollToAnchor?: string | null
@@ -62,7 +65,7 @@ const settings = ref<InspectorSettings | null>(null)
 const isLoading = ref(true)
 
 // -------------------- SECTIONS --------------------
-type SettingsSection = 'general' | 'network' | 'props' | 'pinia' | 'logs' | 'about'
+type SettingsSection = 'general' | 'network' | 'props' | 'pinia' | 'logs' | 'ai' | 'about'
 const activeSection = ref<SettingsSection>('general')
 const sheetOpen = ref(false)
 
@@ -77,6 +80,7 @@ const sections = [
   { id: 'props' as const, label: 'Props', icon: Box },
   { id: 'pinia' as const, label: 'Pinia Store', icon: Database },
   { id: 'logs' as const, label: 'Logs', icon: FileText },
+  { id: 'ai' as const, label: 'AI', icon: Sparkles },
   { id: 'about' as const, label: 'About', icon: Info },
 ]
 
@@ -491,6 +495,8 @@ watch(() => props.scrollToAnchor, (anchor) => {
     activeSection.value = 'props'
   } else if (anchor === 'pinia-favorites-section') {
     activeSection.value = 'pinia'
+  } else if (anchor.startsWith('ai-')) {
+    activeSection.value = 'ai'
   } else {
     activeSection.value = 'network'
   }
@@ -667,6 +673,7 @@ onMounted(async () => {
               v-else-if="activeSection === 'logs'"
               :settings="settings"
             />
+            <AiSection v-else-if="activeSection === 'ai'" />
             <AboutSection
               v-else-if="activeSection === 'about'"
               :settings="settings"

@@ -8,6 +8,7 @@
  *   - default: Row content, receives { item } from RecycleScroller
  *   - after: Optional content after items (e.g. skeleton, empty state)
  */
+import { ref } from 'vue'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 
@@ -37,6 +38,12 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'mouseleave', event: MouseEvent): void
 }>()
+
+const scroller = ref<{ scrollToItem: (index: number) => void } | null>(null)
+
+defineExpose({
+  scrollToItem: (index: number) => scroller.value?.scrollToItem(index),
+})
 </script>
 
 <template>
@@ -56,6 +63,7 @@ const emit = defineEmits<{
         @mouseleave="emit('mouseleave', $event)"
       >
         <RecycleScroller
+          ref="scroller"
           class="flex-1 min-h-0"
           :items="items"
           :item-size="itemSize"

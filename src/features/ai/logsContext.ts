@@ -11,6 +11,8 @@ import { buildLogsReport, withNetworkPairs } from '@/features/logs/exportLogs'
 import { buildAiDigest, type AiDigestOptions } from '@/features/logs/report/aiDigest'
 import type { LogsReportPayload } from '@/features/logs/report/template'
 import { stackCode } from './sources'
+import { aiCredentials } from './credentials'
+import { countMasked, privacySignature, protectPayload } from './privacy'
 
 /** Timeline lines of the digest sent with a question; the rest is read with tools */
 const DIGEST_TIMELINE = 250
@@ -19,6 +21,11 @@ const VALUE_CHARS = 8000
 const RESULT_CHARS = 24000
 const MAX_EVENTS_PER_CALL = 6
 const MAX_SEARCH_RESULTS = 40
+/** Values read from one event for search */
+const MAX_LEAVES = 20_000
+const MAX_LEAVES_SHOWN = 3
+const MAX_GROUPS = 10
+const SNIPPET_CHARS = 160
 const STACK_CODE_CHARS = 5000
 /** Events before / after an error that get_events lists so a race is visible without another call */
 const ERROR_BEFORE = 6
@@ -38,6 +45,8 @@ export interface LogsSnapshot {
   signature: string
   digest: string
   count: number
+  /** Values masked in what the assistant can read */
+  masked: number
   payload: LogsReportPayload
   rt: LogsRuntime
   rows: Row[]
@@ -77,19 +86,24 @@ function pinnedSnapshot(): LogsSnapshot {
   return cached ?? takeLogsSnapshot()
 }
 
-export function resetLogsSnapshot(): void {
-  cached = null
-}
-
-/** Snapshot of the current logs; reused while no event was added or dropped */
+/**
+ * Snapshot of the current logs. Building it (report, masking, digest) walks every event, so it is
+ * reused while no event was added or dropped and no network entry changed (the pool size covers
+ * a response or merged headers arriving for a logged request).
+ */
 export function takeLogsSnapshot(budget: Omit<AiDigestOptions, 'noGuide'> = { maxTimeline: DIGEST_TIMELINE }): LogsSnapshot {
   logs ??= useLogs()
   const { events, source } = logs
   const list = events.value
-  const signature = `${list.length}:${list[0]?.id ?? ''}:${list[list.length - 1]?.id ?? ''}:${budget.maxTimeline}:${budget.maxChars}:${budget.bodyChars}`
+  const privacy = { masking: aiCredentials.masking, access: aiCredentials.access }
+  const signature = [
+    list.length, list[0]?.id ?? '', list[list.length - 1]?.id ?? '', source.value.pool.size,
+    budget.maxTimeline, budget.maxChars, budget.bodyChars, privacySignature(privacy),
+  ].join(':')
   if (cached && cached.signature === signature) return cached
 
-  const payload = buildLogsReport(withNetworkPairs(list, source.value), source.value)
+  const payload = protectPayload(buildLogsReport(withNetworkPairs(list, source.value), source.value), privacy)
+  const masked = countMasked(payload)
   const rt = createLogsRuntime()
   const digest = buildAiDigest(payload, rt, { ...budget, noGuide: true })
 
@@ -121,7 +135,7 @@ export function takeLogsSnapshot(budget: Omit<AiDigestOptions, 'noGuide'> = { ma
     return { index, event, label: rt.eventLabel(event, kindLabels), title, subtitle }
   })
 
-  cached = { signature, digest, count: rows.length, payload, rt, rows, getEntry, stores }
+  cached = { signature, digest, count: rows.length, masked, payload, rt, rows, getEntry, stores }
   return cached
 }
 
@@ -309,32 +323,232 @@ export async function getEvents(ids: unknown): Promise<string> {
   return cut(parts.join('\n\n'), RESULT_CHARS)
 }
 
-function searchableText(snapshot: LogsSnapshot, row: Row): string {
-  const entryId = row.event.data?.entryId
-  if (typeof entryId === 'string') {
-    const entry = snapshot.getEntry(entryId)
-    return entry ? json(networkDetails(entry)) : ''
-  }
-  return json(row.event.data)
+/** One value of an event with its path: `responseBody.data.items[3].id = 29058` */
+interface Leaf {
+  path: string
+  /** Last property name on the path (array indexes skipped) */
+  key: string
+  value: string
 }
 
-export function searchLogs(query: unknown, kind?: unknown, limit?: unknown): string {
+const leafCache = new WeakMap<Row, Leaf[]>()
+
+function addLeaves(value: unknown, path: string, key: string, out: Leaf[], depth = 0): void {
+  if (out.length >= MAX_LEAVES) return
+  if (value === null || typeof value !== 'object') {
+    if (value !== undefined) out.push({ path, key, value: String(value) })
+    return
+  }
+  if (depth > 60) return
+  if (Array.isArray(value)) {
+    // Header / param / form lists: `{ name|key, value }` items are read as `list.<name>`
+    const first = value[0]
+    if (first && typeof first === 'object' && 'value' in first && typeof ((first as { name?: unknown; key?: unknown }).name ?? (first as { key?: unknown }).key) === 'string') {
+      for (const item of value) {
+        if (item && typeof item === 'object' && 'value' in item) {
+          const name = String((item as { name?: unknown; key?: unknown }).name ?? (item as { key?: unknown }).key ?? path)
+          addLeaves((item as { value: unknown }).value, `${path}.${name}`, name, out, depth + 1)
+        } else addLeaves(item, `${path}[${out.length}]`, key, out, depth + 1)
+      }
+      return
+    }
+    value.forEach((item, i) => addLeaves(item, `${path}[${i}]`, key, out, depth + 1))
+    return
+  }
+  const obj = value as Record<string, unknown>
+  // A store / props change reads as the changed path itself
+  if (typeof obj.path === 'string' && ('after' in obj || 'before' in obj)) {
+    const changeKey = obj.path.replace(/\[\d+\]/g, '').split('.').pop() || key
+    if ('after' in obj) addLeaves(obj.after, obj.path, changeKey, out, depth + 1)
+    if ('before' in obj) addLeaves(obj.before, `${obj.path} (before)`, changeKey, out, depth + 1)
+    return
+  }
+  for (const [k, v] of Object.entries(obj)) addLeaves(v, path ? `${path}.${k}` : k, k, out, depth + 1)
+}
+
+/** Body text as values: parsed JSON, form fields, or the text itself */
+function addTextLeaves(text: string, path: string, out: Leaf[]): void {
+  const t = text.trim()
+  if (t[0] === '{' || t[0] === '[') {
+    try {
+      addLeaves(JSON.parse(t), path, path, out)
+      return
+    } catch { /* not JSON */ }
+  }
+  if (/^[^\s=&]+=[^\s&]*(&[^\s=&]+=[^\s&]*)*$/.test(t)) {
+    try {
+      for (const [k, v] of new URLSearchParams(t)) out.push({ path: `${path}.${k}`, key: k, value: v })
+      return
+    } catch { /* keep the text */ }
+  }
+  out.push({ path, key: path, value: text })
+}
+
+function addBodyLeaves(body: any, path: string, out: Leaf[]): void {
+  if (!body || typeof body !== 'object' || body.isBinary || body.media) return
+  if (Array.isArray(body.formData) && body.formData.length) addLeaves(body.formData, path, path, out)
+  else if (typeof body.text === 'string' && body.text) addTextLeaves(body.text, path, out)
+}
+
+/** Values of a network event: its own side of the exchange, so a request and its response do not repeat each other */
+function networkLeaves(row: Row, entry: Record<string, any>): Leaf[] {
+  const out: Leaf[] = []
+  const kind = row.event.kind
+  const add = (key: string, value: unknown) => {
+    if (value != null && value !== '') out.push({ path: key, key, value: String(value) })
+  }
+  add('method', entry.method)
+  add('url', entry.url)
+  if (kind === 'request' || kind === 'ws') {
+    addLeaves(entry.requestHeaders, 'requestHeaders', 'requestHeaders', out)
+    addLeaves(entry.params, 'params', 'params', out)
+    addBodyLeaves(entry.requestBody, 'requestBody', out)
+    if (typeof entry.headers === 'string') add('headers', entry.headers)
+  }
+  if (kind === 'response' || kind === 'ws-closed') {
+    add('status', entry.status)
+    add('error', entry.error)
+    addLeaves(entry.responseHeaders, 'responseHeaders', 'responseHeaders', out)
+    addBodyLeaves(entry.responseBody, 'responseBody', out)
+    add('closeCode', entry.websocket?.closeCode)
+    add('closeReason', entry.websocket?.closeReason)
+  }
+  if (kind === 'ws-sent' || kind === 'ws-received') {
+    const frames: any[] = Array.isArray(entry.websocket?.frames) ? entry.websocket.frames : []
+    const frameId = row.event.data?.frameId
+    for (const frame of frames) {
+      if (frame?.id === frameId && typeof frame.data === 'string') addTextLeaves(frame.data, 'message', out)
+    }
+  }
+  return out
+}
+
+function rowLeaves(snapshot: LogsSnapshot, row: Row): Leaf[] {
+  let leaves = leafCache.get(row)
+  if (leaves) return leaves
+  const entryId = row.event.data?.entryId
+  const entry = typeof entryId === 'string' ? snapshot.getEntry(entryId) : undefined
+  if (entry) {
+    leaves = networkLeaves(row, entry)
+  } else {
+    leaves = []
+    addLeaves(row.event.data, 'data', 'data', leaves)
+  }
+  leafCache.set(row, leaves)
+  return leaves
+}
+
+interface SearchArgs {
+  query?: unknown
+  key?: unknown
+  value?: unknown
+  exact?: unknown
+  kind?: unknown
+  limit?: unknown
+  offset?: unknown
+}
+
+function text(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : ''
+}
+
+/** `dealId`: that property anywhere; `data.items.id`: a path ending (indexes ignored); `~deal`: a name containing the text */
+function keyMatcher(spec: string): ((leaf: Leaf) => boolean) | null {
+  if (!spec) return null
+  const lower = spec.toLowerCase()
+  if (lower.startsWith('~')) {
+    const part = lower.slice(1)
+    return leaf => leaf.key.toLowerCase().includes(part)
+  }
+  if (/[.[]/.test(lower)) {
+    const suffix = lower.replace(/\[\d*\]/g, '')
+    return leaf => {
+      const path = leaf.path.toLowerCase().replace(/\[\d+\]/g, '')
+      return path === suffix || path.endsWith(`.${suffix}`)
+    }
+  }
+  return leaf => leaf.key.toLowerCase() === lower
+}
+
+function excerpt(value: string, needle: string): string {
+  if (value.length <= SNIPPET_CHARS) return value
+  const at = needle ? value.toLowerCase().indexOf(needle) : -1
+  if (at < 0) return `${value.slice(0, SNIPPET_CHARS)}...`
+  const from = Math.max(0, at - SNIPPET_CHARS / 2)
+  return `${from ? '...' : ''}${value.slice(from, from + SNIPPET_CHARS)}${from + SNIPPET_CHARS < value.length ? '...' : ''}`
+}
+
+function groupName(snapshot: LogsSnapshot, row: Row): string {
+  const entryId = row.event.data?.entryId
+  const entry = typeof entryId === 'string' ? snapshot.getEntry(entryId) : undefined
+  if (entry) return `${row.label} ${entry.method ?? ''} ${entry.path || String(entry.url ?? '').split('?')[0]}`.replace(/\s+/g, ' ')
+  return `${row.label} ${row.event.key}`
+}
+
+/**
+ * Events by text (title, URL, any value or property name) and / or by property: `key` and `value`
+ * match single values of bodies, headers, params, messages and app data, read whole (not cut).
+ * Results name the matching paths; many matches are grouped by endpoint and paged with `offset`.
+ */
+export function searchLogs(args: SearchArgs): string {
   const snapshot = pinnedSnapshot()
-  const needle = String(query ?? '').trim().toLowerCase()
-  if (!needle) return 'Pass a non-empty query.'
-  const kindFilter = typeof kind === 'string' && kind ? kind.toLowerCase() : ''
-  const max = Math.min(MAX_SEARCH_RESULTS, Math.max(1, Number(limit) || 20))
+  const query = text(args.query).toLowerCase()
+  const keySpec = text(args.key)
+  const valueSpec = text(args.value).toLowerCase()
+  if (!query && !keySpec && !valueSpec) return 'Pass query, key or value.'
+  const exact = args.exact === true
+  const matchKey = keyMatcher(keySpec)
+  const matchValue = valueSpec
+    ? (leaf: Leaf) => (exact ? leaf.value.toLowerCase() === valueSpec : leaf.value.toLowerCase().includes(valueSpec))
+    : null
+  const kindFilter = typeof args.kind === 'string' && args.kind ? args.kind.toLowerCase() : ''
+  const limit = Math.min(MAX_SEARCH_RESULTS, Math.max(1, Number(args.limit) || 20))
+  const offset = Math.max(0, Math.floor(Number(args.offset) || 0))
   const t0 = snapshot.rows[0]?.event.timestamp ?? 0
-  const found: string[] = []
-  let total = 0
+
+  const matches: { row: Row; leaves: Leaf[]; inHead: boolean }[] = []
   for (const row of snapshot.rows) {
     if (kindFilter && row.event.kind !== kindFilter && row.label.toLowerCase() !== kindFilter) continue
-    const head = `${row.label} ${row.title} ${row.subtitle} ${row.event.key}`.toLowerCase()
-    const inHead = head.includes(needle)
-    if (!inHead && !searchableText(snapshot, row).toLowerCase().includes(needle)) continue
-    total++
-    if (found.length < max) found.push(`${rowLine(row, t0)}${inHead ? '' : '  (matched in data)'}`)
+    const leaves = rowLeaves(snapshot, row)
+    let hits = matchKey || matchValue ? leaves.filter(l => (!matchKey || matchKey(l)) && (!matchValue || matchValue(l))) : []
+    if ((matchKey || matchValue) && !hits.length) continue
+    let inHead = false
+    if (query) {
+      inHead = `${row.label} ${row.title} ${row.subtitle} ${row.event.key}`.toLowerCase().includes(query)
+      const queryHits = (hits.length ? hits : leaves).filter(l => l.value.toLowerCase().includes(query) || l.path.toLowerCase().includes(query))
+      if (!inHead && !queryHits.length) continue
+      if (!matchKey && !matchValue) hits = queryHits
+      else if (!inHead) hits = queryHits
+    }
+    matches.push({ row, leaves: hits, inHead })
   }
-  if (!total) return `No events match "${needle}".`
-  return `${total} events match${total > found.length ? `, first ${found.length} shown` : ''}:\n${found.join('\n')}`
+
+  const what = [query && `"${query}"`, keySpec && `key ${keySpec}`, valueSpec && `value ${exact ? '= ' : '~ '}"${valueSpec}"`].filter(Boolean).join(', ')
+  if (!matches.length) return `No events match ${what}.`
+  const page = matches.slice(offset, offset + limit)
+  const needle = valueSpec || query
+  const lines = page.map(({ row, leaves, inHead }) => {
+    const shown = leaves.slice(0, MAX_LEAVES_SHOWN).map(l => `    ${l.path} = ${excerpt(l.value, needle)}`)
+    if (leaves.length > MAX_LEAVES_SHOWN) shown.push(`    ... ${leaves.length - MAX_LEAVES_SHOWN} more matching values`)
+    return [`${rowLine(row, t0)}${inHead && !leaves.length ? '  (matched in title)' : ''}`, ...shown].join('\n')
+  })
+  const out = [`${matches.length} event${matches.length === 1 ? '' : 's'} match ${what}${matches.length > page.length ? ` (showing ${offset + 1}-${offset + page.length})` : ''}:`, ...lines]
+
+  const groups = new Map<string, number[]>()
+  for (const m of matches) {
+    const name = groupName(snapshot, m.row)
+    const ids = groups.get(name)
+    if (ids) ids.push(m.row.index)
+    else groups.set(name, [m.row.index])
+  }
+  if (groups.size > 1 && matches.length > 3) {
+    const list = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
+    out.push('', 'By endpoint / source:')
+    for (const [name, ids] of list.slice(0, MAX_GROUPS)) {
+      out.push(`- ${name}: ${ids.length} (${ids.slice(0, 5).map(i => `#${i}`).join(', ')}${ids.length > 5 ? ', ...' : ''})`)
+    }
+    if (list.length > MAX_GROUPS) out.push(`- ... ${list.length - MAX_GROUPS} more groups`)
+  }
+  if (offset + page.length < matches.length) out.push('', `More: call again with offset=${offset + page.length}, or narrow with kind, key or a longer value.`)
+  return out.join('\n')
 }

@@ -3,29 +3,48 @@
  * of the selected provider.
  */
 
-import { computed, ref, shallowRef, watch } from 'vue'
-import { activeKey, aiCredentials, loadAiCredentials, saveAiCredentials } from './credentials'
-import { listModels, PROVIDER_BUDGET, type ChatLive } from './providers'
+import { computed, ref, watch } from 'vue'
+import {
+  activeKey,
+  aiCredentials,
+  AUTO_MODEL,
+  loadAiCredentials,
+  saveAiCredentials,
+  selectedModel,
+  type AiAccess,
+  type AiToolGroup,
+} from './credentials'
+import { AiProviderError, PROVIDER_BUDGET, PROVIDER_LABELS, type ChatLive } from './providers'
+import { clearProviderStatus, loadModelStatus } from './modelStatus'
+import { loadModels, providerModels } from './models'
+import { clearAnswerCache } from './markdown'
 import { runAgent } from './agent'
-import { resetLogsSnapshot, takeLogsSnapshot } from './logsContext'
-import type { AiChatEntry, AiModel, AiProviderId, AiStep, AiUsage, ChatMessage } from './types'
+import { styleNote, systemPrompt } from './prompt'
+import { maskText } from './privacy'
+import { allowedTools, TOOL_GROUPS } from './tools'
+import { takeLogsSnapshot, type LogsSnapshot } from './logsContext'
+import type { AiChatEntry, AiProviderId, AiStep, AiUsage, ChatMessage } from './types'
 
 const entries = ref<AiChatEntry[]>([])
 const busy = ref(false)
 const liveSteps = ref<AiStep[]>([])
 const liveText = ref('')
 const liveReasoning = ref('')
-const models = shallowRef<AiModel[]>([])
-const modelsLoading = ref(false)
-const modelsError = ref<string | null>(null)
+/** A tool call waiting for the user's permission */
+const pendingApproval = ref<{ step: AiStep; group: AiToolGroup } | null>(null)
+let resolveApproval: ((allowed: boolean) => void) | null = null
+/** Tool groups the user allowed for the rest of this chat */
+const chatAllowed = new Set<AiToolGroup>()
+const { models, loading: modelsLoading, error: modelsError, reload: reloadModels } = providerModels(() => aiCredentials.provider)
 
 let history: ChatMessage[] = []
 /** Logs snapshot whose digest the model already has */
 let sentSignature = ''
+/** State before the last question, so its answer can be asked again */
+let lastTurn: { history: ChatMessage[]; sentSignature: string } | null = null
 let controller: AbortController | null = null
 let entryCounter = 0
 let initialized = false
-let modelsRequest = 0
 
 function nextId(): string {
   return `ai-${Date.now()}-${++entryCounter}`
@@ -57,45 +76,89 @@ function setLive(live: ChatLive): void {
   liveReasoning.value = ''
 }
 
-async function loadModels(): Promise<void> {
+/** The hand-picked model is gone from the list or was blocked: back to Auto */
+async function pickUsableModel(): Promise<void> {
   const provider = aiCredentials.provider
-  const key = activeKey(provider)
-  const request = ++modelsRequest
-  modelsLoading.value = true
-  modelsError.value = null
-  try {
-    const list = await listModels(provider, key)
-    if (request !== modelsRequest) return
-    models.value = list
-    const current = aiCredentials.models[provider]
-    if (list.length && (!current || !list.some(m => m.id === current))) {
-      const fallback = list.find(m => m.recommended) ?? list[0]
-      await saveAiCredentials({ models: { ...aiCredentials.models, [provider]: fallback.id } })
-    }
-  } catch (e) {
-    if (request !== modelsRequest) return
-    models.value = []
-    modelsError.value = String((e as Error)?.message || e)
-  } finally {
-    if (request === modelsRequest) modelsLoading.value = false
+  const list = models.value
+  const current = selectedModel(provider)
+  if (list.length && current !== AUTO_MODEL && !list.some(m => m.id === current)) {
+    await saveAiCredentials({ models: { ...aiCredentials.models, [provider]: AUTO_MODEL } })
   }
 }
 
 function init(): void {
   if (initialized) return
   initialized = true
-  void loadAiCredentials().then(() => {
-    watch(() => [aiCredentials.provider, activeKey()] as const, () => void loadModels(), { immediate: true })
+  void Promise.all([loadAiCredentials(), loadModelStatus()]).then(() => {
+    watch(() => [aiCredentials.provider, activeKey()] as const, () => void loadModels(aiCredentials.provider).then(pickUsableModel), { immediate: true })
+    // What failed with the old key says nothing about a new one
+    watch(() => [aiCredentials.openRouterKey, aiCredentials.geminiKey, aiCredentials.groqKey] as const, (next, prev) => {
+      const providers: AiProviderId[] = ['openrouter', 'gemini', 'groq']
+      providers.forEach((id, i) => { if (next[i] !== prev[i]) clearProviderStatus(id) })
+    })
+    watch(() => aiCredentials.blockedModels, () => void pickUsableModel(), { deep: true })
   })
+}
+
+function accessLabel(access: AiAccess, group: AiToolGroup): string {
+  return { allow: 'allowed', ask: 'on approval', deny: 'off' }[access.tools[group]]
+}
+
+/** What goes to the provider with this question, shown as the first step of the answer */
+function contextStep(snapshot: LogsSnapshot, digest: string | undefined, access: AiAccess): AiStep {
+  const shared = [
+    'question',
+    digest ? `logs digest (${snapshot.count} events, ${Math.max(1, Math.round(digest.length / 1024))} KB)` : access.digest ? '' : 'no logs digest (turned off)',
+  ].filter(Boolean)
+  const hidden = [!access.headers && 'headers', !access.bodies && 'bodies and messages', !access.appData && 'app data values'].filter(Boolean)
+  const parts = [
+    `Sent to ${PROVIDER_LABELS[aiCredentials.provider]}: ${shared.join(', ')}`,
+    `logs tools ${accessLabel(access, 'logs')}, page code ${accessLabel(access, 'sources')}`,
+    hidden.length ? `hidden: ${hidden.join(', ')}` : '',
+    snapshot.masked ? `${snapshot.masked} values masked` : '',
+  ].filter(Boolean)
+  return { tool: 'Context', summary: parts.join('; ') }
+}
+
+/** Resolves at once for allowed tools; asks the user for tools set to "ask" */
+function approveTool(name: string, step: AiStep, signal: AbortSignal): Promise<boolean> {
+  const group = TOOL_GROUPS[name]
+  if (!group) return Promise.resolve(true)
+  const mode = aiCredentials.access.tools[group]
+  if (mode === 'deny') return Promise.resolve(false)
+  if (mode === 'allow' || chatAllowed.has(group)) return Promise.resolve(true)
+  return new Promise(resolve => {
+    const finish = (allowed: boolean) => {
+      signal.removeEventListener('abort', onAbort)
+      pendingApproval.value = null
+      resolveApproval = null
+      resolve(allowed)
+    }
+    const onAbort = () => finish(false)
+    signal.addEventListener('abort', onAbort, { once: true })
+    pendingApproval.value = { step, group }
+    resolveApproval = finish
+  })
+}
+
+/** Event ids the answer names (`#N`), resolved while the snapshot of its question is current */
+function eventRefs(text: string, snapshot: LogsSnapshot): Record<number, string> | undefined {
+  const refs: Record<number, string> = {}
+  for (const m of text.matchAll(/#(\d{1,6})\b/g)) {
+    const row = snapshot.rows[Number(m[1])]
+    if (row) refs[row.index] = row.event.id
+  }
+  return Object.keys(refs).length ? refs : undefined
 }
 
 export function useAiChat() {
   init()
 
   const provider = computed(() => aiCredentials.provider)
-  const model = computed(() => aiCredentials.models[aiCredentials.provider] ?? '')
+  const model = computed(() => selectedModel())
+  const auto = computed(() => model.value === AUTO_MODEL)
   const hasKey = computed(() => !!activeKey())
-  const ready = computed(() => hasKey.value && !!model.value && aiCredentials.consent)
+  const ready = computed(() => hasKey.value && aiCredentials.consent && (auto.value ? models.value.length > 0 : !!model.value))
 
   function setProvider(id: AiProviderId) {
     void saveAiCredentials({ provider: id })
@@ -109,25 +172,35 @@ export function useAiChat() {
     const text = question.trim()
     if (!text || busy.value || !ready.value) return
     const modelId = model.value
+    lastTurn = { history, sentSignature }
     entries.value = [...entries.value, { id: nextId(), role: 'user', text }]
     busy.value = true
-    liveSteps.value = []
     controller = new AbortController()
 
-    resetLogsSnapshot()
     const budget = PROVIDER_BUDGET[aiCredentials.provider]
+    const access = aiCredentials.access
     const snapshot = takeLogsSnapshot({ maxTimeline: budget.digestTimeline, maxChars: budget.digestChars, bodyChars: budget.digestBodyChars })
-    const digest = snapshot.signature !== sentSignature ? snapshot.digest : undefined
+    const digest = access.digest && snapshot.signature !== sentSignature ? snapshot.digest : undefined
+    liveSteps.value = [contextStep(snapshot, digest, access)]
     const usage: AiUsage = { requests: 0, prompt: 0, completion: 0, cached: 0, unreported: 0, ms: 0 }
     const started = Date.now()
+    const signal = controller.signal
+    const isAuto = modelId === AUTO_MODEL
     try {
       const result = await runAgent({
         question: text,
         digest,
         digestCount: snapshot.count,
         history,
-        request: { provider: aiCredentials.provider, key: activeKey(), model: modelId, reasoning: aiCredentials.reasoning, signal: controller.signal },
+        systemPrompt: systemPrompt(aiCredentials, access),
+        styleNote: styleNote(aiCredentials),
+        detailed: aiCredentials.detail === 'detailed',
+        request: { provider: aiCredentials.provider, key: activeKey(), model: modelId, reasoning: aiCredentials.reasoning, signal },
+        auto: isAuto,
         models: models.value,
+        tools: allowedTools(access),
+        approve: (name, step) => approveTool(name, step, signal),
+        protect: output => maskText(output, aiCredentials.masking),
         onStep: step => { liveSteps.value = [...liveSteps.value, step] },
         onLive: setLive,
         usage,
@@ -135,7 +208,15 @@ export function useAiChat() {
       usage.ms = Date.now() - started
       history = result.history
       sentSignature = snapshot.signature
-      entries.value = [...entries.value, { id: nextId(), role: 'assistant', text: result.answer, steps: liveSteps.value, model: result.model, usage }]
+      entries.value = [...entries.value, {
+        id: nextId(),
+        role: 'assistant',
+        text: result.answer,
+        steps: liveSteps.value,
+        model: result.model,
+        usage,
+        events: eventRefs(result.answer, snapshot),
+      }]
     } catch (e) {
       usage.ms = Date.now() - started
       const aborted = controller?.signal.aborted
@@ -146,6 +227,9 @@ export function useAiChat() {
         text: aborted ? (partial ? `${partial}\n\n*Stopped.*` : 'Stopped.') : String((e as Error)?.message || e),
         steps: liveSteps.value,
         error: !aborted,
+        errorDetails: !aborted && e instanceof AiProviderError ? e.details : undefined,
+        suggestAuto: !aborted && !isAuto && e instanceof AiProviderError && e.modelSpecific,
+        events: aborted && partial ? eventRefs(partial, snapshot) : undefined,
         usage: usage.requests ? usage : undefined,
       }]
     } finally {
@@ -160,11 +244,42 @@ export function useAiChat() {
     controller?.abort()
   }
 
+  /** Asks the last question again in place of its answer */
+  function retry(): void {
+    if (busy.value || !lastTurn) return
+    const list = entries.value
+    const userIndex = list.length - 2
+    if (list[userIndex]?.role !== 'user' || list[userIndex + 1]?.role !== 'assistant') return
+    const question = list[userIndex].text
+    entries.value = list.slice(0, userIndex)
+    history = lastTurn.history
+    sentSignature = lastTurn.sentSignature
+    void send(question)
+  }
+
   function newChat() {
     stop()
     entries.value = []
     history = []
     sentSignature = ''
+    lastTurn = null
+    chatAllowed.clear()
+    clearAnswerCache()
+  }
+
+  /** once: this call; chat: every call of the group until a new chat */
+  function answerApproval(choice: 'once' | 'chat' | 'deny'): void {
+    const pending = pendingApproval.value
+    if (!pending) return
+    if (choice === 'chat') chatAllowed.add(pending.group)
+    resolveApproval?.(choice !== 'deny')
+  }
+
+  /** The hand-picked model failed: answer the same question in Auto mode */
+  function retryWithAuto(): void {
+    if (busy.value) return
+    setModel(AUTO_MODEL)
+    retry()
   }
 
   return {
@@ -179,12 +294,17 @@ export function useAiChat() {
     modelsError,
     provider,
     model,
+    auto,
+    pendingApproval,
+    answerApproval,
+    retryWithAuto,
     hasKey,
     ready,
     setProvider,
     setModel,
-    reloadModels: loadModels,
+    reloadModels: () => reloadModels(true),
     send,
+    retry,
     stop,
     newChat,
   }

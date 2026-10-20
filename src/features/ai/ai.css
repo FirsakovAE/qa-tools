@@ -1,0 +1,61 @@
+/* AI tab: rendered answers (HTML from markdown.ts) and the thin themed scrollbar of nested scrolls */
+
+.ai-answer ul { list-style: disc; }
+.ai-answer ol { list-style: decimal; }
+.ai-answer table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.8125rem; display: block; overflow-x: auto; }
+.ai-answer th,
+.ai-answer td { border: 1px solid hsl(var(--border)); padding: 0.25rem 0.5rem; text-align: left; }
+.ai-answer pre { white-space: pre; overflow-x: auto; }
+.ai-answer .ai-code { position: relative; }
+.ai-answer .ai-code-copy {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 0.375rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ai-answer .ai-code:hover .ai-code-copy,
+.ai-answer .ai-code-copy:focus-visible,
+.ai-answer .ai-code-copy.copied { opacity: 1; }
+.ai-answer .ai-code-copy:hover { color: hsl(var(--foreground)); }
+.ai-answer .ai-code-copy .ai-copy-done,
+.ai-answer .ai-code-copy.copied .ai-copy-idle { display: none; }
+.ai-answer .ai-code-copy.copied .ai-copy-done { display: block; }
+.ai-answer .ai-event-ref { color: hsl(var(--primary)); text-decoration: underline dotted; text-underline-offset: 2px; cursor: pointer; }
+.ai-answer .ai-event-ref:hover { text-decoration-style: solid; }
+
+/* Message actions appear on hover; the last answer keeps them visible */
+.ai-entry-actions { opacity: 0; transition: opacity 0.15s; }
+.ai-entry:hover .ai-entry-actions,
+.ai-entry:last-child .ai-entry-actions,
+.ai-entry-actions:focus-within { opacity: 1; }
+
+.ai-scroll,
+.ai-answer pre,
+.ai-answer table {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+.ai-scroll::-webkit-scrollbar,
+.ai-answer pre::-webkit-scrollbar,
+.ai-answer table::-webkit-scrollbar { width: 8px; height: 8px; }
+.ai-scroll::-webkit-scrollbar-track,
+.ai-answer pre::-webkit-scrollbar-track,
+.ai-answer table::-webkit-scrollbar-track { background: transparent; }
+.ai-scroll::-webkit-scrollbar-thumb,
+.ai-answer pre::-webkit-scrollbar-thumb,
+.ai-answer table::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Upload, Sparkles } from 'lucide-vue-next'
+import { Upload } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
@@ -12,7 +12,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'export'): void
-  (e: 'export-ai'): void
 }>()
 
 const selectedCount = computed(() => props.selected ?? 0)
@@ -30,17 +29,6 @@ const buttonLabel = computed(() => (selectedCount.value ? `Export Logs (${select
     >
       <Upload class="h-3.5 w-3.5" />
       <span class="text-xs font-medium">{{ buttonLabel }}</span>
-    </Button>
-    <Button
-      variant="outline"
-      size="sm"
-      class="h-8 gap-1.5"
-      title="Compact Markdown with a guide for an AI assistant: summary, problems with evidence, timeline"
-      :disabled="count === 0"
-      @click="emit('export-ai')"
-    >
-      <Sparkles class="h-3.5 w-3.5" />
-      <span class="text-xs font-medium">Export for AI</span>
     </Button>
   </div>
 </template>

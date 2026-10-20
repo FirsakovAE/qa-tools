@@ -1,7 +1,7 @@
 import type { LogEvent, StoredNetworkEntry } from '@/types/logs'
 import { LOG_KINDS, LOG_KIND_META } from '@/types/logs'
 import type { BodyContent } from '@/types/network'
-import { createLogsRuntime, logsRuntime as rt, type RuntimeChange } from '@/injected/logs/runtime'
+import { logsRuntime as rt, type RuntimeChange } from '@/injected/logs/runtime'
 import { createSnapshotStore, storedRecord } from '@/injected/logs/snapshots'
 import {
   LOGS_REPORT_FORMAT,
@@ -10,7 +10,6 @@ import {
   type LogsReportPayload,
   type ReportEvent,
 } from './report/template'
-import { buildAiDigest } from './report/aiDigest'
 import type { LogsSource } from './view'
 import { getRuntimeAdapter } from '@/runtime'
 
@@ -241,22 +240,4 @@ export async function exportLogs(
     return
   }
   download(html, 'text/html', `${name}.html`)
-}
-
-/** Markdown digest for an AI assistant (guide, summary, problems, timeline); the same text as "Export for AI" in the report */
-export function buildLogsAiDigest(events: LogEvent[], source: LogsSource, now = Date.now()): string {
-  return buildAiDigest(buildLogsReport(withNetworkPairs(events, source), source, now), createLogsRuntime())
-}
-
-export function exportLogsForAi(events: LogEvent[], source: LogsSource): boolean {
-  const now = Date.now()
-  let text: string
-  try {
-    text = buildLogsAiDigest(events, source, now)
-  } catch (e) {
-    console.error('[logs/exportLogs] AI digest failed:', e)
-    return false
-  }
-  download(text, 'text/markdown', `logs_${fileStamp(now)}.ai.md`)
-  return true
 }

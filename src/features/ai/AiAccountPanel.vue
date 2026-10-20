@@ -68,6 +68,10 @@ async function saveKey(provider: (typeof KEY_PROVIDERS)[number]) {
           Sign-in needs the browser extension. In the bookmarklet use a Gemini or Groq API key.
         </p>
       </template>
+      <p class="text-xs text-muted-foreground">
+        Create a free account and manage keys and limits in
+        <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer" class="underline">OpenRouter</a>.
+      </p>
     </div>
 
     <div v-for="p in KEY_PROVIDERS" :key="p.id" class="space-y-2 border-t pt-3">

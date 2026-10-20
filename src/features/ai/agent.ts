@@ -5,33 +5,38 @@
 
 import {
   AiProviderError,
+  CHAIN_SIZE,
   chatCompletion,
-  markModelBusy,
-  MAX_RATE_WAIT_MS,
-  modelChain,
   PROVIDER_BUDGET,
+  PROVIDER_LABELS,
   type ChatLive,
   type ChatRequest,
   type ChatResult,
 } from './providers'
-import { FINAL_ROUND_NOTE, SYSTEM_PROMPT } from './prompt'
+import { clearModel, markModel, modelStatus, statusLabel, recordRequest, setReportedLimit, type ModelState } from './modelStatus'
+import { DETAILED_CHECK_NOTE, FINAL_ROUND_NOTE, SYSTEM_PROMPT } from './prompt'
 import { AI_TOOLS, describeToolCall, runTool } from './tools'
 import { extractTextToolCalls } from './textToolCalls'
-import type { AiModel, AiStep, AiUsage, ChatMessage, ChatToolCall } from './types'
+import type { AiModel, AiProviderId, AiStep, AiUsage, ChatMessage, ChatToolCall, ToolDefinition } from './types'
 
 /** Tool rounds per question; the round after the last one must answer with text */
 const MAX_TOOL_ROUNDS = 6
-/** Extra attempts with other models when every model of a request was busy */
-const RETRIES = { openrouter: 1, gemini: 2, groq: 2 } as const
+/** Requests per completion in Auto mode (OpenRouter tries up to CHAIN_SIZE models in each) */
+const AUTO_ATTEMPTS = { openrouter: 3, gemini: 4, groq: 4 } as const
 /** Waits for a per-minute limit within one completion */
 const MAX_RATE_WAITS = 2
+/** An overloaded model is skipped this long when the provider gave no time */
+const BUSY_MS = 10 * 60_000
+/** A model the key cannot use is skipped this long (cleared when the key changes) */
+const GONE_MS = 7 * 24 * 3_600_000
+const MANUAL_RETRY_MS = 1500
+const DECLINED = 'The user declined this call. Do not call it again in this answer; answer from the data you have and say what is missing.'
 /** Tool results of earlier questions are shortened to this size in the history */
 const OLD_TOOL_RESULT_CHARS = 1500
 /** Tool results shortened to fit a small context */
 const FIT_TOOL_RESULT_CHARS = 400
 const DIGEST_TAG = /<logs_digest[^>]*>[\s\S]*?<\/logs_digest>/g
 const NO_LIVE: ChatLive = { content: '', reasoning: '' }
-const TOOL_NAMES = new Set(AI_TOOLS.map(t => t.function.name))
 /** The model is told how many tool rounds are left from this many on */
 const ROUNDS_LEFT_NOTE = 2
 
@@ -41,9 +46,23 @@ export interface AgentRun {
   digest?: string
   digestCount?: number
   history: ChatMessage[]
+  /** SYSTEM_PROMPT with the answer style of the user */
+  systemPrompt?: string
+  /** The answer style again, on the newest user message of every request */
+  styleNote?: string
+  /** Detailed answers: one without any tool call is sent back to gather the data */
+  detailed?: boolean
   request: Omit<ChatRequest, 'messages' | 'tools' | 'toolChoice' | 'fallbacks' | 'onDelta'>
-  /** Models of the provider, for fallbacks when the chosen one is busy */
+  /** Auto mode picks models from `models` and switches on errors; manual mode uses only `request.model` */
+  auto: boolean
+  /** Models of the provider the user did not block */
   models: AiModel[]
+  /** Tools the model gets; AI_TOOLS by default */
+  tools?: ToolDefinition[]
+  /** Called before every tool call; false declines it */
+  approve?: (name: string, step: AiStep) => Promise<boolean>
+  /** Applied to every tool result before it goes to the model */
+  protect?: (text: string) => string
   onStep: (step: AiStep) => void
   /** Text and reasoning of the completion in progress; empty when it ended or is retried */
   onLive?: (live: ChatLive) => void
@@ -84,48 +103,111 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
+function modelName(run: AgentRun, id: string): string {
+  return run.models.find(m => m.id === id)?.name ?? id
+}
+
+/** Auto mode order: models without a known problem (stable and recommended first); only busy ones when none is left */
+function autoModels(provider: AiProviderId, models: AiModel[], tried: Set<string>): string[] {
+  const left = models.filter(m => !tried.has(m.id))
+  const usable = left.filter(m => !modelStatus(provider, m.id))
+  const list = usable.length ? usable : left.filter(m => modelStatus(provider, m.id)?.state === 'busy')
+  return list
+    .slice()
+    .sort((a, b) => Number(!!a.unstable) - Number(!!b.unstable) || Number(!!b.recommended) - Number(!!a.recommended))
+    .map(m => m.id)
+}
+
+function stateOf(e: AiProviderError): ModelState {
+  return e.kind === 'quota' ? 'quota' : e.kind === 'gone' ? 'gone' : 'busy'
+}
+
+function skipUntil(e: AiProviderError, state: ModelState): number {
+  return Date.now() + (state === 'gone' ? GONE_MS : e.retryAfterMs ?? BUSY_MS)
+}
+
+function noModelsError(run: AgentRun, failures: string[], last: AiProviderError | null): AiProviderError {
+  const { provider } = run.request
+  const known = failures.length
+    ? failures
+    : run.models.map(m => `${m.name}: ${statusLabel(provider, m.id)}`)
+  const list = known.length ? `\n\n${known.map(line => `- ${line}`).join('\n')}` : ''
+  return new AiProviderError(
+    `No ${PROVIDER_LABELS[provider]} model could answer.${list}\n\nTry again later, switch the provider, or pick a model by hand.`,
+    last?.status,
+    last?.kind ?? 'other',
+    undefined,
+    last?.details,
+  )
+}
+
+/**
+ * One completion. Auto mode moves to the next available model on any model error (quota,
+ * removed model, overload) and remembers the problem; manual mode uses only the chosen model.
+ * A short per-minute limit is waited out in both modes.
+ */
 async function complete(run: AgentRun, messages: ChatMessage[], toolChoice: 'auto' | 'none'): Promise<ChatResult> {
   const { provider } = run.request
   const tried = new Set<string>()
-  let lastError: unknown
+  const failures: string[] = []
+  let lastError: AiProviderError | null = null
   let waits = 0
-  for (let attempt = 0; attempt <= RETRIES[provider]; attempt++) {
-    const chain = provider === 'openrouter'
-      ? modelChain(run.request.model, run.models, tried)
-      : modelChain(run.request.model, run.models, tried).slice(0, 1)
+  let manualRetried = false
+  const attempts = run.auto ? AUTO_ATTEMPTS[provider] : 1
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const chain = run.auto ? autoModels(provider, run.models, tried) : [run.request.model]
     if (!chain.length) break
+    const batch = provider === 'openrouter' ? chain.slice(0, CHAIN_SIZE) : chain.slice(0, 1)
     run.onLive?.(NO_LIVE)
     try {
       const result = await chatCompletion({
         ...run.request,
-        model: chain[0],
-        fallbacks: chain.slice(1),
+        model: batch[0],
+        fallbacks: batch.slice(1),
         messages,
-        tools: AI_TOOLS,
+        tools: run.tools ?? AI_TOOLS,
         toolChoice,
         onDelta: run.onLive,
       })
-      const answered = chain.findIndex(id => sameModel(id, result.model))
-      chain.slice(0, Math.max(answered, 0)).forEach(markModelBusy)
+      const answered = batch.find(id => sameModel(id, result.model)) ?? batch[0]
+      recordRequest(provider, answered)
+      clearModel(provider, answered)
+      if (result.dailyRequests) setReportedLimit(provider, answered, result.dailyRequests.limit, result.dailyRequests.remaining)
       return result
     } catch (e) {
-      lastError = e
-      if (!(e instanceof AiProviderError) || !e.retryable || run.request.signal?.aborted) throw e
-      // A per-minute limit: the same model answers after a short pause
-      if (e.retryAfterMs && e.retryAfterMs <= MAX_RATE_WAIT_MS && waits < MAX_RATE_WAITS) {
+      if (!(e instanceof AiProviderError) || run.request.signal?.aborted) throw e
+      if (e.kind === 'rate' && e.retryAfterMs && waits < MAX_RATE_WAITS) {
         waits++
         attempt--
-        run.onStep({ tool: 'wait', summary: `rate limit, retrying in ${Math.ceil(e.retryAfterMs / 1000)} s` })
+        run.onStep({ tool: 'Wait', summary: `Rate limit, retrying in ${Math.ceil(e.retryAfterMs / 1000)} s` })
         await sleep(e.retryAfterMs + 250, run.request.signal)
         continue
       }
-      for (const id of chain) {
+      if (!e.modelSpecific) throw e
+      lastError = e
+      const state = stateOf(e)
+      // OpenRouter tried the whole batch; the error names only the last of them
+      const batchState: ModelState = batch.length > 1 ? 'busy' : state
+      for (const id of batch) {
         tried.add(id)
-        markModelBusy(id)
+        markModel(provider, id, batchState, skipUntil(e, batchState), e.message)
       }
+      const names = batch.map(id => modelName(run, id)).join(', ')
+      failures.push(`${names}: ${e.message}`)
+      if (!run.auto) {
+        if ((e.kind === 'busy' || e.kind === 'empty') && !manualRetried) {
+          manualRetried = true
+          attempt--
+          run.onStep({ tool: 'Wait', summary: `${names} did not answer, trying once more` })
+          await sleep(MANUAL_RETRY_MS, run.request.signal)
+          continue
+        }
+        throw new AiProviderError(`${names}: ${e.message}\n\nPick another model or switch to Auto: it skips models that are out of quota or unavailable.`, e.status, e.kind, e.retryAfterMs, e.details)
+      }
+      run.onStep({ tool: 'Model', summary: `${names}: ${e.message} Switching to another model.` })
     }
   }
-  throw lastError ?? new Error('No available models. Pick another model or try later.')
+  throw noModelsError(run, failures, lastError)
 }
 
 function userMessage(run: AgentRun): ChatMessage {
@@ -134,6 +216,16 @@ function userMessage(run: AgentRun): ChatMessage {
     role: 'user',
     content: `${run.question}\n\n<logs_digest events="${run.digestCount ?? 0}">\n${run.digest}\n</logs_digest>`,
   }
+}
+
+/** Models follow the latest user turn more than the end of a long system prompt; not kept in the history */
+function withStyle(messages: ChatMessage[], note: string | undefined): ChatMessage[] {
+  const index = messages.findLastIndex(m => m.role === 'user')
+  if (!note || index === -1) return messages
+  const target = messages[index] as Extract<ChatMessage, { role: 'user' }>
+  const copy = messages.slice()
+  copy[index] = { ...target, content: `${target.content}\n\n<answer_style>\n${note}\n</answer_style>` }
+  return copy
 }
 
 /** Older digests and tool results are shortened: the newest digest and tools can bring them back */
@@ -197,6 +289,29 @@ function parseArgs(call: ChatToolCall): Record<string, any> {
   }
 }
 
+const HEDGE = /\b(probably|likely|perhaps|not (captured|logged|in the logs)|was not recorded)\b|скорее всего|вероятно|возможно|не (попал|попало|зафиксирован|залогирован|видно)|нет в лог|отсутству/i
+const QUOTED = /[«"“]([^»"”\n]{6,120})[»"”]/g
+
+const CHECK_NOTE = 'You answered without calling any tool, so nothing above was checked in this question. Verify before answering: search_logs and search_source for the text the user quoted, the button label or the error message, and get_events on the requests and store state around the user\'s action. Then answer with the event ids and code you actually saw.'
+
+function hasLogs(history: ChatMessage[]): boolean {
+  return history.some(m => m.role === 'user' && m.content.includes('<logs_digest'))
+}
+
+/** A diagnostic answer from memory: it hedges, or the user quotes something the model never looked up */
+function unchecked(question: string, answer: string, history: ChatMessage[]): boolean {
+  if (question.trim().length < 25) return false
+  if (HEDGE.test(answer)) return true
+  const seen = history
+    .map(m => (typeof m.content === 'string' ? m.content : ''))
+    .join('\n')
+    .toLowerCase()
+    .split(question.trim().toLowerCase())
+    .join('')
+  for (const m of question.matchAll(QUOTED)) if (!seen.includes(m[1].trim().toLowerCase())) return true
+  return false
+}
+
 function callKey(name: string, args: Record<string, unknown>): string {
   return `${name}:${JSON.stringify(Object.keys(args).sort().map(k => [k, args[k]]))}`
 }
@@ -207,12 +322,14 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
   // A repeated call can point to the earlier result only while results stay whole in the context
   const done = Number.isFinite(budget.contextChars) ? null : new Set<string>()
   let callCounter = 0
+  let recheckAt = -1
+  const toolNames = new Set((run.tools ?? AI_TOOLS).map(t => t.function.name))
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     const last = round === MAX_TOOL_ROUNDS
-    const messages: ChatMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }, ...fitContext(history, budget.contextChars)]
+    const messages: ChatMessage[] = [{ role: 'system', content: run.systemPrompt ?? SYSTEM_PROMPT }, ...fitContext(history, budget.contextChars)]
     if (last) messages.push({ role: 'user', content: FINAL_ROUND_NOTE })
-    const result = await complete(run, messages, last ? 'none' : 'auto')
+    const result = await complete(run, withStyle(messages, run.styleNote), last ? 'none' : 'auto')
     run.usage.requests++
     if (result.tokens) {
       run.usage.prompt += result.tokens.prompt
@@ -224,7 +341,7 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
     run.onLive?.(NO_LIVE)
 
     let toolCalls = result.toolCalls
-    const written = extractTextToolCalls(result.content, TOOL_NAMES)
+    const written = extractTextToolCalls(result.content, toolNames)
     if (!toolCalls.length && written.calls.length && !last) {
       toolCalls = written.calls.map(c => ({ id: '', type: 'function', function: { name: c.name, arguments: JSON.stringify(c.args) } }))
     }
@@ -238,6 +355,16 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
       const answer = content || (last || written.calls.length ? 'I could not finish the analysis within the tool call limit. Ask a narrower question.' : '')
       if (!answer) throw new Error('The model returned an empty answer. Try again or pick another model.')
       history.push({ role: 'assistant', content: answer })
+      const recheck = round === 0 && !last && hasLogs(history)
+        ? (run.detailed ? DETAILED_CHECK_NOTE : unchecked(run.question, answer, history) ? CHECK_NOTE : '')
+        : ''
+      if (recheck) {
+        run.onStep({ tool: 'Check', summary: run.detailed ? 'Detailed answer without data, gathering it with tools' : 'Answer without evidence, verifying with tools' })
+        recheckAt = history.length - 1
+        history.push({ role: 'user', content: recheck })
+        continue
+      }
+      if (recheckAt >= 0) history.splice(recheckAt, 2)
       return { answer, history, model: result.model }
     }
 
@@ -246,14 +373,24 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
     for (const call of calls) {
       run.request.signal?.throwIfAborted()
       const args = parseArgs(call)
-      run.onStep(describeToolCall(call.function.name, args))
+      const step = describeToolCall(call.function.name, args)
       const key = callKey(call.function.name, args)
       let output: string
-      if (done?.has(key)) {
+      if (!toolNames.has(call.function.name)) {
+        run.onStep({ ...step, declined: true })
+        output = `The tool "${call.function.name}" is not available: the user turned it off in the assistant access settings.`
+      } else if (done?.has(key)) {
+        run.onStep(step)
         output = 'The same call was made earlier in this question; its result is above. Use it, or call with other arguments.'
+      } else if (run.approve && !(await run.approve(call.function.name, step))) {
+        run.request.signal?.throwIfAborted()
+        run.onStep({ ...step, declined: true })
+        output = DECLINED
       } else {
+        run.onStep(step)
         done?.add(key)
-        const full = await runTool(call.function.name, args)
+        const raw = await runTool(call.function.name, args)
+        const full = run.protect ? run.protect(raw) : raw
         output = full.length > budget.toolResultChars
           ? `${full.slice(0, budget.toolResultChars)}\n... [${full.length - budget.toolResultChars} chars cut; ask for fewer items or a narrower range]`
           : full

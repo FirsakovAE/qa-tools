@@ -3,8 +3,8 @@
  * the problems with their evidence and a one-line-per-event timeline. Bulky data (bodies,
  * store states) is left in the report; the guide tells the assistant to ask for it by event id.
  *
- * Reads the report payload, so the Logs tab ("Export for AI") and the HTML report
- * ("Export for AI") produce the same text. `buildAiDigest` must stay self-contained
+ * Reads the report payload, so the AI tab and the HTML report ("Export for AI") produce
+ * the same text. `buildAiDigest` must stay self-contained
  * (no references outside its body, ASCII only): the HTML report embeds its source text.
  */
 
@@ -286,6 +286,36 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
     }
     return laterStore.concat(laterAction).join('; ')
   }
+  /** Whether the socket ever worked: a server that never answers means no realtime updates at all */
+  const wsHealth = (g: (typeof groups)[number]): string[] => {
+    const first = g.rows[0].failedEntry
+    if (!first || !first.websocket) return []
+    const url = String(first.url || '')
+    const seen: Record<string, boolean> = {}
+    let opened = 0
+    let received = 0
+    const channels: string[] = []
+    for (const r of rows) {
+      if (r.e.kind !== 'ws' && r.e.kind !== 'ws-closed') continue
+      const entry = getEntry(r.e.data.entryId)
+      if (!entry || !entry.websocket || String(entry.url || '') !== url || seen[entry.id]) continue
+      seen[entry.id] = true
+      opened++
+      const frames = Array.isArray(entry.websocket.frames) ? entry.websocket.frames : []
+      for (const f of frames) {
+        if (f.direction === 'received') received++
+        const text = typeof f.data === 'string' ? f.data : ''
+        const re = /"channel"\s*:\s*"([^"]+)"/g
+        let m: RegExpExecArray | null
+        while ((m = re.exec(text)) && channels.length < 12) if (channels.indexOf(m[1]) === -1) channels.push(m[1])
+      }
+    }
+    const last = g.rows[g.rows.length - 1]
+    const lines = [`- Connections to this URL: ${opened} opened, ${g.rows.length} closed with this error, ${received} frames received, failing from ${rel(g.rows[0].e.timestamp - t0)} to ${rel(last.e.timestamp - t0)}`]
+    if (!received) lines.push('- The server never delivered a message: realtime updates (pushes, statuses, document readiness) did not arrive during the whole capture')
+    if (channels.length) lines.push(`- Subscribed channels: ${channels.join(', ')}`)
+    return lines
+  }
 
   out.push('')
   out.push('## Problems')
@@ -315,6 +345,7 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
     if (page) out.push(`- Page: #${page.index} ${oneLine(page.title, 180)} (last navigation before this error)`)
     const later = dataLater(first)
     if (later) out.push(`- Data later: ${later}`)
+    for (const line of wsHealth(g)) out.push(line)
     for (const line of evidence(first)) out.push(line)
     out.push('')
     if (MAX_CHARS !== Infinity) used += out.slice(start).join('\n').length + 1

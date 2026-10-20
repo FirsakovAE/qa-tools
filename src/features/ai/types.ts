@@ -37,6 +37,8 @@ export interface AiStep {
   tool: string
   summary: string
   thought?: boolean
+  /** The user declined the call or the tool is turned off */
+  declined?: boolean
 }
 
 /** Tokens as the provider reported them; zero when it did not */
@@ -61,6 +63,12 @@ export interface AiChatEntry {
   text: string
   steps?: AiStep[]
   error?: boolean
+  /** Provider's own error text */
+  errorDetails?: string
+  /** The error is about the hand-picked model: Auto mode may answer */
+  suggestAuto?: boolean
   model?: string
   usage?: AiUsage
+  /** Logs event ids of the `#N` the answer names */
+  events?: Record<number, string>
 }
