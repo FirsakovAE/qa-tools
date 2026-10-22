@@ -107,9 +107,9 @@ function modelName(run: AgentRun, id: string): string {
   return run.models.find(m => m.id === id)?.name ?? id
 }
 
-/** Auto mode order: models without a known problem (stable and recommended first); only busy ones when none is left */
+/** Auto mode order: free models without a known problem (stable and recommended first); only busy ones when none is left */
 function autoModels(provider: AiProviderId, models: AiModel[], tried: Set<string>): string[] {
-  const left = models.filter(m => !tried.has(m.id))
+  const left = models.filter(m => !m.paid && !tried.has(m.id))
   const usable = left.filter(m => !modelStatus(provider, m.id))
   const list = usable.length ? usable : left.filter(m => modelStatus(provider, m.id)?.state === 'busy')
   return list
@@ -130,7 +130,7 @@ function noModelsError(run: AgentRun, failures: string[], last: AiProviderError 
   const { provider } = run.request
   const known = failures.length
     ? failures
-    : run.models.map(m => `${m.name}: ${statusLabel(provider, m.id)}`)
+    : run.models.filter(m => !m.paid).map(m => `${m.name}: ${statusLabel(provider, m.id)}`)
   const list = known.length ? `\n\n${known.map(line => `- ${line}`).join('\n')}` : ''
   return new AiProviderError(
     `No ${PROVIDER_LABELS[provider]} model could answer.${list}\n\nTry again later, switch the provider, or pick a model by hand.`,

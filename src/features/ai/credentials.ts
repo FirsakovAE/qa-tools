@@ -8,7 +8,7 @@
 import { reactive } from 'vue'
 import { getRuntimeAdapter } from '@/runtime'
 import { DEFAULT_MASK_KEYS } from '@/injected/logs/config'
-import type { AiProviderId } from './types'
+import type { AiModel, AiProviderId } from './types'
 
 const STORAGE_KEY = 'vue-inspector-ai'
 
@@ -59,7 +59,7 @@ export const DEFAULT_AI_MASK_KEYS = [
 
 export const DEFAULT_AI_ACCESS: AiAccess = {
   digest: true,
-  tools: { logs: 'allow', sources: 'allow' },
+  tools: { logs: 'ask', sources: 'ask' },
   headers: true,
   bodies: true,
   appData: true,
@@ -101,6 +101,8 @@ export interface AiCredentials {
   customStyle: string
   /** Models hidden from the AI tab and skipped as fallbacks, per provider */
   blockedModels: Partial<Record<AiProviderId, string[]>>
+  /** Models the user added to the recommended ones, per provider */
+  addedModels: Partial<Record<AiProviderId, AiModel[]>>
   /** Masking applied to everything the assistant sends to the provider, apart from the Logs masking */
   masking: AiMasking
   access: AiAccess
@@ -112,6 +114,18 @@ const DETAILS = new Set<AiDetail>(['brief', 'normal', 'detailed'])
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function normalizeAdded(raw: AiCredentials['addedModels'] | undefined): AiCredentials['addedModels'] {
+  const out: AiCredentials['addedModels'] = {}
+  for (const provider of PROVIDERS) {
+    const list = raw?.[provider]
+    if (!Array.isArray(list)) continue
+    out[provider] = list
+      .filter(m => typeof m?.id === 'string' && m.id)
+      .map(m => ({ id: m.id, name: text(m.name) || m.id, ...(m.paid ? { paid: true } : {}) }))
+  }
+  return out
 }
 
 /** Known fields only: fields of older versions are dropped from the storage on the next save */
@@ -128,6 +142,7 @@ function normalizeCredentials(raw: Partial<AiCredentials> = {}): AiCredentials {
     detail: raw.detail && DETAILS.has(raw.detail) ? raw.detail : 'normal',
     customStyle: text(raw.customStyle).slice(0, CUSTOM_STYLE_MAX),
     blockedModels: { ...raw.blockedModels },
+    addedModels: normalizeAdded(raw.addedModels),
     masking: normalizeAiMasking(raw.masking),
     access: normalizeAccess(raw.access),
   }
@@ -173,6 +188,16 @@ export function setModelBlocked(provider: AiProviderId, id: string, blocked: boo
   const list = (aiCredentials.blockedModels[provider] ?? []).filter(m => m !== id)
   if (blocked) list.push(id)
   return saveAiCredentials({ blockedModels: { ...aiCredentials.blockedModels, [provider]: list } })
+}
+
+export function isModelAdded(provider: AiProviderId, id: string): boolean {
+  return aiCredentials.addedModels[provider]?.some(m => m.id === id) ?? false
+}
+
+export function setModelAdded(provider: AiProviderId, model: AiModel, added: boolean): Promise<void> {
+  const list = (aiCredentials.addedModels[provider] ?? []).filter(m => m.id !== model.id)
+  if (added) list.push({ id: model.id, name: model.name, ...(model.paid ? { paid: true } : {}) })
+  return saveAiCredentials({ addedModels: { ...aiCredentials.addedModels, [provider]: list } })
 }
 
 export function selectedModel(provider: AiProviderId = aiCredentials.provider): string {

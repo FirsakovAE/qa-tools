@@ -32,7 +32,7 @@ const recommended = computed(() => models.value.filter(m => m.recommended))
 const others = computed(() => models.value.filter(m => !m.recommended))
 const groups = computed(() => [
   { label: 'Recommended', list: recommended.value },
-  { label: 'Other free models', list: others.value },
+  { label: 'Added', list: others.value },
 ].filter(g => g.list.length))
 </script>
 
@@ -55,7 +55,7 @@ const groups = computed(() => [
       </SelectTrigger>
       <SelectContent>
         <SelectItem :value="AUTO_MODEL" class="text-xs">
-          Auto<span class="ml-1 text-muted-foreground">· switches models on limits</span>
+          Auto<span class="ml-1 text-muted-foreground">· free models, switches on limits</span>
         </SelectItem>
         <template v-for="group in groups" :key="group.label">
           <SelectSeparator />

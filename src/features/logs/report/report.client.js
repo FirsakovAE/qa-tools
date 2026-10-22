@@ -1652,10 +1652,35 @@
     return aiDigest
   }
 
+  // Full event as the Raw tab shows it. A message event keeps only its own frame:
+  // the whole connection log in every message would grow the file quadratically.
+  function rawEvent(e) {
+    var full
+    try {
+      full = RT.hydrate(e.raw, ctx, kindLabels).event
+    } catch (err) {
+      full = Object.assign({}, e.raw, { title: e.title, label: e.label })
+    }
+    var en = full.data && full.data.entry
+    if (en && en.websocket && full.data.frameId != null && Array.isArray(en.websocket.frames)) {
+      var frames = en.websocket.frames.filter(function (frame) { return frame.id === full.data.frameId })
+      full.data = Object.assign({}, full.data, { entry: Object.assign({}, en, { websocket: Object.assign({}, en.websocket, { frames: frames }) }) })
+    }
+    return full
+  }
+
   var jsonBtn = $('export-json')
   if (jsonBtn) {
     jsonBtn.addEventListener('click', function () {
-      saveFile(QA_PAYLOAD_TEXT || '{}', 'application/json', reportBaseName() + '.json')
+      var text
+      try {
+        text = JSON.stringify(events.map(rawEvent), null, 2)
+      } catch (err) {
+        console.error('[logs report] RAW JSON failed', err)
+        flash(jsonBtn, 'Failed')
+        return
+      }
+      saveFile(text, 'application/json', reportBaseName() + '.raw.json')
     })
   }
   var aiBtn = $('export-ai')

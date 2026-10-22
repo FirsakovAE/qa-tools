@@ -12,7 +12,7 @@ General information about the tab: [Working with logs](./general.md).
 
 ## Export format
 
-Every export is one **HTML** file: a static report that opens in the browser. There is no separate JSON export.
+Every export is one **HTML** file: a static report that opens in the browser. The report itself downloads the other formats (see [Downloads from the report](#downloads-from-the-report)).
 
 The data inside the report is compact, like the live log (see [How events are stored](./general.md#how-events-are-stored)): store changes are diffs, a request and its response share one network entry, equal bodies are stored once, and identical values in any event are stored once as a shared snapshot. Titles, Before / After states, snapshot values and request / response details are restored when the report is opened.
 
@@ -84,6 +84,17 @@ The header shows **Vue Inspector** with that mode in a tag, **Logs report** on t
 * **↑ / ↓** move between events.
 * The selected section and event are kept in the address (`#…`), so a link to a specific event can be shared and survives a reload.
 * On a narrow screen the section list opens from the menu button. Choosing a section closes it, and a tap outside it closes it. Event rows show a colored bar for the event type.
+
+### Downloads from the report
+
+Two buttons in the top bar download the events of the report:
+
+| Button | File | Content |
+| ------ | ---- | ------- |
+| **Brief for AI** | `<report>.ai.md` | A compact Markdown digest (errors, failed requests, timeline) with a guide for an AI assistant |
+| **RAW JSON** | `<report>.raw.json` | Every event in full, oldest first, indented: the same object the **Raw** tab shows, with restored store states, change values and the request / response details. A WebSocket message keeps only its own frame |
+
+On a narrow screen the buttons are shortened to **Brief AI** and **RAW**.
 
 ---
 

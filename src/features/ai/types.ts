@@ -7,6 +7,8 @@ export interface AiModel {
   recommended?: boolean
   /** Provider status says the model works but fails often lately */
   unstable?: boolean
+  /** Requests are billed by the provider; Auto never picks such a model */
+  paid?: boolean
 }
 
 /** OpenAI-compatible chat message (both providers speak this format) */

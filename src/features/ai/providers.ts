@@ -165,24 +165,33 @@ async function withHealth(models: AiModel[]): Promise<AiModel[]> {
   return models.filter(m => !hidden.has(m.id))
 }
 
-/** Free OpenRouter models that support tool calling */
-async function listOpenRouterModels(): Promise<AiModel[]> {
+function isPriced(m: any): boolean {
+  return [m?.pricing?.prompt, m?.pricing?.completion].some(price => Number(price) > 0)
+}
+
+/** OpenRouter models with tool calling, free and paid; the catalog is public and costs no requests */
+async function openRouterCatalog(): Promise<AiModel[]> {
   const res = await fetch(`${OPENROUTER_API}/models?supported_parameters=tools`)
   if (!res.ok) throw new AiProviderError(`Could not load OpenRouter models (${res.status})`, res.status)
   const data = await res.json()
-  const models: AiModel[] = (Array.isArray(data?.data) ? data.data : [])
-    .filter((m: any) => typeof m?.id === 'string' && m.id.endsWith(':free'))
+  return (Array.isArray(data?.data) ? data.data : [])
+    .filter((m: any) => typeof m?.id === 'string')
     .filter((m: any) => !Array.isArray(m.supported_parameters) || m.supported_parameters.includes('tools'))
-    .map((m: any) => ({
+    .map((m: any): AiModel => ({
       id: m.id,
       name: String(m.name || m.id).replace(/\s*\(free\)\s*$/i, ''),
       contextLength: Number(m.context_length) || undefined,
+      ...(!m.id.endsWith(':free') && isPriced(m) ? { paid: true } : {}),
     }))
-  return withRecommended(await withHealth(models), OPENROUTER_PREFERRED)
 }
 
-/** Gemini Flash models available to the key (the free tier covers the Flash family) */
-async function listGeminiModels(key: string): Promise<AiModel[]> {
+async function listOpenRouterModels(all: Promise<AiModel[]>): Promise<AiModel[]> {
+  const free = (await all).filter(m => m.id.endsWith(':free')).map(m => ({ ...m }))
+  return withRecommended(await withHealth(free), OPENROUTER_PREFERRED)
+}
+
+/** Gemini chat models of the key; the free tier covers the Flash family, the rest is billed */
+async function geminiCatalog(key: string): Promise<AiModel[]> {
   if (!key) return GEMINI_FALLBACK
   try {
     const res = await fetch(`${GEMINI_API}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } })
@@ -190,21 +199,30 @@ async function listGeminiModels(key: string): Promise<AiModel[]> {
     const data = await res.json()
     const models: AiModel[] = (Array.isArray(data?.models) ? data.models : [])
       .filter((m: any) => Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
-      .map((m: any) => ({
-        id: String(m.name || '').replace(/^models\//, ''),
-        name: String(m.displayName || m.name),
-        contextLength: Number(m.inputTokenLimit) || undefined,
-      }))
-      .filter((m: AiModel) => /^gemini-.*flash/i.test(m.id) && !/(image|tts|audio|live|thinking|embedding)/i.test(m.id))
-    return models.length ? withRecommended(models, GEMINI_PREFERRED) : GEMINI_FALLBACK
+      .map((m: any): AiModel => {
+        const id = String(m.name || '').replace(/^models\//, '')
+        return {
+          id,
+          name: String(m.displayName || m.name),
+          contextLength: Number(m.inputTokenLimit) || undefined,
+          ...(/flash/i.test(id) ? {} : { paid: true }),
+        }
+      })
+      .filter((m: AiModel) => /^gemini-/i.test(m.id) && !/(image|tts|audio|live|thinking|embedding)/i.test(m.id))
+    return models.length ? models : GEMINI_FALLBACK
   } catch (e) {
     if (e instanceof AiProviderError && (e.status === 400 || e.status === 401 || e.status === 403)) throw e
     return GEMINI_FALLBACK
   }
 }
 
-/** Groq chat models of the key's organization; all of them support tool calling */
-async function listGroqModels(key: string): Promise<AiModel[]> {
+async function listGeminiModels(all: Promise<AiModel[]>): Promise<AiModel[]> {
+  const free = (await all).filter(m => !m.paid).map(m => ({ ...m }))
+  return free.length ? withRecommended(free, GEMINI_PREFERRED) : GEMINI_FALLBACK
+}
+
+/** Groq chat models of the key's organization; all of them support tool calling and the free tier */
+async function groqCatalog(key: string): Promise<AiModel[]> {
   if (!key) return GROQ_FALLBACK
   try {
     const res = await fetch(`${GROQ_API}/models`, { headers: { Authorization: `Bearer ${key}` } })
@@ -217,26 +235,43 @@ async function listGroqModels(key: string): Promise<AiModel[]> {
         name: m.id.replace(/^[^/]+\//, ''),
         contextLength: Number(m.context_window) || undefined,
       }))
-    return models.length ? withRecommended(models, GROQ_PREFERRED) : GROQ_FALLBACK
+    return models.length ? models : GROQ_FALLBACK
   } catch (e) {
     if (e instanceof AiProviderError && (e.status === 401 || e.status === 403)) throw e
     return GROQ_FALLBACK
   }
 }
 
-/** The list is shared by the AI tab and Options; OpenRouter health checks cost one fetch per model */
+async function listGroqModels(all: Promise<AiModel[]>): Promise<AiModel[]> {
+  const list = (await all).map(m => ({ ...m }))
+  return list.length ? withRecommended(list, GROQ_PREFERRED) : GROQ_FALLBACK
+}
+
+/** The lists are shared by the AI tab and Options; OpenRouter health checks cost one fetch per model */
 const MODELS_TTL_MS = 10 * 60_000
 const modelLists = new Map<string, { at: number; list: Promise<AiModel[]> }>()
 
-/** Free models of the provider, cached per key for a while; `force` asks the provider again */
-export function listModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
-  const id = `${provider}\u0000${key}`
+function cached(id: string, force: boolean, load: () => Promise<AiModel[]>): Promise<AiModel[]> {
   const hit = modelLists.get(id)
   if (!force && hit && Date.now() - hit.at < MODELS_TTL_MS) return hit.list
-  const list = provider === 'openrouter' ? listOpenRouterModels() : provider === 'groq' ? listGroqModels(key) : listGeminiModels(key)
+  const list = load()
   modelLists.set(id, { at: Date.now(), list })
   list.catch(() => modelLists.delete(id))
   return list
+}
+
+/** Every chat model of the provider the key can call, free and paid (`paid` marks billed ones) */
+export function catalogModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
+  return cached(`all\u0000${provider}\u0000${key}`, force, () =>
+    provider === 'openrouter' ? openRouterCatalog() : provider === 'groq' ? groqCatalog(key) : geminiCatalog(key))
+}
+
+/** Free models of the provider with the recommended ones marked, cached per key for a while */
+export function listModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
+  return cached(`free\u0000${provider}\u0000${key}`, force, () => {
+    const all = catalogModels(provider, key, force)
+    return provider === 'openrouter' ? listOpenRouterModels(all) : provider === 'groq' ? listGroqModels(all) : listGeminiModels(all)
+  })
 }
 
 /** `retry-after` header, "try again in 1m2.5s" / "retry in 14h57m29s" / "in 450ms" or Gemini's `"retryDelay": "53s"` */

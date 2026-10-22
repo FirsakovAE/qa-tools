@@ -20,23 +20,6 @@ Default search modes of the **Logs** tab:
 
 ---
 
-## Ignore list
-
-Event groups added with **Ignore** in the **Logs** tab. Events of these groups are not recorded.
-
-| Column | Content |
-| ------ | ------- |
-| **Type** | Event type |
-| **Event** | Group key: request (method and path), component, store, etc. |
-| **Added** | Date the rule was added |
-
-* **Log again** in the row menu removes one rule.
-* **Log all again** removes all rules.
-
-The same list is available from the **ignored** indicator in the **Logs** toolbar.
-
----
-
 ## Logs and limits
 
 ### Logged events

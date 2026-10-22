@@ -3,7 +3,7 @@
  * the problems with their evidence and a one-line-per-event timeline. Bulky data (bodies,
  * store states) is left in the report; the guide tells the assistant to ask for it by event id.
  *
- * Reads the report payload, so the AI tab and the HTML report ("Export for AI") produce
+ * Reads the report payload, so the AI tab and the HTML report ("Brief for AI") produce
  * the same text. `buildAiDigest` must stay self-contained
  * (no references outside its body, ASCII only): the HTML report embeds its source text.
  */
@@ -166,7 +166,7 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
     out.push(`- For the cause of a problem, read the **Timeline** around its id (\`Context\` gives the range): the request before an error, the store changes and navigation after a response.`)
     out.push('- Timeline line: `#N +time KIND title | details`. Time is relative to the first event. Store and props lines show what changed (`key: before -> after`). Repeated identical lines are folded as `(xN)`.')
     out.push('- Text marked `[... chars cut]` was shortened for this digest. `[MASKED]` values were hidden at capture and are not available anywhere.')
-    out.push('- Full bodies, headers and store states are in the HTML report and its "Export JSON" file. If something you need is missing here, ask the user for specific events by id (for example "the response body of #42") instead of the whole file.')
+    out.push('- Full bodies, headers and store states are in the HTML report and its "RAW JSON" file. If something you need is missing here, ask the user for specific events by id (for example "the response body of #42") instead of the whole file.')
     out.push('- Answer with: what went wrong, the most likely cause, the evidence (event ids), and how to reproduce or fix it.')
     out.push('')
   }

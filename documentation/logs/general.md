@@ -127,7 +127,7 @@ Actions are available in the **⋮** menu of the details header and in the row c
 | **Open request event** / **Open response event** | Jump to the paired network event. A WebSocket uses **Open connection event** / **Open close event** |
 | **Ignore** | Stop logging this group of events |
 
-**Ignore** works per group: the same request (method and path), the same component, the same store, and so on. Ignored groups are not recorded at all; they can be logged again from **Options → Logs → Ignore list**.
+**Ignore** works per group: the same request (method and path), the same component, the same store, and so on. Ignored groups are not recorded at all; the **ignored** indicator in the toolbar opens their list, where **×** logs one group again and **Clear all** logs every group again.
 
 ## How it works
 

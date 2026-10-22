@@ -17,9 +17,9 @@ onMounted(() => { void Promise.all([loadAiCredentials(), loadModelStatus()]) })
       <h4 class="text-sm font-semibold">Connection</h4>
       <AiAccountPanel />
     </div>
+    <AiModelsSection />
+    <AiPersonalizationSection />
     <AiAccessSection />
     <AiMaskingSection />
-    <AiPersonalizationSection />
-    <AiModelsSection />
   </div>
 </template>

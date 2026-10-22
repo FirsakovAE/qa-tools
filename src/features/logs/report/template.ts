@@ -159,8 +159,8 @@ export async function renderLogsReport(payload: LogsReportPayload, options: Rend
 <span class="nav-spacer"></span>
 <label class="check"><input id="in-data" type="checkbox"> in data</label>
 <input id="search" class="search" type="search" placeholder="Search events..." autocomplete="off">
-<button id="export-ai" class="nav-btn" type="button" title="Download a compact Markdown digest with a guide for an AI assistant (.md)">Export<span class="nav-btn-long"> for</span> AI</button>
-<button id="export-json" class="nav-btn" type="button" title="Download the report data (JSON)"><span class="nav-btn-long">Export </span>JSON</button>
+<button id="export-ai" class="nav-btn" type="button" title="Download a compact Markdown digest with a guide for an AI assistant (.md)">Brief<span class="nav-btn-long"> for</span> AI</button>
+<button id="export-json" class="nav-btn" type="button" title="Download every event in full, as the Raw tab shows it (.json)">RAW<span class="nav-btn-long"> JSON</span></button>
 </header>
 <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 <div class="layout">

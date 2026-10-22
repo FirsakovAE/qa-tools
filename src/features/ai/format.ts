@@ -47,7 +47,7 @@ export function modelName(models: AiModel[], id: string): string {
 
 export function modelNote(provider: AiProviderId, m: AiModel): string {
   const used = requestsToday(provider, m.id)
-  return [statusLabel(provider, m.id), m.unstable && 'unstable', used && `${used} today`].filter(Boolean).join(' · ')
+  return [m.paid && 'paid', statusLabel(provider, m.id), m.unstable && 'unstable', used && `${used} today`].filter(Boolean).join(' · ')
 }
 
 /** Requests of today and the limits the provider reported; every assistant step is one request */

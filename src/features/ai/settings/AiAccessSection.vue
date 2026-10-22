@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   aiCredentials,
   DEFAULT_AI_ACCESS,
@@ -11,13 +10,20 @@ import {
   type AiToolGroup,
 } from '../credentials'
 import AiSettingsHead from './AiSettingsHead.vue'
-import AiFlag from './AiFlag.vue'
+import AiSelectRow from './AiSelectRow.vue'
 
 const TOOL_ACCESS: Array<{ id: AiToolAccess; label: string }> = [
   { id: 'allow', label: 'Allowed' },
   { id: 'ask', label: 'Ask each time' },
   { id: 'deny', label: 'Off' },
 ]
+
+const SHARING = [
+  { id: 'on', label: 'Allowed' },
+  { id: 'off', label: 'Off' },
+] as const
+
+type Sharing = typeof SHARING[number]['id']
 
 const TOOL_GROUPS: Array<{ id: AiToolGroup; label: string; hint: string }> = [
   { id: 'logs', label: 'Logs', hint: 'Event details and search over the captured logs' },
@@ -31,6 +37,10 @@ const DATA_SCOPES: Array<{ id: 'headers' | 'bodies' | 'appData'; label: string; 
 ]
 
 const isDefault = computed(() => JSON.stringify(aiCredentials.access) === JSON.stringify(DEFAULT_AI_ACCESS))
+
+function sharing(on: boolean): Sharing {
+  return on ? 'on' : 'off'
+}
 
 function reset() {
   void saveAiCredentials({ access: structuredClone(DEFAULT_AI_ACCESS) })
@@ -47,45 +57,43 @@ function reset() {
       @reset="reset"
     />
 
-    <AiFlag
+    <AiSelectRow
       id="ai-access-digest"
       label="Attach the logs digest to questions"
       hint="A short summary of errors and the timeline. Off: the assistant sees the logs only through the tools below."
-      :model-value="aiCredentials.access.digest"
-      @update:model-value="setAiAccess({ digest: $event })"
+      :options="SHARING"
+      :model-value="sharing(aiCredentials.access.digest)"
+      @update:model-value="setAiAccess({ digest: $event === 'on' })"
     />
 
-    <div class="space-y-2">
+    <div class="space-y-3">
       <Label class="text-xs font-medium text-muted-foreground">Tools</Label>
-      <div v-for="group in TOOL_GROUPS" :key="group.id" class="flex flex-wrap items-center gap-3">
-        <Select :model-value="aiCredentials.access.tools[group.id]" @update:model-value="setAiAccess({ tools: { ...aiCredentials.access.tools, [group.id]: $event as AiToolAccess } })">
-          <SelectTrigger class="h-8 w-[150px] text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="mode in TOOL_ACCESS" :key="mode.id" :value="mode.id">{{ mode.label }}</SelectItem>
-          </SelectContent>
-        </Select>
-        <div class="text-sm">
-          {{ group.label }}
-          <span class="block text-xs text-muted-foreground">{{ group.hint }}</span>
-        </div>
-      </div>
+      <AiSelectRow
+        v-for="group in TOOL_GROUPS"
+        :id="`ai-access-tool-${group.id}`"
+        :key="group.id"
+        :label="group.label"
+        :hint="group.hint"
+        :options="TOOL_ACCESS"
+        :model-value="aiCredentials.access.tools[group.id]"
+        @update:model-value="setAiAccess({ tools: { ...aiCredentials.access.tools, [group.id]: $event } })"
+      />
       <p class="text-xs text-muted-foreground">
         Ask each time: the AI tab waits for Allow, Allow in this chat or Deny before the call. The Vue Inspector documentation is always available.
       </p>
     </div>
 
-    <div class="space-y-2">
+    <div class="space-y-3">
       <Label class="text-xs font-medium text-muted-foreground">Data in the logs</Label>
-      <AiFlag
+      <AiSelectRow
         v-for="scope in DATA_SCOPES"
         :id="`ai-access-${scope.id}`"
         :key="scope.id"
         :label="scope.label"
         :hint="scope.hint"
-        :model-value="aiCredentials.access[scope.id]"
-        @update:model-value="setAiAccess({ [scope.id]: $event })"
+        :options="SHARING"
+        :model-value="sharing(aiCredentials.access[scope.id])"
+        @update:model-value="setAiAccess({ [scope.id]: $event === 'on' })"
       />
     </div>
   </div>

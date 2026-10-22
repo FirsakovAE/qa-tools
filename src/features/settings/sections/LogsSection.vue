@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { LogIgnoreRule } from '@/types/logs'
-import { LOG_KIND_META } from '@/types/logs'
 import { TableCell } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,7 +10,7 @@ import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
 import SettingsTableSection from '../components/SettingsTableSection.vue'
 import type { TableColumn } from '../components/SettingsTableSection.vue'
 import type { MenuAction } from '@/components/OptionsItemActionsMenu'
-import { Eye, Trash, RotateCcw } from 'lucide-vue-next'
+import { Trash, RotateCcw } from 'lucide-vue-next'
 import { formatBytes } from '@/types/network'
 import {
   DEFAULT_LOGS_LIMITS,
@@ -42,23 +39,6 @@ const searchItems: Array<{ key: SearchKey; label: string }> = [
 function toggleSearch(key: SearchKey) {
   if (!props.settings.logsSearch) props.settings.logsSearch = { byName: true, byKey: false, byValue: false }
   props.settings.logsSearch[key] = !props.settings.logsSearch[key]
-}
-
-// -------------------- IGNORE LIST --------------------
-const ignoreColumns: TableColumn[] = [
-  { header: 'Type', width: '130px' },
-  { header: 'Event', class: 'min-w-0' },
-  { header: 'Added', width: '80px', class: 'text-center' },
-]
-
-const ignoreRows = computed<LogIgnoreRule[]>(() => props.settings.logsIgnoreRules ?? [])
-
-function removeIgnoreRule(id: string) {
-  props.settings.logsIgnoreRules = (props.settings.logsIgnoreRules ?? []).filter(r => r.id !== id)
-}
-
-function getIgnoreActions(rule: LogIgnoreRule): MenuAction[] {
-  return [{ label: 'Log again', icon: Eye, onClick: () => removeIgnoreRule(rule.id) }]
 }
 
 // -------------------- CAPTURE & LIMITS --------------------
@@ -158,52 +138,6 @@ const compressSupported = canCompressReport()
       id-prefix="logs-search"
       @toggle="(k) => toggleSearch(k as SearchKey)"
     />
-
-    <SettingsTableSection
-      section-id="logs-ignore-section"
-      title="Ignore list"
-      description="Events of these groups are not logged. Add groups with the Ignore action in the Logs tab."
-      :columns="ignoreColumns"
-      :rows="ignoreRows"
-      :row-key="(r) => (r as LogIgnoreRule).id"
-      :get-actions="(row) => getIgnoreActions(row as LogIgnoreRule)"
-      empty-message="No ignored events"
-      @select="() => {}"
-    >
-      <template #after-title>
-        <Button
-          v-if="ignoreRows.length > 0"
-          variant="outline"
-          size="sm"
-          class="h-7 text-xs gap-1.5"
-          @click="settings.logsIgnoreRules = []"
-        >
-          <Eye class="h-3.5 w-3.5" />
-          Log all again
-        </Button>
-      </template>
-      <template #row="{ row }">
-        <TableCell class="w-[130px] !py-2">
-          <Badge
-            variant="outline"
-            class="text-[10px] px-1.5 py-0 whitespace-nowrap"
-            :class="LOG_KIND_META[(row as LogIgnoreRule).kind]?.badgeClass"
-          >
-            {{ LOG_KIND_META[(row as LogIgnoreRule).kind]?.label ?? (row as LogIgnoreRule).kind }}
-          </Badge>
-        </TableCell>
-        <TableCell class="min-w-0 overflow-hidden !py-2">
-          <div class="text-sm font-mono truncate" :title="(row as LogIgnoreRule).key">
-            {{ (row as LogIgnoreRule).key }}
-          </div>
-        </TableCell>
-        <TableCell class="w-[80px] text-center !py-2">
-          <div class="text-xs text-muted-foreground">
-            {{ new Date((row as LogIgnoreRule).addedAt).toLocaleDateString() }}
-          </div>
-        </TableCell>
-      </template>
-    </SettingsTableSection>
 
     <!-- Limits -->
     <div id="logs-limits-section" class="space-y-4 border-t pt-4">

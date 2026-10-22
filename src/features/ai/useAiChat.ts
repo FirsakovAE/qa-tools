@@ -96,7 +96,7 @@ function init(): void {
       const providers: AiProviderId[] = ['openrouter', 'gemini', 'groq']
       providers.forEach((id, i) => { if (next[i] !== prev[i]) clearProviderStatus(id) })
     })
-    watch(() => aiCredentials.blockedModels, () => void pickUsableModel(), { deep: true })
+    watch(() => [aiCredentials.blockedModels, aiCredentials.addedModels], () => void pickUsableModel(), { deep: true })
   })
 }
 
@@ -158,7 +158,7 @@ export function useAiChat() {
   const model = computed(() => selectedModel())
   const auto = computed(() => model.value === AUTO_MODEL)
   const hasKey = computed(() => !!activeKey())
-  const ready = computed(() => hasKey.value && aiCredentials.consent && (auto.value ? models.value.length > 0 : !!model.value))
+  const ready = computed(() => hasKey.value && aiCredentials.consent && (auto.value ? models.value.some(m => !m.paid) : !!model.value))
 
   function setProvider(id: AiProviderId) {
     void saveAiCredentials({ provider: id })

@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/Textarea'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/RadioGroup'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { aiCredentials, CUSTOM_STYLE_MAX, loadAiCredentials, saveAiCredentials, type AiDetail, type AiTone } from '../credentials'
 import AiSettingsHead from './AiSettingsHead.vue'
@@ -23,6 +22,7 @@ const DETAILS: Array<{ id: AiDetail; label: string; hint: string }> = [
 ]
 
 const toneHint = computed(() => TONES.find(t => t.id === aiCredentials.tone)?.hint ?? '')
+const detailHint = computed(() => DETAILS.find(d => d.id === aiCredentials.detail)?.hint ?? '')
 const customStyle = ref('')
 const saveStyle = useDebounceFn((text: string) => saveAiCredentials({ customStyle: text }), 400)
 const isDefault = computed(() => aiCredentials.tone === 'default' && aiCredentials.detail === 'normal' && !customStyle.value)
@@ -64,15 +64,17 @@ onMounted(async () => {
 
     <div class="space-y-2">
       <Label class="text-xs font-medium text-muted-foreground">Answer detail</Label>
-      <RadioGroup :model-value="aiCredentials.detail" class="gap-3" @update:model-value="saveAiCredentials({ detail: $event as AiDetail })">
-        <div v-for="detail in DETAILS" :key="detail.id" class="flex items-start space-x-2">
-          <RadioGroupItem :id="`ai-detail-${detail.id}`" :value="detail.id" class="mt-0.5" />
-          <Label :for="`ai-detail-${detail.id}`" class="text-sm font-normal cursor-pointer">
-            {{ detail.label }}
-            <span class="block text-xs text-muted-foreground">{{ detail.hint }}</span>
-          </Label>
-        </div>
-      </RadioGroup>
+      <div class="flex flex-wrap items-center gap-3">
+        <Select :model-value="aiCredentials.detail" @update:model-value="saveAiCredentials({ detail: $event as AiDetail })">
+          <SelectTrigger class="h-8 w-[180px] text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="detail in DETAILS" :key="detail.id" :value="detail.id">{{ detail.label }}</SelectItem>
+          </SelectContent>
+        </Select>
+        <span class="text-xs text-muted-foreground">{{ detailHint }}</span>
+      </div>
     </div>
 
     <div class="space-y-2">

@@ -224,7 +224,7 @@ General information about the tab: [Working with logs](./general.md).\r
 \r
 ## Export format\r
 \r
-Every export is one **HTML** file: a static report that opens in the browser. There is no separate JSON export.\r
+Every export is one **HTML** file: a static report that opens in the browser. The report itself downloads the other formats (see [Downloads from the report](#downloads-from-the-report)).\r
 \r
 The data inside the report is compact, like the live log (see [How events are stored](./general.md#how-events-are-stored)): store changes are diffs, a request and its response share one network entry, equal bodies are stored once, and identical values in any event are stored once as a shared snapshot. Titles, Before / After states, snapshot values and request / response details are restored when the report is opened.\r
 \r
@@ -296,6 +296,17 @@ The header shows **Vue Inspector** with that mode in a tag, **Logs report** on t
 * **↑ / ↓** move between events.\r
 * The selected section and event are kept in the address (\`#…\`), so a link to a specific event can be shared and survives a reload.\r
 * On a narrow screen the section list opens from the menu button. Choosing a section closes it, and a tap outside it closes it. Event rows show a colored bar for the event type.\r
+\r
+### Downloads from the report\r
+\r
+Two buttons in the top bar download the events of the report:\r
+\r
+| Button | File | Content |\r
+| ------ | ---- | ------- |\r
+| **Brief for AI** | \`<report>.ai.md\` | A compact Markdown digest (errors, failed requests, timeline) with a guide for an AI assistant |\r
+| **RAW JSON** | \`<report>.raw.json\` | Every event in full, oldest first, indented: the same object the **Raw** tab shows, with restored store states, change values and the request / response details. A WebSocket message keeps only its own frame |\r
+\r
+On a narrow screen the buttons are shortened to **Brief AI** and **RAW**.\r
 \r
 ---\r
 \r
@@ -433,7 +444,7 @@ Actions are available in the **⋮** menu of the details header and in the row c
 | **Open request event** / **Open response event** | Jump to the paired network event. A WebSocket uses **Open connection event** / **Open close event** |\r
 | **Ignore** | Stop logging this group of events |\r
 \r
-**Ignore** works per group: the same request (method and path), the same component, the same store, and so on. Ignored groups are not recorded at all; they can be logged again from **Options → Logs → Ignore list**.\r
+**Ignore** works per group: the same request (method and path), the same component, the same store, and so on. Ignored groups are not recorded at all; the **ignored** indicator in the toolbar opens their list, where **×** logs one group again and **Clear all** logs every group again.\r
 \r
 ## How it works\r
 \r
@@ -495,23 +506,6 @@ Default search modes of the **Logs** tab:\r
 | **Search by event name** | Title, component, store, URL (enabled by default) |\r
 | **Search by key** | Keys in the payload and changed paths |\r
 | **Search by value** | Values in the payload |\r
-\r
----\r
-\r
-## Ignore list\r
-\r
-Event groups added with **Ignore** in the **Logs** tab. Events of these groups are not recorded.\r
-\r
-| Column | Content |\r
-| ------ | ------- |\r
-| **Type** | Event type |\r
-| **Event** | Group key: request (method and path), component, store, etc. |\r
-| **Added** | Date the rule was added |\r
-\r
-* **Log again** in the row menu removes one rule.\r
-* **Log all again** removes all rules.\r
-\r
-The same list is available from the **ignored** indicator in the **Logs** toolbar.\r
 \r
 ---\r
 \r
@@ -1918,7 +1912,7 @@ Standalone uses **its own local storage**: settings and media persist between la
 1. Open a page with a Vue application;\r
 2. Click the saved **Vue Inspector** bookmark;\r
 3. The inspector panel opens at the bottom of the page.\r
-`,N=`---\r
+`,A=`---\r
 title: Favorites\r
 ---\r
 \r
@@ -2014,7 +2008,7 @@ Avoid empty names — they never usefully match.\r
 * [Store overview](/store/general)\r
 * [Favorites (Props)](/props/favorite)\r
 * [Customize](/options/customize)\r
-`,A=`---\r
+`,N=`---\r
 title: Pinia stores\r
 ---\r
 \r
@@ -2476,9 +2470,9 @@ function patchState(storeId, path, value) {\r
 * [Getters](/store/getters)\r
 * [Store overview](/store/general)\r
 * [Favorites](/store/favorite)\r
-`,B=Object.assign({"../../../documentation/extension.md":c,"../../../documentation/general_principles.md":h,"../../../documentation/index.md":p,"../../../documentation/install.md":u,"../../../documentation/logs/export.md":m,"../../../documentation/logs/general.md":g,"../../../documentation/logs/settings.md":f,"../../../documentation/network/advanced.md":w,"../../../documentation/network/export.md":v,"../../../documentation/network/general.md":b,"../../../documentation/network/traffic.md":y,"../../../documentation/options/auto_run.md":k,"../../../documentation/options/customize.md":S,"../../../documentation/options/display_mode.md":x,"../../../documentation/options/json_mode.md":T,"../../../documentation/options/settings_management.md":I,"../../../documentation/options/update_settings.md":P,"../../../documentation/props/blacklist.md":_,"../../../documentation/props/favorite.md":R,"../../../documentation/props/general.md":C,"../../../documentation/props/inspect.md":E,"../../../documentation/standalone.md":O,"../../../documentation/store/favorite.md":N,"../../../documentation/store/general.md":A,"../../../documentation/store/getters.md":q,"../../../documentation/store/state.md":W});function M(e){const r=e.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/),s=r?.[1].match(/^title:\s*(.+)$/m)?.[1].trim()??"",t=e.slice(r?.[0].length??0).replace(/<!--[\s\S]*?-->/g,"").replace(/^[ \t]*!\[[^\]]*\]\([^)]*\)[ \t]*$/gm,"").replace(/^[ \t]*<\/?[a-z][^\n]*>[ \t]*$/gim,"").replace(/\n{3,}/g,`
+`,B=Object.assign({"../../../documentation/extension.md":c,"../../../documentation/general_principles.md":h,"../../../documentation/index.md":p,"../../../documentation/install.md":u,"../../../documentation/logs/export.md":m,"../../../documentation/logs/general.md":g,"../../../documentation/logs/settings.md":f,"../../../documentation/network/advanced.md":w,"../../../documentation/network/export.md":v,"../../../documentation/network/general.md":b,"../../../documentation/network/traffic.md":y,"../../../documentation/options/auto_run.md":k,"../../../documentation/options/customize.md":S,"../../../documentation/options/display_mode.md":x,"../../../documentation/options/json_mode.md":T,"../../../documentation/options/settings_management.md":I,"../../../documentation/options/update_settings.md":P,"../../../documentation/props/blacklist.md":_,"../../../documentation/props/favorite.md":R,"../../../documentation/props/general.md":C,"../../../documentation/props/inspect.md":E,"../../../documentation/standalone.md":O,"../../../documentation/store/favorite.md":A,"../../../documentation/store/general.md":N,"../../../documentation/store/getters.md":q,"../../../documentation/store/state.md":W});function M(e){const r=e.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/),s=r?.[1].match(/^title:\s*(.+)$/m)?.[1].trim()??"",t=e.slice(r?.[0].length??0).replace(/<!--[\s\S]*?-->/g,"").replace(/^[ \t]*!\[[^\]]*\]\([^)]*\)[ \t]*$/gm,"").replace(/^[ \t]*<\/?[a-z][^\n]*>[ \t]*$/gim,"").replace(/\n{3,}/g,`
 
-`).trim();return{title:s,text:t}}function L(e){return e.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu,"").trim().replace(/\s+/g,"-")}function F(e){const r=[];let s=!1;return e.forEach((t,n)=>{/^\s*```/.test(t)&&(s=!s);const o=!s&&t.match(/^(#{1,6})\s+(.+?)\s*$/);if(!o)return;const a=o[2].match(/\s*\{#([^}]+)\}$/),d=o[2].slice(0,a?.index).replace(/[*`]/g,"");r.push({line:n,level:o[1].length,text:d,id:a?.[1]??L(d)})}),r}const l=Object.entries(B).map(([e,r])=>{const s={id:e.replace(/^.*\/documentation\//,"").replace(/\.md$/,""),...M(r)};return{...s,headings:F(s.text.split(`
+`).trim();return{title:s,text:t}}function F(e){return e.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu,"").trim().replace(/\s+/g,"-")}function L(e){const r=[];let s=!1;return e.forEach((t,n)=>{/^\s*```/.test(t)&&(s=!s);const o=!s&&t.match(/^(#{1,6})\s+(.+?)\s*$/);if(!o)return;const a=o[2].match(/\s*\{#([^}]+)\}$/),d=o[2].slice(0,a?.index).replace(/[*`]/g,"");r.push({line:n,level:o[1].length,text:d,id:a?.[1]??F(d)})}),r}const l=Object.entries(B).map(([e,r])=>{const s={id:e.replace(/^.*\/documentation\//,"").replace(/\.md$/,""),...M(r)};return{...s,headings:L(s.text.split(`
 `))}}).sort((e,r)=>e.id.localeCompare(r.id));function D(e,r){const s=r.trim().toLowerCase().replace(/^#/,""),t=[...e].sort((n,o)=>(n.level===1?1:0)-(o.level===1?1:0));return t.find(n=>n.text.toLowerCase()===s||n.id===s)??t.find(n=>n.text.toLowerCase().includes(s))}function z(e){const r=e.trim().toLowerCase().replace(/^\/+/,"").replace(/#.*$/,"").replace(/\.md$/,""),s=l.find(n=>n.id===r);if(s)return s;const t=l.filter(n=>n.id.split("/").pop()===r||n.title.toLowerCase()===r);return t.length===1?t[0]:t.length?t:l.filter(n=>n.id.includes(r))}function U(e,r){const s=e.text.split(`
 `),t=e.headings,n=t.filter(i=>i.level>=2&&i.level<=3).map(i=>i.text),o=`# docs: ${e.id} (${e.title})`;if(!r)return n.length>2?`${o}
 Sections: ${n.join("; ")}
