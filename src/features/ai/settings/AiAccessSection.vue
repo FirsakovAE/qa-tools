@@ -78,9 +78,6 @@ function reset() {
         :model-value="aiCredentials.access.tools[group.id]"
         @update:model-value="setAiAccess({ tools: { ...aiCredentials.access.tools, [group.id]: $event } })"
       />
-      <p class="text-xs text-muted-foreground">
-        Ask each time: the AI tab waits for Allow, Allow in this chat or Deny before the call. The Vue Inspector documentation is always available.
-      </p>
     </div>
 
     <div class="space-y-3">

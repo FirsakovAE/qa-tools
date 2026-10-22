@@ -14,7 +14,7 @@ import { Trash, RotateCcw } from 'lucide-vue-next'
 import { formatBytes } from '@/types/network'
 import {
   DEFAULT_LOGS_LIMITS,
-  DEFAULT_MASK_KEYS,
+  DEFAULT_LOGS_MASKING,
   LOG_LIMIT_BOUNDS,
   normalizeLimits,
   normalizeMasking,
@@ -95,6 +95,10 @@ const masking = computed(() => normalizeMasking(props.settings.logsMasking))
 
 function writeMasking(patch: Partial<ReturnType<typeof normalizeMasking>>) {
   props.settings.logsMasking = { ...normalizeMasking(props.settings.logsMasking), ...patch }
+}
+
+function resetMasking() {
+  props.settings.logsMasking = structuredClone(DEFAULT_LOGS_MASKING)
 }
 
 const newMaskKey = ref('')
@@ -238,6 +242,12 @@ const compressSupported = canCompressReport()
       @add="addMaskKey"
       @select="() => {}"
     >
+      <template #title-actions>
+        <Button variant="ghost" size="sm" class="h-7 text-xs gap-1.5 shrink-0" @click="resetMasking">
+          <RotateCcw class="h-3.5 w-3.5" />
+          Defaults
+        </Button>
+      </template>
       <template #after-title>
         <div class="space-y-2 pt-1">
           <div class="flex items-center gap-3">
@@ -259,15 +269,6 @@ const compressSupported = canCompressReport()
               Mask token-like values in any text (JWT, Bearer / Basic credentials, card numbers)
             </Label>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            class="h-7 text-xs gap-1.5"
-            @click="writeMasking({ keys: [...DEFAULT_MASK_KEYS] })"
-          >
-            <RotateCcw class="h-3.5 w-3.5" />
-            Default keys
-          </Button>
         </div>
       </template>
       <template #row="{ row }">

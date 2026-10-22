@@ -98,7 +98,10 @@ function onAddInputKeydown(e: KeyboardEvent) {
 
 <template>
   <div :id="sectionId" class="space-y-2 border-t pt-4">
-    <h4 class="text-sm font-semibold">{{ title }}</h4>
+    <div class="flex items-start justify-between gap-2">
+      <h4 class="text-sm font-semibold">{{ title }}</h4>
+      <slot name="title-actions" />
+    </div>
     <slot name="after-title" />
     <p v-if="description" class="text-xs text-muted-foreground">
       {{ description }}

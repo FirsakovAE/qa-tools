@@ -21,6 +21,11 @@ const STRUCTURE_KEYS = new Set([
   'op', 'type', 'path', 'kind', 'store', 'storeId', 'id', 'uid', 'name', 'event', 'component', 'componentName',
   'file', 'level', 'entryId', 'frameId', '__snap', '__snapLit', 'action', 'status', 'duration',
 ])
+/**
+ * Ids that link an event to its network entry and frame. They hold no user data, and an entry id
+ * (`net-<Date.now()>-<n>`) can pass the card number check: masked, the event loses its entry.
+ */
+const LINK_KEYS = ['entryId', 'frameId'] as const
 /** `name: "value"`, `"name": "value"`, `name = 'value'` in any text, page code included */
 const ASSIGNMENT_RE = /(["'`]?)([A-Za-z_$][\w$-]{1,60})\1(\s*[:=]\s*)(["'`])([^"'`\n]{4,})\4/g
 /** `Name: value` header lines */
@@ -85,9 +90,22 @@ function collectRefs(value: unknown, pool: Record<string, unknown>, out: Set<str
   for (const child of Object.values(value as Record<string, unknown>)) collectRefs(child, pool, out, depth + 1)
 }
 
+function keepLinks(clean: Record<string, unknown>, raw: unknown): void {
+  if (!raw || typeof raw !== 'object') return
+  for (const key of LINK_KEYS) {
+    const value = (raw as Record<string, unknown>)[key]
+    if (value !== undefined) clean[key] = value
+  }
+}
+
 function protectEntry(raw: Record<string, any>, s: Sanitizer, privacy: AiPrivacy): Record<string, any> {
   const { access, masking } = privacy
   const entry = s.sanitize<Record<string, any>>(raw).value
+  if (raw.id !== undefined) entry.id = raw.id
+  const rawFrames: any[] | undefined = raw.websocket?.frames
+  if (Array.isArray(rawFrames)) {
+    entry.websocket.frames.forEach((frame: any, i: number) => { if (rawFrames[i]?.id !== undefined) frame.id = rawFrames[i].id })
+  }
   if (!access.headers) {
     delete entry.requestHeaders
     delete entry.responseHeaders
@@ -126,6 +144,7 @@ export function protectPayload(payload: LogsReportPayload, privacy: AiPrivacy): 
 
   const events = payload.events.map(e => {
     const data = s.sanitize<Record<string, unknown>>(e.data).value ?? {}
+    keepLinks(data, e.data)
     return { ...e, data: (APP_KINDS.has(e.kind) ? appData(data) : data) as typeof e.data }
   })
   const pool = payload.snapshots ?? {}

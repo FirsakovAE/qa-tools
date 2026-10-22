@@ -68,7 +68,7 @@ Default keys: `password`, `passwd`, `pwd`, `secret`, `token`, `authorization`, `
 
 Keys match case-insensitively and ignore separators (`api_key`, `api-key` and `apiKey` are the same). Fragments of **4 letters or fewer** must match a whole word, so `pwd` or `otp` do not mask unrelated keys.
 
-Add your own fragments in the input under the list; remove them from the row menu. **Default keys** restores the default list.
+Add your own fragments in the input under the list; remove them from the row menu. **Defaults**, next to the title, restores the key list and both checkboxes.
 
 Masked values are replaced with markers: `[MASKED]` for values of sensitive keys, `[MASKED JWT]` and `[MASKED CARD]` for tokens and card numbers found in text (card numbers are checked with the Luhn algorithm).
 

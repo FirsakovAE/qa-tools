@@ -108,7 +108,7 @@ export interface AiCredentials {
   access: AiAccess
 }
 
-const PROVIDERS = new Set<AiProviderId>(['openrouter', 'gemini', 'groq'])
+const PROVIDERS = new Set<AiProviderId>(['gemini', 'openrouter', 'groq'])
 const TONES = new Set<AiTone>(['default', 'professional', 'friendly', 'direct', 'mentor'])
 const DETAILS = new Set<AiDetail>(['brief', 'normal', 'detailed'])
 
@@ -131,7 +131,7 @@ function normalizeAdded(raw: AiCredentials['addedModels'] | undefined): AiCreden
 /** Known fields only: fields of older versions are dropped from the storage on the next save */
 function normalizeCredentials(raw: Partial<AiCredentials> = {}): AiCredentials {
   return {
-    provider: raw.provider && PROVIDERS.has(raw.provider) ? raw.provider : 'openrouter',
+    provider: raw.provider && PROVIDERS.has(raw.provider) ? raw.provider : 'gemini',
     openRouterKey: text(raw.openRouterKey),
     geminiKey: text(raw.geminiKey),
     groqKey: text(raw.groqKey),
@@ -163,21 +163,6 @@ export function loadAiCredentials(): Promise<void> {
 export async function saveAiCredentials(patch: Partial<AiCredentials>): Promise<void> {
   Object.assign(aiCredentials, patch)
   await getRuntimeAdapter()?.storage.set(STORAGE_KEY, JSON.parse(JSON.stringify(aiCredentials)))
-}
-
-/** OAuth needs `chrome.identity` in the background script (extension only) */
-export function canSignInWithOpenRouter(): boolean {
-  return getRuntimeAdapter()?.capabilities.hasBackgroundScript === true && typeof chrome !== 'undefined' && !!chrome.runtime?.id
-}
-
-export async function signInWithOpenRouter(): Promise<void> {
-  const response = await chrome.runtime.sendMessage({ type: 'AI_OPENROUTER_SIGN_IN' }) as { key?: string; error?: string } | undefined
-  if (!response?.key) throw new Error(response?.error || 'Sign-in failed')
-  await saveAiCredentials({ openRouterKey: response.key, provider: 'openrouter' })
-}
-
-export function signOutOfOpenRouter(): Promise<void> {
-  return saveAiCredentials({ openRouterKey: '' })
 }
 
 export function isModelBlocked(id: string, provider: AiProviderId = aiCredentials.provider): boolean {

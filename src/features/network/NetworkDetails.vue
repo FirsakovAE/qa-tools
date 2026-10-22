@@ -735,7 +735,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               v-model="wsDraft"
               rows="3"
               placeholder="Message"
-              class="min-h-[4.5rem] font-mono text-xs"
+              class="font-mono text-xs"
               :disabled="entry.websocket?.state === 'closed'"
             />
             <div class="flex gap-2">

@@ -31,9 +31,9 @@ const status = computed(() => {
         {{ status }}
       </div>
       <AiSteps v-if="liveSteps.length" :steps="liveSteps" />
-      <div v-if="pendingApproval" class="rounded-md border border-orange-500/40 bg-orange-500/5 p-2 space-y-2 text-foreground">
+      <div v-if="pendingApproval" class="rounded-md border border-foreground/40 bg-foreground/5 p-2 space-y-2 text-foreground">
         <div class="flex items-center gap-1.5 font-medium">
-          <ShieldQuestion class="h-3.5 w-3.5 text-orange-500" />
+          <ShieldQuestion class="h-3.5 w-3.5" />
           Allow the assistant to read {{ GROUP_LABELS[pendingApproval.group] }}?
         </div>
         <div class="font-mono break-all text-muted-foreground">
@@ -42,7 +42,7 @@ const status = computed(() => {
         <div class="flex flex-wrap gap-1.5">
           <Button size="sm" class="h-7 text-xs" @click="answerApproval('once')">Allow</Button>
           <Button size="sm" variant="outline" class="h-7 text-xs" @click="answerApproval('chat')">Allow in this chat</Button>
-          <Button size="sm" variant="ghost" class="h-7 text-xs" @click="answerApproval('deny')">Deny</Button>
+          <Button size="sm" variant="outline" class="h-7 text-xs" @click="answerApproval('deny')">Deny</Button>
         </div>
       </div>
       <AiThought v-if="liveReasoning" :text="liveReasoning" active />

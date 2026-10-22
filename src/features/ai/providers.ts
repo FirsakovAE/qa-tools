@@ -11,7 +11,7 @@ const OPENROUTER_API = 'https://openrouter.ai/api/v1'
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta'
 const GROQ_API = 'https://api.groq.com/openai/v1'
 
-export const PROVIDER_LABELS: Record<AiProviderId, string> = { openrouter: 'OpenRouter', gemini: 'Gemini', groq: 'Groq' }
+export const PROVIDER_LABELS: Record<AiProviderId, string> = { gemini: 'Gemini', openrouter: 'OpenRouter', groq: 'Groq' }
 
 export interface ProviderBudget {
   /** Timeline lines of the logs digest sent with a question */

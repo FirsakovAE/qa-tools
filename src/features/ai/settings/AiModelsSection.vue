@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
-import { RefreshCw, RotateCcw, Search, X } from 'lucide-vue-next'
+import { RefreshCw, Search, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,12 +14,11 @@ import {
   isModelAdded,
   isModelBlocked,
   loadAiCredentials,
-  saveAiCredentials,
   setModelAdded,
   setModelBlocked,
 } from '../credentials'
 import { loadCatalog, loadModels, providerModels } from '../models'
-import { clearProviderStatus, modelStatus, requestsToday, statusLabel } from '../modelStatus'
+import { modelStatus, requestsToday, statusLabel } from '../modelStatus'
 import { PROVIDER_LABELS } from '../providers'
 import type { AiModel, AiProviderId } from '../types'
 import AiSettingsHead from './AiSettingsHead.vue'
@@ -32,7 +31,6 @@ const { all, free, loading, error, reload, catalog, catalogLoading, catalogError
 
 const hasKey = computed(() => !!activeKey(modelsProvider.value))
 const blockedCount = computed(() => all.value.filter(m => isModelBlocked(m.id, modelsProvider.value)).length)
-const markedCount = computed(() => all.value.filter(m => modelStatus(modelsProvider.value, m.id)).length)
 const recommendedIds = computed(() => new Set(free.value.filter(m => m.recommended).map(m => m.id)))
 
 function setAllowed(model: AiModel, allowed: boolean) {
@@ -97,24 +95,7 @@ onMounted(async () => {
     <AiSettingsHead
       title="Models"
       description="The recommended free models and the ones you add. Unchecked models are hidden on the AI tab. Auto uses only free models and skips those out of quota or unavailable until their limit resets; a hand-picked model is always used as chosen."
-      reset-label="Allow all"
-      :reset-disabled="blockedCount === 0"
-      @reset="saveAiCredentials({ blockedModels: { ...aiCredentials.blockedModels, [modelsProvider]: [] } })"
-    >
-      <template #actions>
-        <Button
-          variant="ghost"
-          size="sm"
-          class="h-7 text-xs gap-1.5"
-          :disabled="markedCount === 0"
-          title="Forget quota and availability errors: Auto tries these models again"
-          @click="clearProviderStatus(modelsProvider)"
-        >
-          <RotateCcw class="h-3.5 w-3.5" />
-          Reset limits
-        </Button>
-      </template>
-    </AiSettingsHead>
+    />
 
     <div class="flex items-center gap-2">
       <Select v-model="modelsProvider">

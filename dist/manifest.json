@@ -23,8 +23,7 @@
     "activeTab",
     "storage",
     "webRequest",
-    "clipboardWrite",
-    "identity"
+    "clipboardWrite"
   ],
   "host_permissions": ["<all_urls>"],
   "devtools_page": "devtools/devtools.html",

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Trash } from 'lucide-vue-next'
+import { RotateCcw, Trash } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { TableCell } from '@/components/ui/table'
 import SettingsTableSection from '@/features/settings/components/SettingsTableSection.vue'
@@ -29,6 +29,10 @@ function add() {
   newKey.value = ''
 }
 
+function reset() {
+  void setAiMasking({ keys: [...DEFAULT_AI_MASK_KEYS], valuePatterns: true })
+}
+
 function actions(row: { key: string }): MenuAction[] {
   return [{
     label: 'Delete',
@@ -55,6 +59,12 @@ function actions(row: { key: string }): MenuAction[] {
     :add-error="error"
     @add="add"
   >
+    <template #title-actions>
+      <Button variant="ghost" size="sm" class="h-7 text-xs gap-1.5 shrink-0" @click="reset">
+        <RotateCcw class="h-3.5 w-3.5" />
+        Defaults
+      </Button>
+    </template>
     <template #after-title>
       <div class="space-y-2 pt-1">
         <p class="text-xs text-muted-foreground">
@@ -67,9 +77,6 @@ function actions(row: { key: string }): MenuAction[] {
           :model-value="aiCredentials.masking.valuePatterns"
           @update:model-value="setAiMasking({ valuePatterns: $event })"
         />
-        <Button variant="ghost" size="sm" class="h-7 text-xs gap-1.5" @click="setAiMasking({ keys: [...DEFAULT_AI_MASK_KEYS] })">
-          Default keys
-        </Button>
       </div>
     </template>
     <template #row="{ row }">
