@@ -33,7 +33,9 @@ function loadable(): Loadable {
 }
 
 function catalog(provider: AiProviderId): Catalog {
-  return catalogs[provider] ??= { free: loadable(), all: loadable() }
+  // Read back through the proxy: `??=` returns the raw object, whose changes the UI would not see
+  catalogs[provider] ??= { free: loadable(), all: loadable() }
+  return catalogs[provider]!
 }
 
 async function fill(target: Loadable, load: () => Promise<AiModel[]>): Promise<boolean> {
