@@ -19,6 +19,7 @@ import { initPropsModule, cleanupPropsModule } from './props/index'
 import { initPiniaModule } from './pinia/index'
 import { initNetworkModule, cleanupNetworkModule } from './network/index'
 import { initLogsModule, initPiniaLogs, initPropsLogs, cleanupPropsLogs } from './logs/index'
+import { initAiModule } from './ai/index'
 
 // Module state
 let propsModuleLoaded = false
@@ -161,6 +162,7 @@ function initialize() {
     window.addEventListener('message', handleMessage)
 
     initLogsModule()
+    initAiModule()
     loadNetworkModule()
 
     cleanupDetection = setupReactiveDetection({

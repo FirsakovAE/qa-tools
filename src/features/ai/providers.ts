@@ -23,6 +23,8 @@ export interface ProviderBudget {
   toolResultChars: number
   /** Conversation size per request (without the system prompt and tool definitions) */
   contextChars: number
+  /** Requests with tools per question; one more answers without them */
+  toolRounds: number
   maxTokens?: number
 }
 
@@ -31,9 +33,9 @@ export interface ProviderBudget {
  * prompt and tool definitions take about 2.5K tokens; the conversation stays under 10K chars.
  */
 export const PROVIDER_BUDGET: Record<AiProviderId, ProviderBudget> = {
-  openrouter: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity },
-  gemini: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity },
-  groq: { digestTimeline: 40, digestChars: 5500, digestBodyChars: 500, toolResultChars: 3500, contextChars: 10_000, maxTokens: 2500 },
+  openrouter: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity, toolRounds: 10 },
+  gemini: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity, toolRounds: 10 },
+  groq: { digestTimeline: 40, digestChars: 5500, digestBodyChars: 500, toolResultChars: 3500, contextChars: 10_000, toolRounds: 6, maxTokens: 2500 },
 }
 
 /**

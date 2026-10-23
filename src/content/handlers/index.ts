@@ -51,6 +51,7 @@ import {
 } from './network'
 
 import { handleAiSourcesList, handleAiSourceFetch } from './sources'
+import { handleAiInspectUi, handleAiReadStores } from './aiPage'
 
 /**
  * Runtime handlers map - message type to handler function
@@ -94,7 +95,11 @@ export const runtimeHandlers: Record<string, RuntimeHandler> = {
 
   // AI assistant: page sources
   AI_SOURCES_LIST: handleAiSourcesList,
-  AI_SOURCE_FETCH: handleAiSourceFetch
+  AI_SOURCE_FETCH: handleAiSourceFetch,
+
+  // AI assistant: live page
+  AI_INSPECT_UI: handleAiInspectUi,
+  AI_READ_STORES: handleAiReadStores
 }
 
 /**

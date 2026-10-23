@@ -22,20 +22,38 @@ function inlineScripts(): HTMLScriptElement[] {
   return Array.from(document.scripts).filter(s => !s.src && (s.textContent?.trim().length ?? 0) > 0 && !/json|template/i.test(s.type))
 }
 
+function isScriptEntry(entry: PerformanceResourceTiming): boolean {
+  if (!isPageScriptUrl(entry.name)) return false
+  try {
+    return entry.initiatorType === 'script' || SCRIPT_PATH.test(new URL(entry.name).pathname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Scripts seen since the content script started. Lazy chunks (routes, micro-frontends) are often
+ * removed from the DOM after they run, and the resource timing buffer drops entries when it is full.
+ */
+const seenScripts = new Set<string>()
+try {
+  new PerformanceObserver(list => {
+    for (const entry of list.getEntries() as PerformanceResourceTiming[]) if (isScriptEntry(entry)) seenScripts.add(entry.name)
+  }).observe({ type: 'resource', buffered: true })
+} catch { /* resource timing unavailable */ }
+
 export const handleAiSourcesList: RuntimeHandler = (_message, _sender, sendResponse) => {
   const urls = new Set<string>()
   for (const script of Array.from(document.scripts)) {
     if (script.src && isPageScriptUrl(script.src)) urls.add(script.src)
   }
-  for (const link of Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="modulepreload"][href]'))) {
+  for (const link of Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="modulepreload"][href], link[rel="preload"][as="script"][href]'))) {
     if (isPageScriptUrl(link.href)) urls.add(link.href)
   }
   try {
-    for (const entry of performance.getEntriesByType('resource') as PerformanceResourceTiming[]) {
-      if (!isPageScriptUrl(entry.name)) continue
-      if (entry.initiatorType === 'script' || SCRIPT_PATH.test(new URL(entry.name).pathname)) urls.add(entry.name)
-    }
+    for (const entry of performance.getEntriesByType('resource') as PerformanceResourceTiming[]) if (isScriptEntry(entry)) urls.add(entry.name)
   } catch { /* resource timing unavailable */ }
+  for (const url of seenScripts) urls.add(url)
 
   sendResponse({
     page: { url: location.href, title: document.title },

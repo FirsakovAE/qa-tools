@@ -3,6 +3,7 @@ import type { AiAccess, AiToolGroup } from './credentials'
 import { getEvents, searchLogs } from './logsContext'
 import { listSources, readSource, searchSource } from './sources'
 import { readDocs } from './docs'
+import { inspectUi, readStores } from './page'
 
 export const AI_TOOLS: ToolDefinition[] = [
   {
@@ -70,11 +71,14 @@ export const AI_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'read_source',
-      description: 'Read page code. `path` is a script URL or an original file path. For a stack frame or a search_source match pass the script URL with line and column: the position is mapped to the original file when a source map exists. Minified scripts can only be read at a line and column.',
+      description: 'Read page code. `path` is a script URL, a part of it (chunk name) or an original file path. To read around a search_source match pass query: a distinctive piece of the matched code (or a regex); returns about `chars` on each side of each match, also in minified one-line files, no line or column needed. For a stack frame pass line and column: the position is mapped to the original file when a source map exists.',
       parameters: {
         type: 'object',
         properties: {
           path: { type: 'string' },
+          query: { type: 'string', description: 'Text (or regex with regex=true) to read around; the first matches of the file are shown' },
+          regex: { type: 'boolean', description: 'Treat query as a JavaScript regular expression' },
+          chars: { type: 'integer', description: 'Chars on each side of the match or column in minified code, default 1500, up to 6000' },
           line: { type: 'integer', description: '1-based line to center on' },
           column: { type: 'integer', description: '1-based column (stack frames)' },
           context: { type: 'integer', description: 'Lines around `line`, default 20' },
@@ -102,6 +106,35 @@ export const AI_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'inspect_ui',
+      description: 'The live page as it is now, beyond the logs. Finds UI elements by visible text, label, placeholder or test id (or a CSS selector) and returns for each: why it is disabled, hidden or covered (disabled, aria-disabled, fieldset, pointer-events, display / opacity, an overlay on top), attributes, the code of its event handlers and of the component methods they call, the Vue component chain with file paths, and the current props / state / computed values of the component. No match means the element is not rendered now (v-if); the result then lists elements with words of the text, such as a notice. With component: the mounted instances of that component, their current props / state and what their template reads now (computeds with getter code and values: the v-if / :disabled conditions, readable also in minified code), where each prop comes from (the parent component that sets it with the binding expression from its render code, or the state / store path of the value; pass-through wrappers skipped), and the child components, also when the element in question is not rendered.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Text on or in the element: button label, field label or placeholder, toast or error message (case-insensitive substring)' },
+          selector: { type: 'string', description: 'Optional CSS selector; with text, only elements that also contain the text' },
+          component: { type: 'string', description: 'Component name, file or chunk (AgreementCars, agreement-cars, AgreementCars.vue, agreement-cars-CccydAut.js): read its state and template conditions instead of searching elements' },
+          limit: { type: 'integer', description: 'Max elements, default 3, up to 6' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_stores',
+      description: 'Current state and getters of the Pinia (or Vuex) stores of the live page, beyond the logs. Call without ids for the store list with their state, getter and action names; then pass up to 4 store ids (Vuex: module names) for the values.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ids: { type: 'array', items: { type: 'string' }, description: 'Store ids, up to 4' },
+        },
+      },
+    },
+  },
 ]
 
 /** Access group of a tool; documentation is always available */
@@ -111,6 +144,8 @@ export const TOOL_GROUPS: Record<string, AiToolGroup | undefined> = {
   list_sources: 'sources',
   read_source: 'sources',
   search_source: 'sources',
+  inspect_ui: 'page',
+  read_stores: 'page',
 }
 
 /** Tools the user did not turn off */
@@ -143,9 +178,16 @@ export function describeToolCall(name: string, args: Record<string, any>): AiSte
     case 'list_sources':
       return { tool: 'Sources', summary: `List files${args.filter ? ` matching "${short(args.filter)}"` : ''}` }
     case 'read_source':
-      return { tool: 'Sources', summary: `Read ${short(args.path, 90)}${args.line ? `:${args.line}${args.column ? `:${args.column}` : ''}` : ''}` }
+      return { tool: 'Sources', summary: `Read ${short(args.path, 90)}${args.query ? ` around "${short(args.query)}"` : args.line ? `:${args.line}${args.column ? `:${args.column}` : ''}` : ''}` }
     case 'search_source':
       return { tool: 'Sources', summary: `Search code "${short(args.query)}"${args.path ? ` in ${short(args.path)}` : ''}` }
+    case 'inspect_ui': {
+      if (args.component) return { tool: 'Page', summary: `Inspect component ${short(args.component)}` }
+      const parts = [args.text && `"${short(args.text)}"`, args.selector && short(args.selector)].filter(Boolean)
+      return { tool: 'Page', summary: `Inspect elements ${parts.join(' in ') || '(empty)'}` }
+    }
+    case 'read_stores':
+      return { tool: 'Page', summary: Array.isArray(args.ids) && args.ids.length ? `Store state ${args.ids.map(id => short(id)).join(', ')}` : 'List stores' }
     default:
       return { tool: name, summary: '' }
   }
@@ -166,6 +208,10 @@ export async function runTool(name: string, args: Record<string, any>): Promise<
         return await readSource(args)
       case 'search_source':
         return await searchSource(args)
+      case 'inspect_ui':
+        return await inspectUi(args)
+      case 'read_stores':
+        return await readStores(args)
       default:
         return `Unknown tool "${name}".`
     }

@@ -19,6 +19,11 @@ export interface AiDigestOptions {
   bodyChars?: number
   /** For the built-in assistant: its system prompt explains the digest, so the guide is left out */
   noGuide?: boolean
+  /**
+   * Only the events from this id on: the reader already has a digest of the earlier ones with the
+   * same numbering. Problems and the timeline cover the new events; the summary counts both.
+   */
+  fromIndex?: number
 }
 
 export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, options?: AiDigestOptions): string {
@@ -30,6 +35,7 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
   const STACK_LINES = MAX_CHARS === Infinity ? 12 : 6
   const BRIEF_PROBLEMS = 15
   const SLOWEST = 5
+  const FROM = options && options.fromIndex ? options.fromIndex : 0
 
   const hasOwn = (obj: unknown, key: string) => !!obj && Object.prototype.hasOwnProperty.call(obj, key)
   const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === 'object'
@@ -146,15 +152,21 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
   // ------------------------------------------------------------ summary
 
   const out: string[] = []
+  /** Rows this digest reports: all of them, or the new ones */
+  const scope = FROM ? rows.filter(r => r.index >= FROM) : rows
   const counts: Record<string, number> = {}
-  for (const r of rows) counts[r.label] = (counts[r.label] || 0) + 1
-  const errors = rows.filter(r => r.e.level === 'error').length
-  const failedHttp = rows.filter(r => r.failedEntry && !r.failedEntry.websocket).length
-  const failedWs = rows.filter(r => r.failedEntry && r.failedEntry.websocket).length
+  for (const r of scope) counts[r.label] = (counts[r.label] || 0) + 1
+  const errors = scope.filter(r => r.e.level === 'error').length
+  const failedHttp = scope.filter(r => r.failedEntry && !r.failedEntry.websocket).length
+  const failedWs = scope.filter(r => r.failedEntry && r.failedEntry.websocket).length
   const span = events.length ? events[events.length - 1].timestamp - t0 : 0
 
-  out.push('# Vue Inspector logs - AI digest')
+  out.push(FROM ? `# Vue Inspector logs - new events #${FROM}..#${rows.length - 1}` : '# Vue Inspector logs - AI digest')
   out.push('')
+  if (FROM) {
+    out.push(`Events #0..#${FROM - 1} are in the earlier digest of this chat and keep their ids. This part lists only what was captured after it.`)
+    out.push('')
+  }
   if (!(options && options.noGuide)) {
     out.push('## How to read this file')
     out.push('')
@@ -175,10 +187,11 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
   if (info.generator || info.name) out.push(`- Source: ${oneLine(info.generator || info.name)}`)
   if (info.exportedAt) out.push(`- Exported: ${oneLine(info.exportedAt)}`)
   if (events.length) out.push(`- Captured: ${new Date(t0).toISOString()} .. ${new Date(t0 + span).toISOString()} (${rel(span).slice(1)})`)
-  out.push(`- Events: ${events.length}${Object.keys(counts).length ? ` (${Object.keys(counts).sort((a, b) => counts[b] - counts[a]).map(k => `${k} ${counts[k]}`).join(', ')})` : ''}`)
-  out.push(`- Errors: ${errors}; failed requests: ${failedHttp}; failed WebSocket connections: ${failedWs}`)
+  const byLabel = Object.keys(counts).length ? ` (${Object.keys(counts).sort((a, b) => counts[b] - counts[a]).map(k => `${k} ${counts[k]}`).join(', ')})` : ''
+  out.push(FROM ? `- Events: ${events.length}, new: ${scope.length}${byLabel}` : `- Events: ${events.length}${byLabel}`)
+  out.push(`- ${FROM ? 'New errors' : 'Errors'}: ${errors}; failed requests: ${failedHttp}; failed WebSocket connections: ${failedWs}`)
 
-  const timed = rows
+  const timed = scope
     .filter(r => r.e.kind === 'response')
     .map(r => ({ r, entry: getEntry(r.e.data.entryId) }))
     .filter(x => x.entry && !x.entry.websocket && Number(x.entry.duration) > 0)
@@ -192,7 +205,7 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
 
   const groups: Array<{ sig: string; rows: typeof rows }> = []
   const bySig: Record<string, (typeof groups)[number]> = {}
-  for (const r of rows) {
+  for (const r of scope) {
     if (!r.problem) continue
     const status = r.failedEntry ? (r.failedEntry.websocket ? r.failedEntry.websocket.closeCode : r.failedEntry.status) : ''
     const sig = `${r.e.kind}|${r.title}|${status}|${r.failedEntry ? r.failedEntry.error || '' : r.subtitle}`
@@ -320,7 +333,7 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
   out.push('')
   out.push('## Problems')
   out.push('')
-  if (!groups.length) out.push('No errors, failed requests or failed WebSocket connections were captured.')
+  if (!groups.length) out.push(FROM ? 'No new errors, failed requests or failed WebSocket connections.' : 'No errors, failed requests or failed WebSocket connections were captured.')
   // Problems take up to half of the budget; the rest of the groups get one line each
   const problemsBudget = MAX_CHARS * 0.5
   let used = out.join('\n').length
@@ -360,22 +373,22 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
 
   // ------------------------------------------------------------ timeline
 
-  let shown = rows.map(() => true)
+  let shown = rows.map(r => r.index >= FROM)
   let note = ''
-  if (rows.length > MAX_TIMELINE) {
-    shown = rows.map(r => r.e.kind === 'navigation')
-    for (const r of rows) {
+  if (scope.length > MAX_TIMELINE) {
+    shown = rows.map(r => r.index >= FROM && r.e.kind === 'navigation')
+    for (const r of scope) {
       if (!r.problem) continue
-      for (let i = Math.max(0, r.index - CONTEXT); i <= Math.min(rows.length - 1, r.index + CONTEXT); i++) shown[i] = true
+      for (let i = Math.max(FROM, r.index - CONTEXT); i <= Math.min(rows.length - 1, r.index + CONTEXT); i++) shown[i] = true
     }
     let budget = MAX_TIMELINE - shown.filter(Boolean).length
-    for (let i = 0; i < rows.length && budget > 0; i++) {
+    for (let i = FROM; i < rows.length && budget > 0; i++) {
       if (!shown[i]) {
         shown[i] = true
         budget--
       }
     }
-    note = `Only ${shown.filter(Boolean).length} of ${rows.length} events are listed: navigation, the context of every problem and the earliest events. Gaps are marked with "...".`
+    note = `Only ${shown.filter(Boolean).length} of ${scope.length} ${FROM ? 'new ' : ''}events are listed: navigation, the context of every problem and the earliest events. Gaps are marked with "...".`
   }
 
   const TIMELINE_LINE = MAX_CHARS === Infinity ? LINE_CHARS : 160
@@ -400,7 +413,7 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
     const picked = rows.map(() => false)
     let left = MAX_CHARS - out.join('\n').length - 400
     for (const i of order) {
-      if (i < 0 || i >= rows.length || picked[i]) continue
+      if (i < FROM || i >= rows.length || picked[i]) continue
       const cost = timelineText(rows[i]).length + 16
       if (cost > left) break
       picked[i] = true
@@ -408,8 +421,8 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
     }
     shown = picked
     const listed = picked.filter(Boolean).length
-    note = listed < rows.length
-      ? `Only ${listed} of ${rows.length} events are listed: the nearest events of every problem first, then navigation and the earliest events. Gaps are marked with "...".`
+    note = listed < scope.length
+      ? `Only ${listed} of ${scope.length} ${FROM ? 'new ' : ''}events are listed: the nearest events of every problem first, then navigation and the earliest events. Gaps are marked with "...".`
       : ''
   }
 
@@ -435,7 +448,7 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
     repeat = 0
   }
   let skipped = false
-  for (const r of rows) {
+  for (const r of scope) {
     if (timelineLeft < 0) {
       cutAt = r.index
       break

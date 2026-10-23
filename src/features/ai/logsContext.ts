@@ -43,6 +43,9 @@ interface Row {
 
 export interface LogsSnapshot {
   signature: string
+  /** Budget and privacy the digest was built with: a digest of new events must use the same */
+  digestKey: string
+  budget: Omit<AiDigestOptions, 'noGuide'>
   digest: string
   count: number
   /** Values masked in what the assistant can read */
@@ -96,10 +99,8 @@ export function takeLogsSnapshot(budget: Omit<AiDigestOptions, 'noGuide'> = { ma
   const { events, source } = logs
   const list = events.value
   const privacy = { masking: aiCredentials.masking, access: aiCredentials.access }
-  const signature = [
-    list.length, list[0]?.id ?? '', list[list.length - 1]?.id ?? '', source.value.pool.size,
-    budget.maxTimeline, budget.maxChars, budget.bodyChars, privacySignature(privacy),
-  ].join(':')
+  const digestKey = [budget.maxTimeline, budget.maxChars, budget.bodyChars, privacySignature(privacy)].join(':')
+  const signature = [list.length, list[0]?.id ?? '', list[list.length - 1]?.id ?? '', source.value.pool.size, digestKey].join(':')
   if (cached && cached.signature === signature) return cached
 
   const payload = protectPayload(buildLogsReport(withNetworkPairs(list, source.value), source.value), privacy)
@@ -135,8 +136,41 @@ export function takeLogsSnapshot(budget: Omit<AiDigestOptions, 'noGuide'> = { ma
     return { index, event, label: rt.eventLabel(event, kindLabels), title, subtitle }
   })
 
-  cached = { signature, digest, count: rows.length, masked, payload, rt, rows, getEntry, stores }
+  cached = { signature, digestKey, budget, digest, count: rows.length, masked, payload, rt, rows, getEntry, stores }
   return cached
+}
+
+/** The logs the model already has in this chat */
+export interface SentLogs {
+  digestKey: string
+  count: number
+  firstId: string
+  lastId: string
+}
+
+export interface DigestUpdate {
+  /** Text to attach; none when the model already has every event */
+  digest?: string
+  /** Set for a digest of the new events only: earlier digests in the chat stay valid */
+  from?: number
+  sent: SentLogs
+}
+
+/**
+ * What to attach to a question. Logs only grew since the last digest of the chat (its first and
+ * last events are still at their positions): only the new events, the ids stay the same.
+ * Otherwise (cleared, trimmed, other masking or budget) the full digest, which replaces the old one.
+ */
+export function digestUpdate(snapshot: LogsSnapshot, sent: SentLogs | null, allowPartial: boolean): DigestUpdate {
+  const { rows } = snapshot
+  const next: SentLogs = { digestKey: snapshot.digestKey, count: rows.length, firstId: rows[0]?.event.id ?? '', lastId: rows[rows.length - 1]?.event.id ?? '' }
+  const grown = !!sent && sent.count > 0 && sent.digestKey === snapshot.digestKey && rows.length >= sent.count
+    && rows[0]?.event.id === sent.firstId && rows[sent.count - 1]?.event.id === sent.lastId
+  if (grown && rows.length === sent!.count) return { sent: next }
+  if (!grown || !allowPartial) return { digest: snapshot.digest, sent: next }
+  const rt = createLogsRuntime()
+  const digest = buildAiDigest(snapshot.payload, rt, { ...snapshot.budget, noGuide: true, fromIndex: sent!.count })
+  return { digest, from: sent!.count, sent: next }
 }
 
 function rowLine(row: Row, t0: number): string {

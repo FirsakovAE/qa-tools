@@ -173,6 +173,12 @@ export function protectPayload(payload: LogsReportPayload, privacy: AiPrivacy): 
   return { ...payload, events, snapshots, network: { entries, bodies } as LogsReportPayload['network'] }
 }
 
+/** Live app values (component state, stores): masked by the AI mask list; only types when app data is off */
+export function protectAppData(value: unknown, privacy: AiPrivacy): unknown {
+  const clean = sanitizerFor(privacy.masking).sanitize(value).value
+  return privacy.access.appData ? clean : redact(clean)
+}
+
 /** Masked values in a protected payload, for the context note */
 export function countMasked(value: unknown): number {
   if (typeof value === 'string') return value.includes('[MASKED') ? (value.match(/\[MASKED(?: JWT| CARD)?\]/g)?.length ?? 0) : 0

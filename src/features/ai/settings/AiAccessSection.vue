@@ -28,6 +28,7 @@ type Sharing = typeof SHARING[number]['id']
 const TOOL_GROUPS: Array<{ id: AiToolGroup; label: string; hint: string }> = [
   { id: 'logs', label: 'Logs', hint: 'Event details and search over the captured logs' },
   { id: 'sources', label: 'Page code', hint: 'List, read and search the scripts of the page and their source maps' },
+  { id: 'page', label: 'Live page', hint: 'Find elements on the page, why they are disabled or hidden, their components, handler code and the current store state' },
 ]
 
 const DATA_SCOPES: Array<{ id: 'headers' | 'bodies' | 'appData'; label: string; hint: string }> = [

@@ -8,7 +8,7 @@ import { useAiChat } from './useAiChat'
 import { renderMarkdown } from './markdown'
 import { isToolStep } from './format'
 
-const GROUP_LABELS = { logs: 'logs', sources: 'page code' } as const
+const GROUP_LABELS = { logs: 'logs', sources: 'page code', page: 'the live page' } as const
 
 defineEmits<{ (e: 'click', event: MouseEvent): void }>()
 

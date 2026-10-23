@@ -3,6 +3,15 @@
  * Keeps the live WebSocket objects so the inspector can attach after it starts.
  */
 ;(() => {
+  // The default buffer keeps 250 resources: on a busy page API calls push out the lazy chunks the assistant reads
+  try {
+    performance.setResourceTimingBufferSize(5000)
+  } catch {
+    /* not supported */
+  }
+})()
+
+;(() => {
   const page = window as Window & {
     __VUE_INSPECTOR_NATIVE_WS__?: typeof WebSocket
     __VUE_INSPECTOR_WS_SOCKETS__?: Array<{ socket: WebSocket; protocols: string[] }>

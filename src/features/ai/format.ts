@@ -6,13 +6,22 @@ import { AUTO_MODEL } from './credentials'
 import { latestReportedLimit, modelStatus, reportedLimit, requestsToday, statusLabel, unavailableCount } from './modelStatus'
 import type { AiModel, AiProviderId, AiStep, AiUsage } from './types'
 
+/** Some providers stream reasoning made of whitespace or zero-width characters only, also with reasoning off */
+export function hasVisibleText(text: string | null | undefined): boolean {
+  return !!text && /[^\s\u200b-\u200f\u2028\u2029\u2060\ufeff]/.test(text)
+}
+
 export function isToolStep(step: AiStep): boolean {
   return !step.thought && step.tool !== 'Context'
 }
 
+export function isShownThought(step: AiStep): boolean {
+  return !!step.thought && hasVisibleText(step.summary)
+}
+
 export function stepsLabel(steps: AiStep[]): string {
   const tools = steps.filter(isToolStep).length
-  const reasoning = steps.some(s => s.thought)
+  const reasoning = steps.some(isShownThought)
   if (!tools) return reasoning ? 'Reasoning' : 'Shared data'
   return `${tools} step${tools === 1 ? '' : 's'}${reasoning ? ' and reasoning' : ''}`
 }

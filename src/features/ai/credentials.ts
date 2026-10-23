@@ -22,7 +22,7 @@ export const AUTO_MODEL = 'auto'
 
 /** allow: runs on its own; ask: the user confirms each call (or once per chat); deny: the model does not get the tool */
 export type AiToolAccess = 'allow' | 'ask' | 'deny'
-export type AiToolGroup = 'logs' | 'sources'
+export type AiToolGroup = 'logs' | 'sources' | 'page'
 
 export interface AiAccess {
   /** The short logs digest goes with a question */
@@ -59,7 +59,7 @@ export const DEFAULT_AI_MASK_KEYS = [
 
 export const DEFAULT_AI_ACCESS: AiAccess = {
   digest: true,
-  tools: { logs: 'ask', sources: 'ask' },
+  tools: { logs: 'ask', sources: 'ask', page: 'ask' },
   headers: true,
   bodies: true,
   appData: true,

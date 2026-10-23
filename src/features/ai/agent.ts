@@ -17,10 +17,9 @@ import { clearModel, markModel, modelStatus, statusLabel, recordRequest, setRepo
 import { DETAILED_CHECK_NOTE, FINAL_ROUND_NOTE, SYSTEM_PROMPT } from './prompt'
 import { AI_TOOLS, describeToolCall, runTool } from './tools'
 import { extractTextToolCalls } from './textToolCalls'
+import { hasVisibleText } from './format'
 import type { AiModel, AiProviderId, AiStep, AiUsage, ChatMessage, ChatToolCall, ToolDefinition } from './types'
 
-/** Tool rounds per question; the round after the last one must answer with text */
-const MAX_TOOL_ROUNDS = 6
 /** Requests per completion in Auto mode (OpenRouter tries up to CHAIN_SIZE models in each) */
 const AUTO_ATTEMPTS = { openrouter: 3, gemini: 4, groq: 4 } as const
 /** Waits for a per-minute limit within one completion */
@@ -38,13 +37,15 @@ const FIT_TOOL_RESULT_CHARS = 400
 const DIGEST_TAG = /<logs_digest[^>]*>[\s\S]*?<\/logs_digest>/g
 const NO_LIVE: ChatLive = { content: '', reasoning: '' }
 /** The model is told how many tool rounds are left from this many on */
-const ROUNDS_LEFT_NOTE = 2
+const ROUNDS_LEFT_NOTE = 3
 
 export interface AgentRun {
   question: string
   /** Attached when the logs changed since the last question */
   digest?: string
   digestCount?: number
+  /** The digest lists only events from this id on: the earlier digests of the chat stay valid */
+  digestFrom?: number
   history: ChatMessage[]
   /** SYSTEM_PROMPT with the answer style of the user */
   systemPrompt?: string
@@ -214,7 +215,7 @@ function userMessage(run: AgentRun): ChatMessage {
   if (!run.digest) return { role: 'user', content: run.question }
   return {
     role: 'user',
-    content: `${run.question}\n\n<logs_digest events="${run.digestCount ?? 0}">\n${run.digest}\n</logs_digest>`,
+    content: `${run.question}\n\n<logs_digest events="${run.digestCount ?? 0}"${run.digestFrom ? ` new_from="${run.digestFrom}"` : ''}>\n${run.digest}\n</logs_digest>`,
   }
 }
 
@@ -294,6 +295,10 @@ const QUOTED = /[«"“]([^»"”\n]{6,120})[»"”]/g
 
 const CHECK_NOTE = 'You answered without calling any tool, so nothing above was checked in this question. Verify before answering: search_logs and search_source for the text the user quoted, the button label or the error message, and get_events on the requests and store state around the user\'s action. Then answer with the event ids and code you actually saw.'
 
+/** Questions about when a control is enabled / shown or a message appears: answered from the live page and the code */
+const UI_CONDITION = /\b(disabled|enabled|available|unavailable|blocked|greyed|hidden|visible|shown|missing|absent|appears?|toast)\b|услови|доступн|блокир|неактивн|активн|скрыт|отображ|показыва|появля|отсутств|пропал|не видн|нет кнопк|тост/i
+
+const UI_CHECK_NOTE = 'You answered a question about UI conditions without calling any tool. Check now: inspect_ui on the element or the message, then read its component code (the bindings and the handler), and the current values of the data it depends on (read_stores, search_logs). Then answer with the conditions, the code locations and the current values you actually saw.'
 function hasLogs(history: ChatMessage[]): boolean {
   return history.some(m => m.role === 'user' && m.content.includes('<logs_digest'))
 }
@@ -318,15 +323,17 @@ function callKey(name: string, args: Record<string, unknown>): string {
 
 export async function runAgent(run: AgentRun): Promise<AgentResult> {
   const budget = PROVIDER_BUDGET[run.request.provider]
-  const history = [...compactHistory(run.history, !!run.digest), userMessage(run)]
+  const history = [...compactHistory(run.history, !!run.digest && !run.digestFrom), userMessage(run)]
   // A repeated call can point to the earlier result only while results stay whole in the context
   const done = Number.isFinite(budget.contextChars) ? null : new Set<string>()
   let callCounter = 0
-  let recheckAt = -1
+  /** Answers sent back for checking, with the note after each; dropped from the kept history */
+  const rechecks: number[] = []
   const toolNames = new Set((run.tools ?? AI_TOOLS).map(t => t.function.name))
 
-  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-    const last = round === MAX_TOOL_ROUNDS
+  const rounds = budget.toolRounds
+  for (let round = 0; round <= rounds; round++) {
+    const last = round === rounds
     const messages: ChatMessage[] = [{ role: 'system', content: run.systemPrompt ?? SYSTEM_PROMPT }, ...fitContext(history, budget.contextChars)]
     if (last) messages.push({ role: 'user', content: FINAL_ROUND_NOTE })
     const result = await complete(run, withStyle(messages, run.styleNote), last ? 'none' : 'auto')
@@ -348,23 +355,27 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
     const content = written.text
 
     const answering = !toolCalls.length || last
-    const thought = [result.reasoning, answering ? '' : content].filter(Boolean).join('\n\n')
+    const thought = [result.reasoning, answering ? '' : content].filter(hasVisibleText).map(t => t.trim()).join('\n\n')
     if (thought) run.onStep({ tool: 'Thinking', summary: thought, thought: true })
 
     if (answering) {
       const answer = content || (last || written.calls.length ? 'I could not finish the analysis within the tool call limit. Ask a narrower question.' : '')
       if (!answer) throw new Error('The model returned an empty answer. Try again or pick another model.')
       history.push({ role: 'assistant', content: answer })
-      const recheck = round === 0 && !last && hasLogs(history)
-        ? (run.detailed ? DETAILED_CHECK_NOTE : unchecked(run.question, answer, history) ? CHECK_NOTE : '')
+      const uiQuestion = UI_CONDITION.test(run.question) && toolNames.has('inspect_ui')
+      const recheck = round === 0 && !last && (hasLogs(history) || uiQuestion)
+        ? (run.detailed ? DETAILED_CHECK_NOTE : uiQuestion ? UI_CHECK_NOTE : unchecked(run.question, answer, history) ? CHECK_NOTE : '')
         : ''
       if (recheck) {
-        run.onStep({ tool: 'Check', summary: run.detailed ? 'Detailed answer without data, gathering it with tools' : 'Answer without evidence, verifying with tools' })
-        recheckAt = history.length - 1
+        run.onStep({
+          tool: 'Check',
+          summary: run.detailed ? 'Detailed answer without data, gathering it with tools' : 'Answer without evidence, verifying with tools',
+        })
+        rechecks.push(history.length - 1)
         history.push({ role: 'user', content: recheck })
         continue
       }
-      if (recheckAt >= 0) history.splice(recheckAt, 2)
+      for (const at of rechecks.reverse()) history.splice(at, 2)
       return { answer, history, model: result.model }
     }
 
@@ -397,7 +408,7 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
       }
       history.push({ role: 'tool', tool_call_id: call.id, name: call.function.name, content: output })
     }
-    const left = MAX_TOOL_ROUNDS - round - 1
+    const left = rounds - round - 1
     if (left <= ROUNDS_LEFT_NOTE) {
       const lastTool = history[history.length - 1] as Extract<ChatMessage, { role: 'tool' }>
       lastTool.content += left
