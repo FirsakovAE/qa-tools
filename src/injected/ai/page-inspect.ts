@@ -52,9 +52,22 @@ function isVueInternal(obj: any): boolean {
   return obj.__v_isVNode === true || obj._isVue === true || (typeof obj.uid === 'number' && 'subTree' in obj && 'vnode' in obj) || (obj.$ && typeof obj.$ === 'object' && 'subTree' in obj.$)
 }
 
-/** Plain-JSON copy with refs / proxies unwrapped and every dimension limited */
-function plain(value: unknown, ctx: PlainContext = { nodes: 0, seen: new WeakSet() }, depth = 0): unknown {
-  if (++ctx.nodes > VALUE_NODES) return '[...]'
+function childPath(path: string, key: string | number): string {
+  if (typeof key === 'number' || /^\d+$/.test(key)) return `${path}[${key}]`
+  return path ? `${path}.${key}` : key
+}
+
+/** Where to read a cut part: the tools take `path` (and `offset` / `filter` for long lists) */
+function readMore(path: string, extra = ''): string {
+  return path ? `; read with path="${path}"${extra}` : ''
+}
+
+/**
+ * Plain-JSON copy with refs / proxies unwrapped and every dimension limited. Cut parts say what
+ * is there (keys, length) and the `path` that reads them, instead of a bare "[Object]".
+ */
+function plain(value: unknown, ctx: PlainContext = { nodes: 0, seen: new WeakSet() }, depth = 0, path = ''): unknown {
+  if (++ctx.nodes > VALUE_NODES) return `[not read: size limit${readMore(path)}]`
   switch (typeof value) {
     case 'string': return shortText(value, VALUE_STRING)
     case 'number': return Number.isFinite(value) ? value : String(value)
@@ -67,7 +80,7 @@ function plain(value: unknown, ctx: PlainContext = { nodes: 0, seen: new WeakSet
   if (value === null) return null
   let obj = value as any
   try {
-    if (obj.__v_isRef === true) return plain('_rawValue' in obj ? obj._rawValue : obj._value, ctx, depth)
+    if (obj.__v_isRef === true) return plain('_rawValue' in obj ? obj._rawValue : obj._value, ctx, depth, path)
     if (obj.__v_raw && obj.__v_raw !== obj) obj = obj.__v_raw
     if (typeof obj.nodeType === 'number') return `[DOM ${String(obj.nodeName ?? 'node')}]`
     if (obj === window) return '[Window]'
@@ -80,14 +93,22 @@ function plain(value: unknown, ctx: PlainContext = { nodes: 0, seen: new WeakSet
     return '[Unreadable]'
   }
   if (ctx.seen.has(obj)) return '[Circular]'
-  if (depth >= VALUE_DEPTH) return Array.isArray(obj) ? `[Array(${obj.length})]` : '[Object]'
+  if (depth >= VALUE_DEPTH) {
+    try {
+      if (Array.isArray(obj) || obj instanceof Set) return `[Array(${Array.isArray(obj) ? obj.length : obj.size}) not expanded${readMore(path)}]`
+      const keys = obj instanceof Map ? Array.from(obj.keys()).map(String) : Object.keys(obj)
+      return `[Object, ${keys.length} keys: ${keys.slice(0, 8).join(', ')}${keys.length > 8 ? ', ...' : ''}${readMore(path)}]`
+    } catch {
+      return '[Unreadable]'
+    }
+  }
   ctx.seen.add(obj)
   try {
     if (obj instanceof Map) obj = Object.fromEntries(Array.from(obj.entries()).map(([k, v]) => [String(k), v]))
     else if (obj instanceof Set) obj = Array.from(obj)
     if (Array.isArray(obj)) {
-      const out = obj.slice(0, VALUE_ITEMS).map((item: unknown) => plain(item, ctx, depth + 1))
-      if (obj.length > VALUE_ITEMS) out.push(`[+${obj.length - VALUE_ITEMS} more, ${obj.length} items]`)
+      const out = obj.slice(0, VALUE_ITEMS).map((item: unknown, i: number) => plain(item, ctx, depth + 1, childPath(path, i)))
+      if (obj.length > VALUE_ITEMS) out.push(`[+${obj.length - VALUE_ITEMS} more of ${obj.length} items${readMore(path, ` offset=${VALUE_ITEMS}, or filter`)}]`)
       return out
     }
     const keys = Object.keys(obj)
@@ -99,15 +120,116 @@ function plain(value: unknown, ctx: PlainContext = { nodes: 0, seen: new WeakSet
       } catch {
         child = '[Unreadable]'
       }
-      out[key] = plain(child, ctx, depth + 1)
+      out[key] = plain(child, ctx, depth + 1, childPath(path, key))
     }
-    if (keys.length > VALUE_KEYS) out['[more keys]'] = keys.length - VALUE_KEYS
+    if (keys.length > VALUE_KEYS) {
+      const rest = keys.slice(VALUE_KEYS)
+      out['[more keys]'] = `${rest.length} more: ${rest.slice(0, 10).join(', ')}${rest.length > 10 ? ', ...' : ''}${readMore(path, ` offset=${VALUE_KEYS}, or filter`)}`
+    }
     return out
   } catch {
     return '[Unreadable]'
   } finally {
     ctx.seen.delete(obj)
   }
+}
+
+const PAGE_ITEMS = 30
+const PAGE_KEYS = 60
+
+/** One value read by path, a page of it when it is long */
+export interface PathValue {
+  path: string
+  /** Items or keys in the value (after the filter) */
+  total?: number
+  offset?: number
+  data?: unknown
+  error?: string
+}
+
+function step(value: any, key: string): any {
+  let obj = value
+  if (obj && typeof obj === 'object' && obj.__v_isRef === true) obj = '_rawValue' in obj ? obj._rawValue : obj._value
+  if (obj == null) return undefined
+  if (obj instanceof Map) return obj.has(key) ? obj.get(key) : obj.get(Number(key))
+  if (obj instanceof Set) return Array.from(obj)[Number(key)]
+  return obj[key]
+}
+
+/** `cart.items[3].price` from the roots; the first segment picks the root when there are several */
+function resolvePath(roots: Record<string, unknown>, path: string): { found: boolean; value?: unknown; at?: string } {
+  const parts = path.match(/[^.[\]"']+/g) ?? []
+  const first = parts[0]
+  if (first === undefined) return { found: false }
+  let value: any
+  let index = 1
+  if (Object.prototype.hasOwnProperty.call(roots, first)) value = roots[first]
+  else {
+    // Without a root name: the first root that has the key
+    const root = Object.values(roots).find(r => {
+      try {
+        return step(r, first) !== undefined
+      } catch {
+        return false
+      }
+    })
+    if (root === undefined) return { found: false, at: first }
+    value = root
+    index = 0
+  }
+  for (; index < parts.length; index++) {
+    try {
+      value = step(value, parts[index]!)
+    } catch {
+      return { found: false, at: parts.slice(0, index + 1).join('.') }
+    }
+    if (value === undefined && index < parts.length - 1) return { found: false, at: parts.slice(0, index + 1).join('.') }
+  }
+  return { found: true, value }
+}
+
+function matchesFilter(key: string, value: unknown, filter: string): boolean {
+  if (key.toLowerCase().includes(filter)) return true
+  try {
+    return JSON.stringify(plain(value, undefined, VALUE_DEPTH - 2))?.toLowerCase().includes(filter) ?? false
+  } catch {
+    return false
+  }
+}
+
+/** The value at `path`; a long array or object is paged with `offset` and narrowed by `filter` (key or contents) */
+function readPath(roots: Record<string, unknown>, path: string, offsetArg: unknown, filterArg: unknown): PathValue {
+  const resolved = resolvePath(roots, path)
+  if (!resolved.found) return { path, error: `nothing at "${resolved.at ?? path}"; the roots are ${Object.keys(roots).join(', ')}` }
+  const filter = typeof filterArg === 'string' ? filterArg.trim().toLowerCase() : ''
+  const offset = Math.max(0, Number(offsetArg) || 0)
+  let value: any = resolved.value
+  try {
+    if (value && typeof value === 'object' && value.__v_isRef === true) value = '_rawValue' in value ? value._rawValue : value._value
+    if (value && typeof value === 'object' && value.__v_raw) value = value.__v_raw
+  } catch { /* keep the value */ }
+  if (!value || typeof value !== 'object') return { path, data: plain(value, undefined, 0, path) }
+  if (Array.isArray(value) || value instanceof Set) {
+    const items = (Array.isArray(value) ? value : Array.from(value)).slice(0, 5000).map((item, i) => [i, item] as const)
+    const kept = filter ? items.filter(([i, item]) => matchesFilter(String(i), item, filter)) : items
+    const page = kept.slice(offset, offset + PAGE_ITEMS)
+    const data: Record<string, unknown> = {}
+    for (const [i, item] of page) data[`[${i}]`] = plain(item, undefined, 1, childPath(path, i))
+    return { path, total: kept.length, offset, data }
+  }
+  const entries: Array<[string, unknown]> = value instanceof Map
+    ? Array.from(value.entries()).map(([k, v]) => [String(k), v])
+    : Object.keys(value).map(k => {
+      try {
+        return [k, value[k]]
+      } catch {
+        return [k, '[Unreadable]']
+      }
+    })
+  const kept = filter ? entries.filter(([k, v]) => matchesFilter(k, v, filter)) : entries
+  const data: Record<string, unknown> = {}
+  for (const [k, v] of kept.slice(offset, offset + PAGE_KEYS)) data[k] = plain(v, undefined, 1, childPath(path, k))
+  return { path, total: kept.length, offset, data }
 }
 
 function code(fn: unknown): string {
@@ -407,7 +529,7 @@ function componentState(owner: Owner): { values: Record<string, unknown>; method
       if (typeof value === 'function') methods[key] = value
       else data[key] = value
     }
-    if (Object.keys(data).length) values[group] = plain(data)
+    if (Object.keys(data).length) values[group] = plain(data, undefined, 0, group)
   }
   if (owner.version === 3) {
     split('props', instance.props)
@@ -505,7 +627,7 @@ function readKey(dep: any, props: Record<string, unknown> | undefined): Reactive
     } catch {
       value = '[Unreadable]'
     }
-    return { key, prop: true, value: plain(value) }
+    return { key, prop: true, value: plain(value, undefined, 0, `props.${key}`) }
   }
   return { key, prop: false }
 }
@@ -526,9 +648,10 @@ function describeComputed(computed: any, props: any, names: Map<any, string>, de
     }
     addRead(reads, readKey(dep, props))
   }
+  const name = names.get(computed)
   return {
-    name: names.get(computed),
-    value: plain(computed._value),
+    name,
+    value: plain(computed._value, undefined, 0, name && !name.startsWith('store ') ? `setup.${name}` : ''),
     code: getter ? shortText(code(getter), DEP_CODE_CHARS) : '[code unavailable]',
     reads,
     uses,
@@ -585,6 +708,8 @@ export interface PropOrigin {
   found: Array<{ path: string; value: unknown }>
   /** No binding by name and a short render of `from`: its code shows the object it passes */
   render?: string
+  /** Not passed by the parent: the default of the prop (of `from` when it is a pass-through component) */
+  defaulted?: boolean
 }
 
 function describeInstance(instance: any): string {
@@ -747,10 +872,16 @@ function propOrigins(owner: Owner): PropOrigin[] {
     } catch {
       value = '[Unreadable]'
     }
-    const origin: PropOrigin = { prop: key, value: plain(value), through: [], bindings: [], found: [] }
+    const origin: PropOrigin = { prop: key, value: plain(value, undefined, 0, `props.${key}`), through: [], bindings: [], found: [] }
     const sameKey = new RegExp(`:\\s*(?:[\\w$]+\\.)*(?:${key.replace(/[$]/g, '\\$')})$`)
     let current = owner.instance
     for (let level = 0; level < ORIGIN_LEVELS; level++) {
+      // The vnode props are what the parent passed; a prop missing there has its default value
+      if (current.vnode && !hasKey(current.vnode.props, key)) {
+        origin.defaulted = true
+        if (current !== owner.instance) origin.from = origin.through.pop()
+        break
+      }
       const parent = current.vnode?.ctx ?? current.parent
       if (!parent || parent === current) break
       const bindings = bindingsIn(codeOf(parent), key)
@@ -778,7 +909,9 @@ function propOrigins(owner: Owner): PropOrigin[] {
     const inStores = rest.size && stores?.length ? pathsOf(stores, rest) : new Map<string, PropOrigin['found']>()
     const render = codeOf(parent).replace(/\s+/g, ' ').trim()
     for (const origin of list) {
-      origin.found = inState.get(origin.prop) ?? inStores.get(origin.prop) ?? []
+      // A common key (text, disabled) is in many places: only those holding the same value can be the source
+      const same = (found: PropOrigin['found']) => found.filter(f => JSON.stringify(f.value) === JSON.stringify(origin.value))
+      origin.found = same(inState.get(origin.prop) ?? []).length ? same(inState.get(origin.prop)!) : same(inStores.get(origin.prop) ?? [])
       if (render && render.length <= SHORT_RENDER) origin.render = render
     }
   }
@@ -862,7 +995,23 @@ export interface InspectResult {
   matches: InspectedElement[]
   /** No match: elements with words of the text (a notice often explains why a control is missing) */
   hints?: InspectHint[]
+  /** component + path: one value of the first matching instance instead of the overview */
+  value?: PathValue & { component: string }
   error?: string
+}
+
+function stateRootsOf(owner: Owner): Record<string, unknown> {
+  const { instance } = owner
+  if (owner.version === 3) {
+    return {
+      props: instance.props,
+      setup: instance.setupState,
+      data: instance.data,
+      computed: instance.proxy,
+      attrs: instance.attrs,
+    }
+  }
+  return { props: instance.$props, data: instance.$data, computed: instance }
 }
 
 function inspectElement(el: Element, withState: boolean): InspectedElement {
@@ -959,14 +1108,20 @@ function hintsFor(text: string): InspectHint[] {
     })
 }
 
-export function inspectUi(args: { text?: unknown; selector?: unknown; component?: unknown; limit?: unknown }): InspectResult {
+export function inspectUi(args: { text?: unknown; selector?: unknown; component?: unknown; limit?: unknown; path?: unknown; offset?: unknown; filter?: unknown }): InspectResult {
   const page = location.href
   const text = typeof args.text === 'string' ? args.text.trim() : ''
   const selector = typeof args.selector === 'string' ? args.selector.trim() : ''
   const component = typeof args.component === 'string' ? args.component.trim() : ''
+  const path = typeof args.path === 'string' ? args.path.trim() : ''
   const limit = Math.min(MAX_MATCHES, Math.max(1, Number(args.limit) || 3))
   if (component) {
     const owners = findComponents(component)
+    if (path) {
+      if (!owners.length) return { page, total: 0, matches: [] }
+      const owner = owners[0]
+      return { page, total: owners.length, matches: [], value: { component: ownerChain(owner)[0], ...readPath(stateRootsOf(owner), path, args.offset, args.filter) } }
+    }
     return { page, total: owners.length, matches: owners.slice(0, limit).map(inspectComponent) }
   }
   if (!text && !selector) return { page, total: 0, matches: [], error: 'Pass text (a label, button text or message), a CSS selector or a component name.' }
@@ -990,6 +1145,8 @@ export interface StoresResult {
   kind: 'pinia' | 'vuex' | 'none'
   stores: Array<{ id: string; state?: unknown; getters?: unknown; stateKeys?: string[]; getterKeys?: string[]; actionKeys?: string[] }>
   missing?: string[]
+  /** ids + path: one value of the first store */
+  value?: PathValue & { store: string }
 }
 
 function vuexStore(): any {
@@ -1000,12 +1157,18 @@ function vuexStore(): any {
   return null
 }
 
-export function readStores(args: { ids?: unknown }): StoresResult {
+export function readStores(args: { ids?: unknown; path?: unknown; offset?: unknown; filter?: unknown }): StoresResult {
   const ids = Array.isArray(args.ids) ? args.ids.map(String).slice(0, 4) : typeof args.ids === 'string' ? [args.ids] : []
+  const path = typeof args.path === 'string' ? args.path.trim() : ''
   let pinia = getPiniaInstance()
   if (!pinia) pinia = updatePiniaContext().pinia
   if (pinia?._s) {
     const map: Map<string, any> = pinia._s instanceof Map ? pinia._s : new Map(Object.entries(pinia._s))
+    if (path && ids.length) {
+      const store = map.get(ids[0])
+      if (!store) return { kind: 'pinia', stores: [], missing: [ids[0]] }
+      return { kind: 'pinia', stores: [], value: { store: ids[0], ...readPath({ state: store.$state, store }, path, args.offset, args.filter) } }
+    }
     if (!ids.length) {
       return {
         kind: 'pinia',
@@ -1027,8 +1190,8 @@ export function readStores(args: { ids?: unknown }): StoresResult {
       }
       stores.push({
         id,
-        state: plain(readKeys(store, getStoreStateKeys(store))),
-        getters: plain(readKeys(store, getGetterKeys(store))),
+        state: plain(readKeys(store, getStoreStateKeys(store)), undefined, 0, ''),
+        getters: plain(readKeys(store, getGetterKeys(store)), undefined, 0, ''),
       })
     }
     return { kind: 'pinia', stores, missing: missing.length ? missing : undefined }
@@ -1036,6 +1199,7 @@ export function readStores(args: { ids?: unknown }): StoresResult {
   const vuex = vuexStore()
   if (vuex) {
     const getterKeys = Object.keys(vuex.getters ?? {})
+    if (path) return { kind: 'vuex', stores: [], value: { store: 'root', ...readPath({ state: vuex.state, getters: vuex.getters }, path, args.offset, args.filter) } }
     if (!ids.length) return { kind: 'vuex', stores: [{ id: 'root', stateKeys: Object.keys(vuex.state ?? {}), getterKeys }] }
     const wanted = ids.filter(id => id !== 'root')
     const state = wanted.length ? readKeys(vuex.state, wanted) : vuex.state

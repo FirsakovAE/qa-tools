@@ -434,7 +434,7 @@ Saving removed keys in **Edit** mode is fixed.
 * Fixed resolving relative URLs that were edited at a **Breakpoint**.
 * Fixed saving removed keys when editing **Pinia** and **Props**.
 
-## [2.7.0] - 2026-10-17
+## [2.7.0] - 2026-10-25
 
 ### AI assistant
 
@@ -446,6 +446,10 @@ Saving removed keys in **Edit** mode is fixed.
 * Later questions in a chat send only the logs events captured since the last digest, or no digest when nothing new was captured. A full digest is sent again after the logs are cleared or trimmed, or when the masking settings change.
 * The assistant traces where a component prop comes from: the parent component that sets it with the expression from its code, or the place in the parent state or a store where the value lies; wrappers that only pass props on are skipped.
 * Code search lists every match in minified scripts, not only the first one in a line, and the assistant reads the code around a found text without a line and column.
+* Code search and code reading skip CSS selectors with the same name and list the same code in several bundles once; a name matches in any spelling (`or-tooltip` finds `ORTooltip`). The default code window is smaller, which cuts the size of every following request.
+* Props a parent did not pass are reported as default values, not traced to unrelated parent state.
+* Long lists and deep objects in component and store state are cut with the path to read them; the assistant reads only that part with a path, pages of a list and a text filter instead of getting `[Object]`.
+* The assistant does not repeat searches and code reads it already made, and finishes once a cause explained by the code is found, marking an unverified cause as a hypothesis.
 * The assistant has up to 10 tool rounds per question (6 on Groq).
 * An empty **Reasoning** step is no longer shown; some models return empty reasoning even with reasoning turned off.
 * When the assistant reads an error, it gets the code at the first app frames of the stack in the same step. Library and extension frames are skipped. This saves a request per frame on the free tier.

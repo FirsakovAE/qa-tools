@@ -88,7 +88,6 @@ onMounted(async () => {
         @update:model-value="onStyle"
       />
       <p class="text-xs text-muted-foreground">
-        Added to every question. The rules of the assistant (evidence from the logs and the code) stay in force.
         <span class="float-right tabular-nums">{{ customStyle.length }} / {{ CUSTOM_STYLE_MAX }}</span>
       </p>
     </div>

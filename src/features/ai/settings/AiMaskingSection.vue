@@ -47,7 +47,6 @@ function actions(row: { key: string }): MenuAction[] {
   <SettingsTableSection
     section-id="ai-masking-section"
     title="Data masking for AI"
-    description="Applied to everything the assistant sends: the logs digest, event data, page code. Works on top of Options → Logs → Data masking and does not change the Logs view or exports."
     :columns="columns"
     :rows="rows"
     :row-key="(r) => (r as { key: string }).key"
@@ -68,12 +67,11 @@ function actions(row: { key: string }): MenuAction[] {
     <template #after-title>
       <div class="space-y-2 pt-1">
         <p class="text-xs text-muted-foreground">
-          Object keys, headers, URL params and <code>name: "value"</code> pairs in the code whose name contains a fragment are sent as [MASKED].
-          Fragments of 4 letters or less (auth, jwt, otp) match a whole word of the name.
+          Values with matching names in objects, headers, URLs, and code are sent as [MASKED].
         </p>
         <AiFlag
           id="ai-masking-patterns"
-          label="Mask token-like values in any text (JWT, Bearer / Basic credentials, card numbers)"
+          label="Mask sensitive data"
           :model-value="aiCredentials.masking.valuePatterns"
           @update:model-value="setAiMasking({ valuePatterns: $event })"
         />

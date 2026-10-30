@@ -5,7 +5,7 @@
  */
 
 import { getRuntimeAdapter } from '@/runtime'
-import type { InspectResult, PropOrigin, ReactiveRead, RenderDependencies, RenderDependency, StoresResult } from '@/injected/ai/page-inspect'
+import type { InspectResult, PathValue, PropOrigin, ReactiveRead, RenderDependencies, RenderDependency, StoresResult } from '@/injected/ai/page-inspect'
 import { aiCredentials } from './credentials'
 import { protectAppData } from './privacy'
 
@@ -43,7 +43,11 @@ function formatRender(render: RenderDependencies, out: string[]): void {
 }
 
 /** Props grouped by the component that sets them: the binding in its render code or where the value is */
-function formatOrigins(origins: PropOrigin[], out: string[]): void {
+function formatOrigins(all: PropOrigin[], out: string[]): void {
+  const own = all.filter(o => o.defaulted && !o.from)
+  const origins = all.filter(o => !own.includes(o))
+  if (own.length) out.push(`Props not passed by the parent (their default values): ${own.map(o => `${o.prop} = ${json(o.value)}`).join(', ')}`)
+  if (!origins.length) return
   const groups = new Map<string, PropOrigin[]>()
   for (const o of origins) {
     const key = `${o.through.join(' < ')}|${o.from ?? ''}`
@@ -55,7 +59,8 @@ function formatOrigins(origins: PropOrigin[], out: string[]): void {
     const via = through.length ? `passed on unchanged by ${through.join(' < ')}; ` : ''
     out.push(`- ${from ? `${via}set by ${from}:` : `${via}no component above sets them (root props or set at runtime):`}`)
     for (const o of list) {
-      const where = o.bindings.length ? o.bindings.map(b => `\`${b}\``).join(' | ')
+      const where = o.defaulted ? `not passed to ${o.from}, its default value`
+        : o.bindings.length ? o.bindings.map(b => `\`${b}\``).join(' | ')
         : o.found.length ? `passed as part of an object; the key is at ${o.found.map(f => `${f.path} = ${json(f.value)}`).join(', ')}`
         : from ? 'passed as part of an object (v-bind / h()); the key is not in its readable state or the stores' : ''
       out.push(`  - ${o.prop} = ${json(o.value)}${where ? `: ${where}` : ''}`)
@@ -69,10 +74,28 @@ function isEmpty(value: unknown): boolean {
   return !value || (typeof value === 'object' && !Object.keys(value as object).length)
 }
 
+/** A value read by path: one page of a long list, with what to pass for the next one */
+function formatPathValue(where: string, value: PathValue): string {
+  if (value.error) return `${where}: ${value.error}`
+  const out = [`${where}, path "${value.path}"`]
+  if (value.total !== undefined) {
+    const shown = Object.keys((value.data as object) ?? {}).length
+    const from = value.offset ?? 0
+    out[0] += `: ${value.total} entries${value.total > shown ? `, ${from}..${from + shown - 1} shown` : ''}`
+    if (from + shown < value.total) out.push(`Next page: offset=${from + shown}; narrow with filter (a key or a value).`)
+  }
+  out.push(json(value.data))
+  return out.join('\n')
+}
+
 export async function inspectUi(args: Record<string, unknown>): Promise<string> {
-  const res = await request<InspectResult>({ type: 'AI_INSPECT_UI', text: args.text, selector: args.selector, component: args.component, limit: args.limit })
+  const res = await request<InspectResult>({
+    type: 'AI_INSPECT_UI', text: args.text, selector: args.selector, component: args.component, limit: args.limit,
+    path: args.path, offset: args.offset, filter: args.filter,
+  })
   if ('error' in res && res.error) return `Could not inspect the page: ${res.error}`
-  const { page, total, matches, hints } = res as InspectResult
+  const { page, total, matches, hints, value } = res as InspectResult
+  if (args.component && value) return cut(formatPathValue(`Component ${value.component}${total > 1 ? ` (first of ${total} instances)` : ''}`, value), RESULT_CHARS)
   if (args.component) {
     if (!matches.length) return `Page: ${page}\nNo mounted component matches "${args.component}". Names come from the component name or its file; production builds may keep only some of them. Inspect an element the component renders (text or selector) to see its chain.`
   }
@@ -126,10 +149,11 @@ export async function inspectUi(args: Record<string, unknown>): Promise<string> 
 
 export async function readStores(args: Record<string, unknown>): Promise<string> {
   const ids = Array.isArray(args.ids) ? args.ids : typeof args.ids === 'string' && args.ids ? [args.ids] : []
-  const res = await request<StoresResult>({ type: 'AI_READ_STORES', ids })
+  const res = await request<StoresResult>({ type: 'AI_READ_STORES', ids, path: args.path, offset: args.offset, filter: args.filter })
   if ('error' in res && res.error) return `Could not read the stores: ${res.error}`
-  const { kind, stores, missing } = res as StoresResult
+  const { kind, stores, missing, value } = res as StoresResult
   if (kind === 'none') return 'The page has no Pinia or Vuex store.'
+  if (value) return cut(formatPathValue(`Store ${value.store}`, value), RESULT_CHARS)
   const out: string[] = []
   if (!ids.length) {
     out.push(`${kind === 'pinia' ? 'Pinia' : 'Vuex'} stores now (pass ids to read the values):`)

@@ -94,7 +94,6 @@ onMounted(async () => {
   <div id="ai-models-section" class="space-y-4 border-t pt-4">
     <AiSettingsHead
       title="Models"
-      description="The recommended free models and the ones you add. Unchecked models are hidden on the AI tab. Auto uses only free models and skips those out of quota or unavailable until their limit resets; a hand-picked model is always used as chosen."
     />
 
     <div class="flex items-center gap-2">

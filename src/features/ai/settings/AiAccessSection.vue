@@ -52,7 +52,7 @@ function reset() {
   <div id="ai-access-section" class="space-y-4 border-t pt-4">
     <AiSettingsHead
       title="Agent access"
-      description="What the assistant may read and send to the provider. Every answer lists the shared data and each tool call it made."
+      description="What the assistant may read and send to the provider."
       reset-label="Defaults"
       :reset-disabled="isDefault"
       @reset="reset"
@@ -61,7 +61,7 @@ function reset() {
     <AiSelectRow
       id="ai-access-digest"
       label="Attach the logs digest to questions"
-      hint="A short summary of errors and the timeline. Off: the assistant sees the logs only through the tools below."
+      hint="A short summary of errors and the timeline."
       :options="SHARING"
       :model-value="sharing(aiCredentials.access.digest)"
       @update:model-value="setAiAccess({ digest: $event === 'on' })"

@@ -78,7 +78,8 @@ export const AI_TOOLS: ToolDefinition[] = [
           path: { type: 'string' },
           query: { type: 'string', description: 'Text (or regex with regex=true) to read around; the first matches of the file are shown' },
           regex: { type: 'boolean', description: 'Treat query as a JavaScript regular expression' },
-          chars: { type: 'integer', description: 'Chars on each side of the match or column in minified code, default 1500, up to 6000' },
+          chars: { type: 'integer', description: 'Chars on each side of the match or column in minified code, default 1000, up to 6000. Widen only when the code you need is cut' },
+          include_css: { type: 'boolean', description: 'Also read matches in CSS selectors (skipped by default)' },
           line: { type: 'integer', description: '1-based line to center on' },
           column: { type: 'integer', description: '1-based column (stack frames)' },
           context: { type: 'integer', description: 'Lines around `line`, default 20' },
@@ -93,7 +94,7 @@ export const AI_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'search_source',
-      description: 'Search page code (original files when source maps exist, otherwise the scripts) for a text or a regular expression. Returns file:line matches; in minified lines file:line:column with the code around the match, often enough without read_source.',
+      description: 'Search page code (original files when source maps exist, otherwise the scripts) for a text or a regular expression. Case-insensitive; a name matches in any spelling (or-tooltip, ORTooltip, orTooltip). Returns file:line matches; in minified lines file:line:column with the code around the match, often enough without read_source. Matches in CSS selectors are hidden and the same code in several bundles is listed once.',
       parameters: {
         type: 'object',
         properties: {
@@ -101,6 +102,7 @@ export const AI_TOOLS: ToolDefinition[] = [
           regex: { type: 'boolean', description: 'Treat query as a JavaScript regular expression' },
           path: { type: 'string', description: 'Optional substring of the file path or URL to search in' },
           include_libraries: { type: 'boolean', description: 'Also search node_modules files' },
+          include_css: { type: 'boolean', description: 'Also list matches in CSS selectors' },
         },
         required: ['query'],
       },
@@ -118,6 +120,9 @@ export const AI_TOOLS: ToolDefinition[] = [
           selector: { type: 'string', description: 'Optional CSS selector; with text, only elements that also contain the text' },
           component: { type: 'string', description: 'Component name, file or chunk (AgreementCars, agreement-cars, AgreementCars.vue, agreement-cars-CccydAut.js): read its state and template conditions instead of searching elements' },
           limit: { type: 'integer', description: 'Max elements, default 3, up to 6' },
+          path: { type: 'string', description: 'With component: read one value of it instead of the overview, e.g. setup.form.items or props.config.rows[3]; cut values in results name their path' },
+          offset: { type: 'integer', description: 'With path: first entry of a long array or object' },
+          filter: { type: 'string', description: 'With path: only entries whose key or contents contain this text' },
         },
       },
     },
@@ -126,11 +131,14 @@ export const AI_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'read_stores',
-      description: 'Current state and getters of the Pinia (or Vuex) stores of the live page, beyond the logs. Call without ids for the store list with their state, getter and action names; then pass up to 4 store ids (Vuex: module names) for the values.',
+      description: 'Current state and getters of the Pinia (or Vuex) stores of the live page, beyond the logs. Call without ids for the store list with their state, getter and action names; then pass up to 4 store ids (Vuex: module names) for the values. Deep or long values are cut with their path: pass one id and path (offset / filter for long lists) to read that part.',
       parameters: {
         type: 'object',
         properties: {
           ids: { type: 'array', items: { type: 'string' }, description: 'Store ids, up to 4' },
+          path: { type: 'string', description: 'With one id: read only this value of the store, e.g. cart.items or user.roles[0]' },
+          offset: { type: 'integer', description: 'With path: first entry of a long array or object' },
+          filter: { type: 'string', description: 'With path: only entries whose key or contents contain this text' },
         },
       },
     },
@@ -182,12 +190,12 @@ export function describeToolCall(name: string, args: Record<string, any>): AiSte
     case 'search_source':
       return { tool: 'Sources', summary: `Search code "${short(args.query)}"${args.path ? ` in ${short(args.path)}` : ''}` }
     case 'inspect_ui': {
-      if (args.component) return { tool: 'Page', summary: `Inspect component ${short(args.component)}` }
+      if (args.component) return { tool: 'Page', summary: `Inspect component ${short(args.component)}${args.path ? ` → ${short(args.path)}` : ''}` }
       const parts = [args.text && `"${short(args.text)}"`, args.selector && short(args.selector)].filter(Boolean)
       return { tool: 'Page', summary: `Inspect elements ${parts.join(' in ') || '(empty)'}` }
     }
     case 'read_stores':
-      return { tool: 'Page', summary: Array.isArray(args.ids) && args.ids.length ? `Store state ${args.ids.map(id => short(id)).join(', ')}` : 'List stores' }
+      return { tool: 'Page', summary: Array.isArray(args.ids) && args.ids.length ? `Store state ${args.ids.map(id => short(id)).join(', ')}${args.path ? ` → ${short(args.path)}` : ''}` : 'List stores' }
     default:
       return { tool: name, summary: '' }
   }

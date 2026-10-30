@@ -266,7 +266,7 @@ const compressSupported = canCompressReport()
               @update:model-value="writeMasking({ valuePatterns: !!$event })"
             />
             <Label for="logs-masking-patterns" class="text-sm font-normal cursor-pointer">
-              Mask token-like values in any text (JWT, Bearer / Basic credentials, card numbers)
+              Mask sensitive data
             </Label>
           </div>
         </div>

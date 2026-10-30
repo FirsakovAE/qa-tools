@@ -16,17 +16,18 @@ const PARALLEL = 6
 const RESULT_CHARS = 20000
 const LONG_LINE = 1000
 const MAX_LIST = 300
-const MAX_MATCHES = 30
+const MAX_MATCHES = 20
 const STACK_FRAMES = 3
 const STACK_CONTEXT = 4
 const STACK_COLUMN_CHARS = 250
 /** Average line length above which a script is treated as minified */
 const MINIFIED_LINE = 500
 /** Chars on each side of a position in a minified line */
-const SNIPPET_CHARS = 1500
+const SNIPPET_CHARS = 1000
 const MAX_SNIPPET_CHARS = 6000
-/** Windows read_source returns for a query */
+/** Windows read_source returns for a query, and their total size */
 const QUERY_WINDOWS = 3
+const READ_CHARS = 9000
 /** Matches search_source lists in one minified line */
 const LINE_MATCHES = 8
 const NO_MAPS_NOTE = 'The page has no source maps with embedded code: only the minified scripts can be read, original files (.vue, stores) are not available.'
@@ -337,7 +338,7 @@ export async function readSource(args: Record<string, unknown>): Promise<string>
   const find = query ? matcher(query, args.regex === true, 50) : null
   if (typeof find === 'string') return find
   const around = (name: string, text: string) =>
-    cut(readAround(name, text, find!, chars) ?? `No match for "${query}" in ${name}. search_source lists the files that contain it.`, RESULT_CHARS)
+    cut(readAround(name, text, find!, chars, args.include_css === true) ?? `No match for "${query}" in ${name}. search_source lists the files that contain it.`, RESULT_CHARS)
 
   let script = findScript(path)
   if (!script && /^https?:/i.test(path)) {
@@ -404,6 +405,31 @@ function escapedTextPattern(text: string): RegExp {
   return new RegExp(source, 'i')
 }
 
+/** A name in any spelling: `or-tooltip` also finds `ORTooltip` and `orTooltip`, `orTooltip` also finds `or-tooltip` */
+function namePattern(query: string): string {
+  return query
+    .replace(/([a-z0-9])([A-Z])/g, '$1\u0000$2')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/[-_\u0000](?=[A-Za-z0-9])/g, '[-_]?')
+}
+
+/** The match is in a CSS selector (`.or-tooltip[data-v-1a2b]{...}`), not in code */
+function inCss(line: string, pos: number): boolean {
+  let start = pos
+  while (start > 0 && /[\w-]/.test(line[start - 1])) start--
+  if (line[start - 1] !== '.' && line[start - 1] !== '#') return false
+  const after = line.slice(pos, pos + 200)
+  const brace = after.indexOf('{')
+  return brace !== -1 && !/["'`;=()]/.test(after.slice(0, brace))
+}
+
+/** The same code in several bundles (a shared UI kit) differs only in short minified names */
+function codeKey(line: string, pos: number): string {
+  return line.slice(Math.max(0, pos - 40), pos + 160)
+    .replace(/__mf_\d+|data-v-[0-9a-f]+/g, '_')
+    .replace(/\b[\w$]{1,3}\b/g, '_')
+}
+
 /** Start indexes of the query in a line, at most `max`; or an error message for a bad regular expression */
 function matcher(query: string, regex: boolean, max: number): ((line: string) => number[]) | string {
   let re: RegExp
@@ -414,7 +440,7 @@ function matcher(query: string, regex: boolean, max: number): ((line: string) =>
       return `Invalid regular expression: ${(e as Error).message}`
     }
   } else {
-    re = /[^\x00-\x7f]/.test(query) ? new RegExp(escapedTextPattern(query).source, 'gi') : new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+    re = /[^\x00-\x7f]/.test(query) ? new RegExp(escapedTextPattern(query).source, 'gi') : new RegExp(namePattern(query), 'gi')
   }
   return line => {
     const out: number[] = []
@@ -442,27 +468,61 @@ function matchWindows(text: string, at: number[], before: number, after: number)
   return windows
 }
 
-/** Code of a minified line around a query: what read_source returns for `query` */
-function readAround(name: string, text: string, find: (line: string) => number[], chars: number): string | null {
+/** A definition of the name (`__name:"or-tooltip"`, `function save(`, `const save=`) is read before its usages */
+function isDefinition(line: string, pos: number): boolean {
+  return /(?:__name|name)\s*:\s*["'`]$|(?:function|class|const|let|var)\s+$/.test(line.slice(Math.max(0, pos - 12), pos))
+}
+
+/**
+ * Code around a query: what read_source returns for `query`. In minified lines definitions come
+ * first, CSS selectors and copies of the same code (one UI kit in several bundles) are skipped.
+ */
+function readAround(name: string, text: string, find: (line: string) => number[], chars: number, includeCss: boolean): string | null {
   const lines = text.split('\n')
-  const out: string[] = []
+  const windows: Array<{ line: number; from: number; to: number; at: number[]; definition: boolean }> = []
+  const seen = new Set<string>()
   let total = 0
+  let css = 0
+  let copies = 0
   for (let i = 0; i < lines.length; i++) {
-    const at = find(lines[i])
+    const all = find(lines[i])
+    if (!all.length) continue
+    total += all.length
+    const at = includeCss ? all : all.filter(pos => !inCss(lines[i], pos))
+    css += all.length - at.length
     if (!at.length) continue
-    total += at.length
-    if (out.length >= QUERY_WINDOWS) continue
     if (lines[i].length <= LONG_LINE) {
-      out.push(`${name}:${i + 1}\n${numbered(lines, Math.max(1, i + 1 - 20), i + 1 + 20, i + 1)}`)
+      windows.push({ line: i, from: -1, to: -1, at, definition: at.some(pos => isDefinition(lines[i], pos)) })
       continue
     }
     for (const w of matchWindows(lines[i], at, chars, chars)) {
-      if (out.length >= QUERY_WINDOWS) break
-      out.push(`${name}:${i + 1}:${w.at[0] + 1} (chars ${w.from}..${w.to} of ${lines[i].length}${w.at.length > 1 ? `, ${w.at.length} matches` : ''}):\n${lines[i].slice(w.from, w.to)}`)
+      const key = codeKey(lines[i], w.at[0])
+      if (seen.has(key)) {
+        copies++
+        continue
+      }
+      seen.add(key)
+      windows.push({ line: i, ...w, definition: w.at.some(pos => isDefinition(lines[i], pos)) })
     }
   }
-  if (!out.length) return null
-  return `${total} match${total === 1 ? '' : 'es'}${total > out.length ? `, the first ${out.length} windows shown (pass a longer query or a regex to narrow)` : ''}\n\n${out.join('\n\n')}`
+  if (!windows.length) return null
+  const shown = windows.slice().sort((a, b) => Number(b.definition) - Number(a.definition)).slice(0, QUERY_WINDOWS)
+  let left = READ_CHARS
+  const out: string[] = []
+  for (const w of shown) {
+    if (left <= 0) break
+    const body = w.from === -1
+      ? `${name}:${w.line + 1}\n${numbered(lines, Math.max(1, w.line + 1 - 20), w.line + 1 + 20, w.line + 1)}`
+      : `${name}:${w.line + 1}:${w.at[0] + 1} (chars ${w.from}..${w.to} of ${lines[w.line].length}${w.at.length > 1 ? `, ${w.at.length} matches` : ''}${w.definition ? ', definition' : ''}):\n${lines[w.line].slice(w.from, w.to)}`
+    out.push(body.length > left ? `${body.slice(0, left)}... [cut; pass a smaller chars or a longer query]` : body)
+    left -= body.length
+  }
+  const skipped = [
+    windows.length > out.length && `${windows.length - out.length} more places (pass a longer query or a regex to narrow)`,
+    css && `${css} in CSS selectors (include_css=true to read them)`,
+    copies && `${copies} ${copies === 1 ? 'copy' : 'copies'} of the same code`,
+  ].filter(Boolean)
+  return `${total} match${total === 1 ? '' : 'es'}${skipped.length ? `; not shown: ${skipped.join(', ')}` : ''}\n\n${out.join('\n\n')}`
 }
 
 export async function searchSource(args: Record<string, unknown>): Promise<string> {
@@ -473,25 +533,43 @@ export async function searchSource(args: Record<string, unknown>): Promise<strin
   if (typeof find === 'string') return find
   const scope = typeof args.path === 'string' ? args.path.toLowerCase() : ''
   const libs = args.include_libraries === true
+  const includeCss = args.include_css === true
 
-  const found: string[] = []
+  const found: Array<{ text: string; copies: string[] }> = []
+  /** First match of each piece of code, to fold its copies in other bundles */
+  const byCode = new Map<string, { text: string; copies: string[] }>()
   let total = 0
+  let css = 0
+  const add = (key: string | null, at: string, text: string) => {
+    total++
+    const first = key ? byCode.get(key) : undefined
+    if (first) {
+      first.copies.push(at)
+      return
+    }
+    if (found.length >= MAX_MATCHES) return
+    const entry = { text, copies: [] }
+    found.push(entry)
+    if (key) byCode.set(key, entry)
+  }
   const scan = (name: string, text: string) => {
     const lines = text.split('\n')
     for (let i = 0; i < lines.length; i++) {
       const lineText = lines[i]
-      const at = find(lineText)
+      const all = find(lineText)
+      if (!all.length) continue
+      const at = includeCss ? all : all.filter(pos => !inCss(lineText, pos))
+      css += all.length - at.length
       if (!at.length) continue
       // Minified lines: every match with its column, a line is often the whole file
       if (lineText.length > 240) {
         for (const w of matchWindows(lineText, at, 120, 200)) {
-          total++
-          if (found.length < MAX_MATCHES) found.push(`${name}:${i + 1}:${w.at[0] + 1}: ...${lineText.slice(w.from, w.to).trim()}...`)
+          const place = `${name}:${i + 1}:${w.at[0] + 1}`
+          add(codeKey(lineText, w.at[0]), place, `${place}: ...${lineText.slice(w.from, w.to).trim()}...`)
         }
         continue
       }
-      total++
-      if (found.length < MAX_MATCHES) found.push(`${name}:${i + 1}: ${lineText.trim()}`)
+      add(null, `${name}:${i + 1}`, `${name}:${i + 1}: ${lineText.trim()}`)
     }
   }
 
@@ -509,8 +587,18 @@ export async function searchSource(args: Record<string, unknown>): Promise<strin
   }
   const note = originals().some(o => originalText(o) != null) ? '' : `\n${NO_MAPS_NOTE}`
   if (!total) {
-    return `No matches for "${query}". ${coverage()}${note}\nThe text may be built from parts, come from translations (search a shorter part or the i18n key) or from the server (search_logs), or live in a chunk that is not loaded yet: open the screen that shows it and search again.`
+    const cssNote = css ? ` ${css} matches are in CSS selectors only (include_css=true lists them).` : ''
+    return `No matches for "${query}" in code.${cssNote} ${coverage()}${note}\nThe text may be built from parts, come from translations (search a shorter part or the i18n key) or from the server (search_logs), or live in a chunk that is not loaded yet: open the screen that shows it and search again.`
   }
+  const shortName = (place: string) => place.replace(/^.*\//, '')
+  const lines = found.map(f => (f.copies.length
+    ? `${f.text}\n  same code also at: ${f.copies.slice(0, 6).map(shortName).join(', ')}${f.copies.length > 6 ? ` +${f.copies.length - 6}` : ''}`
+    : f.text))
+  const listed = found.length + found.reduce((sum, f) => sum + f.copies.length, 0)
+  const hidden = [
+    total > listed && `${total - listed} more not shown`,
+    css && `${css} in CSS selectors hidden (include_css=true)`,
+  ].filter(Boolean)
   const next = 'To read more code around a match: read_source with the url and query (a distinctive piece of the match), no column needed.'
-  return cut(`${total} matches${total > found.length ? `, first ${found.length} shown` : ''}:\n${found.join('\n')}\n${next}${note}`, RESULT_CHARS)
+  return cut(`${total} matches${hidden.length ? ` (${hidden.join('; ')})` : ''}:\n${lines.join('\n')}\n${next}${note}`, RESULT_CHARS)
 }
