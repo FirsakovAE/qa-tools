@@ -14,6 +14,7 @@ export type LogKind =
   | 'store'
   | 'action'
   | 'navigation'
+  | 'click'
   | 'error'
 
 export type LogLevel = 'info' | 'warn' | 'error'

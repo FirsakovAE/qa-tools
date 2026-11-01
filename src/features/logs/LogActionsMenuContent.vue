@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Upload, Terminal, EyeOff, ArrowRightLeft } from 'lucide-vue-next'
+import { Upload, Terminal, EyeOff, ArrowRightLeft, Sparkles } from 'lucide-vue-next'
+import { askAiAboutLog } from '@/features/ai/attachments'
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -56,9 +57,14 @@ function handleClick(e: Event, action: () => void) {
     class="w-52"
     v-bind="variant === 'dropdown' ? { align: 'end' } : {}"
   >
+    <component :is="Item" @click="handleClick($event, () => askAiAboutLog(event))">
+      <Sparkles class="h-4 w-4 mr-2" />
+      Ask AI
+    </component>
+    <component :is="Separator" />
     <component :is="Item" @click="handleClick($event, () => emit('export', event))">
       <Upload class="h-4 w-4 mr-2" />
-      {{ isNetwork ? 'Export request & response' : 'Export event' }}
+      Export event
     </component>
     <component
       :is="Item"

@@ -1,6 +1,5 @@
 /**
- * Instructions sent with every completion. Keep this short: Groq counts the whole
- * request against an 8K-token minute cap, and each tool round resends the prompt.
+ * Instructions sent with every completion. Keep this short: each tool round resends the prompt.
  */
 
 import type { AiAccess, AiCredentials, AiDetail, AiTone } from './credentials'
@@ -18,9 +17,6 @@ brief: 'Answer length: brief. Use 2-5 sentences or a few bullets. Include the co
 normal: 'Answer length: focused. Answer the question directly with relevant evidence and no unrelated details. Complete the essential investigation needed to verify the finding; do not substitute a plausible explanation for checking available evidence.',
 detailed: 'Length: detailed. Investigate the relevant evidence thoroughly using the tools appropriate to the question. Explain the observed behavior, the causal chain, supporting event ids and code locations, alternatives ruled out, and reproduction or verification steps. Do not read unrelated stores, requests or code merely to make the answer longer.',
 }
-
-/** Answer detail controls presentation, not investigation depth. */
-export const DETAILED_CHECK_NOTE = 'Before answering, verify that the available evidence supports the conclusion, regardless of the requested answer length. Reuse relevant tool results already present in this conversation. If essential evidence is missing and the necessary tools are available, gather it before answering. Do not invent a root cause from an error message alone or infer causation from events occurring at the same time. If the evidence cannot establish the cause, state the uncertainty. Do not call unrelated tools solely to make the answer longer.'
 
 type AnswerStyle = Pick<AiCredentials, 'tone' | 'detail' | 'customStyle'>
 
@@ -103,7 +99,11 @@ Do not treat these categories as exhaustive.
 
 Use this section when the user reports a problem or asks you to investigate application behavior.
 
-## 2.1. Digest Analysis
+## 2.1. Attachments
+
+The user may attach items to the question: a logs event, a network request, component props, or a store. Each comes in \`<attachment type name event>\` with its full data, already masked and cut like tool results. \`event="#N"\` is its id in the logs. The question is about these items first: do not call \`get_events\` for them again.
+
+## 2.2. Digest Analysis
 
 Start with \`<logs_digest>\`: \`Summary\`, \`Problems\`, and \`Timeline\`.
 
@@ -124,13 +124,13 @@ Reference relevant events. Do not confuse the last navigation with an earlier on
 - Navigation events may indicate redirects or separate visits. Do not assume different URLs belong to the same site. Use the latest relevant navigation event to identify the current page, and treat a redirect as confirmed only when supported by evidence. Do not attribute events or application state to the current page solely because they appear in the same session; verify their association with the page first.
 - Do not assume that stores or events belong to the current page based on session history alone. Confirm their association through page-specific evidence, such as source code or component bindings. If the association cannot be verified, state that explicitly.
 
-## 2.2. Symptom Search
+## 2.3. Symptom Search
 
 Prioritize the symptom reported by the user. If it is absent from \`Problems\`, find it before drawing conclusions.
 
 Search for distinctive error text, button labels, or other identifying clues using \`search_logs\` and \`search_source\`. For user actions, investigate surrounding requests and state changes using \`get_events\`.
 
-## 2.3. Log and Source Code Investigation
+## 2.4. Log and Source Code Investigation
 
 If the digest is insufficient:
 
@@ -141,7 +141,7 @@ If the digest is insufficient:
 
 Prefer an already retrieved code snippet if it provides sufficient evidence.
 
-## 2.4. Establishing the Cause
+## 2.5. Establishing the Cause
 
 Trace the symptom through related requests, responses, state changes, and UI behavior. Identify:
 

@@ -7,6 +7,7 @@ import { copyToClipboard } from '@/utils/networkUtils'
 import { useLogs } from '@/features/logs/useLogs'
 import { openLogsEvent } from '@/features/logs/logsNavigation'
 import { quotaLine } from './format'
+import { aiAttachments, takeAttachments } from './attachments'
 import AiToolbar from './AiToolbar.vue'
 import AiWelcome from './AiWelcome.vue'
 import AiEntry from './AiEntry.vue'
@@ -27,7 +28,8 @@ function openSettings(anchor = 'ai-connection-section') {
 }
 
 function submit(text: string) {
-  if (text.trim() && !busy.value && ready.value) void send(text)
+  if (busy.value || !ready.value || (!text.trim() && !aiAttachments.value.length)) return
+  void send(text, takeAttachments())
 }
 
 const COPIED_MS = 1500

@@ -24,6 +24,7 @@ import { OptionsTab } from '@/features/settings'
 import { NetworkTab } from '@/features/network'
 import { LogsTab, initLogsCollector } from '@/features/logs'
 import { pendingLogsEvent } from '@/features/logs/logsNavigation'
+import { askAiRequest } from '@/features/ai/attachments'
 import { postToContentScript } from '@/utils/postToContentScript'
 
 const AiTab = defineAsyncComponent(() => import('@/features/ai/AiTab.vue'))
@@ -393,6 +394,10 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
     if (id) activeTab.value = 'logs'
   })
 
+  watch(askAiRequest, () => {
+    activeTab.value = 'ai'
+  })
+
   function clearScrollAnchor() {
     optionsScrollAnchor.value = null
   }
@@ -510,6 +515,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           <NetworkTab 
             :pending-breakpoint="pendingBreakpoint"
             @clear-pending-breakpoint="clearPendingBreakpoint"
+            @navigate-to-options="handleNavigateToOptions"
           />
         </div>
 
@@ -518,7 +524,7 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
           v-else-if="activeTab === 'logs'"
           class="h-full overflow-hidden"
         >
-          <LogsTab />
+          <LogsTab @navigate-to-options="handleNavigateToOptions" />
         </div>
 
         <!-- ===== AI tab ===== -->

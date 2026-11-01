@@ -1,4 +1,6 @@
-export type AiProviderId = 'openrouter' | 'gemini' | 'groq'
+import type { AiAttachment } from './attachments'
+
+export type AiProviderId = 'openrouter' | 'gemini'
 
 export interface AiModel {
   id: string
@@ -63,6 +65,8 @@ export interface AiChatEntry {
   id: string
   role: 'user' | 'assistant'
   text: string
+  /** Items the user attached to the question */
+  attachments?: AiAttachment[]
   steps?: AiStep[]
   error?: boolean
   /** Provider's own error text */

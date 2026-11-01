@@ -28,12 +28,14 @@ Each group has a checkbox: an unchecked group is not logged at all, and already 
 
 | Group | Events |
 | ----- | ------ |
-| **Network** | **Send request** and **Receive response** |
+| **Requests** | **Send request** and **Receive response** |
+| **WebSocket** | **WebSocket open**, **WebSocket sent**, **WebSocket received** and **WebSocket closed** |
 | **Props changes** | **Change props** |
 | **Emits** | **Emit** |
 | **Pinia changes** | **Change store** (when checked again, the store starts with a new **Store snapshot**) |
 | **Store actions** | **Store action** |
 | **Navigation** | **Navigation** |
+| **Clicks** | **Click** |
 | **JS errors** | **JS error** |
 
 The number next to a checkbox shows how many events of the group are currently stored.
@@ -51,6 +53,21 @@ When the memory budget is reached, the log is cut at a **Navigation** and every 
 The bar under the fields shows current usage (**Used X of Y**); it turns orange above 90 %.
 
 Values outside the range are corrected to the nearest bound. **Defaults** restores all settings of the block.
+
+---
+
+## Ignore list
+
+Event groups excluded from logging. A group is one subject: the same request (method and path), the same component, the same store, and so on. Ignored groups are not recorded at all.
+
+| Column | Meaning |
+| ------ | ------- |
+| **Type** | Event kind (**Send request**, **Change store**, **JS error**, and the rest) |
+| **Object** | Subject of the group: URL, component, store, message, and so on |
+
+**Log again** in the row menu resumes that group. **Log all again**, next to the title, resumes every group.
+
+The **ignored** indicator on the [Logs](./general.md) toolbar opens this table.
 
 ---
 

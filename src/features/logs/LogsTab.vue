@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { Trash2, Pause, Play, SearchIcon, EyeOff, X } from 'lucide-vue-next'
+import { Trash2, Pause, Play, SearchIcon, EyeOff } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { FacetedFilter } from '@/components/ui/FacetedFilter'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover'
 import {
   Tooltip,
   TooltipContent,
@@ -21,12 +20,16 @@ import { toast } from '@/components/ui/Toaster'
 import LogsTable from './LogsTable.vue'
 import LogDetails from './LogDetails.vue'
 import ExportLogsMenu from './ExportLogsMenu.vue'
-import { useLogs, ignoreRuleLabel } from './useLogs'
+import { useLogs } from './useLogs'
 import { useLogsSearch } from './useLogsSearch'
 import { exportLogEvent, exportLogs } from './exportLogs'
 import { networkEntryOf, pairedNetworkEvent } from './view'
 import { canCompressReport } from './report/compressSupport'
 import { pendingLogsEvent } from './logsNavigation'
+
+const emit = defineEmits<{
+  (e: 'navigateToOptions', anchor: string): void
+}>()
 
 const settings = useInspectorSettingsSync()
 
@@ -40,8 +43,6 @@ const {
   clearEvents,
   getEvent,
   ignoreEvent,
-  removeIgnoreRule,
-  clearIgnoreRules,
 } = useLogs()
 
 const { curlCopied, copyCurl } = useCurlCopy(() => settings.value ?? undefined)
@@ -74,6 +75,49 @@ const isFiltered = computed(() => isSearching.value || !allTypesSelected.value)
 // ============================================================================
 
 const rowSelection = useRowSelection(() => filteredEvents.value.map(e => e.id))
+
+/** The other half of a Send request / Receive response pair, when it is in the log */
+function httpPairId(id: string): string | null {
+  const event = getEvent(id)
+  if (!event || (event.kind !== 'request' && event.kind !== 'response')) return null
+  const pair = pairedNetworkEvent(event, source.value, getEvent)
+  if (!pair || pair.id === id || (pair.kind !== 'request' && pair.kind !== 'response')) return null
+  return pair.id
+}
+
+/**
+ * Checking a network event also checks its request or response.
+ * Unchecking clears that pair, so the export count matches the file.
+ */
+function handleCheck(id: string, event: MouseEvent) {
+  const before = rowSelection.checked.value
+  rowSelection.toggle(id, event)
+  const after = rowSelection.checked.value
+  if (before === after) return
+
+  const changed = new Set<string>([id])
+  if (event.shiftKey) {
+    for (const item of before) if (!after.has(item)) changed.add(item)
+    for (const item of after) if (!before.has(item)) changed.add(item)
+  }
+
+  const next = new Set(after)
+  let paired = false
+  for (const item of changed) {
+    const pair = httpPairId(item)
+    if (!pair) continue
+    if (next.has(item)) {
+      if (!next.has(pair)) {
+        next.add(pair)
+        paired = true
+      }
+    } else if (next.has(pair)) {
+      next.delete(pair)
+      paired = true
+    }
+  }
+  if (paired) rowSelection.replace(next)
+}
 
 const exportOptions = computed(() => ({ compress: canCompressReport() && settings.value?.logsExport?.compress !== false }))
 
@@ -228,50 +272,15 @@ function handleClear() {
           {{ filteredCount }}<span v-if="isFiltered && filteredCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
         </Badge>
 
-        <Popover v-if="ignoreRules.length > 0">
-          <PopoverTrigger as-child>
-            <Badge
-              variant="outline"
-              class="whitespace-nowrap cursor-pointer text-muted-foreground border-muted-foreground/35 hover:bg-muted/50"
-            >
-              <EyeOff class="h-3 w-3" />
-              <span class="ml-1">{{ ignoreRules.length }}</span><span class="badge-label">ignored</span>
-            </Badge>
-          </PopoverTrigger>
-          <PopoverContent class="w-96 p-0" align="end">
-            <div class="flex items-center justify-between px-3 py-2 border-b">
-              <span class="text-sm font-medium">Ignored events</span>
-              <Button variant="ghost" size="sm" class="h-7 text-xs" @click="clearIgnoreRules">
-                Clear all
-              </Button>
-            </div>
-            <div class="max-h-72 overflow-y-auto py-1">
-              <div
-                v-for="rule in ignoreRules"
-                :key="rule.id"
-                class="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50"
-              >
-                <Badge
-                  variant="outline"
-                  class="text-[10px] px-1.5 py-0 whitespace-nowrap shrink-0"
-                  :class="LOG_KIND_META[rule.kind]?.badgeClass"
-                >
-                  {{ LOG_KIND_META[rule.kind]?.label ?? rule.kind }}
-                </Badge>
-                <span class="flex-1 min-w-0 truncate font-mono text-xs" :title="ignoreRuleLabel(rule)">{{ rule.key }}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-6 w-6 shrink-0"
-                  title="Log these events again"
-                  @click="removeIgnoreRule(rule.id)"
-                >
-                  <X class="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <Badge
+          v-if="ignoreRules.length > 0"
+          variant="outline"
+          class="whitespace-nowrap cursor-pointer text-muted-foreground border-muted-foreground/35 hover:bg-muted/50"
+          @click="emit('navigateToOptions', 'logs-ignore-section')"
+        >
+          <EyeOff class="h-3 w-3" />
+          <span class="ml-1">{{ ignoreRules.length }}</span><span class="badge-label">ignored</span>
+        </Badge>
 
         <Badge v-if="paused" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
           Paused
@@ -328,7 +337,7 @@ function handleClear() {
           :selected-id="selectedId"
           :checked-ids="rowSelection.checked.value"
           :header-check-state="rowSelection.headerState.value"
-          @check="rowSelection.toggle"
+          @check="handleCheck"
           @check-all="rowSelection.toggleAll"
           :empty-message="emptyMessage"
           @select="selectedId = $event"

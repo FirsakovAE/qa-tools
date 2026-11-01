@@ -159,6 +159,7 @@ button { cursor: pointer; }
 .k-store { --c: var(--qa-yellow); }
 .k-action { --c: var(--qa-purple); }
 .k-navigation { --c: var(--qa-blue); }
+.k-click { --c: var(--qa-orange); }
 .k-error { --c: var(--qa-red); }
 .k-other { --c: var(--qa-gray); }
 .s-ok { --c: var(--qa-green); }

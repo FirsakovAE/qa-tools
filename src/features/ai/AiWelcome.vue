@@ -28,7 +28,7 @@ const { credentials, provider, hasKey, busy, entries } = useAiChat()
     </div>
     <p class="text-sm text-muted-foreground">
       The assistant reads the captured logs and the page code to explain what went wrong.
-      Add a free API key of Gemini (recommended), OpenRouter or Groq.
+      Add a free API key of Gemini or OpenRouter.
     </p>
     <Button size="sm" class="h-8 gap-1.5" @click="emit('open-settings')">
       <Settings class="h-3.5 w-3.5" />

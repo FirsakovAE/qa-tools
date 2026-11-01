@@ -13,6 +13,45 @@ const COPY_ICONS =
   '<svg class="ai-copy-idle" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>'
   + '<svg class="ai-copy-done" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
 
+/** A pipe inside inline code must not split a table cell: `` `a|b` `` stays one column */
+function escapePipesInCode(line: string): string {
+  let out = ''
+  let i = 0
+  while (i < line.length) {
+    if (line[i] !== '`') {
+      out += line[i++]
+      continue
+    }
+    let ticks = 0
+    while (line[i + ticks] === '`') ticks++
+    const marker = '`'.repeat(ticks)
+    const close = line.indexOf(marker, i + ticks)
+    if (close === -1) {
+      out += line.slice(i)
+      break
+    }
+    out += line.slice(i, close + ticks).replace(/(?<!\\)\|/g, '\\|')
+    i = close + ticks
+  }
+  return out
+}
+
+/** GFM splits every `|`, including one written inside backticks, so the row no longer matches its separator */
+function prepareMarkdown(text: string): string {
+  let fence: string | null = null
+  return text.split('\n').map(line => {
+    const open = line.match(/^\s*(`{3,}|~{3,})/)
+    if (open) {
+      const marker = open[1][0]
+      if (!fence) fence = marker
+      else if (line.trim().startsWith(fence)) fence = null
+      return line
+    }
+    if (fence || !/^\s*\|/.test(line)) return line
+    return escapePipesInCode(line)
+  }).join('\n')
+}
+
 /** Model output is untrusted: raw HTML is shown as text (except line breaks), links open outside the inspector, images become links */
 const md = new Marked({
   gfm: true,
@@ -77,7 +116,7 @@ function linkEvents(html: string, refs: Record<number, string>): string {
 export function renderMarkdown(text: string, refs?: Record<number, string>): string {
   let html: string
   try {
-    html = md.parse(text, { async: false }) as string
+    html = md.parse(prepareMarkdown(text), { async: false }) as string
   } catch {
     return `<p>${escapeHtml(text)}</p>`
   }

@@ -730,6 +730,8 @@ export function createLogsRuntime() {
         return { title: `${emitComponent(event)} @${data.event}`, subtitle: previewArgs(data.args) }
       case 'navigation':
         return { title: key, subtitle: data.navType }
+      case 'click':
+        return { title: String(data.text || data.tag || 'Click'), subtitle: String(data.xpath || key) }
       case 'error':
         return { title: key, subtitle: data.source }
       case 'ws':

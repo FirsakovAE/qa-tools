@@ -8,18 +8,16 @@ import type { AiProviderId } from './types'
 
 const KEY_PROVIDERS: {
   id: AiProviderId
-  field: 'geminiKey' | 'openRouterKey' | 'groqKey'
+  field: 'geminiKey' | 'openRouterKey'
   label: string
-  recommended?: boolean
   consoleName: string
   consoleUrl: string
 }[] = [
-  { id: 'gemini', field: 'geminiKey', label: 'Gemini', recommended: true, consoleName: 'Google AI Studio', consoleUrl: 'https://aistudio.google.com/apikey' },
+  { id: 'gemini', field: 'geminiKey', label: 'Gemini', consoleName: 'Google AI Studio', consoleUrl: 'https://aistudio.google.com/apikey' },
   { id: 'openrouter', field: 'openRouterKey', label: 'OpenRouter', consoleName: 'OpenRouter', consoleUrl: 'https://openrouter.ai/settings/keys' },
-  { id: 'groq', field: 'groqKey', label: 'Groq', consoleName: 'GroqCloud', consoleUrl: 'https://console.groq.com/keys' },
 ]
 
-const drafts = reactive<Record<AiProviderId, string>>({ gemini: '', openrouter: '', groq: '' })
+const drafts = reactive<Record<AiProviderId, string>>({ gemini: '', openrouter: '' })
 
 function masked(key: string): string {
   return `${'•'.repeat(8)}${key.slice(-4)}`
@@ -39,7 +37,6 @@ async function saveKey(provider: (typeof KEY_PROVIDERS)[number]) {
       <div class="flex items-center gap-2 font-medium">
         {{ p.label }}
         <span class="text-xs font-normal text-muted-foreground">your own API key</span>
-        <span v-if="p.recommended" class="ml-auto rounded border px-1.5 py-px text-[10px] font-normal leading-4 text-muted-foreground">recommended</span>
       </div>
       <div v-if="aiCredentials[p.field]" class="flex items-center gap-2">
         <KeyRound class="h-4 w-4 text-muted-foreground" />

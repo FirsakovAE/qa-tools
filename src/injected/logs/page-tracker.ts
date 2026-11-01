@@ -7,6 +7,7 @@
  * in this extension script would make Chrome list the site's errors as errors of the extension.
  */
 
+import { initClickLogs } from './click-tracker'
 import { onLogsReset, recordLog } from './core'
 import { emitAppConsoleError, installConsoleErrorFallback, observeConsoleError, prepareConsoleLogs } from './console-tracker'
 import { errorInfoOf, locationOf, recordError } from './errors'
@@ -99,6 +100,7 @@ export function initPageLogs(): void {
 
   onLogsReset(recordCurrentPage)
   recordCurrentPage()
+  initClickLogs()
 
   prepareConsoleLogs()
   const api: PageErrorApi = {

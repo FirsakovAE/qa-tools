@@ -70,6 +70,11 @@ export function useRowSelection(orderedIds: () => string[]) {
     anchor = null
   }
 
+  /** Replace the checked set without moving the range anchor */
+  function replace(next: ReadonlySet<string>) {
+    checked.value = next
+  }
+
   function toggleAll() {
     if (!ids.value.length) return
     if (headerState.value === true) clear()
@@ -83,5 +88,5 @@ export function useRowSelection(orderedIds: () => string[]) {
     return true
   }
 
-  return { checked, checkedIds, count, headerState, toggle, toggleAll, selectAll, clear, handleRowClick }
+  return { checked, checkedIds, count, headerState, toggle, toggleAll, selectAll, clear, replace, handleRowClick }
 }

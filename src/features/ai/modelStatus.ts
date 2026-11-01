@@ -33,7 +33,7 @@ interface StatusData {
   models: Record<string, ModelStatus>
   /** Requests by day: `provider` and `provider:model` → count */
   usage: { day: string; counts: Record<string, number> }
-  /** Requests per day the provider reported (Groq headers, OpenRouter key info) */
+  /** Requests per day the provider reported (OpenRouter key info and rate-limit headers) */
   limits: Record<string, ReportedLimit>
 }
 
@@ -152,15 +152,6 @@ function current(entry: ReportedLimit): ReportedLimit {
 export function reportedLimit(provider: AiProviderId, model?: string): ReportedLimit | null {
   const entry = status.limits[key(provider, model)]
   return entry ? current(entry) : null
-}
-
-/** The newest per-model limit of the provider, with its model id */
-export function latestReportedLimit(provider: AiProviderId): (ReportedLimit & { model: string }) | null {
-  let best: [string, ReportedLimit] | null = null
-  for (const pair of Object.entries(status.limits)) {
-    if (pair[0].startsWith(`${provider}:`) && (!best || pair[1].at > best[1].at)) best = pair
-  }
-  return best ? { ...current(best[1]), model: best[0].slice(provider.length + 1) } : null
 }
 
 /** Models of the list Auto mode skips right now */

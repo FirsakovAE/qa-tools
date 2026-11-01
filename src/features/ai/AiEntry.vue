@@ -3,9 +3,10 @@ import { computed } from 'vue'
 import { Copy, Check, RotateCcw, Wand2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import AiSteps from './AiSteps.vue'
+import AiAttachmentChip from './AiAttachmentChip.vue'
 import { useAiChat } from './useAiChat'
 import { renderAnswer } from './markdown'
-import { modelName, stepsLabel, usageLine, usageTitle } from './format'
+import { modelName, usageLine, usageTitle } from './format'
 import type { AiChatEntry } from './types'
 
 const props = defineProps<{
@@ -29,15 +30,17 @@ const lastAnswer = computed(() => {
 
 <template>
   <div class="ai-entry flex flex-col" :class="entry.role === 'user' ? 'items-end' : 'items-start'">
-    <div
-      v-if="entry.role === 'user'"
-      class="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-primary text-primary-foreground whitespace-pre-wrap break-words"
-    >{{ entry.text }}</div>
+    <div v-if="entry.role === 'user'" class="flex max-w-[85%] flex-col items-end gap-1">
+      <div v-if="entry.attachments?.length" class="flex max-w-full flex-wrap justify-end gap-1">
+        <AiAttachmentChip v-for="item in entry.attachments" :key="item.key" :item="item" />
+      </div>
+      <div
+        v-if="entry.text"
+        class="max-w-full rounded-lg px-3 py-2 text-sm bg-primary text-primary-foreground whitespace-pre-wrap break-words"
+      >{{ entry.text }}</div>
+    </div>
     <div v-else class="max-w-[95%] min-w-0 rounded-lg border px-3 py-2 bg-background" @click="emit('click', $event)">
-      <details v-if="entry.steps?.length" class="mb-2 text-xs text-muted-foreground">
-        <summary class="cursor-pointer select-none">{{ stepsLabel(entry.steps) }}</summary>
-        <AiSteps :steps="entry.steps" class="mt-1" />
-      </details>
+      <AiSteps v-if="entry.steps?.length" :steps="entry.steps" class="mb-2" />
       <template v-if="entry.error">
         <div class="text-sm text-destructive_text whitespace-pre-wrap break-words">{{ entry.text }}</div>
         <details v-if="entry.errorDetails" class="mt-1 text-xs text-muted-foreground">

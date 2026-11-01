@@ -23,7 +23,6 @@ const MAX_EVENTS_PER_CALL = 6
 const MAX_SEARCH_RESULTS = 40
 /** Values read from one event for search */
 const MAX_LEAVES = 20_000
-const MAX_LEAVES_SHOWN = 3
 const MAX_GROUPS = 10
 const SNIPPET_CHARS = 160
 const STACK_CODE_CHARS = 5000
@@ -337,6 +336,23 @@ async function withStackCode(details: string, stack: string, seen: Set<string>):
   }
 }
 
+/** `#N` of the first (or last) event of the snapshot that matches */
+export function findEventRef(snapshot: LogsSnapshot, match: (event: RuntimeEvent) => boolean, last = false): number | undefined {
+  const index = last ? snapshot.rows.findLastIndex(r => match(r.event)) : snapshot.rows.findIndex(r => match(r.event))
+  return index === -1 ? undefined : index
+}
+
+/** Full data of one event the user attached to a question, as get_events gives it */
+export async function eventAttachment(snapshot: LogsSnapshot, ref: number, max: number): Promise<string> {
+  const row = snapshot.rows[ref]
+  return cut(await withStackCode(eventDetails(snapshot, row), eventStack(row.event), new Set()), max)
+}
+
+/** A protected network entry that is not in the logs, in the format of get_events */
+export function networkAttachment(entry: Record<string, any>, max: number): string {
+  return cut(json(networkDetails(entry)), max)
+}
+
 export async function getEvents(ids: unknown): Promise<string> {
   const snapshot = pinnedSnapshot()
   const list = (Array.isArray(ids) ? ids : [ids])
@@ -562,8 +578,7 @@ export function searchLogs(args: SearchArgs): string {
   const page = matches.slice(offset, offset + limit)
   const needle = valueSpec || query
   const lines = page.map(({ row, leaves, inHead }) => {
-    const shown = leaves.slice(0, MAX_LEAVES_SHOWN).map(l => `    ${l.path} = ${excerpt(l.value, needle)}`)
-    if (leaves.length > MAX_LEAVES_SHOWN) shown.push(`    ... ${leaves.length - MAX_LEAVES_SHOWN} more matching values`)
+    const shown = leaves.map(l => `    ${l.path} = ${excerpt(l.value, needle)}`)
     return [`${rowLine(row, t0)}${inHead && !leaves.length ? '  (matched in title)' : ''}`, ...shown].join('\n')
   })
   const out = [`${matches.length} event${matches.length === 1 ? '' : 's'} match ${what}${matches.length > page.length ? ` (showing ${offset + 1}-${offset + page.length})` : ''}:`, ...lines]

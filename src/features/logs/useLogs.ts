@@ -5,7 +5,7 @@
  * collected regardless of the active tab.
  *
  * Sources:
- *  - injected logs module (`__LOGS__` broadcasts): props, emit, store, action, navigation, error
+ *  - injected logs module (`__LOGS__` broadcasts): props, emit, store, action, navigation, click, error
  *    (already sanitized, size-limited and compacted in page context)
  *  - existing network broadcasts (`__NETWORK__`): Send request / Receive response. Both events
  *    reference one masked network entry in the network pool (see networkPool.ts).

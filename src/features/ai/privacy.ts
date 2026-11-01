@@ -90,6 +90,31 @@ function collectRefs(value: unknown, pool: Record<string, unknown>, out: Set<str
   for (const child of Object.values(value as Record<string, unknown>)) collectRefs(child, pool, out, depth + 1)
 }
 
+/** Classic (bookmark) headers: indexes into the full list, or header objects when the index was missed */
+function classicHeaders(full: unknown, refs: unknown): { name: string; value: string }[] | undefined {
+  if (!Array.isArray(refs)) return undefined
+  const list = Array.isArray(full) ? full : []
+  const out: { name: string; value: string }[] = []
+  for (const ref of refs) {
+    const header = typeof ref === 'number' ? list[ref] : ref
+    if (header && typeof header === 'object' && typeof (header as { name?: unknown }).name === 'string') {
+      out.push(header as { name: string; value: string })
+    }
+  }
+  return out
+}
+
+/** WebRequest adds CORS headers the page never sees. The model gets the bookmark header list. */
+function keepClassicHeaders(entry: Record<string, any>, side: 'request' | 'response'): void {
+  const headers = side === 'request' ? 'requestHeaders' : 'responseHeaders'
+  const visible = side === 'request' ? 'requestHeadersVisible' : 'responseHeadersVisible'
+  const page = side === 'request' ? 'requestHeadersPageVisible' : 'responseHeadersPageVisible'
+  if (Array.isArray(entry[visible])) entry[headers] = classicHeaders(entry[headers], entry[visible]) ?? []
+  else if (Array.isArray(entry[page])) entry[headers] = entry[page]
+  delete entry[visible]
+  delete entry[page]
+}
+
 function keepLinks(clean: Record<string, unknown>, raw: unknown): void {
   if (!raw || typeof raw !== 'object') return
   for (const key of LINK_KEYS) {
@@ -111,11 +136,17 @@ function protectEntry(raw: Record<string, any>, s: Sanitizer, privacy: AiPrivacy
     delete entry.responseHeaders
     delete entry.requestHeadersVisible
     delete entry.responseHeadersVisible
+    delete entry.requestHeadersPageVisible
+    delete entry.responseHeadersPageVisible
     delete entry.authorization
     entry.headers = HIDDEN
-  } else if (entry.authorization && typeof entry.authorization === 'object') {
-    for (const field of ['token', 'username']) {
-      if (entry.authorization[field]) entry.authorization[field] = MASK
+  } else {
+    keepClassicHeaders(entry, 'request')
+    keepClassicHeaders(entry, 'response')
+    if (entry.authorization && typeof entry.authorization === 'object') {
+      for (const field of ['token', 'username']) {
+        if (entry.authorization[field]) entry.authorization[field] = MASK
+      }
     }
   }
   const frames: any[] | undefined = entry.websocket?.frames
@@ -171,6 +202,19 @@ export function protectPayload(payload: LogsReportPayload, privacy: AiPrivacy): 
     }
   }
   return { ...payload, events, snapshots, network: { entries, bodies } as LogsReportPayload['network'] }
+}
+
+/** A Network tab entry with its bodies inline (one that is not in the logs), protected like the logs payload */
+export function protectNetworkEntry(raw: Record<string, any>, privacy: AiPrivacy): Record<string, any> {
+  const s = sanitizerFor(privacy.masking)
+  const entry = protectEntry(raw, s, privacy)
+  for (const key of ['requestBody', 'responseBody']) {
+    const body = raw[key]
+    if (!body) continue
+    if (!privacy.access.bodies) delete entry[key]
+    else if (typeof body.text === 'string' && !body.isBinary) entry[key].text = maskBodyText(body.text, s, privacy.masking)
+  }
+  return entry
 }
 
 /** Live app values (component state, stores): masked by the AI mask list; only types when app data is off */

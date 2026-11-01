@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Star, StarOff, EyeOff } from 'lucide-vue-next'
+import { Star, StarOff, EyeOff, Sparkles } from 'lucide-vue-next'
+import { askAiAboutProps } from '@/features/ai/attachments'
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -51,6 +52,15 @@ function handleClick(e: Event, action: () => void) {
     :class="contentClass"
     v-bind="variant === 'dropdown' ? { align: 'end' } : {}"
   >
+    <component
+      :is="Item"
+      :disabled="!row.hasPropsFlag"
+      @click="handleClick($event, () => void askAiAboutProps(row))"
+    >
+      <Sparkles class="h-4 w-4 mr-2" />
+      Ask AI
+    </component>
+    <component :is="Separator" />
     <component
       :is="Item"
       @click="handleClick($event, () => emit('toggleFavorite', row))"

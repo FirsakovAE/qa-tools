@@ -2,10 +2,10 @@
  * Logs limits and masking config shared by the injected bundle and the UI (no imports allowed).
  */
 
-export type LogLimitKey = 'network' | 'props' | 'emit' | 'store' | 'action' | 'navigation' | 'error'
+export type LogLimitKey = 'network' | 'ws' | 'props' | 'emit' | 'store' | 'action' | 'navigation' | 'click' | 'error'
 
 export interface LogsLimits {
-  /** Event groups that are logged at all (network: both request and response events) */
+  /** Event groups that are logged at all (network: request and response; ws: open, frames and close) */
   capture: Record<LogLimitKey, boolean>
   /** Total budget for buffered events (approximate serialized size) */
   maxMemoryMB: number
@@ -22,10 +22,10 @@ export interface LogsMasking {
   valuePatterns: boolean
 }
 
-export const LOG_LIMIT_KEYS: LogLimitKey[] = ['network', 'props', 'emit', 'store', 'action', 'navigation', 'error']
+export const LOG_LIMIT_KEYS: LogLimitKey[] = ['network', 'ws', 'props', 'emit', 'store', 'action', 'navigation', 'click', 'error']
 
 export const DEFAULT_LOGS_LIMITS: LogsLimits = {
-  capture: { network: true, props: true, emit: true, store: true, action: true, navigation: true, error: true },
+  capture: { network: true, ws: true, props: true, emit: true, store: true, action: true, navigation: true, click: true, error: true },
   maxMemoryMB: 20,
   limitEventSize: true,
   maxEventKB: 512,
@@ -62,9 +62,9 @@ export const DEFAULT_LOGS_MASKING: LogsMasking = {
 }
 
 export function limitKeyForKind(kind: string): LogLimitKey {
-  return kind === 'request' || kind === 'response' || kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed'
-    ? 'network'
-    : (kind as LogLimitKey)
+  if (kind === 'request' || kind === 'response') return 'network'
+  if (kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed') return 'ws'
+  return kind as LogLimitKey
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -76,7 +76,15 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
 export function normalizeLimits(raw: Partial<LogsLimits> | null | undefined): LogsLimits {
   const capture = {} as Record<LogLimitKey, boolean>
   const { memoryMB, eventKB } = LOG_LIMIT_BOUNDS
-  for (const key of LOG_LIMIT_KEYS) capture[key] = raw?.capture?.[key] !== false
+  const stored = raw?.capture
+  for (const key of LOG_LIMIT_KEYS) {
+    // Older settings had one Network switch for requests and WebSocket
+    if (key === 'ws' && stored && !Object.prototype.hasOwnProperty.call(stored, 'ws')) {
+      capture.ws = stored.network !== false
+    } else {
+      capture[key] = stored?.[key] !== false
+    }
+  }
   return {
     capture,
     maxMemoryMB: clampInt(raw?.maxMemoryMB, memoryMB.min, memoryMB.max, DEFAULT_LOGS_LIMITS.maxMemoryMB),

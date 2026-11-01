@@ -4,7 +4,7 @@ title: Working with logs
 
 # Working with logs
 
-The **Logs** tab is a single chronological journal of what happens on the page: network requests, component props and emits, **Pinia** changes and actions, SPA navigation and JS errors. It helps to reconstruct a scenario step by step and to hand it over as a file.
+The **Logs** tab is a single chronological journal of what happens on the page: network requests, component props and emits, **Pinia** changes and actions, SPA navigation, clicks and JS errors. It helps to reconstruct a scenario step by step and to hand it over as a file.
 
 The tab is always visible, comes after **Pinia Store**, and records events the same way in the extension and in **Bookmark** ([Standalone](/standalone)) mode.
 
@@ -23,6 +23,7 @@ The tab is always visible, comes after **Pinia Store**, and records events the s
 | **Change store** | Changed **Pinia** state: list of changes and full **Before** / **After** snapshots. The type also includes the store's base states: **Store initialized**, **Store snapshot** and **Store checkpoint** (see [How events are stored](#how-events-are-stored)) |
 | **Store action** | **Pinia** action call: arguments, result or error, status, duration |
 | **Navigation** | SPA navigation: **pushState**, **replaceState**, **popstate**, **hashchange** with **From** / **To**. When logging starts, and after **Clear**, the current page is recorded as **snapshot** |
+| **Click** | A primary click: **XPath** of the field or button (its **id** when that id is unique and stable, otherwise an absolute path) and **Text** inside that control. A click on an icon inside a button is recorded as the button. Clicks on Vue Inspector itself are skipped. The value of a password or hidden field is not stored |
 | **JS error** | Uncaught error, unhandled promise rejection or `console.error` of the page: message, source, location, compact stack (see [JS errors](#js-errors)) |
 
 Each network call produces **two** events that share one network entry. **Send request** shows what was sent, **Receive response** shows what came back. A WebSocket writes a separate event for the open connection (**WebSocket open**), for every sent frame, for every received frame and for the close. Those four types are in the **Type** filter. They share one stored connection, so the handshake and the frame text are kept once. After a request is edited at a [Breakpoint](/network/traffic), both events show the data that was actually sent and received.
@@ -52,7 +53,7 @@ As in other tabs, a query **without** quotes matches a substring, a query wrappe
 | Item | Purpose |
 | ---- | ------- |
 | **N** or **N/M** | Rows after filters; with an active search or **Type** filter, **M** is the total number of events in the buffer |
-| **ignored** | Number of ignored event groups. Click opens **Ignored events**: remove a single rule or **Clear all** |
+| **ignored** | Number of ignored event groups. Click opens **Options → Logs**, the **Ignore list** table |
 | **Paused** | Recording of new events is paused |
 
 ### Log controls
@@ -82,7 +83,7 @@ The first column contains checkboxes, in the same position as the favorites star
 
 | Action | Result |
 | ------ | ------ |
-| Click a checkbox | Select / unselect a row |
+| Click a checkbox | Select / unselect a row. **Send request** and **Receive response** of the same request are selected and cleared together |
 | **Shift** + click | Select a range from the last clicked row |
 | **Ctrl / Cmd** + click on a row | Toggle a row without opening details |
 | Header checkbox | Select all / clear selection |
@@ -105,6 +106,7 @@ Clicking a row opens details on the right. The layout follows **Network**: a tab
 | **Store action** | **Overview**, **Arguments**, **Result** / **Error**, **Raw** |
 | **Emit** | **Arguments (n)**, **Overview**, **Raw** |
 | **Navigation**, **JS error** | **Overview**, **Stack** (errors), **Raw** |
+| **Click** | **Overview**, **Raw** |
 
 **Changes** shows a diff by path: added, removed and changed values with the old and new value. Very large diffs are truncated; the full state stays available on **Before** / **After**.
 
@@ -122,12 +124,13 @@ Actions are available in the **⋮** menu of the details header and in the row c
 
 | Action | Purpose |
 | ------ | ------- |
-| **Export event** | Export one event. For network events the item is **Export request & response**: both events of the request go into one file. A WebSocket event exports that one event |
+| **Ask AI** | Attach the event to a question for the assistant. The **AI** tab opens with a chip above the input that shows the event name: **×** removes it from the question. Type a question, or send the chip without one. The assistant gets the full event with its id `#N`, masked and cut by the AI settings |
+| **Export event** | Export one event. For a network event, **Send request** and **Receive response** of the same request go into one file. A WebSocket event exports that one event |
 | **Copy cURL** | Copy the request as a cURL command (also available on **Receive response**: both events share the request data). WebSocket events do not have this action |
 | **Open request event** / **Open response event** | Jump to the paired network event. A WebSocket uses **Open connection event** / **Open close event** |
 | **Ignore** | Stop logging this group of events |
 
-**Ignore** works per group: the same request (method and path), the same component, the same store, and so on. Ignored groups are not recorded at all; the **ignored** indicator in the toolbar opens their list, where **×** logs one group again and **Clear all** logs every group again.
+**Ignore** works per group: the same request (method and path), the same component, the same store, and so on. Ignored groups are not recorded at all. The **ignored** indicator in the toolbar opens **Options → Logs**, the **Ignore list**, where **Log again** resumes one group and **Log all again** resumes every group.
 
 ## How it works
 

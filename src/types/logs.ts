@@ -22,6 +22,7 @@ export type LogKind =
   | 'store'
   | 'action'
   | 'navigation'
+  | 'click'
   | 'error'
 
 export type LogLevel = 'info' | 'warn' | 'error'
@@ -99,6 +100,7 @@ export const LOG_KIND_META: Record<LogKind, LogKindMeta> = {
   store: { label: 'Change store', badgeClass: 'text-yellow-500 border-yellow-500/40 bg-yellow-500/10' },
   action: { label: 'Store action', badgeClass: 'text-purple-500 border-purple-500/40 bg-purple-500/10' },
   navigation: { label: 'Navigation', badgeClass: 'text-blue-500 border-blue-500/40 bg-blue-500/10' },
+  click: { label: 'Click', badgeClass: 'text-orange-500 border-orange-500/40 bg-orange-500/10' },
   error: { label: 'JS error', badgeClass: 'text-red-500 border-red-500/40 bg-red-500/10' },
 }
 

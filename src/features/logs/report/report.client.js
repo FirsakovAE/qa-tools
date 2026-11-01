@@ -24,9 +24,9 @@
     { title: 'WebSocket', kinds: ['ws', 'ws-sent', 'ws-received', 'ws-closed'] },
     { title: 'Components', kinds: ['props', 'emit'] },
     { title: 'Pinia', kinds: ['store', 'action'] },
-    { title: 'Page', kinds: ['navigation', 'error'] },
+    { title: 'Page', kinds: ['navigation', 'click', 'error'] },
   ]
-  var KNOWN = ['request', 'response', 'ws', 'ws-sent', 'ws-received', 'ws-closed', 'props', 'emit', 'store', 'action', 'navigation', 'error']
+  var KNOWN = ['request', 'response', 'ws', 'ws-sent', 'ws-received', 'ws-closed', 'props', 'emit', 'store', 'action', 'navigation', 'click', 'error']
 
   var doc = document
   // Parsed (and unpacked) by the loader; QA_PAYLOAD_TEXT is the same data as JSON text
@@ -1235,6 +1235,11 @@
       if (d.uid !== undefined) rows.push(['uid', d.uid])
       if (d.parents) rows.push(['Parents', d.parents])
     } else if (e.kind === 'navigation') rows.push(['Type', d.navType], ['From', d.from || '-'], ['To', d.to])
+    else if (e.kind === 'click') {
+      rows.push(['Text', d.text || '-'], ['XPath', d.xpath || '-'])
+      if (d.tag) rows.push(['Tag', d.tag])
+      if (d.inputType) rows.push(['Input', d.inputType])
+    }
     else if (e.kind === 'error') {
       rows.push(['Source', d.source])
       if (d.name) rows.push(['Name', d.name])

@@ -238,6 +238,12 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
       rows.push({ label: 'From', value: String(d.from || '—') })
       rows.push({ label: 'To', value: String(d.to) })
       break
+    case 'click':
+      rows.push({ label: 'Text', value: String(d.text || '—') })
+      rows.push({ label: 'XPath', value: String(d.xpath || '—') })
+      if (d.tag) rows.push({ label: 'Tag', value: String(d.tag) })
+      if (d.inputType) rows.push({ label: 'Input', value: String(d.inputType) })
+      break
     case 'error':
       rows.push({ label: 'Source', value: String(d.source) })
       if (d.name) rows.push({ label: 'Name', value: String(d.name) })

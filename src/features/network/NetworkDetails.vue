@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/Textarea'
 import {
   Table,
   TableBody,
@@ -448,8 +447,11 @@ watch(
   },
 )
 
-watch(activeSection, (s) => {
+watch(activeSection, async (s) => {
   lastNetworkDetailsSection.value = s
+  if (s !== 'messages') return
+  await nextTick()
+  scrollWsToEnd()
 })
 
 watch(
@@ -475,13 +477,13 @@ function wsViewport(): HTMLElement | null {
 
 function onWsScroll(event: Event) {
   const el = event.target as HTMLElement
-  wsStick.value = el.scrollTop < 48
+  wsStick.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80
 }
 
-const wsFramesNewestFirst = computed(() => {
-  const frames = props.entry.websocket?.frames
-  return frames?.length ? frames.slice().reverse() : []
-})
+function scrollWsToEnd() {
+  const el = wsViewport()
+  if (el) el.scrollTop = el.scrollHeight
+}
 
 const centrifugeEmptyFrame = computed(() =>
   isCentrifugeEntry(props.entry) && isEmptyJsonObject(wsDraft.value),
@@ -492,8 +494,7 @@ watch(
   async () => {
     if (activeSection.value !== 'messages' || !wsStick.value) return
     await nextTick()
-    const el = wsViewport()
-    if (el) el.scrollTop = 0
+    scrollWsToEnd()
   },
 )
 
@@ -508,6 +509,21 @@ function wsPayload(text: string): string {
 }
 
 const wsDraft = ref('')
+const wsInput = ref<HTMLTextAreaElement | null>(null)
+const WS_INPUT_MAX_LINES = 5
+
+function fitWsInput() {
+  const el = wsInput.value
+  if (!el) return
+  const style = getComputedStyle(el)
+  const line = parseFloat(style.lineHeight) || 20
+  const max = line * WS_INPUT_MAX_LINES + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, max)}px`
+  el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden'
+}
+
+watch(wsDraft, () => nextTick(fitWsInput))
 
 function submitWsFrame(direction: 'sent' | 'received') {
   const socket = props.entry.websocket
@@ -538,6 +554,7 @@ watch(
   (newVal, oldVal) => {
     if (!newVal.id) return
     if (newVal.id !== oldVal?.id) {
+      wsStick.value = true
       curlCopied.value = false
       copiedHeaderIndex.value = null
       copiedResponseHeaderIndex.value = null
@@ -641,7 +658,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         </Tooltip>
 
         <!-- 3-dot actions menu (mobile < 1000px, same as table) -->
-        <DropdownMenu v-if="!isWebSocket">
+        <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button
               variant="outline"
@@ -688,7 +705,6 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
           </div>
         </ContextMenuTrigger>
         <NetworkActionsMenuContent
-          v-if="!isWebSocket"
           variant="context"
           :entry="props.entry"
           :breakpoint-matching-ids="props.breakpointMatchingIds"
@@ -730,74 +746,84 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             <span v-if="entry.websocket?.closeReason">{{ entry.websocket.closeReason }}</span>
             <span v-if="entry.websocket?.droppedFrames">Earlier messages dropped: {{ entry.websocket.droppedFrames }}</span>
           </div>
-          <div class="shrink-0 border-b px-3 py-2 space-y-2">
-            <Textarea
-              v-model="wsDraft"
-              rows="3"
-              placeholder="Message"
-              class="font-mono text-xs"
-              :disabled="entry.websocket?.state === 'closed'"
-            />
-            <div class="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                class="h-8 text-xs text-sky-400 border-sky-400/40"
-                :disabled="entry.websocket?.state !== 'open'"
-                title="Send this message on the socket"
-                @click="submitWsFrame('sent')"
+          <ScrollArea ref="wsScroll" :horizontal="false" class="flex-1 min-h-0" @scroll="onWsScroll">
+            <div class="space-y-3 p-3">
+              <div v-if="!entry.websocket?.frames.length" class="py-8 text-center text-sm text-muted-foreground">
+                No messages yet
+              </div>
+              <div
+                v-for="frame in entry.websocket?.frames"
+                :key="frame.id"
+                class="flex flex-col"
+                :class="frame.direction === 'sent' ? 'items-end' : 'items-start'"
               >
-                Sent
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                class="h-8 text-xs text-green-500 border-green-500/40"
-                :disabled="entry.websocket?.state === 'closed'"
-                title="Deliver this message to the page"
-                @click="submitWsFrame('received')"
-              >
-              Received
-            </Button>
-          </div>
-          <p v-if="centrifugeEmptyFrame" class="text-xs text-amber-500">
-            This frame may trigger a protocol error and disconnect the WebSocket.
-          </p>
-        </div>
-          <ScrollArea ref="wsScroll" class="flex-1 min-h-0" @scroll="onWsScroll">
-          <div class="p-3 space-y-2">
-            <div v-if="!entry.websocket?.frames.length" class="text-sm text-muted-foreground text-center py-8">
-              No messages yet
+                <div class="mb-0.5 flex max-w-[85%] items-center gap-2 px-1 text-[10px] text-muted-foreground">
+                  <span class="font-mono">{{ wsClock(frame.time) }}</span>
+                  <span :class="frame.direction === 'sent' ? 'text-sky-400' : 'text-green-500'">
+                    {{ frame.direction === 'sent' ? 'Sent' : 'Received' }}
+                  </span>
+                  <span v-if="frame.kind === 'binary'">Binary</span>
+                  <span v-if="frame.mocked" class="text-purple-400">Mock</span>
+                  <span>{{ formatBytes(frame.size) }}</span>
+                  <span v-if="frame.truncated">truncated</span>
+                  <Button
+                    v-if="frame.kind === 'text' && frame.data"
+                    variant="ghost"
+                    size="icon"
+                    class="h-6 w-6"
+                    title="Copy message"
+                    @click="copyToClipboard(frame.data)"
+                  >
+                    <Copy class="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div
+                  v-if="frame.data"
+                  class="max-w-[85%] whitespace-pre-wrap break-all rounded-lg px-3 py-2 font-mono text-xs"
+                  :class="frame.direction === 'sent'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border bg-background'"
+                >{{ frame.kind === 'text' ? wsPayload(frame.data) : frame.data }}</div>
+              </div>
             </div>
-            <div
-              v-for="frame in wsFramesNewestFirst"
-              :key="frame.id"
-              class="rounded-md border px-3 py-2"
-            >
-              <div class="flex items-center gap-2 text-xs">
-                <span class="font-mono text-muted-foreground">{{ wsClock(frame.time) }}</span>
-                <span :class="frame.direction === 'sent' ? 'text-sky-400' : 'text-green-500'">
-                  {{ frame.direction === 'sent' ? 'Sent' : 'Received' }}
-                </span>
-                <span v-if="frame.kind === 'binary'" class="text-muted-foreground">Binary</span>
-                <span v-if="frame.mocked" class="text-purple-400">Mock</span>
-                <span class="text-muted-foreground">{{ formatBytes(frame.size) }}</span>
-                <span v-if="frame.truncated" class="text-muted-foreground">truncated</span>
+          </ScrollArea>
+          <div class="shrink-0 space-y-1 border-t p-2">
+            <div class="flex items-end rounded-xl border border-border bg-input">
+              <textarea
+                ref="wsInput"
+                v-model="wsDraft"
+                rows="1"
+                placeholder="Message"
+                class="block min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-2.5 pl-3 pr-1 text-sm leading-5 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                :disabled="entry.websocket?.state === 'closed'"
+              />
+              <div class="flex shrink-0 items-center gap-1.5 py-1.5 pr-1.5">
                 <Button
-                  v-if="frame.kind === 'text' && frame.data"
-                  variant="ghost"
-                  size="icon"
-                  class="ml-auto h-6 w-6"
-                  title="Copy message"
-                  @click="copyToClipboard(frame.data)"
+                  variant="outline"
+                  size="sm"
+                  class="h-8 rounded-full border-green-500/40 px-3 text-xs text-green-500"
+                  :disabled="entry.websocket?.state === 'closed'"
+                  title="Deliver this message to the page"
+                  @click="submitWsFrame('received')"
                 >
-                  <Copy class="h-3.5 w-3.5" />
+                  Received
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="h-8 rounded-full border-sky-400/40 px-3 text-xs text-sky-400"
+                  :disabled="entry.websocket?.state !== 'open'"
+                  title="Send this message on the socket"
+                  @click="submitWsFrame('sent')"
+                >
+                  Sent
                 </Button>
               </div>
-              <pre v-if="frame.data" class="mt-1 mb-0 whitespace-pre-wrap break-all font-mono text-xs">{{ frame.kind === 'text' ? wsPayload(frame.data) : frame.data }}</pre>
             </div>
+            <p v-if="centrifugeEmptyFrame" class="px-1 text-xs text-amber-500">
+              This frame may trigger a protocol error and disconnect the WebSocket.
+            </p>
           </div>
-          </ScrollArea>
         </div>
         <!-- URL Section (Breakpoint mode only) -->
         <ScrollArea v-else-if="activeSection === 'url' && canEditRequest" class="h-full">

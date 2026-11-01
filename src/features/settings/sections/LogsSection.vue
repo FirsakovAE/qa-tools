@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import { TableCell } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,7 +11,8 @@ import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
 import SettingsTableSection from '../components/SettingsTableSection.vue'
 import type { TableColumn } from '../components/SettingsTableSection.vue'
 import type { MenuAction } from '@/components/OptionsItemActionsMenu'
-import { Trash, RotateCcw } from 'lucide-vue-next'
+import { Eye, Trash, RotateCcw } from 'lucide-vue-next'
+import { LOG_KIND_META, type LogIgnoreRule } from '@/types/logs'
 import { formatBytes } from '@/types/network'
 import {
   DEFAULT_LOGS_LIMITS,
@@ -43,12 +45,14 @@ function toggleSearch(key: SearchKey) {
 
 // -------------------- CAPTURE & LIMITS --------------------
 const captureRows: Array<{ key: LogLimitKey; label: string; unit: string }> = [
-  { key: 'network', label: 'Network', unit: 'requests' },
+  { key: 'network', label: 'Requests', unit: 'requests' },
+  { key: 'ws', label: 'WebSocket', unit: 'events' },
   { key: 'props', label: 'Props changes', unit: 'events' },
   { key: 'emit', label: 'Emits', unit: 'events' },
   { key: 'store', label: 'Pinia changes', unit: 'events' },
   { key: 'action', label: 'Store actions', unit: 'events' },
   { key: 'navigation', label: 'Navigation', unit: 'events' },
+  { key: 'click', label: 'Clicks', unit: 'events' },
   { key: 'error', label: 'JS errors', unit: 'events' },
 ]
 
@@ -88,6 +92,36 @@ function setEventSize(event: Event) {
 
 function resetLimits() {
   props.settings.logsLimits = structuredClone(DEFAULT_LOGS_LIMITS)
+}
+
+// -------------------- IGNORE LIST --------------------
+const ignoreRows = computed<LogIgnoreRule[]>(() =>
+  Array.isArray(props.settings.logsIgnoreRules) ? props.settings.logsIgnoreRules : [],
+)
+
+const ignoreColumns: TableColumn[] = [
+  { header: 'Type', width: '180px' },
+  { header: 'Object', class: 'min-w-0' },
+]
+
+function ignoreKindLabel(kind: LogIgnoreRule['kind']): string {
+  return LOG_KIND_META[kind]?.label ?? kind
+}
+
+function ignoreKindClass(kind: LogIgnoreRule['kind']): string {
+  return LOG_KIND_META[kind]?.badgeClass ?? ''
+}
+
+function removeIgnoreRule(id: string) {
+  props.settings.logsIgnoreRules = ignoreRows.value.filter(rule => rule.id !== id)
+}
+
+function clearIgnoreRules() {
+  props.settings.logsIgnoreRules = []
+}
+
+function getIgnoreActions(row: LogIgnoreRule): MenuAction[] {
+  return [{ label: 'Log again', icon: Eye, onClick: () => removeIgnoreRule(row.id) }]
 }
 
 // -------------------- MASKING --------------------
@@ -224,6 +258,47 @@ const compressSupported = canCompressReport()
         </div>
       </div>
     </div>
+
+    <SettingsTableSection
+      section-id="logs-ignore-section"
+      title="Ignore list"
+      description="These event groups are not recorded. Log again resumes one group."
+      :columns="ignoreColumns"
+      :rows="ignoreRows"
+      :row-key="(r) => (r as LogIgnoreRule).id"
+      :get-actions="(row) => getIgnoreActions(row as LogIgnoreRule)"
+      empty-message="No ignored objects"
+      @select="() => {}"
+    >
+      <template #title-actions>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-7 text-xs gap-1.5 shrink-0"
+          :disabled="ignoreRows.length === 0"
+          @click="clearIgnoreRules"
+        >
+          <Eye class="h-3.5 w-3.5" />
+          Log all again
+        </Button>
+      </template>
+      <template #row="{ row }">
+        <TableCell class="w-[180px] overflow-hidden !py-2">
+          <Badge
+            variant="outline"
+            class="max-w-full text-[10px] px-1.5 py-0 font-medium"
+            :class="ignoreKindClass((row as LogIgnoreRule).kind)"
+          >
+            <span class="truncate">{{ ignoreKindLabel((row as LogIgnoreRule).kind) }}</span>
+          </Badge>
+        </TableCell>
+        <TableCell class="min-w-0 overflow-hidden !py-2">
+          <div class="text-sm font-mono truncate" :title="(row as LogIgnoreRule).key">
+            {{ (row as LogIgnoreRule).key }}
+          </div>
+        </TableCell>
+      </template>
+    </SettingsTableSection>
 
     <!-- Masking -->
     <SettingsTableSection

@@ -58,6 +58,8 @@ Left: the store table. Main columns (visibility in table settings):
 
 Rows expose a **favorite** star and a context menu. Favorites are stored in inspector settings — see [Favorites](/store/favorite).
 
+**Ask AI** in the row menu attaches the current state and getters of the store to a question for the assistant. The **AI** tab opens with a chip above the input, for example *Store cart*: **×** removes it from the question. Type a question, or send the chip without one. When **Logs** has changes of this store, the assistant also gets the id `#N` of the latest one. Values are masked by the AI settings and cut; with **Values of store state, props, emits and actions** off, the assistant gets only names and types.
+
 ## Store details
 
 Selecting a store row opens a detail panel for that store.

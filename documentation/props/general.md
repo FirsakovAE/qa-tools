@@ -58,6 +58,8 @@ Hovering a row highlights the matching node in the page.
 
 The row context menu and star connect to [Favorites](/props/favorite) and [Blacklist](/props/blacklist).
 
+**Ask AI** in the row menu attaches the current props of the component to a question for the assistant. The **AI** tab opens with a chip above the input, for example *OrderCard props*: **×** removes it from the question. Type a question, or send the chip without one. Values are masked by the AI settings and cut; with **Values of store state, props, emits and actions** off, the assistant gets only names and types. The item is disabled for a component without props.
+
 ## Component details
 
 Selecting a component row opens a detail panel for that component.

@@ -26,7 +26,7 @@ The embedded data uses format version 1.
 
 * Without a selection — all events visible in the table after **Search** and **Type** filters.
 * With a selection — only the rows ticked in the checkbox column; the button shows **Export Logs (n)**.
-* Network events are always exported as a pair: when only **Send request** or only **Receive response** of a request is filtered or selected, the other event is added to the file too. A WebSocket frame stays the event that was selected.
+* Checking **Send request** or **Receive response** also checks the other event of the same request, and clearing one clears both, so **Export Logs (n)** counts both. If a filter hides one half, that half is still added to the file. A WebSocket frame stays the event that was selected.
 
 The button is disabled while the filtered list is empty.
 
@@ -34,7 +34,7 @@ The button is disabled while the filtered list is empty.
 
 **Export event** in the **⋮** menu of the details header or in the row context menu exports one event.
 
-For network events the item is called **Export request & response**: the **Send request** and **Receive response** events of the same request are exported together in one file, so the request and its response are never separated. A WebSocket event is exported on its own.
+For a network event, **Send request** and **Receive response** of the same request are exported together in one file, so the request and its response are never separated. A WebSocket event is exported on its own.
 
 ### Pinia changes in a partial export
 
@@ -59,7 +59,7 @@ The **HTML** report is one self-contained file: styles, scripts, the application
 ### Sidebar
 
 * **Report** — **Overview** and **All events** with the total count;
-* sections by type with counters: **Network** (**Send request**, **Receive response**), **WebSocket** (**WebSocket open**, **WebSocket sent**, **WebSocket received**, **WebSocket closed**), **Components** (**Change props**, **Emit**), **Pinia** (**Change store**, **Store action**), **Page** (**Navigation**, **JS error**);
+* sections by type with counters: **Network** (**Send request**, **Receive response**), **WebSocket** (**WebSocket open**, **WebSocket sent**, **WebSocket received**, **WebSocket closed**), **Components** (**Change props**, **Emit**), **Pinia** (**Change store**, **Store action**), **Page** (**Navigation**, **Click**, **JS error**);
 * **Download Vue Inspector** at the bottom — link to the project page.
 * **Support Vue Inspector** above it: **Monthly support** opens Boosty, **Donate with USDT** shows the Tron (TRC-20) address, a QR code and **Copy address**.
 

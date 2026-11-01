@@ -178,7 +178,8 @@ export default defineConfig({
         // 3. VitePress → docs/docs/ (маршрут /docs/ для serve и GitHub Pages)
         // `execFileSync('npx.cmd', …)` даёт EINVAL на части установок Windows; CLI через тот же node, что и сборка.
         const vitepressCli = join(process.cwd(), 'node_modules', 'vitepress', 'bin', 'vitepress.js')
-        execFileSync(process.execPath, [vitepressCli, 'build', 'documentation'], {
+        const realpathPreload = join(process.cwd(), 'scripts', 'win-realpath.cjs')
+        execFileSync(process.execPath, ['--require', realpathPreload, vitepressCli, 'build', 'documentation'], {
           stdio: 'inherit',
           cwd: process.cwd(),
           env: process.env,

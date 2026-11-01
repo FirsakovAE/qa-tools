@@ -9,7 +9,7 @@
     "build": "vue-tsc -b && vite build",
     "build:extension": "vue-tsc -b && vite build",
     "docs:dev": "vitepress dev documentation",
-    "docs:build": "vitepress build documentation",
+    "docs:build": "node --require ./scripts/win-realpath.cjs ./node_modules/vitepress/bin/vitepress.js build documentation",
     "build:standalone": "npm run build && echo 'Standalone build ready in docs/'",
     "preview": "vite preview",
     "serve:standalone": "node scripts/serve-docs-github-pages.mjs"

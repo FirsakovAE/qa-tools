@@ -43,10 +43,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="mt-2 w-full">
-    <h4 class="text-sm font-semibold leading-tight">Support Vue Inspector</h4>
-    <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-      Fund features and experiments.
-    </p>
+    <div class="border border-transparent px-2">
+      <h4 class="text-sm font-semibold leading-tight">Support Vue Inspector</h4>
+      <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+        Fund features and experiments.
+      </p>
+    </div>
 
     <div class="mt-2 flex flex-col gap-1.5">
       <a

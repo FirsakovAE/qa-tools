@@ -497,6 +497,8 @@ watch(() => props.scrollToAnchor, (anchor) => {
     activeSection.value = 'pinia'
   } else if (anchor.startsWith('ai-')) {
     activeSection.value = 'ai'
+  } else if (anchor === 'logs-ignore-section') {
+    activeSection.value = 'logs'
   } else {
     activeSection.value = 'network'
   }

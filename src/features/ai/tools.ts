@@ -46,7 +46,7 @@ export const AI_TOOLS: ToolDefinition[] = [
           key: { type: 'string', description: 'Property, header or param name, exact and case-insensitive (dealId); a path ending (data.items.id); or ~text for names containing the text' },
           value: { type: 'string', description: 'Text the value contains (case-insensitive); with exact: true the whole value' },
           exact: { type: 'boolean', description: 'value must equal the whole value' },
-          kind: { type: 'string', description: 'Optional event kind: request, response, ws, ws-sent, ws-received, ws-closed, props, emit, store, action, navigation, error' },
+          kind: { type: 'string', description: 'Optional event kind: request, response, ws, ws-sent, ws-received, ws-closed, props, emit, store, action, navigation, click, error' },
           limit: { type: 'integer', description: 'Max results, default 20, up to 40' },
           offset: { type: 'integer', description: 'Skip this many results (next page)' },
         },

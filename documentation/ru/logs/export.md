@@ -26,7 +26,7 @@ title: Экспорт
 
 * Без выбора — все события, видимые в таблице с учётом **Search** и фильтра **Type**.
 * С выбором — только строки, отмеченные в колонке чекбоксов; кнопка показывает **Export Logs (n)**.
-* Сетевые события всегда экспортируются парой: если в фильтр или выбор попал только **Send request** или только **Receive response** запроса, второе событие тоже добавляется в файл. Кадр WebSocket остаётся тем событием, которое выбрано.
+* Отметка **Send request** или **Receive response** отмечает и второе событие того же запроса, а снятие одной отметки снимает обе, поэтому **Export Logs (n)** считает оба. Если фильтр скрывает одну половину, она всё равно попадает в файл. Кадр WebSocket остаётся тем событием, которое выбрано.
 
 Кнопка неактивна, пока в отфильтрованном списке нет ни одного события.
 
@@ -34,7 +34,7 @@ title: Экспорт
 
 **Export event** в меню **⋮** шапки детализации или в контекстном меню строки экспортирует одно событие.
 
-Для сетевых событий пункт называется **Export request & response**: события **Send request** и **Receive response** одного запроса экспортируются вместе в одном файле, поэтому запрос и ответ никогда не разделяются. Событие WebSocket экспортируется само по себе.
+Для сетевого события **Send request** и **Receive response** одного запроса экспортируются вместе в одном файле, поэтому запрос и ответ никогда не разделяются. Событие WebSocket экспортируется само по себе.
 
 ### Изменения Pinia при частичном экспорте
 
@@ -59,7 +59,7 @@ title: Экспорт
 ### Боковая панель
 
 * **Report** — **Overview** и **All events** с общим количеством;
-* разделы по типам со счётчиками: **Network** (**Send request**, **Receive response**), **WebSocket** (**WebSocket open**, **WebSocket sent**, **WebSocket received**, **WebSocket closed**), **Components** (**Change props**, **Emit**), **Pinia** (**Change store**, **Store action**), **Page** (**Navigation**, **JS error**);
+* разделы по типам со счётчиками: **Network** (**Send request**, **Receive response**), **WebSocket** (**WebSocket open**, **WebSocket sent**, **WebSocket received**, **WebSocket closed**), **Components** (**Change props**, **Emit**), **Pinia** (**Change store**, **Store action**), **Page** (**Navigation**, **Click**, **JS error**);
 * внизу — **Download Vue Inspector** со ссылкой на страницу проекта.
 * над ней — **Support Vue Inspector**: **Monthly support** открывает Boosty, **Donate with USDT** показывает адрес Tron (TRC-20), QR-код и кнопку **Copy address**.
 

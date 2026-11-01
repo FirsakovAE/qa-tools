@@ -1,5 +1,5 @@
 /**
- * Chat completions for OpenRouter, Gemini and Groq through their OpenAI-compatible endpoints,
+ * Chat completions for OpenRouter and Gemini through their OpenAI-compatible endpoints,
  * and the free models each of them offers.
  */
 
@@ -9,9 +9,8 @@ import type { AiModel, AiProviderId, AiTokens, ChatMessage, ChatToolCall, ToolDe
 
 const OPENROUTER_API = 'https://openrouter.ai/api/v1'
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta'
-const GROQ_API = 'https://api.groq.com/openai/v1'
 
-export const PROVIDER_LABELS: Record<AiProviderId, string> = { gemini: 'Gemini', openrouter: 'OpenRouter', groq: 'Groq' }
+export const PROVIDER_LABELS: Record<AiProviderId, string> = { gemini: 'Gemini', openrouter: 'OpenRouter' }
 
 export interface ProviderBudget {
   /** Timeline lines of the logs digest sent with a question */
@@ -25,17 +24,11 @@ export interface ProviderBudget {
   contextChars: number
   /** Requests with tools per question; one more answers without them */
   toolRounds: number
-  maxTokens?: number
 }
 
-/**
- * Groq free tier rejects a single request above ~8K tokens (the minute cap). The system
- * prompt and tool definitions take about 2.5K tokens; the conversation stays under 10K chars.
- */
 export const PROVIDER_BUDGET: Record<AiProviderId, ProviderBudget> = {
   openrouter: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity, toolRounds: 10 },
   gemini: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity, toolRounds: 10 },
-  groq: { digestTimeline: 40, digestChars: 5500, digestBodyChars: 500, toolResultChars: 3500, contextChars: 10_000, toolRounds: 6, maxTokens: 2500 },
 }
 
 /**
@@ -57,14 +50,6 @@ const GEMINI_PREFERRED = [/^gemini-[\d.]+-flash$/i, /^gemini-[\d.]+-flash-lite$/
 const GEMINI_FALLBACK: AiModel[] = [
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', recommended: true },
   { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', recommended: true },
-]
-const GROQ_PREFERRED = [/gpt-oss-120b/i, /qwen/i, /llama-3\.3-70b|llama-4/i, /minimax|kimi|muse/i, /gpt-oss-20b/i, /llama/i]
-/** Speech, moderation and server-side agent models: no function calling with our tools */
-const GROQ_EXCLUDED = /whisper|orpheus|playai|tts|guard|safeguard|compound|allam/i
-const GROQ_FALLBACK: AiModel[] = [
-  { id: 'openai/gpt-oss-120b', name: 'gpt-oss-120b', recommended: true },
-  { id: 'qwen/qwen3.8-27b', name: 'qwen3.8-27b', recommended: true },
-  { id: 'openai/gpt-oss-20b', name: 'gpt-oss-20b', recommended: true },
 ]
 /** Waits for a per-minute limit up to this long instead of switching models */
 const MAX_RATE_WAIT_MS = 20_000
@@ -223,32 +208,6 @@ async function listGeminiModels(all: Promise<AiModel[]>): Promise<AiModel[]> {
   return free.length ? withRecommended(free, GEMINI_PREFERRED) : GEMINI_FALLBACK
 }
 
-/** Groq chat models of the key's organization; all of them support tool calling and the free tier */
-async function groqCatalog(key: string): Promise<AiModel[]> {
-  if (!key) return GROQ_FALLBACK
-  try {
-    const res = await fetch(`${GROQ_API}/models`, { headers: { Authorization: `Bearer ${key}` } })
-    if (!res.ok) throw new AiProviderError(await errorMessage(res), res.status)
-    const data = await res.json()
-    const models: AiModel[] = (Array.isArray(data?.data) ? data.data : [])
-      .filter((m: any) => typeof m?.id === 'string' && m.active !== false && !GROQ_EXCLUDED.test(m.id))
-      .map((m: any) => ({
-        id: m.id,
-        name: m.id.replace(/^[^/]+\//, ''),
-        contextLength: Number(m.context_window) || undefined,
-      }))
-    return models.length ? models : GROQ_FALLBACK
-  } catch (e) {
-    if (e instanceof AiProviderError && (e.status === 401 || e.status === 403)) throw e
-    return GROQ_FALLBACK
-  }
-}
-
-async function listGroqModels(all: Promise<AiModel[]>): Promise<AiModel[]> {
-  const list = (await all).map(m => ({ ...m }))
-  return list.length ? withRecommended(list, GROQ_PREFERRED) : GROQ_FALLBACK
-}
-
 /** The lists are shared by the AI tab and Options; OpenRouter health checks cost one fetch per model */
 const MODELS_TTL_MS = 10 * 60_000
 const modelLists = new Map<string, { at: number; list: Promise<AiModel[]> }>()
@@ -265,14 +224,14 @@ function cached(id: string, force: boolean, load: () => Promise<AiModel[]>): Pro
 /** Every chat model of the provider the key can call, free and paid (`paid` marks billed ones) */
 export function catalogModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
   return cached(`all\u0000${provider}\u0000${key}`, force, () =>
-    provider === 'openrouter' ? openRouterCatalog() : provider === 'groq' ? groqCatalog(key) : geminiCatalog(key))
+    provider === 'openrouter' ? openRouterCatalog() : geminiCatalog(key))
 }
 
 /** Free models of the provider with the recommended ones marked, cached per key for a while */
 export function listModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
   return cached(`free\u0000${provider}\u0000${key}`, force, () => {
     const all = catalogModels(provider, key, force)
-    return provider === 'openrouter' ? listOpenRouterModels(all) : provider === 'groq' ? listGroqModels(all) : listGeminiModels(all)
+    return provider === 'openrouter' ? listOpenRouterModels(all) : listGeminiModels(all)
   })
 }
 
@@ -303,7 +262,7 @@ async function errorMessage(res: Response): Promise<string> {
 
 /** OpenRouter's account-wide daily cap on free models: switching models does not help */
 const DAILY_LIMIT = /per[- ]day|free-models-per-day|daily/i
-/** Gemini / Groq quota of one model (per day, per minute or a tier without access) */
+/** Gemini quota of one model (per day, per minute or a tier without access) */
 const QUOTA = /quota|resource[_ ]exhausted|limit:\s*0\b|per[- ]day|daily|\b(rpd|tpd)\b/i
 /** The key cannot use this model at all */
 const GONE = /no longer available|not found|does not exist|deprecated|decommissioned|not supported for|unsupported model|model.*not available|not enabled for/i
@@ -363,8 +322,6 @@ export interface ChatRequest {
   /** `none` forces a text answer */
   toolChoice?: 'auto' | 'none'
   signal?: AbortSignal
-  /** Thinking models reason before answering; off asks them to skip it where the model allows */
-  reasoning?: boolean
   /** Streams the response: called with the text received so far */
   onDelta?: (live: ChatLive) => void
 }
@@ -382,7 +339,7 @@ export interface ChatResult {
   /** Model that answered (a fallback when the chosen one failed) */
   model: string
   tokens?: AiTokens
-  /** Requests per day of the model and what is left, when the provider reports them (Groq) */
+  /** Requests per day of the model and what is left, when the provider reports them */
   dailyRequests?: { limit: number; remaining: number }
 }
 
@@ -411,22 +368,6 @@ function splitThink(raw: string): ChatLive {
     return ''
   })
   return { content: content.trim(), reasoning: reasoning.join('\n\n') }
-}
-
-/**
- * Reasoning switch per provider. Models that always reason (gpt-oss, Gemini Pro) get the lowest
- * effort when it is off; models without reasoning get nothing, an unknown parameter may fail there.
- */
-function reasoningParams(provider: AiProviderId, model: string, on: boolean): Record<string, unknown> {
-  if (provider === 'openrouter') return { reasoning: { enabled: on } }
-  if (provider === 'gemini') {
-    if (/gemini-2\.5-flash/i.test(model)) return on ? {} : { reasoning_effort: 'none' }
-    if (/gemini-(2\.5|[3-9])/i.test(model)) return on ? {} : { reasoning_effort: 'low' }
-    return {}
-  }
-  if (/qwen3/i.test(model)) return { reasoning_effort: on ? 'default' : 'none', reasoning_format: 'parsed' }
-  if (/gpt-oss/i.test(model)) return { reasoning_effort: on ? 'medium' : 'low' }
-  return {}
 }
 
 function joinReasoning(...parts: string[]): string {
@@ -490,7 +431,7 @@ async function readStream(res: Response, req: ChatRequest): Promise<ChatResult> 
   const onData = (data: any) => {
     if (data?.error) throw upstreamError(data, req.provider)
     if (typeof data?.model === 'string' && data.model) model = data.model
-    tokens = readTokens(data?.usage ?? data?.x_groq?.usage) ?? tokens
+    tokens = readTokens(data?.usage) ?? tokens
     const choice = data?.choices?.[0]
     if (!choice) return
     received = true
@@ -538,7 +479,6 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
   const url = {
     openrouter: `${OPENROUTER_API}/chat/completions`,
     gemini: `${GEMINI_API}/openai/chat/completions`,
-    groq: `${GROQ_API}/chat/completions`,
   }[req.provider]
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -552,9 +492,6 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
     messages: req.messages,
     temperature: 0.2,
   }
-  const { maxTokens } = PROVIDER_BUDGET[req.provider]
-  if (maxTokens) body.max_tokens = maxTokens
-  Object.assign(body, reasoningParams(req.provider, req.model, req.reasoning === true))
   const fallbacks = req.provider === 'openrouter' ? (req.fallbacks ?? []).filter(id => id !== req.model) : []
   if (fallbacks.length) body.models = [req.model, ...fallbacks].slice(0, CHAIN_SIZE)
   else body.model = req.model
@@ -565,7 +502,7 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
 
   if (req.onDelta) {
     body.stream = true
-    // Gemini and Groq add the usage to the last chunk on their own
+    // Gemini adds the usage to the last chunk on its own
     if (req.provider === 'openrouter') body.stream_options = { include_usage: true }
   }
 

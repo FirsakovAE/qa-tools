@@ -15,7 +15,7 @@ const STORAGE_KEY = 'vue-inspector-ai'
 export type AiTone = 'default' | 'professional' | 'friendly' | 'direct' | 'mentor'
 export type AiDetail = 'brief' | 'normal' | 'detailed'
 
-export const CUSTOM_STYLE_MAX = 1000
+export const CUSTOM_STYLE_MAX = 2000
 
 /** Model value of the automatic mode: the assistant picks an available model and switches on limits */
 export const AUTO_MODEL = 'auto'
@@ -45,6 +45,7 @@ export interface AiMasking {
 
 export const DEFAULT_AI_MASK_KEYS = [
   ...DEFAULT_MASK_KEYS,
+  'passcode',
   'auth',
   'bearer',
   'jwt',
@@ -77,10 +78,16 @@ function normalizeAccess(raw: Partial<AiAccess> | undefined): AiAccess {
   return { digest: flag('digest'), tools, headers: flag('headers'), bodies: flag('bodies'), appData: flag('appData') }
 }
 
+function coversKey(keys: string[], word: string): boolean {
+  const needle = word.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return keys.some(key => key.toLowerCase().replace(/[^a-z0-9]/g, '').includes(needle))
+}
+
 function normalizeAiMasking(raw: Partial<AiMasking> | undefined): AiMasking {
   const keys = Array.isArray(raw?.keys)
     ? [...new Set(raw!.keys.filter((k): k is string => typeof k === 'string' && k.trim().length > 0).map(k => k.trim()))]
     : [...DEFAULT_AI_MASK_KEYS]
+  if (!coversKey(keys, 'passcode')) keys.push('passcode')
   return { keys, valuePatterns: raw?.valuePatterns !== false }
 }
 
@@ -88,13 +95,10 @@ export interface AiCredentials {
   provider: AiProviderId
   openRouterKey: string
   geminiKey: string
-  groqKey: string
   /** Selected model per provider; `AUTO_MODEL` or missing: automatic choice */
   models: Partial<Record<AiProviderId, string>>
   /** The user accepted that logs and page sources are sent to the provider */
   consent: boolean
-  /** Let thinking models reason before answering (spends completion tokens) */
-  reasoning: boolean
   tone: AiTone
   detail: AiDetail
   /** Style instructions of the user, added to the system prompt */
@@ -108,12 +112,21 @@ export interface AiCredentials {
   access: AiAccess
 }
 
-const PROVIDERS = new Set<AiProviderId>(['gemini', 'openrouter', 'groq'])
+const PROVIDERS = new Set<AiProviderId>(['gemini', 'openrouter'])
 const TONES = new Set<AiTone>(['default', 'professional', 'friendly', 'direct', 'mentor'])
 const DETAILS = new Set<AiDetail>(['brief', 'normal', 'detailed'])
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function knownProviderRecord<T>(raw: Partial<Record<string, T>> | undefined): Partial<Record<AiProviderId, T>> {
+  const out: Partial<Record<AiProviderId, T>> = {}
+  if (!raw) return out
+  for (const provider of PROVIDERS) {
+    if (raw[provider] !== undefined) out[provider] = raw[provider]
+  }
+  return out
 }
 
 function normalizeAdded(raw: AiCredentials['addedModels'] | undefined): AiCredentials['addedModels'] {
@@ -134,14 +147,12 @@ function normalizeCredentials(raw: Partial<AiCredentials> = {}): AiCredentials {
     provider: raw.provider && PROVIDERS.has(raw.provider) ? raw.provider : 'gemini',
     openRouterKey: text(raw.openRouterKey),
     geminiKey: text(raw.geminiKey),
-    groqKey: text(raw.groqKey),
-    models: { ...raw.models },
+    models: knownProviderRecord(raw.models),
     consent: raw.consent === true,
-    reasoning: raw.reasoning === true,
     tone: raw.tone && TONES.has(raw.tone) ? raw.tone : 'default',
     detail: raw.detail && DETAILS.has(raw.detail) ? raw.detail : 'normal',
     customStyle: text(raw.customStyle).slice(0, CUSTOM_STYLE_MAX),
-    blockedModels: { ...raw.blockedModels },
+    blockedModels: knownProviderRecord(raw.blockedModels),
     addedModels: normalizeAdded(raw.addedModels),
     masking: normalizeAiMasking(raw.masking),
     access: normalizeAccess(raw.access),
@@ -190,7 +201,13 @@ export function selectedModel(provider: AiProviderId = aiCredentials.provider): 
 }
 
 export function setAiAccess(patch: Partial<AiAccess>): Promise<void> {
-  return saveAiCredentials({ access: { ...aiCredentials.access, ...patch, tools: { ...aiCredentials.access.tools, ...patch.tools } } })
+  return saveAiCredentials({
+    access: {
+      ...aiCredentials.access,
+      ...patch,
+      tools: { ...aiCredentials.access.tools, ...patch.tools },
+    },
+  })
 }
 
 export function setAiMasking(patch: Partial<AiMasking>): Promise<void> {
@@ -198,5 +215,5 @@ export function setAiMasking(patch: Partial<AiMasking>): Promise<void> {
 }
 
 export function activeKey(provider: AiProviderId = aiCredentials.provider): string {
-  return { openrouter: aiCredentials.openRouterKey, gemini: aiCredentials.geminiKey, groq: aiCredentials.groqKey }[provider]
+  return provider === 'openrouter' ? aiCredentials.openRouterKey : aiCredentials.geminiKey
 }

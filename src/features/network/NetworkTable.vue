@@ -293,15 +293,12 @@ const ROW_HEIGHT = 40
                           variant="ghost"
                           size="icon"
                           class="h-6 w-6 p-0"
-                          :disabled="entry.initiator === 'websocket'"
-                          :title="entry.initiator === 'websocket' ? 'No actions for WebSocket' : undefined"
                           @click.stop
                         >
                           <MoreHorizontal class="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <NetworkActionsMenuContent
-                        v-if="entry.initiator !== 'websocket'"
                         variant="dropdown"
                         :entry="entry"
                         :breakpoint-matching-ids="breakpointMatchingIds"
@@ -322,7 +319,6 @@ const ROW_HEIGHT = 40
               </ContextMenuTrigger>
 
               <NetworkActionsMenuContent
-                v-if="entry.initiator !== 'websocket'"
                 variant="context"
                 :entry="entry"
                 :breakpoint-matching-ids="breakpointMatchingIds"

@@ -24,7 +24,12 @@ import { maskText } from './privacy'
 import { hasVisibleText } from './format'
 import { allowedTools, TOOL_GROUPS } from './tools'
 import { digestUpdate, takeLogsSnapshot, type LogsSnapshot, type SentLogs } from './logsContext'
+import { attachmentsText } from './attachmentContext'
+import type { AiAttachment } from './attachments'
 import type { AiChatEntry, AiProviderId, AiStep, AiUsage, ChatMessage } from './types'
+
+/** Sent to the model when the user attached items without typing a question */
+const ATTACHMENT_QUESTION = 'Explain the attached data and point out anything wrong in it.'
 
 const entries = ref<AiChatEntry[]>([])
 const busy = ref(false)
@@ -95,8 +100,8 @@ function init(): void {
   void Promise.all([loadAiCredentials(), loadModelStatus()]).then(() => {
     watch(() => [aiCredentials.provider, activeKey()] as const, () => void loadModels(aiCredentials.provider).then(pickUsableModel), { immediate: true })
     // What failed with the old key says nothing about a new one
-    watch(() => [aiCredentials.openRouterKey, aiCredentials.geminiKey, aiCredentials.groqKey] as const, (next, prev) => {
-      const providers: AiProviderId[] = ['openrouter', 'gemini', 'groq']
+    watch(() => [aiCredentials.openRouterKey, aiCredentials.geminiKey] as const, (next, prev) => {
+      const providers: AiProviderId[] = ['openrouter', 'gemini']
       providers.forEach((id, i) => { if (next[i] !== prev[i]) clearProviderStatus(id) })
     })
     watch(() => [aiCredentials.blockedModels, aiCredentials.addedModels], () => void pickUsableModel(), { deep: true })
@@ -108,13 +113,14 @@ function accessLabel(access: AiAccess, group: AiToolGroup): string {
 }
 
 /** What goes to the provider with this question, shown as the first step of the answer */
-function contextStep(snapshot: LogsSnapshot, digest: string | undefined, from: number | undefined, access: AiAccess): AiStep {
+function contextStep(snapshot: LogsSnapshot, digest: string | undefined, from: number | undefined, access: AiAccess, attachments: AiAttachment[]): AiStep {
   const size = digest ? `${Math.max(1, Math.round(digest.length / 1024))} KB` : ''
   const logs = !access.digest ? 'no logs digest (turned off)'
     : !digest ? (snapshot.count ? 'no new logs events since the last digest' : '')
     : from ? `logs digest of new events (${snapshot.count - from} of ${snapshot.count}, ${size})`
     : `logs digest (${snapshot.count} events, ${size})`
-  const shared = ['question', logs].filter(Boolean)
+  const attached = attachments.length ? `attached ${attachments.map(a => a.label).join(', ')}` : ''
+  const shared = ['question', attached, logs].filter(Boolean)
   const hidden = [!access.headers && 'headers', !access.bodies && 'bodies and messages', !access.appData && 'app data values'].filter(Boolean)
   const parts = [
     `Sent to ${PROVIDER_LABELS[aiCredentials.provider]}: ${shared.join(', ')}`,
@@ -173,12 +179,12 @@ export function useAiChat() {
     void saveAiCredentials({ models: { ...aiCredentials.models, [aiCredentials.provider]: id } })
   }
 
-  async function send(question: string): Promise<void> {
+  async function send(question: string, attachments: AiAttachment[] = []): Promise<void> {
     const text = question.trim()
-    if (!text || busy.value || !ready.value) return
+    if ((!text && !attachments.length) || busy.value || !ready.value) return
     const modelId = model.value
     lastTurn = { history, sentSignature, sentLogs }
-    entries.value = [...entries.value, { id: nextId(), role: 'user', text }]
+    entries.value = [...entries.value, { id: nextId(), role: 'user', text, attachments: attachments.length ? attachments : undefined }]
     busy.value = true
     controller = new AbortController()
 
@@ -190,22 +196,23 @@ export function useAiChat() {
       ? digestUpdate(snapshot, sentLogs, !Number.isFinite(budget.contextChars))
       : null
     const digest = update?.digest
-    liveSteps.value = [contextStep(snapshot, digest, update?.from, access)]
+    liveSteps.value = [contextStep(snapshot, digest, update?.from, access, attachments)]
     const usage: AiUsage = { requests: 0, prompt: 0, completion: 0, cached: 0, unreported: 0, ms: 0 }
     const started = Date.now()
     const signal = controller.signal
     const isAuto = modelId === AUTO_MODEL
     try {
+      const attached = attachments.length ? await attachmentsText(attachments, snapshot, budget.toolResultChars) : null
       const result = await runAgent({
-        question: text,
+        question: text || ATTACHMENT_QUESTION,
+        attachments: attached ?? undefined,
         digest,
         digestCount: snapshot.count,
         digestFrom: update?.from,
         history,
         systemPrompt: systemPrompt(aiCredentials, access),
         styleNote: styleNote(aiCredentials),
-        detailed: aiCredentials.detail === 'detailed',
-        request: { provider: aiCredentials.provider, key: activeKey(), model: modelId, reasoning: aiCredentials.reasoning, signal },
+        request: { provider: aiCredentials.provider, key: activeKey(), model: modelId, signal },
         auto: isAuto,
         models: models.value,
         tools: allowedTools(access),
@@ -263,12 +270,12 @@ export function useAiChat() {
     const list = entries.value
     const userIndex = list.length - 2
     if (list[userIndex]?.role !== 'user' || list[userIndex + 1]?.role !== 'assistant') return
-    const question = list[userIndex].text
+    const { text: question, attachments } = list[userIndex]
     entries.value = list.slice(0, userIndex)
     history = lastTurn.history
     sentSignature = lastTurn.sentSignature
     sentLogs = lastTurn.sentLogs
-    void send(question)
+    void send(question, attachments)
   }
 
   function newChat() {

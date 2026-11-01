@@ -14,14 +14,14 @@ import {
   type ChatResult,
 } from './providers'
 import { clearModel, markModel, modelStatus, statusLabel, recordRequest, setReportedLimit, type ModelState } from './modelStatus'
-import { DETAILED_CHECK_NOTE, FINAL_ROUND_NOTE, SYSTEM_PROMPT } from './prompt'
+import { FINAL_ROUND_NOTE, SYSTEM_PROMPT } from './prompt'
 import { AI_TOOLS, describeToolCall, runTool } from './tools'
 import { extractTextToolCalls } from './textToolCalls'
 import { hasVisibleText } from './format'
 import type { AiModel, AiProviderId, AiStep, AiUsage, ChatMessage, ChatToolCall, ToolDefinition } from './types'
 
 /** Requests per completion in Auto mode (OpenRouter tries up to CHAIN_SIZE models in each) */
-const AUTO_ATTEMPTS = { openrouter: 3, gemini: 4, groq: 4 } as const
+const AUTO_ATTEMPTS = { openrouter: 3, gemini: 4 } as const
 /** Waits for a per-minute limit within one completion */
 const MAX_RATE_WAITS = 2
 /** An overloaded model is skipped this long when the provider gave no time */
@@ -35,12 +35,15 @@ const OLD_TOOL_RESULT_CHARS = 1500
 /** Tool results shortened to fit a small context */
 const FIT_TOOL_RESULT_CHARS = 400
 const DIGEST_TAG = /<logs_digest[^>]*>[\s\S]*?<\/logs_digest>/g
+const ATTACHMENT_TAG = /<attachment[^>]*>[\s\S]*?<\/attachment>/g
 const NO_LIVE: ChatLive = { content: '', reasoning: '' }
 /** The model is told how many tool rounds are left from this many on */
 const ROUNDS_LEFT_NOTE = 3
 
 export interface AgentRun {
   question: string
+  /** Items the user attached to the question (Ask AI), already masked and cut */
+  attachments?: string
   /** Attached when the logs changed since the last question */
   digest?: string
   digestCount?: number
@@ -51,8 +54,6 @@ export interface AgentRun {
   systemPrompt?: string
   /** The answer style again, on the newest user message of every request */
   styleNote?: string
-  /** Detailed answers: one without any tool call is sent back to gather the data */
-  detailed?: boolean
   request: Omit<ChatRequest, 'messages' | 'tools' | 'toolChoice' | 'fallbacks' | 'onDelta'>
   /** Auto mode picks models from `models` and switches on errors; manual mode uses only `request.model` */
   auto: boolean
@@ -212,11 +213,16 @@ async function complete(run: AgentRun, messages: ChatMessage[], toolChoice: 'aut
 }
 
 function userMessage(run: AgentRun): ChatMessage {
-  if (!run.digest) return { role: 'user', content: run.question }
-  return {
-    role: 'user',
-    content: `${run.question}\n\n<logs_digest events="${run.digestCount ?? 0}"${run.digestFrom ? ` new_from="${run.digestFrom}"` : ''}>\n${run.digest}\n</logs_digest>`,
-  }
+  const parts = [run.question]
+  if (run.attachments) parts.push(run.attachments)
+  if (run.digest) parts.push(`<logs_digest events="${run.digestCount ?? 0}"${run.digestFrom ? ` new_from="${run.digestFrom}"` : ''}>\n${run.digest}\n</logs_digest>`)
+  return { role: 'user', content: parts.join('\n\n') }
+}
+
+function shortAttachment(block: string): string {
+  if (block.length <= OLD_TOOL_RESULT_CHARS) return block
+  const close = '\n</attachment>'
+  return `${block.slice(0, OLD_TOOL_RESULT_CHARS)}\n... [shortened; get_events for the full data of a logs event]${close}`
 }
 
 /** Models follow the latest user turn more than the end of a long system prompt; not kept in the history */
@@ -232,8 +238,10 @@ function withStyle(messages: ChatMessage[], note: string | undefined): ChatMessa
 /** Older digests and tool results are shortened: the newest digest and tools can bring them back */
 function compactHistory(history: ChatMessage[], replacingDigest: boolean): ChatMessage[] {
   return history.map(m => {
-    if (m.role === 'user' && replacingDigest && m.content.includes('<logs_digest')) {
-      return { ...m, content: m.content.replace(DIGEST_TAG, '[older logs digest removed; ids now refer to the newest digest]') }
+    if (m.role === 'user') {
+      let content = m.content.replace(ATTACHMENT_TAG, shortAttachment)
+      if (replacingDigest) content = content.replace(DIGEST_TAG, '[older logs digest removed; ids now refer to the newest digest]')
+      return content === m.content ? m : { ...m, content }
     }
     if (m.role === 'tool' && m.content.length > OLD_TOOL_RESULT_CHARS) {
       return { ...m, content: `${m.content.slice(0, OLD_TOOL_RESULT_CHARS)}\n... [shortened; call the tool again for the full result]` }
@@ -290,33 +298,6 @@ function parseArgs(call: ChatToolCall): Record<string, any> {
   }
 }
 
-const HEDGE = /\b(probably|likely|perhaps|not (captured|logged|in the logs)|was not recorded)\b|скорее всего|вероятно|возможно|не (попал|попало|зафиксирован|залогирован|видно)|нет в лог|отсутству/i
-const QUOTED = /[«"“]([^»"”\n]{6,120})[»"”]/g
-
-const CHECK_NOTE = 'You answered without calling any tool, so nothing above was checked in this question. Verify before answering: search_logs and search_source for the text the user quoted, the button label or the error message, and get_events on the requests and store state around the user\'s action. Then answer with the event ids and code you actually saw.'
-
-/** Questions about when a control is enabled / shown or a message appears: answered from the live page and the code */
-const UI_CONDITION = /\b(disabled|enabled|available|unavailable|blocked|greyed|hidden|visible|shown|missing|absent|appears?|toast)\b|услови|доступн|блокир|неактивн|активн|скрыт|отображ|показыва|появля|отсутств|пропал|не видн|нет кнопк|тост/i
-
-const UI_CHECK_NOTE = 'You answered a question about UI conditions without calling any tool. Check now: inspect_ui on the element or the message, then read its component code (the bindings and the handler), and the current values of the data it depends on (read_stores, search_logs). Then answer with the conditions, the code locations and the current values you actually saw.'
-function hasLogs(history: ChatMessage[]): boolean {
-  return history.some(m => m.role === 'user' && m.content.includes('<logs_digest'))
-}
-
-/** A diagnostic answer from memory: it hedges, or the user quotes something the model never looked up */
-function unchecked(question: string, answer: string, history: ChatMessage[]): boolean {
-  if (question.trim().length < 25) return false
-  if (HEDGE.test(answer)) return true
-  const seen = history
-    .map(m => (typeof m.content === 'string' ? m.content : ''))
-    .join('\n')
-    .toLowerCase()
-    .split(question.trim().toLowerCase())
-    .join('')
-  for (const m of question.matchAll(QUOTED)) if (!seen.includes(m[1].trim().toLowerCase())) return true
-  return false
-}
-
 function callKey(name: string, args: Record<string, unknown>): string {
   return `${name}:${JSON.stringify(Object.keys(args).sort().map(k => [k, args[k]]))}`
 }
@@ -327,8 +308,6 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
   // A repeated call can point to the earlier result only while results stay whole in the context
   const done = Number.isFinite(budget.contextChars) ? null : new Set<string>()
   let callCounter = 0
-  /** Answers sent back for checking, with the note after each; dropped from the kept history */
-  const rechecks: number[] = []
   const toolNames = new Set((run.tools ?? AI_TOOLS).map(t => t.function.name))
 
   const rounds = budget.toolRounds
@@ -362,20 +341,6 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
       const answer = content || (last || written.calls.length ? 'I could not finish the analysis within the tool call limit. Ask a narrower question.' : '')
       if (!answer) throw new Error('The model returned an empty answer. Try again or pick another model.')
       history.push({ role: 'assistant', content: answer })
-      const uiQuestion = UI_CONDITION.test(run.question) && toolNames.has('inspect_ui')
-      const recheck = round === 0 && !last && (hasLogs(history) || uiQuestion)
-        ? (run.detailed ? DETAILED_CHECK_NOTE : uiQuestion ? UI_CHECK_NOTE : unchecked(run.question, answer, history) ? CHECK_NOTE : '')
-        : ''
-      if (recheck) {
-        run.onStep({
-          tool: 'Check',
-          summary: run.detailed ? 'Detailed answer without data, gathering it with tools' : 'Answer without evidence, verifying with tools',
-        })
-        rechecks.push(history.length - 1)
-        history.push({ role: 'user', content: recheck })
-        continue
-      }
-      for (const at of rechecks.reverse()) history.splice(at, 2)
       return { answer, history, model: result.model }
     }
 
