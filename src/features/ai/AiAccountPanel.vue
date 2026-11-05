@@ -13,8 +13,8 @@ const KEY_PROVIDERS: {
   consoleName: string
   consoleUrl: string
 }[] = [
-  { id: 'gemini', field: 'geminiKey', label: 'Gemini', consoleName: 'Google AI Studio', consoleUrl: 'https://aistudio.google.com/apikey' },
   { id: 'openrouter', field: 'openRouterKey', label: 'OpenRouter', consoleName: 'OpenRouter', consoleUrl: 'https://openrouter.ai/settings/keys' },
+  { id: 'gemini', field: 'geminiKey', label: 'Gemini', consoleName: 'Google AI Studio', consoleUrl: 'https://aistudio.google.com/apikey' },
 ]
 
 const drafts = reactive<Record<AiProviderId, string>>({ gemini: '', openrouter: '' })

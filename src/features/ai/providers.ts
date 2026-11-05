@@ -10,7 +10,7 @@ import type { AiModel, AiProviderId, AiTokens, ChatMessage, ChatToolCall, ToolDe
 const OPENROUTER_API = 'https://openrouter.ai/api/v1'
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta'
 
-export const PROVIDER_LABELS: Record<AiProviderId, string> = { gemini: 'Gemini', openrouter: 'OpenRouter' }
+export const PROVIDER_LABELS: Record<AiProviderId, string> = { openrouter: 'OpenRouter', gemini: 'Gemini' }
 
 export interface ProviderBudget {
   /** Timeline lines of the logs digest sent with a question */

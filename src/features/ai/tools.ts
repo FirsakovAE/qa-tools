@@ -1,6 +1,6 @@
 import type { AiStep, ToolDefinition } from './types'
 import type { AiAccess, AiToolGroup } from './credentials'
-import { getEvents, searchLogs } from './logsContext'
+import { findItems, getEvents, searchLogs } from './logsContext'
 import { listSources, readSource, searchSource } from './sources'
 import { readDocs } from './docs'
 import { inspectUi, readStores } from './page'
@@ -24,11 +24,13 @@ export const AI_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_events',
-      description: 'Full data of logged events by id (#N from the digest): bodies, headers, store state, props, payloads, stacks. An error also names Page (last navigation), Data later (when store data arrived) and nearby events. Stack frames include page code when source maps exist. Pass every id in one call.',
+      description: 'Full data of logged events by id (#N from the digest): bodies, headers, store state, props, payloads, stacks. An error also names Page (last navigation), Data later (when store data arrived) and nearby events. Stack frames include page code when source maps exist. Pass every id in one call. Long bodies and data are cut with a marker such as `[N more chars: get_events ids=[12] part=responseBody offset=6000]`: make that call to read on, 12000 chars per call.',
       parameters: {
         type: 'object',
         properties: {
-          ids: { type: 'array', items: { type: 'integer' }, description: 'Event ids without "#", up to 6' },
+          ids: { type: 'array', items: { type: 'integer' }, description: 'Event ids without "#", up to 6; with part, one id' },
+          part: { type: 'string', enum: ['requestBody', 'responseBody', 'data'], description: 'Read this long value of the event in full, page by page, instead of the overview' },
+          offset: { type: 'integer', description: 'With part: first char to read, from the marker or the previous page' },
         },
         required: ['ids'],
       },
@@ -47,8 +49,31 @@ export const AI_TOOLS: ToolDefinition[] = [
           value: { type: 'string', description: 'Text the value contains (case-insensitive); with exact: true the whole value' },
           exact: { type: 'boolean', description: 'value must equal the whole value' },
           kind: { type: 'string', description: 'Optional event kind: request, response, ws, ws-sent, ws-received, ws-closed, props, emit, store, action, navigation, click, error' },
+          ids: { type: 'array', items: { type: 'integer' }, description: 'Only these events (#N without "#"); the request and the response row of one request count as one' },
           limit: { type: 'integer', description: 'Max results, default 20, up to 40' },
           offset: { type: 'integer', description: 'Skip this many results (next page)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_items',
+      description: 'Filter the objects of arrays in logged JSON (request / response bodies, WebSocket messages, store state, props, payloads) by property conditions, in one call: "filters with isVisibleByDefault true", "items with price > 100", "users without email". Returns each matching item with its array index, grouped by event and array path, with counts (items / matching). Use it instead of reading an array item by item or paging through a long body to list or count items. Also works on a body cut at capture: the stored items are searched.',
+      parameters: {
+        type: 'object',
+        properties: {
+          where: {
+            type: 'object',
+            description: 'Conditions on item properties, all must hold. Key: property name or path inside the item (settings.visible). Value: true / 42 / "text" equal (case-insensitive, true matches "true"); "~text" contains; "!value" not equal; ">10" "<10" ">=10" "<=10"; "*" has the property; "!*" lacks it. Example: {"isVisibleByDefault": true, "type": "~select"}',
+          },
+          path: { type: 'string', description: 'The array: its path or path ending, indexes ignored (data.filters, filters). Without it every array of objects is searched' },
+          ids: { type: 'array', items: { type: 'integer' }, description: 'Only these events (#N without "#"); the request and the response row of one request count as one, so either id finds both bodies. Without ids every event is searched' },
+          kind: { type: 'string', description: 'Only events of this kind: request, response, ws-sent, ws-received, store, props, emit, action...' },
+          fields: { type: 'array', items: { type: 'string' }, description: 'Properties to show for each item (name, label, settings.visible); default: the whole item, or its id / name / label and the condition keys when it is long' },
+          limit: { type: 'integer', description: 'Max items, default 50, up to 200' },
+          offset: { type: 'integer', description: 'Skip this many matching items (next page)' },
         },
       },
     },
@@ -149,6 +174,7 @@ export const AI_TOOLS: ToolDefinition[] = [
 export const TOOL_GROUPS: Record<string, AiToolGroup | undefined> = {
   get_events: 'logs',
   search_logs: 'logs',
+  find_items: 'logs',
   list_sources: 'sources',
   read_source: 'sources',
   search_source: 'sources',
@@ -174,6 +200,7 @@ export function describeToolCall(name: string, args: Record<string, any>): AiSte
     case 'read_docs':
       return { tool: 'Docs', summary: Array.isArray(args.pages) && args.pages.length ? `Read ${args.pages.map(p => short(p)).join(', ')}${args.section ? ` § ${short(args.section)}` : ''}` : 'List pages' }
     case 'get_events':
+      if (args.part) return { tool: 'Logs', summary: `Read #${Array.isArray(args.ids) ? args.ids[0] : args.ids} ${short(args.part)} from ${Number(args.offset) || 0}` }
       return { tool: 'Logs', summary: `Event details ${(Array.isArray(args.ids) ? args.ids : [args.ids]).map((id: unknown) => `#${id}`).join(', ')}` }
     case 'search_logs': {
       const parts = [
@@ -182,6 +209,13 @@ export function describeToolCall(name: string, args: Record<string, any>): AiSte
         args.value && `value ${args.exact ? '=' : '~'} "${short(args.value)}"`,
       ].filter(Boolean)
       return { tool: 'Logs', summary: `Search ${parts.join(', ') || '(empty)'}${args.kind ? ` in ${args.kind}` : ''}${Number(args.offset) > 0 ? `, from ${args.offset}` : ''}` }
+    }
+    case 'find_items': {
+      const where = args.where && typeof args.where === 'object'
+        ? Object.entries(args.where).map(([k, v]) => `${k} ${typeof v === 'string' && /^(~|!|>|<|\*)/.test(v) ? v : `= ${JSON.stringify(v)}`}`).join(', ')
+        : short(args.where)
+      const scope = [args.path && `in ${short(args.path)}`, Array.isArray(args.ids) && args.ids.length && `of ${args.ids.map((id: unknown) => `#${id}`).join(', ')}`].filter(Boolean).join(' ')
+      return { tool: 'Logs', summary: `Find items${where ? ` where ${short(where, 90)}` : ''}${scope ? ` ${scope}` : ''}${Number(args.offset) > 0 ? `, from ${args.offset}` : ''}` }
     }
     case 'list_sources':
       return { tool: 'Sources', summary: `List files${args.filter ? ` matching "${short(args.filter)}"` : ''}` }
@@ -207,9 +241,11 @@ export async function runTool(name: string, args: Record<string, any>): Promise<
       case 'read_docs':
         return await readDocs(args.pages ?? args.page, args.section)
       case 'get_events':
-        return await getEvents(args.ids)
+        return await getEvents(args.ids, args.part, args.offset)
       case 'search_logs':
         return searchLogs(args)
+      case 'find_items':
+        return findItems(args)
       case 'list_sources':
         return await listSources(args.filter, args.include_libraries)
       case 'read_source':

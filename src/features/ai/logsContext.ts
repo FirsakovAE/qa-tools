@@ -31,6 +31,10 @@ const ERROR_BEFORE = 6
 const ERROR_AFTER = 12
 const ERROR_LATER = 50
 const SKIP_AROUND = new Set(['ws-sent', 'ws-received'])
+/** Chars of a long value read per get_events call with `part` */
+const PART_CHARS = 12000
+const EVENT_PARTS = ['requestBody', 'responseBody', 'data'] as const
+type EventPart = typeof EVENT_PARTS[number]
 
 interface Row {
   index: number
@@ -178,20 +182,27 @@ function rowLine(row: Row, t0: number): string {
   return `#${row.index} ${rel} ${row.label} ${row.title}${row.subtitle ? ` | ${row.subtitle}` : ''}`
 }
 
-function bodyText(body: any): string | undefined {
+/** A long value of event #N cut to `max`, with the get_events call that reads on from there */
+function cutPart(text: string, max: number, ref: number | undefined, part: EventPart): string {
+  if (text.length <= max) return text
+  if (ref === undefined) return cut(text, max)
+  return `${text.slice(0, max)}... [${text.length - max} more chars: get_events ids=[${ref}] part=${part} offset=${max}]`
+}
+
+function bodyText(body: any, ref?: number, part: EventPart = 'responseBody'): string | undefined {
   if (!body || typeof body !== 'object') return undefined
   if (body.isBinary || body.media) return `[binary${body.media?.format ? ` ${body.media.format}` : ''}, ${body.originalSize ?? '?'} bytes]`
   if (typeof body.text !== 'string') return undefined
   const note = body.truncated ? ' [cut at capture]' : ''
-  return cut(compactBody(body.text), BODY_CHARS) + note
+  return cutPart(compactBody(body.text), BODY_CHARS, ref, part) + note
 }
 
-function networkDetails(entry: Record<string, any>): Record<string, unknown> {
+function networkDetails(entry: Record<string, any>, ref?: number): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(entry)) {
     if (value == null || value === '' || key.endsWith('Ref') || key === 'id') continue
     if (key === 'requestBody' || key === 'responseBody') {
-      const text = bodyText(value)
+      const text = bodyText(value, ref, key)
       if (text !== undefined) out[key] = text
       continue
     }
@@ -220,7 +231,7 @@ function eventDetails(snapshot: LogsSnapshot, row: Row): string {
   const entryId = event.data?.entryId
   if (typeof entryId === 'string') {
     const entry = snapshot.getEntry(entryId)
-    lines.push(entry ? `- network entry: ${cut(json(networkDetails(entry)), RESULT_CHARS)}` : '- network entry: not in the logs any more')
+    lines.push(entry ? `- network entry: ${cut(json(networkDetails(entry, row.index)), RESULT_CHARS)}` : '- network entry: not in the logs any more')
     return lines.join('\n')
   }
   if (event.kind === 'store' && event.data?.op === 'change') {
@@ -235,8 +246,37 @@ function eventDetails(snapshot: LogsSnapshot, row: Row): string {
     lines.push(`- data: ${cut(json(rest), VALUE_CHARS)}`)
     return lines.join('\n')
   }
-  lines.push(`- data: ${cut(json(event.data), VALUE_CHARS)}`)
+  lines.push(`- data: ${cutPart(json(event.data), VALUE_CHARS, row.index, 'data')}`)
   return lines.join('\n')
+}
+
+/** Full text of one long value of an event, as get_events shows it cut */
+function partText(snapshot: LogsSnapshot, row: Row, part: EventPart): { text: string; capture?: boolean } | string {
+  if (part === 'data') return { text: json(row.event.data) }
+  const entryId = row.event.data?.entryId
+  const entry = typeof entryId === 'string' ? snapshot.getEntry(entryId) : undefined
+  if (!entry) return `#${row.index} is not a network event with bodies; use part=data.`
+  const body = entry[part]
+  if (body && typeof body === 'object' && (body.isBinary || body.media)) return `#${row.index} ${part} is binary: ${bodyText(body)}`
+  if (!body || typeof body !== 'object' || typeof body.text !== 'string' || !body.text) {
+    return `#${row.index} has no ${part}${entry.bodies ? ' (bodies are hidden by the access settings)' : ''}.`
+  }
+  return { text: compactBody(body.text), capture: !!body.truncated }
+}
+
+/** A long value of one event from `offset`, PART_CHARS at a time */
+function eventPart(snapshot: LogsSnapshot, n: number, part: EventPart, offset: number): string {
+  const row = snapshot.rows[n]
+  if (!row) return `No such event #${n} (the logs have #0..#${snapshot.count - 1}).`
+  const found = partText(snapshot, row, part)
+  if (typeof found === 'string') return found
+  const { text, capture } = found
+  const from = Math.min(Math.max(0, offset), text.length)
+  const to = Math.min(text.length, from + PART_CHARS)
+  const out = [`## #${n} ${part}, chars ${from}-${to} of ${text.length}`, text.slice(from, to)]
+  if (to < text.length) out.push(`[More: get_events ids=[${n}] part=${part} offset=${to}]`)
+  else out.push(`[End of ${part}.${capture ? ' It was cut when captured (Options → Logs → Limit event size): the rest was not stored.' : ''}]`)
+  return out.join('\n')
 }
 
 function lastNavigation(snapshot: LogsSnapshot, index: number): Row | undefined {
@@ -353,13 +393,46 @@ export function networkAttachment(entry: Record<string, any>, max: number): stri
   return cut(json(networkDetails(entry)), max)
 }
 
-export async function getEvents(ids: unknown): Promise<string> {
+/** A list argument given as an array, a JSON array text, or `[a, b]` / `a, b` */
+function listArg(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'number') return [value]
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) return parsed
+  } catch {}
+  return value.trim().replace(/^\[|\]$/g, '').split(',').map(v => v.trim().replace(/^["'`]|["'`]$/g, '')).filter(Boolean)
+}
+
+function idsArg(value: unknown): number[] {
+  return listArg(value).map(v => Number(String(v).trim().replace(/^#/, ''))).filter(n => Number.isInteger(n) && n >= 0)
+}
+
+/** Rows of the ids, with the other row of a request / response pair: both show the same entry */
+function rowsOfIds(snapshot: LogsSnapshot, ids: number[]): Row[] {
+  const picked = new Set<number>()
+  for (const n of ids) {
+    const row = snapshot.rows[n]
+    if (!row) continue
+    picked.add(n)
+    const entryId = row.event.data?.entryId
+    if ((row.event.kind !== 'request' && row.event.kind !== 'response') || typeof entryId !== 'string') continue
+    for (const other of snapshot.rows) {
+      if ((other.event.kind === 'request' || other.event.kind === 'response') && other.event.data?.entryId === entryId) picked.add(other.index)
+    }
+  }
+  return [...picked].sort((a, b) => a - b).map(n => snapshot.rows[n])
+}
+
+export async function getEvents(ids: unknown, part?: unknown, offset?: unknown): Promise<string> {
   const snapshot = pinnedSnapshot()
-  const list = (Array.isArray(ids) ? ids : [ids])
-    .map(v => Number(String(v).replace(/^#/, '')))
-    .filter(n => Number.isInteger(n))
-    .slice(0, MAX_EVENTS_PER_CALL)
+  const list = idsArg(ids).slice(0, MAX_EVENTS_PER_CALL)
   if (!list.length) return 'Pass event ids as numbers, for example [12, 13].'
+  if (part !== undefined && part !== null && part !== '') {
+    if (!EVENT_PARTS.includes(part as EventPart)) return `part must be one of ${EVENT_PARTS.join(', ')}.`
+    return eventPart(snapshot, list[0], part as EventPart, Math.floor(Number(offset) || 0))
+  }
   const stacks = new Set<string>()
   const parts: string[] = []
   for (const n of list) {
@@ -416,14 +489,53 @@ function addLeaves(value: unknown, path: string, key: string, out: Leaf[], depth
   for (const [k, v] of Object.entries(obj)) addLeaves(v, path ? `${path}.${k}` : k, k, out, depth + 1)
 }
 
+/**
+ * JSON that may be cut (a body cut at capture): parsed up to the last complete value, with the
+ * open objects and arrays closed. `repaired` tells that the tail was dropped.
+ */
+function parseJsonLenient(text: string): { value: unknown; repaired: boolean } | undefined {
+  const t = text.trim()
+  if (t[0] !== '{' && t[0] !== '[') return undefined
+  try {
+    return { value: JSON.parse(t), repaired: false }
+  } catch { /* cut or not JSON */ }
+  let stack = ''
+  let inString = false
+  let escaped = false
+  let cutAt = -1
+  let cutStack = ''
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (c === '\\') escaped = true
+      else if (c === '"') inString = false
+      continue
+    }
+    if (c === '"') inString = true
+    else if (c === '{' || c === '[') stack += c
+    else if (c === '}' || c === ']') stack = stack.slice(0, -1)
+    else if (c === ',' && stack) {
+      cutAt = i
+      cutStack = stack
+    }
+  }
+  if (cutAt < 0) return undefined
+  const closers = [...cutStack].reverse().map(c => (c === '{' ? '}' : ']')).join('')
+  try {
+    return { value: JSON.parse(t.slice(0, cutAt) + closers), repaired: true }
+  } catch {
+    return undefined
+  }
+}
+
 /** Body text as values: parsed JSON, form fields, or the text itself */
 function addTextLeaves(text: string, path: string, out: Leaf[]): void {
   const t = text.trim()
-  if (t[0] === '{' || t[0] === '[') {
-    try {
-      addLeaves(JSON.parse(t), path, path, out)
-      return
-    } catch { /* not JSON */ }
+  const parsed = parseJsonLenient(t)
+  if (parsed) {
+    addLeaves(parsed.value, path, path, out)
+    return
   }
   if (/^[^\s=&]+=[^\s&]*(&[^\s=&]+=[^\s&]*)*$/.test(t)) {
     try {
@@ -494,6 +606,7 @@ interface SearchArgs {
   value?: unknown
   exact?: unknown
   kind?: unknown
+  ids?: unknown
   limit?: unknown
   offset?: unknown
 }
@@ -555,9 +668,12 @@ export function searchLogs(args: SearchArgs): string {
   const limit = Math.min(MAX_SEARCH_RESULTS, Math.max(1, Number(args.limit) || 20))
   const offset = Math.max(0, Math.floor(Number(args.offset) || 0))
   const t0 = snapshot.rows[0]?.event.timestamp ?? 0
+  const ids = idsArg(args.ids)
+  const rows = ids.length ? rowsOfIds(snapshot, ids) : snapshot.rows
+  if (ids.length && !rows.length) return `No such events (the logs have #0..#${snapshot.count - 1}).`
 
   const matches: { row: Row; leaves: Leaf[]; inHead: boolean }[] = []
-  for (const row of snapshot.rows) {
+  for (const row of rows) {
     if (kindFilter && row.event.kind !== kindFilter && row.label.toLowerCase() !== kindFilter) continue
     const leaves = rowLeaves(snapshot, row)
     let hits = matchKey || matchValue ? leaves.filter(l => (!matchKey || matchKey(l)) && (!matchValue || matchValue(l))) : []
@@ -574,7 +690,7 @@ export function searchLogs(args: SearchArgs): string {
   }
 
   const what = [query && `"${query}"`, keySpec && `key ${keySpec}`, valueSpec && `value ${exact ? '= ' : '~ '}"${valueSpec}"`].filter(Boolean).join(', ')
-  if (!matches.length) return `No events match ${what}.`
+  if (!matches.length) return `No events match ${what}${ids.length ? ` in ${rows.map(r => `#${r.index}`).join(', ')}` : ''}.`
   const page = matches.slice(offset, offset + limit)
   const needle = valueSpec || query
   const lines = page.map(({ row, leaves, inHead }) => {
@@ -600,4 +716,216 @@ export function searchLogs(args: SearchArgs): string {
   }
   if (offset + page.length < matches.length) out.push('', `More: call again with offset=${offset + page.length}, or narrow with kind, key or a longer value.`)
   return out.join('\n')
+}
+
+const FIND_LIMIT = 50
+const FIND_MAX_LIMIT = 200
+const ITEM_CHARS = 400
+/** Properties that name an item, shown when the whole item is too long */
+const ID_KEYS = ['id', 'key', 'name', 'code', 'title', 'label', 'type']
+
+interface JsonPart {
+  part: string
+  value: unknown
+  /** The body was cut at capture: the items after the last complete one are missing */
+  repaired: boolean
+}
+
+const jsonPartsCache = new WeakMap<Row, JsonPart[]>()
+
+/** JSON values of an event: its own body or WebSocket message, or the event data */
+function jsonParts(snapshot: LogsSnapshot, row: Row): JsonPart[] {
+  let parts = jsonPartsCache.get(row)
+  if (parts) return parts
+  parts = []
+  const entryId = row.event.data?.entryId
+  const entry = typeof entryId === 'string' ? snapshot.getEntry(entryId) : undefined
+  const addText = (part: string, text: unknown) => {
+    if (typeof text !== 'string' || !text) return
+    const parsed = parseJsonLenient(text)
+    if (parsed) parts!.push({ part, ...parsed })
+  }
+  if (entry) {
+    const kind = row.event.kind
+    if (kind === 'request') addText('requestBody', entry.requestBody?.text)
+    if (kind === 'response') addText('responseBody', entry.responseBody?.text)
+    if (kind === 'ws-sent' || kind === 'ws-received') {
+      const frame = (entry.websocket?.frames ?? []).find((f: any) => f?.id === row.event.data?.frameId)
+      addText('message', frame?.data)
+    }
+  } else {
+    parts.push({ part: 'data', value: row.event.data, repaired: false })
+  }
+  jsonPartsCache.set(row, parts)
+  return parts
+}
+
+/** Arrays that hold objects, with their paths (`data.groups[2].filters`) */
+function objectArrays(value: unknown, path: string, out: { path: string; items: unknown[] }[], depth = 0): void {
+  if (!value || typeof value !== 'object' || depth > 40) return
+  if (Array.isArray(value)) {
+    if (value.some(v => v && typeof v === 'object' && !Array.isArray(v))) out.push({ path, items: value })
+    value.forEach((v, i) => objectArrays(v, `${path}[${i}]`, out, depth + 1))
+    return
+  }
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) objectArrays(v, path ? `${path}.${k}` : k, out, depth + 1)
+}
+
+/** `a.b[2].c` inside an item */
+function valueAt(item: unknown, path: string): unknown {
+  let current: any = item
+  for (const step of path.split(/\.|\[(\d+)\]/).filter(Boolean)) {
+    if (current == null || typeof current !== 'object') return undefined
+    current = current[step]
+  }
+  return current
+}
+
+type Condition = { key: string; test: (item: unknown) => boolean; label: string }
+
+/** `value`: equal (true matches "true"); `~text` contains; `!value` not equal; `>n` `<n` `>=n` `<=n`; `*` has the property; `!*` lacks it */
+function condition(key: string, spec: unknown): Condition {
+  const label = `${key} ${typeof spec === 'string' && /^(~|!|>|<|\*)/.test(spec) ? spec : `= ${JSON.stringify(spec)}`}`
+  const lower = (v: unknown) => (v === null ? 'null' : typeof v === 'object' ? JSON.stringify(v) : String(v)).toLowerCase()
+  const matchOne = (actual: unknown, test: (v: unknown) => boolean) => (Array.isArray(actual) ? actual.some(test) : test(actual))
+  let test: (actual: unknown) => boolean
+  if (spec === '*') test = actual => actual !== undefined
+  else if (spec === '!*') test = actual => actual === undefined
+  else if (typeof spec === 'string' && spec.startsWith('~')) {
+    const part = spec.slice(1).toLowerCase()
+    test = actual => actual !== undefined && matchOne(actual, v => lower(v).includes(part))
+  } else if (typeof spec === 'string' && /^(>=|<=|>|<)-?\d/.test(spec)) {
+    const [, op, num] = spec.match(/^(>=|<=|>|<)(.+)$/)!
+    const n = Number(num)
+    test = actual => matchOne(actual, v => {
+      const x = Number(v)
+      if (v === null || v === '' || Number.isNaN(x)) return false
+      return op === '>' ? x > n : op === '<' ? x < n : op === '>=' ? x >= n : x <= n
+    })
+  } else if (typeof spec === 'string' && spec.startsWith('!')) {
+    const other = spec.slice(1).toLowerCase()
+    test = actual => !matchOne(actual, v => lower(v) === other)
+  } else {
+    const expected = lower(spec)
+    test = actual => actual !== undefined && matchOne(actual, v => lower(v) === expected)
+  }
+  return { key, label, test: item => test(valueAt(item, key)) }
+}
+
+/** `{ "isVisibleByDefault": true }`, or the text `isVisibleByDefault=true, type=~select` */
+function parseWhere(where: unknown): Condition[] {
+  if (typeof where === 'string' && where.trim().startsWith('{')) {
+    try {
+      where = JSON.parse(where)
+    } catch {}
+  }
+  if (where && typeof where === 'object' && !Array.isArray(where)) {
+    return Object.entries(where as Record<string, unknown>).map(([k, v]) => condition(k, v))
+  }
+  if (typeof where !== 'string' || !where.trim()) return []
+  return where.split(/\s*(?:,|&|\band\b)\s*/i).filter(Boolean).map(pair => {
+    const m = pair.match(/^([^=!<>~]+?)\s*(=|!=|>=|<=|>|<|~)\s*(.*)$/)
+    if (!m) return condition(pair.trim(), '*')
+    const [, key, op, raw] = m
+    const value = raw.trim().replace(/^["']|["']$/g, '')
+    return condition(key.trim(), op === '=' ? value : op === '!=' ? `!${value}` : `${op}${value}`)
+  })
+}
+
+function itemLine(item: unknown, fields: string[], conditions: Condition[]): string {
+  if (fields.length) {
+    const picked: Record<string, unknown> = {}
+    for (const f of fields) picked[f] = valueAt(item, f)
+    return cut(json(picked), ITEM_CHARS)
+  }
+  const whole = json(item)
+  if (whole.length <= ITEM_CHARS || !item || typeof item !== 'object') return cut(whole, ITEM_CHARS)
+  const keys = Object.keys(item as object)
+  const shown = [...new Set([...ID_KEYS.filter(k => keys.includes(k)), ...conditions.map(c => c.key)])]
+  const picked: Record<string, unknown> = {}
+  for (const k of shown) picked[k] = valueAt(item, k)
+  return `${cut(json(picked), ITEM_CHARS)} (+${Math.max(0, keys.length - shown.length)} more keys; pass fields)`
+}
+
+interface FindArgs {
+  ids?: unknown
+  kind?: unknown
+  path?: unknown
+  where?: unknown
+  fields?: unknown
+  limit?: unknown
+  offset?: unknown
+}
+
+/**
+ * Items of arrays in logged JSON (bodies, WebSocket messages, event data) that match property
+ * conditions, listed with their index: one call instead of reading an array item by item.
+ */
+export function findItems(args: FindArgs): string {
+  const snapshot = pinnedSnapshot()
+  const conditions = parseWhere(args.where)
+  const pathSpec = typeof args.path === 'string' ? args.path.trim().replace(/\[\d*\]/g, '').toLowerCase() : ''
+  const fields = listArg(args.fields).map(f => String(f).trim()).filter(Boolean)
+  if (!conditions.length && !pathSpec) return 'Pass where (property conditions) and / or path (the array).'
+  const kindFilter = typeof args.kind === 'string' && args.kind ? args.kind.toLowerCase() : ''
+  const ids = idsArg(args.ids)
+  const rows = ids.length ? rowsOfIds(snapshot, ids) : snapshot.rows
+  if (ids.length && !rows.length) return `No such events (the logs have #0..#${snapshot.count - 1}).`
+  const limit = Math.min(FIND_MAX_LIMIT, Math.max(1, Number(args.limit) || FIND_LIMIT))
+  const offset = Math.max(0, Math.floor(Number(args.offset) || 0))
+  const t0 = snapshot.rows[0]?.event.timestamp ?? 0
+
+  const groups: { head: string; matches: { index: number; item: unknown }[] }[] = []
+  const searched = new Map<number, Map<string, number>>()
+  let total = 0
+  for (const row of rows) {
+    if (kindFilter && row.event.kind !== kindFilter && row.label.toLowerCase() !== kindFilter) continue
+    const rowArrays = new Map<string, number>()
+    searched.set(row.index, rowArrays)
+    for (const { part, value, repaired } of jsonParts(snapshot, row)) {
+      const arrays: { path: string; items: unknown[] }[] = []
+      objectArrays(value, part, arrays)
+      for (const { path, items } of arrays) {
+        const plainPath = path.replace(/\[\d+\]/g, '[]')
+        if (!rowArrays.has(plainPath)) rowArrays.set(plainPath, items.length)
+        if (pathSpec) {
+          const plain = path.replace(/\[\d+\]/g, '').toLowerCase()
+          if (plain !== pathSpec && !plain.endsWith(`.${pathSpec}`)) continue
+        }
+        const matches = items
+          .map((item, index) => ({ index, item }))
+          .filter(({ item }) => item && typeof item === 'object' && conditions.every(c => c.test(item)))
+        if (!matches.length) continue
+        total += matches.length
+        const note = repaired ? '; the body was cut at capture, later items were not stored' : ''
+        groups.push({ head: `${rowLine(row, t0)}\n  ${path}: ${items.length} items, ${matches.length} match${note}`, matches })
+      }
+    }
+  }
+  const what = [conditions.map(c => c.label).join(' and '), pathSpec && `in ${pathSpec}`].filter(Boolean).join(' ')
+  if (!total) {
+    const out = [`No array items match ${what}${ids.length ? ` in ${[...searched.keys()].map(n => `#${n}`).join(', ') || ids.map(n => `#${n}`).join(', ')}` : ''}.`]
+    if (ids.length) {
+      for (const [index, arrays] of searched) {
+        const list = [...arrays.entries()].slice(0, 12).map(([p, n]) => `${p} (${n})`)
+        out.push(`- #${index} ${snapshot.rows[index].label}: ${list.length ? `arrays of objects ${list.join(', ')}${arrays.size > 12 ? ', ...' : ''}` : 'no JSON arrays of objects'}`)
+      }
+      if (!searched.size) out.push(`- no event of kind ${kindFilter} among them`)
+    }
+    out.push('Check the array path and the property name (search_logs key=<name> shows the paths), or drop ids / kind to search every event.')
+    return out.join('\n')
+  }
+
+  const out = [`${total} item${total === 1 ? '' : 's'} match ${what} in ${groups.length} array${groups.length === 1 ? '' : 's'}${total > limit ? ` (showing ${offset + 1}-${Math.min(total, offset + limit)})` : ''}:`]
+  let seen = 0
+  for (const group of groups) {
+    const from = Math.max(0, offset - seen)
+    const room = offset + limit - Math.max(seen, offset)
+    seen += group.matches.length
+    if (from >= group.matches.length || room <= 0) continue
+    out.push(group.head)
+    for (const { index, item } of group.matches.slice(from, from + room)) out.push(`    [${index}] ${itemLine(item, fields, conditions)}`)
+  }
+  if (offset + limit < total) out.push('', `More: call again with offset=${offset + limit}.`)
+  return cut(out.join('\n'), RESULT_CHARS)
 }

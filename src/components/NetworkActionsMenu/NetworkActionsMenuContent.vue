@@ -94,11 +94,6 @@ function handleClick(e: Event, action: () => void) {
     :class="contentClass"
     v-bind="variant === 'dropdown' ? { align: 'end' } : {}"
   >
-    <component :is="Item" @click="handleClick($event, () => askAiAboutRequest(entry))">
-      <Sparkles class="h-4 w-4 mr-2" />
-      Ask AI
-    </component>
-    <component v-if="entry.initiator !== 'websocket'" :is="Separator" />
     <component
       v-if="entry.initiator !== 'websocket'"
       :is="Item"
@@ -106,6 +101,11 @@ function handleClick(e: Event, action: () => void) {
     >
       <Terminal class="h-4 w-4 mr-2" />
       Copy cURL
+    </component>
+    <component v-if="entry.initiator !== 'websocket'" :is="Separator" />
+    <component :is="Item" @click="handleClick($event, () => askAiAboutRequest(entry))">
+      <Sparkles class="h-4 w-4 mr-2" />
+      Ask AI
     </component>
     <component v-if="entry.initiator !== 'websocket'" :is="Separator" />
     <component
