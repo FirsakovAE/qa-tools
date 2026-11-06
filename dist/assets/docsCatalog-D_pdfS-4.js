@@ -732,7 +732,7 @@ Clears accumulated rows next to **Pause**.\r
 \r
 ### Export Collection\r
 \r
-**All** / **XHR** / **WS**, next to **Export Collection**, limits the table to every row, to \`fetch\` / XHR, or to WebSocket. **All** is the default. The switch does not remove rows from the buffer. On a narrow toolbar the switch and **Export Collection** move together to the next line.\r
+**All** / **XHR** / **WS**, next to **Export Collection**, limits the table to every row, to \`fetch\` / XHR, or to WebSocket. **All** is the default. The last choice is kept between sessions. The switch does not remove rows from the buffer. On a narrow toolbar the switch and **Export Collection** move together to the next line.\r
 \r
 **Export Collection** downloads a **Postman collection** (**JSON**): the current **filtered** HTTP list, or only the ticked HTTP requests. **WebSocket** rows are left out of the file. Their checkboxes stay disabled, and select all and a **Shift** range skip them. On **WS** the button stays disabled (see [Export Collection](./export.md)).\r
 \r
