@@ -58,7 +58,7 @@ const results = computed(() => {
     : catalog.value.filter(m => !m.paid)
   return list
     .slice()
-    .sort((a, b) => Number(!!a.paid) - Number(!!b.paid) || a.name.localeCompare(b.name))
+    .sort((a, b) => Number(!!a.paid) - Number(!!b.paid) || b.name.localeCompare(a.name, undefined, { numeric: true }))
 })
 const shown = computed(() => results.value.slice(0, SEARCH_LIMIT))
 

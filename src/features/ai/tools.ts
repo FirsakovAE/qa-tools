@@ -1,6 +1,7 @@
 import type { AiStep, ToolDefinition } from './types'
-import type { AiAccess, AiToolGroup } from './credentials'
+import type { AiAccess, AiRouting, AiToolGroup } from './credentials'
 import { findItems, getEvents, searchLogs } from './logsContext'
+import { LOAD_SKILL_TOOL, loadSkills } from './skills'
 import { listSources, readSource, searchSource } from './sources'
 import { readDocs } from './docs'
 import { inspectUi, readStores } from './page'
@@ -182,12 +183,13 @@ export const TOOL_GROUPS: Record<string, AiToolGroup | undefined> = {
   read_stores: 'page',
 }
 
-/** Tools the user did not turn off */
-export function allowedTools(access: AiAccess): ToolDefinition[] {
-  return AI_TOOLS.filter(t => {
+/** Tools the user did not turn off; Lite routing adds the skill loader */
+export function allowedTools(access: AiAccess, routing: AiRouting = 'lite'): ToolDefinition[] {
+  const tools = AI_TOOLS.filter(t => {
     const group = TOOL_GROUPS[t.function.name]
     return !group || access.tools[group] !== 'deny'
   })
+  return routing === 'lite' ? [LOAD_SKILL_TOOL, ...tools] : tools
 }
 
 function short(value: unknown, max = 60): string {
@@ -197,6 +199,8 @@ function short(value: unknown, max = 60): string {
 
 export function describeToolCall(name: string, args: Record<string, any>): AiStep {
   switch (name) {
+    case 'load_skill':
+      return { tool: 'Skill', summary: `Load ${(Array.isArray(args.names) ? args.names : [args.names ?? args.name]).map(n => short(n)).join(', ')}` }
     case 'read_docs':
       return { tool: 'Docs', summary: Array.isArray(args.pages) && args.pages.length ? `Read ${args.pages.map(p => short(p)).join(', ')}${args.section ? ` § ${short(args.section)}` : ''}` : 'List pages' }
     case 'get_events':
@@ -238,6 +242,8 @@ export function describeToolCall(name: string, args: Record<string, any>): AiSte
 export async function runTool(name: string, args: Record<string, any>): Promise<string> {
   try {
     switch (name) {
+      case 'load_skill':
+        return loadSkills(args.names ?? args.name)
       case 'read_docs':
         return await readDocs(args.pages ?? args.page, args.section)
       case 'get_events':

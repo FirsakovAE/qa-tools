@@ -14,7 +14,7 @@ import {
   type ChatResult,
 } from './providers'
 import { clearModel, markModel, modelStatus, statusLabel, recordRequest, setReportedLimit, type ModelState } from './modelStatus'
-import { FINAL_ROUND_NOTE, SYSTEM_PROMPT } from './prompt'
+import { FINAL_ROUND_NOTE, systemPrompt } from './prompt'
 import { AI_TOOLS, describeToolCall, runTool } from './tools'
 import { extractTextToolCalls } from './textToolCalls'
 import { hasVisibleText } from './format'
@@ -37,6 +37,9 @@ const FIT_TOOL_RESULT_CHARS = 400
 const DIGEST_TAG = /<logs_digest[^>]*>[\s\S]*?<\/logs_digest>/g
 const ATTACHMENT_TAG = /<attachment[^>]*>[\s\S]*?<\/attachment>/g
 const NO_LIVE: ChatLive = { content: '', reasoning: '' }
+/** Its result is instructions: kept whole within a question, a cut copy would be worse than none */
+const SKILL_TOOL = 'load_skill'
+const OLD_SKILL_NOTE = '[skill rules of an earlier question removed; call load_skill again when this question needs them]'
 /** The model is told how many tool rounds are left from this many on */
 const ROUNDS_LEFT_NOTE = 3
 
@@ -50,7 +53,7 @@ export interface AgentRun {
   /** The digest lists only events from this id on: the earlier digests of the chat stay valid */
   digestFrom?: number
   history: ChatMessage[]
-  /** SYSTEM_PROMPT with the answer style of the user */
+  /** Core instructions with the access limits and the skills of the chosen routing */
   systemPrompt?: string
   /** The answer style again, on the newest user message of every request */
   styleNote?: string
@@ -243,6 +246,7 @@ function compactHistory(history: ChatMessage[], replacingDigest: boolean): ChatM
       if (replacingDigest) content = content.replace(DIGEST_TAG, '[older logs digest removed; ids now refer to the newest digest]')
       return content === m.content ? m : { ...m, content }
     }
+    if (m.role === 'tool' && m.name === SKILL_TOOL) return m.content === OLD_SKILL_NOTE ? m : { ...m, content: OLD_SKILL_NOTE }
     if (m.role === 'tool' && m.content.length > OLD_TOOL_RESULT_CHARS) {
       return { ...m, content: `${m.content.slice(0, OLD_TOOL_RESULT_CHARS)}\n... [shortened; call the tool again for the full result]` }
     }
@@ -283,7 +287,7 @@ function fitContext(history: ChatMessage[], maxChars: number): ChatMessage[] {
   // The newest tool result stays whole: the model asked for it right now
   const lastTool = messages.findLastIndex(m => m.role === 'tool')
   return messages.map((m, i) => {
-    if (total <= maxChars || m.role !== 'tool' || i === lastTool || m.content.length <= FIT_TOOL_RESULT_CHARS) return m
+    if (total <= maxChars || m.role !== 'tool' || m.name === SKILL_TOOL || i === lastTool || m.content.length <= FIT_TOOL_RESULT_CHARS) return m
     total -= m.content.length - FIT_TOOL_RESULT_CHARS
     return { ...m, content: `${m.content.slice(0, FIT_TOOL_RESULT_CHARS)}\n... [shortened to fit the model limit; call the tool again if needed]` }
   })
@@ -313,7 +317,7 @@ export async function runAgent(run: AgentRun): Promise<AgentResult> {
   const rounds = budget.toolRounds
   for (let round = 0; round <= rounds; round++) {
     const last = round === rounds
-    const messages: ChatMessage[] = [{ role: 'system', content: run.systemPrompt ?? SYSTEM_PROMPT }, ...fitContext(history, budget.contextChars)]
+    const messages: ChatMessage[] = [{ role: 'system', content: run.systemPrompt ?? systemPrompt() }, ...fitContext(history, budget.contextChars)]
     if (last) messages.push({ role: 'user', content: FINAL_ROUND_NOTE })
     const result = await complete(run, withStyle(messages, run.styleNote), last ? 'none' : 'auto')
     run.usage.requests++

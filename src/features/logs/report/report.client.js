@@ -1236,9 +1236,18 @@
       if (d.parents) rows.push(['Parents', d.parents])
     } else if (e.kind === 'navigation') rows.push(['Type', d.navType], ['From', d.from || '-'], ['To', d.to])
     else if (e.kind === 'click') {
-      rows.push(['Text', d.text || '-'], ['XPath', d.xpath || '-'])
+      rows.push(['Text', d.text || '-'])
+      if (d.selector) rows.push(['CSS selector', d.selector])
+      if (d.id) rows.push(['ID', d.id])
+      if (d.testId) rows.push([d.testAttr || 'data-testid', d.testId])
+      if (d.ariaLabel) rows.push(['aria-label', d.ariaLabel])
+      if (d.title) rows.push(['title', d.title])
+      if (d.href) rows.push(['href', d.href])
+      if (d.type) rows.push(['type', d.type])
+      else if (d.inputType) rows.push(['Input', d.inputType])
+      if (d.className) rows.push(['class', d.className])
+      rows.push(['XPath', d.xpath || '-'])
       if (d.tag) rows.push(['Tag', d.tag])
-      if (d.inputType) rows.push(['Input', d.inputType])
     }
     else if (e.kind === 'error') {
       rows.push(['Source', d.source])

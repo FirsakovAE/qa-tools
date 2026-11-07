@@ -4,7 +4,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/Textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { aiCredentials, CUSTOM_STYLE_MAX, loadAiCredentials, saveAiCredentials, type AiDetail, type AiTone } from '../credentials'
+import { aiCredentials, CUSTOM_STYLE_MAX, loadAiCredentials, saveAiCredentials, type AiDetail, type AiRouting, type AiTone } from '../credentials'
 import AiSettingsHead from './AiSettingsHead.vue'
 
 const TONES: Array<{ id: AiTone; label: string; hint: string }> = [
@@ -21,11 +21,17 @@ const DETAILS: Array<{ id: AiDetail; label: string; hint: string }> = [
   { id: 'detailed', label: 'Detailed', hint: 'The whole chain of events, ruled-out causes, steps to reproduce' },
 ]
 
+const ROUTINGS: Array<{ id: AiRouting; label: string; hint: string }> = [
+  { id: 'full', label: 'Full', hint: 'All task instructions in every request. For strong models' },
+  { id: 'lite', label: 'Lite', hint: 'Core rules only; the model loads the instructions of the task when needed' },
+]
+
 const toneHint = computed(() => TONES.find(t => t.id === aiCredentials.tone)?.hint ?? '')
 const detailHint = computed(() => DETAILS.find(d => d.id === aiCredentials.detail)?.hint ?? '')
+const routingHint = computed(() => ROUTINGS.find(r => r.id === aiCredentials.routing)?.hint ?? '')
 const customStyle = ref('')
 const saveStyle = useDebounceFn((text: string) => saveAiCredentials({ customStyle: text }), 400)
-const isDefault = computed(() => aiCredentials.tone === 'default' && aiCredentials.detail === 'normal' && !customStyle.value)
+const isDefault = computed(() => aiCredentials.tone === 'default' && aiCredentials.detail === 'normal' && aiCredentials.routing === 'lite' && !customStyle.value)
 
 function onStyle(value: string | number | undefined) {
   customStyle.value = String(value ?? '').slice(0, CUSTOM_STYLE_MAX)
@@ -34,7 +40,7 @@ function onStyle(value: string | number | undefined) {
 
 function reset() {
   customStyle.value = ''
-  void saveAiCredentials({ tone: 'default', detail: 'normal', customStyle: '' })
+  void saveAiCredentials({ tone: 'default', detail: 'normal', routing: 'lite', customStyle: '' })
 }
 
 onMounted(async () => {
@@ -74,6 +80,21 @@ onMounted(async () => {
           </SelectContent>
         </Select>
         <span class="text-xs text-muted-foreground">{{ detailHint }}</span>
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      <Label class="text-xs font-medium text-muted-foreground">Instruction routing</Label>
+      <div class="flex flex-wrap items-center gap-3">
+        <Select :model-value="aiCredentials.routing" @update:model-value="saveAiCredentials({ routing: $event as AiRouting })">
+          <SelectTrigger class="h-8 w-[180px] text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="routing in ROUTINGS" :key="routing.id" :value="routing.id">{{ routing.label }}</SelectItem>
+          </SelectContent>
+        </Select>
+        <span class="text-xs text-muted-foreground">{{ routingHint }}</span>
       </div>
     </div>
 

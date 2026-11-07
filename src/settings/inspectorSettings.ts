@@ -1,10 +1,10 @@
-import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
+import type { BaseInspectorSettings, FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkTrafficFilter, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
 
 import { DEFAULT_LOGS_LIMITS, DEFAULT_LOGS_MASKING } from '@/injected/logs/config'
 import { NETWORK_ENTRY_LIMIT } from '@/types/network'
 
 export type InspectorSettings = BaseInspectorSettings
-export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope }
+export type { FavoriteItem, PiniaFavoriteItem, BreakpointItem, MockRule, MockHeaderEntry, NetworkSearchSettings, NetworkTableColumnsSettings, PropsTableColumnsSettings, PiniaTableColumnsSettings, PropsSearchSettings, PiniaSearchSettings, GlobalSearchSettings, DisplayMode, ThemeMode, SavedFile, CustomizeSettings, ImageSourceType, AutoRunSettings, SiteListEntry, NetworkCaptureMode, NetworkTrafficFilter, NetworkAdvancedHeaderPolicy, NetworkHeaderLinkRule, NetworkPinnedHeaderItem, NetworkPinnedHeaderScope }
 
 /** Default Network table columns (all visible except Name) */
 const defaultNetworkTableColumns: NetworkTableColumnsSettings = {
@@ -73,6 +73,7 @@ export const defaultInspectorSettings: InspectorSettings = {
     mocks: { active: [], inactive: [] },
     networkBreakpointsEnabled: true,
     networkMocksEnabled: true,
+    networkTrafficFilter: 'all',
     networkTableColumns: { ...defaultNetworkTableColumns },
     propsTableColumns: { ...defaultPropsTableColumns },
     piniaTableColumns: { ...defaultPiniaTableColumns },

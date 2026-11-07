@@ -199,6 +199,9 @@ export type ThemeMode = 'dark' | 'light'
  */
 export type NetworkCaptureMode = 'saved' | 'advanced'
 
+/** Network toolbar filter: every row, fetch/XHR, or WebSocket. */
+export type NetworkTrafficFilter = 'all' | 'xhr' | 'ws'
+
 /** Visibility / export policy for headers only available after Advanced (webRequest) merge */
 export interface NetworkAdvancedHeaderPolicy {
     /** When false, hide webRequest-only headers in Network details (pinned still shown). Default true. */
@@ -318,6 +321,8 @@ export interface BaseInspectorSettings {
      * Default true.
      */
     networkMocksEnabled: boolean
+    /** Last All / XHR / WS choice on the Network tab. Kept between sessions. */
+    networkTrafficFilter: NetworkTrafficFilter
     /** Network table column visibility */
     networkTableColumns?: NetworkTableColumnsSettings
     /** Props table column visibility */

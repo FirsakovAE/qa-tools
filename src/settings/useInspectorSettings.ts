@@ -484,6 +484,9 @@ function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSett
     mergeDeep(result, saved)
     result.networkMaxHttpRequests = normalizeNetworkMaxEntries(result.networkMaxHttpRequests)
     result.networkMaxWebSocketEvents = normalizeNetworkMaxEntries(result.networkMaxWebSocketEvents)
+    if (result.networkTrafficFilter !== 'xhr' && result.networkTrafficFilter !== 'ws') {
+        result.networkTrafficFilter = 'all'
+    }
     return result
 }
 

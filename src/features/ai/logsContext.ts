@@ -427,7 +427,8 @@ function rowsOfIds(snapshot: LogsSnapshot, ids: number[]): Row[] {
 
 export async function getEvents(ids: unknown, part?: unknown, offset?: unknown): Promise<string> {
   const snapshot = pinnedSnapshot()
-  const list = idsArg(ids).slice(0, MAX_EVENTS_PER_CALL)
+  const all = idsArg(ids)
+  const list = all.slice(0, MAX_EVENTS_PER_CALL)
   if (!list.length) return 'Pass event ids as numbers, for example [12, 13].'
   if (part !== undefined && part !== null && part !== '') {
     if (!EVENT_PARTS.includes(part as EventPart)) return `part must be one of ${EVENT_PARTS.join(', ')}.`
@@ -443,7 +444,11 @@ export async function getEvents(ids: unknown, part?: unknown, offset?: unknown):
     }
     parts.push(await withStackCode(eventDetails(snapshot, row), eventStack(row.event), stacks))
   }
-  return cut(parts.join('\n\n'), RESULT_CHARS)
+  const skipped = all.slice(MAX_EVENTS_PER_CALL)
+  const result = cut(parts.join('\n\n'), RESULT_CHARS)
+  return skipped.length
+    ? `${result}\n\n[Not loaded: ${skipped.map(n => `#${n}`).join(', ')}: up to ${MAX_EVENTS_PER_CALL} ids per call. Call get_events again with the ones you still need.]`
+    : result
 }
 
 /** One value of an event with its path: `responseBody.data.items[3].id = 29058` */

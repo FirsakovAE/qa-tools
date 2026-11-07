@@ -240,9 +240,17 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
       break
     case 'click':
       rows.push({ label: 'Text', value: String(d.text || '—') })
+      if (d.selector) rows.push({ label: 'CSS selector', value: String(d.selector) })
+      if (d.id) rows.push({ label: 'ID', value: String(d.id) })
+      if (d.testId) rows.push({ label: String(d.testAttr || 'data-testid'), value: String(d.testId) })
+      if (d.ariaLabel) rows.push({ label: 'aria-label', value: String(d.ariaLabel) })
+      if (d.title) rows.push({ label: 'title', value: String(d.title) })
+      if (d.href) rows.push({ label: 'href', value: String(d.href) })
+      if (d.type) rows.push({ label: 'type', value: String(d.type) })
+      else if (d.inputType) rows.push({ label: 'Input', value: String(d.inputType) })
+      if (d.className) rows.push({ label: 'class', value: String(d.className) })
       rows.push({ label: 'XPath', value: String(d.xpath || '—') })
       if (d.tag) rows.push({ label: 'Tag', value: String(d.tag) })
-      if (d.inputType) rows.push({ label: 'Input', value: String(d.inputType) })
       break
     case 'error':
       rows.push({ label: 'Source', value: String(d.source) })

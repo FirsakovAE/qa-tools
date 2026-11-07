@@ -731,7 +731,7 @@ export function createLogsRuntime() {
       case 'navigation':
         return { title: key, subtitle: data.navType }
       case 'click':
-        return { title: String(data.text || data.tag || 'Click'), subtitle: String(data.xpath || key) }
+        return { title: String(data.text || data.tag || 'Click'), subtitle: String(data.selector || data.xpath || key) }
       case 'error':
         return { title: key, subtitle: data.source }
       case 'ws':

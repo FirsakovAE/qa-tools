@@ -16,8 +16,8 @@ import NetworkDetails from './NetworkDetails.vue'
 import MockForm from './MockForm.vue'
 import BreakpointForm from './BreakpointForm.vue'
 import type { NetworkEntry } from '@/types/network'
-import type { BreakpointItem, MockRule } from '@/types/inspector'
-import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
+import type { BreakpointItem, MockRule, NetworkTrafficFilter } from '@/types/inspector'
+import { inspectorState, useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useSearchSettings } from '@/composables/useSearchSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
 import { useRowSelection } from '@/composables/useRowSelection'
@@ -218,9 +218,16 @@ const selectedEntry = computed(() => {
   return null
 })
 
-type TrafficFilter = 'all' | 'xhr' | 'ws'
-const trafficFilter = ref<TrafficFilter>('all')
-const trafficOptions: { id: TrafficFilter; label: string }[] = [
+const trafficFilter = computed<NetworkTrafficFilter>({
+  get: () => {
+    const value = inspectorState.networkTrafficFilter
+    return value === 'xhr' || value === 'ws' ? value : 'all'
+  },
+  set: (value) => {
+    inspectorState.networkTrafficFilter = value
+  },
+})
+const trafficOptions: { id: NetworkTrafficFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'xhr', label: 'XHR' },
   { id: 'ws', label: 'WS' },

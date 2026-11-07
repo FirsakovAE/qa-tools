@@ -14,6 +14,8 @@ const STORAGE_KEY = 'vue-inspector-ai'
 
 export type AiTone = 'default' | 'professional' | 'friendly' | 'direct' | 'mentor'
 export type AiDetail = 'brief' | 'normal' | 'detailed'
+/** full: every skill in the system prompt; lite: a skill list, the model loads the rules it needs */
+export type AiRouting = 'full' | 'lite'
 
 export const CUSTOM_STYLE_MAX = 2000
 
@@ -103,6 +105,7 @@ export interface AiCredentials {
   detail: AiDetail
   /** Style instructions of the user, added to the system prompt */
   customStyle: string
+  routing: AiRouting
   /** Models hidden from the AI tab and skipped as fallbacks, per provider */
   blockedModels: Partial<Record<AiProviderId, string[]>>
   /** Models the user added to the recommended ones, per provider */
@@ -115,6 +118,7 @@ export interface AiCredentials {
 const PROVIDERS = new Set<AiProviderId>(['gemini', 'openrouter'])
 const TONES = new Set<AiTone>(['default', 'professional', 'friendly', 'direct', 'mentor'])
 const DETAILS = new Set<AiDetail>(['brief', 'normal', 'detailed'])
+const ROUTINGS = new Set<AiRouting>(['full', 'lite'])
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
@@ -152,6 +156,7 @@ function normalizeCredentials(raw: Partial<AiCredentials> = {}): AiCredentials {
     tone: raw.tone && TONES.has(raw.tone) ? raw.tone : 'default',
     detail: raw.detail && DETAILS.has(raw.detail) ? raw.detail : 'normal',
     customStyle: text(raw.customStyle).slice(0, CUSTOM_STYLE_MAX),
+    routing: raw.routing && ROUTINGS.has(raw.routing) ? raw.routing : 'lite',
     blockedModels: knownProviderRecord(raw.blockedModels),
     addedModels: normalizeAdded(raw.addedModels),
     masking: normalizeAiMasking(raw.masking),
