@@ -31,7 +31,7 @@ If HTTP requests are ticked in the checkbox column, only the selected requests a
 For each included row, a separate request is created in the collection with:
 
 * **method** and **URL** (including address components and query string when present);
-* **request headers** stored by the inspector (pseudo-headers starting with `:` are omitted; for **multipart** bodies the content-type header may be intentionally skipped to avoid conflicts with Postman **form-data** mode);
+* **request headers** stored by the inspector (pseudo-headers starting with `:` are omitted; for **multipart** bodies the content-type header may be intentionally skipped to avoid conflicts with Postman **form-data** mode). In **Advanced mode**, headers that only the browser captured are included when **Include in Collection export** is on; pinned names are kept either way ([Advanced headers](./advanced.md#advanced-headers));
 * **request body** when captured: raw text (including JSON syntax hints where applicable) or **form-data** fields, including file-part markers (binary files themselves are not attached — only names or placeholders are exported, as is typical when no real files are available).
 
 **Server responses** are **not included** — the export contains only the description of **outgoing** requests suitable for replay from a client.

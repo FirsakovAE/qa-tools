@@ -54,7 +54,9 @@ Data is masked at capture time, so the files contain the same masked values as t
 
 ## HTML report
 
-The **HTML** report is one self-contained file: styles, scripts, the application icon and the event data are embedded. It uses a dark theme, does not load external resources and opens offline from disk.
+The **HTML** report is one self-contained file: styles, scripts, the application icon and the event data are embedded. It uses a dark theme and does not load external resources.
+
+**Compress report** (**Options → Logs → Export**) is on by default. The file then stores the same JSON as gzip in base64. Opening it needs a browser with `DecompressionStream` (Chrome / Edge 80+, Firefox 113+, Safari 16.4+). An older browser shows **This report is compressed and this browser cannot unpack it. Open it in Chrome / Edge 80+, Firefox 113+ or Safari 16.4+.** When the browser that exports the file cannot compress, the checkbox is disabled and the file is plain HTML. See [Logs settings](./settings.md#export).
 
 ### Sidebar
 
@@ -65,16 +67,18 @@ The **HTML** report is one self-contained file: styles, scripts, the application
 
 ### Overview
 
-Summary cards: **Events**, **Errors**, **Failed requests**, first and last event time, time span; counters by type; export information. **Generator** is **Vue Inspector Extension** or **Vue Inspector Bookmarklet**, matching the mode that created the file.
+Summary cards: **Events**, **Errors**, **Failed requests / WS**, first and last event time, time span; counters by type; export information. **Generator** is **Vue Inspector Extension** or **Vue Inspector Bookmarklet**, matching the mode that created the file. **Format version** is 1.
+
+**Failed requests / WS** counts a **Receive response** with a network error or status **400** or higher, and a **WebSocket closed** event with an error, with **No automatic reconnect**, or with a close code other than empty, **1000**, **1001** or **1005**.
 
 The header shows **Vue Inspector** with that mode in a tag, **Logs report** on the next line, and the event count with the export time centered beside those two lines.
 
-**Events**, **Errors** and **Failed requests** are clickable: they open **All events** with the matching filter. The active filter is shown as a chip above the list; clicking the chip removes it.
+**Events**, **Errors** and **Failed requests / WS** are clickable: they open **All events** with the matching filter. The active filter is shown as a chip above the list; clicking the chip removes it.
 
 ### Event list and details
 
 * Search in the top bar; with **in data** enabled the search also looks inside event data.
-* **All events** has a **Type** dropdown with checkboxes, the same control as on the **Logs** tab. Every type is on by default. **Select all** and **Clear** turn the whole list on or off. With every type off, the list is empty. The filter stays on this page while you search or use the **Errors** / **Failed requests** chip, and does not change the sidebar sections.
+* **All events** has a **Type** dropdown with checkboxes. It lists only the types present in the file, all on by default. **Select all** and **Clear** turn that list on or off. With every type off, the list says **No event types selected — enable them in the Type filter**. A search or chip that matches nothing says **No events match the filters**. An empty section says **No events**. The filter stays on this page while you search or use the **Errors** / **Failed requests / WS** chip, and does not change the sidebar sections.
 * Clicking a row opens details with the same tabs as in the app (**Overview**, **Params**, **Headers**, **Body**, **Changes**, **Before** / **After**, **State**, **Raw**, etc.). Every JSON and text block has the same bar on top: **Find**, the previous / next match arrows, the match count and **Copy**. JSON is indented and colored, including a truncated body. **Find** searches the whole block and highlights the matches; Enter and Shift+Enter move between them, Esc clears the field. **Copy** copies the stored text. While details with such a block are open, Ctrl+F (Cmd+F) moves to its **Find** field in any keyboard layout; a second Ctrl+F opens the browser find. A block larger than **200 KB** fills the details area and keeps only the visible lines in the page, so only **Find** sees all of it. Smaller blocks are on the page in full, so the browser find works on them too.
 * A binary response shows the same yellow notice as a truncated body, *Binary response received. Body not included in report.*, above the type line (`image/jpeg (986.2 KB)` and **Binary**).
 * **WebSocket open**, **WebSocket sent**, **WebSocket received** and **WebSocket closed** are a separate **WebSocket** section. A message is pretty-printed JSON when the frame is JSON. **Sent** or **Received** and the size sit above that block, in the same type-and-size line as a binary file. **WebSocket closed** lists each frame the same way. When the tab holds several messages, one **Find** bar sits above them and stays visible while scrolling: it searches all messages together, the count and the arrows go through the matches across the messages, and each message keeps its own **Copy**. **Overview** shows the close code, the reason and **No automatic reconnect** when that was determined.

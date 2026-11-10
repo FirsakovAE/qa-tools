@@ -8,21 +8,44 @@ Under **Options → Network** you can choose the **capture mode** for network tr
 
 | Mode | In the UI | What it means |
 | ---- | --------- | -------------- |
-| **Classic mode** | classic snapshot | Same limits as in-page interception: headers and bodies are only what page scripts can read (including **CORS** rules for cross-origin). See [Working with requests](./general.md#display-limits). |
-| **Advanced mode** | extended capture | The extension requests **`webRequest`** access and enriches the request details with the **full set** of request and response headers as seen by the browser for the exchange—not only the subset exposed to the page. |
+| **Classic mode** | Radio **Classic mode**. While it is selected: *Captures standard headers available in the classic (non-extension) view.* | Same limits as in-page interception: headers and bodies are only what page scripts can read (including **CORS** rules for cross-origin). See [Working with requests](./general.md#display-limits). |
+| **Advanced mode** | Radio **Advanced mode**. While it is selected: *Captures full header data close to original DevTools output.* | The extension requests **`webRequest`** access and enriches the request details with the **full set** of request and response headers as seen by the browser for the exchange—not only the subset exposed to the page. |
 
 **Advanced mode** (pinning headers, **Header links**, Advanced-only header visibility options) is available **only in the Chrome / Edge extension**.  
-**Standalone** still runs without extended capture: the full header set via **`webRequest`** described below **is not available** there.
+**Standalone** still runs without extended capture: the radios are disabled and the section says *Capture Mode is only available for the browser extension version.* The full header set via **`webRequest`** described below **is not available** there.
 
 ---
 
 ## What Advanced mode adds in the Network tab
 
 - **Request and response headers** in request details use the extended data (including headers not listed in `Access-Control-Expose-Headers`).
-- **Pinning header rows** — a header name can be pinned **to the top of the list** separately for **Request** and **Response**. Pins are toggled from the **row menu** (three dots) when Advanced mode is on.
+- **Pinning header rows** — a header name can be pinned **to the top of the list** separately for **Request** and **Response**. Commands are in [Advanced headers](#advanced-headers).
 - **Header links** — for a given header name and request **Host**, open an external URL using a template; the **`{value}`** placeholder (and optional **value pipeline**) controls how the header text is inserted into the link. See [Header links](#header-links) below.
 
 The **Header links** list, **Pinned headers** table, and **Advanced headers** options under **Options → Network** are shown **only when Advanced mode is enabled**, so Classic mode stays uncluttered.
+
+### Advanced headers {#advanced-headers}
+
+**Options → Network → Advanced headers** has three checkboxes, all on by default. They control headers that Advanced mode adds on top of what the page can read. A **pinned** name stays in that surface even when the checkbox is off.
+
+| Checkbox | Effect |
+| -------- | ------ |
+| **Show in details** | **Headers** on the request card |
+| **Include in Copy cURL** | **Copy cURL** |
+| **Include in Collection export** | **Export Collection** ([Export Collection](./export.md)) |
+
+In Advanced mode the header row menu (right click or **⋮**) is:
+
+| Command | Effect |
+| ------- | ------ |
+| **Copy** | Copy the header value. Classic mode has this **Copy** column too, without the rest of the menu. |
+| **Pin** / **Unpin** | Pin that name to the top of **Request** or **Response** (**Pinned Request Headers** / **Pinned Response Headers**). |
+| **Create link** | No rule yet for this header on this host. The editor replaces the details panel. |
+| **Open link**, **Edit link**, **Delete link** | A rule for this header and host already exists. |
+
+### Pinned headers in Options
+
+The table is sorted by header name, then by scope. Columns are **Header** and **Type** (**Request** or **Response**). An empty table says *No pinned headers. Add pins from the Network tab (header row menu).* There is no **Add** control. The only row action is **Delete**. Clicking a row does not open a card. Pins are added from the header row menu on the **Network** tab, described above.
 
 ---
 
@@ -34,7 +57,9 @@ Each rule defines:
 - **Host** — host of the request URL (normalized: no scheme or path, e.g. `api.example.com`);
 - **Link** — URL template; placeholders are resolved as described in **[Value placeholder and pipeline](#value-placeholder-and-pipelines)**.
 
-You can create and edit rules from the **header row menu** on the **Network** tab (Advanced) and from **Options** when a header rule group is selected.
+You can create a rule from the **header row menu** on the **Network** tab (Advanced). In **Options** the **Header links** table groups rules by header name, ignoring case, and sorts those names. Columns are **Header** and **Rules** (how many hosts). An empty table says *No header links. Create one from the Network tab (Advanced) via a header row menu.* There is no **Add** control.
+
+**Delete** in the row menu removes every rule for that header name at once. A click opens **Header Link Details**: the header name, then **Host** and **Link** for each rule, and **Last updated** when a rule has a time. The pencil turns on editing. The header name stays fixed. **Add Rule** appends a row, **×** removes one row, **Remove all** clears the draft. **Save** keeps only rows that have both a host and a link. The host is lowercased, and a scheme or a path typed into it is stripped (`https://api.example.com/v1` is stored as `api.example.com`). Two rows with the same host: the later one is kept. A row with an empty host or an empty link is dropped. **Cancel** discards the draft. **Enter** in **Host** or **Link** saves. If the group is deleted while the card is open, the card says *This header link was removed.* Placeholders in **Link** are described in **[Value placeholder and pipeline](#value-placeholder-and-pipelines)**.
 
 ### Value placeholder and pipeline {#value-placeholder-and-pipelines}
 
@@ -111,5 +136,5 @@ Multiple placeholders in one template are allowed; each `{value...}` block is re
 
 - **Advanced mode** extends headers via **`webRequest`**; **Standalone** does not provide this mode.
 - **Classic mode** is the original “page-visible” header model.
-- **Pin** — separate for **Request** / **Response** lists.
+- **Pin** — separate for **Request** / **Response** lists. Pinned names stay visible when the Advanced header checkboxes above are off.
 - **Header links:** **Host** + **Link** template: **`{value}`** or pipeline **`{value|op|…}`** for the header value.

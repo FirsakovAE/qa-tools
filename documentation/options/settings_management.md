@@ -35,7 +35,7 @@ Decorative media uses the same storage perimeter with a **total size budget** (s
 
 ## Export
 
-**Export** downloads text named like `vue-inspector-settings-YYYY-MM-DD.txt` containing pretty-printed JSON of in-memory settings.
+**Export** downloads text named like `vue-inspector-settings-YYYY-MM-DD.txt` containing pretty-printed JSON of in-memory settings. **Options → AI** is stored separately and is not in this file. See [Options → AI](/ai/settings).
 
 * **Standalone:** for `savedFiles` rows backed by blobs, export may inline **data URIs** so the backup is **portable** across browsers/machines.
 * **Extension:** data URI payloads for heavy files are usually **stripped** — you get structure/options; re-copy media locally or re-import a **rich** standalone export if you need bytes.
@@ -66,7 +66,7 @@ Import **overwrites** current keys present in the file. **Export** first if you 
 
 **Irreversible** without a prior export.
 
-Partial Auto Run reset (without full wipe) exists via the extension **popup** — see [Auto run](/options/auto_run). **Reset** here clears the **entire** profile.
+Partial Auto Run reset (without full wipe) exists via the extension **popup** — see [Auto run](/options/auto_run). **Reset** here clears the **entire** inspector profile. [Options → AI](/ai/settings), including the keys and today's request counts, stays.
 
 ---
 

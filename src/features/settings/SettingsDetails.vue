@@ -394,11 +394,6 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
   if (bp.query) url += `?${bp.query}`
   return url
 }
-
-function formatTrigger(trigger: string): string {
-  if (trigger === 'both') return 'Request & Response'
-  return trigger.charAt(0).toUpperCase() + trigger.slice(1)
-}
 </script>
 
 <template>

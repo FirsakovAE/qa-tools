@@ -6,6 +6,8 @@ title: JSON Mode
 
 In **Options → General**, the **JSON Mode** switch chooses which implementation is used to **view and edit JSON** across the inspector (for example request/response bodies in **Network**, payloads in **Mock response**, **Pinia** state snapshots, and **Props** component data when the content is JSON).
 
+The default is **Advanced**. **Classic** says **JSON in text format with syntax highlighting**. **Advanced** says **Advanced mode with support for tree mode.** The last **Text** or **Tree** choice inside Advanced is stored and reused.
+
 Non-JSON bodies (XML, plain text, etc.) still use a **single text view** with Prism highlighting where applicable; the switch mainly affects **JSON** payloads.
 
 ---

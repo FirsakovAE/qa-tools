@@ -2,10 +2,14 @@
 import { computed, ref } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
 import AiThought from './AiThought.vue'
-import { isShownThought } from './format'
+import { actionSummary, isShownThought } from './format'
 import type { AiStep } from './types'
 
-const props = defineProps<{ steps: AiStep[] }>()
+const props = defineProps<{
+  steps: AiStep[]
+  /** The agent is still working */
+  live?: boolean
+}>()
 
 const open = ref(false)
 
@@ -17,6 +21,10 @@ const latest = computed(() => {
   }
   return undefined
 })
+
+/** `2 files · Grepped 1 · Read 4 events` once the agent has called tools */
+const summary = computed(() => actionSummary(props.steps))
+const heading = computed(() => (props.live ? 'Exploring' : 'Explored'))
 </script>
 
 <template>
@@ -28,12 +36,13 @@ const latest = computed(() => {
       @click="open = !open"
     >
       <ChevronRight class="h-3 w-3 shrink-0 transition-transform" :class="{ 'rotate-90': open }" />
-      <template v-if="!open">
-        <span class="shrink-0 text-foreground/70">{{ latest.tool }}</span>
-        <span class="min-w-0 truncate font-mono" :class="{ 'line-through opacity-60': latest.declined }" :title="latest.summary">
-          {{ latest.summary }}<span v-if="latest.declined"> (not allowed)</span>
-        </span>
+      <template v-if="summary">
+        <span class="shrink-0 text-foreground/70">{{ heading }}</span>
+        <span v-if="!open" class="min-w-0 truncate">{{ summary }}</span>
       </template>
+      <span v-else-if="!open" class="shrink-0 text-foreground/70" :class="{ 'line-through opacity-60': latest.declined }">
+        {{ latest.tool }}<span v-if="latest.declined"> (not allowed)</span>
+      </span>
       <span v-else class="shrink-0 text-foreground/70">Actions</span>
     </button>
     <ul v-if="open" class="ai-scroll mt-1 ml-4 max-h-48 space-y-0.5 overflow-y-auto border-l-2 pl-2">

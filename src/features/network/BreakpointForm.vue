@@ -90,7 +90,7 @@ function handleConfirm() {
     path: path.value,
     query: query.value || undefined,
     method: method.value || undefined,
-    trigger: props.existingBreakpoint?.trigger ?? 'request',
+    trigger: 'request',
     enabled: props.existingBreakpoint?.enabled ?? true,
     timestamp: new Date().toISOString(),
     description: description.value || undefined

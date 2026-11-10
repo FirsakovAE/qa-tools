@@ -10,43 +10,29 @@ Below **Customize** in **Options → General** you will find **Search Parameters
 
 ## Search Parameters
 
-Global rules for **text search** across tabs that share the same parameters (**Props**, **Network**, **Pinia** — field debounce/min length).
+Global rules for **text search** on **Props**, **Network**, **Pinia Stores**, and **Logs**. Defaults are **300** ms and **2** characters.
 
 ### Search Debounce (ms)
 
-**Delay after typing stops** before the query applies. Avoids firing on every keystroke.
-
-Typical allowed range **100–1000** ms (default near **300**). Lower = snappier but more churn; higher = calmer on heavy tables.
+**Delay after typing stops** before the query applies. The field is marked **100–1000**. The default is **300**.
 
 ### Minimum Search Length
 
-**Minimum characters** before filtering runs. Shorter input behaves like an empty query (usually full list).
+**Minimum characters** before a new filter runs. The field is marked **1–10**. The default is **2**.
 
-Allowed **1–10** (often **2**). **1** reacts on first char; higher reduces noisy short prefixes.
-
-These fields are **shared** — one place updates **Props**, **Network**, and **Pinia** consumers.
+A shorter non-empty query does not start a new search. The previous result stays until the field is cleared or the query reaches the minimum. An empty field shows the full list. **Network** and **Logs** count the text inside double quotes. **Props** and **Pinia Stores** count the whole field, including the quote characters.
 
 ---
 
 ## Auto Refresh
 
-**Enable auto refresh** polls **component tree** views and the **Pinia Stores** table on an interval (**Refresh Interval**: **1, 2, 5, 10, 30** seconds).
+**Enable auto refresh** is off by default. **Refresh Interval** appears only while it is on. The default interval is **5 seconds**. The choices are **1 second**, **2 seconds**, **5 seconds**, **10 seconds**, and **30 seconds**.
 
-Ticks **do not stack** if a refresh is already running.
+**Pinia Stores** reloads the store list on that interval while that tab is open and the panel is visible. A tick is skipped while a load is already running. Hiding the panel stops the timer; showing it starts the timer again if the checkbox is still on.
 
-### Panel visibility
+**Props** reloads the component tree on that interval while the panel is visible, and stops while it is hidden. If **10** tree updates arrive within **5 seconds**, further updates are dropped for **10 seconds**. The console says `Props update flood detected, entering cooldown`. There is no switch for that. Changing the checkbox or the interval also starts a second **Props** timer that keeps running until you leave the **Props** tab, including while the panel is hidden.
 
-Polling runs **only while the inspector panel is visible** (embedded UI considered active). **Hiding** the panel **stops** timers; showing it again **resumes** if **Enable auto refresh** stays on.
-
-Primarily affects **Props** and **Stores**.
-
-### Props storm protection
-
-On **Props**, besides the configured interval, very frequent tree snapshots from the page can trigger **throttling**: temporarily **pauses applying** bursts so the UI stays responsive. There is **no** user toggle — it is a protective layer.
-
-**Network** is **not** on this auto-refresh schedule — it follows page network events.
-
-Use Auto Refresh when the app mutates the tree or stores often and you want updates without hammering **Refresh** manually. Very short intervals on huge trees can cost CPU — try **10–30** s if needed.
+**Network** is not on this timer.
 
 ---
 

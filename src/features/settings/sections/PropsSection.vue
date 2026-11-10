@@ -21,11 +21,10 @@ const emit = defineEmits<{
 }>()
 
 // -------------------- SEARCH SETTINGS --------------------
-type SearchKey = 'byName' | 'byLabel' | 'byRootElement' | 'byKey' | 'byValue'
+type SearchKey = 'byName' | 'byRootElement' | 'byKey' | 'byValue'
 
 const searchItems: Array<{ key: SearchKey; label: string }> = [
   { key: 'byName', label: 'Search by component name' },
-  { key: 'byLabel', label: 'Search by component label' },
   { key: 'byRootElement', label: 'Search by root element' },
   { key: 'byKey', label: 'Search by key' },
   { key: 'byValue', label: 'Search by value' },

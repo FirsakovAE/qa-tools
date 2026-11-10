@@ -944,95 +944,9 @@ function interceptFetch(): void {
       const clone = response.clone()
 
       // Get response headers
-      let responseHeaders = parseHeaders(response.headers)
+      const responseHeaders = parseHeaders(response.headers)
 
-      // ========================================
-      // RESPONSE BREAKPOINT CHECK
-      // ========================================
-      let finalResponse = response
-
-      if (callbacks?.onBreakpointCheck) {
-        const match = callbacks.onBreakpointCheck(effectiveUrl, 'response', effectiveMethod)
-
-        if (match) {
-          
-          // Read response body BEFORE waiting for resume (so UI can show it)
-          const taken = await takeResponseBody(response, clone)
-          responseBody = taken.body
-          const media = taken.media
-          const originalSize = taken.originalSize
-
-          // Calculate size
-          const contentLength = getContentLength(responseHeaders)
-          const size = contentLength || originalSize
-
-          // ✅ Notify UI about the response BEFORE pausing (so user can see/edit body)
-          // NOTE: Always notify for breakpoints, regardless of isPaused (breakpoints work even when logging is paused)
-          if (callbacks?.onResponse) {
-            callbacks.onResponse(requestId, {
-              status: response.status,
-              statusText: response.statusText,
-              headers: responseHeaders,
-              body: responseBody,
-              size,
-              duration,
-              media,
-              truncated: taken.truncated,
-              originalSize
-            })
-          }
-
-          // NOW pause and wait for user to modify and click Apply
-          const modifications = await waitForBreakpointResume(
-            requestId,
-            match.breakpointId,
-            'response'
-          ) as BreakpointModifiedResponse | undefined
-
-          // Apply any modifications from user
-          if (modifications && modifications.responseBody !== undefined) {
-            const modifiedBody = modifications.responseBody
-
-            // Create modified headers
-            const modifiedHeaders = new Headers()
-            const headersToUse = modifications.responseHeaders ?? responseHeaders
-            headersToUse.forEach(h => modifiedHeaders.set(h.name, h.value))
-
-            // Update content-length if body changed
-            if (modifiedBody !== null) {
-              modifiedHeaders.set('content-length', String(modifiedBody.length))
-            } else {
-              modifiedHeaders.delete('content-length')
-            }
-
-            finalResponse = new Response(modifiedBody, {
-              status: modifications.status ?? response.status,
-              statusText: modifications.statusText ?? response.statusText,
-              headers: modifiedHeaders
-            })
-
-            // Update for logging
-            responseBody = modifiedBody
-            responseHeaders = headersToUse
-
-            // Update UI with modified response
-            if (callbacks?.onResponse) {
-              callbacks.onResponse(requestId, {
-                status: finalResponse.status,
-                statusText: finalResponse.statusText,
-                headers: responseHeaders,
-                body: modifiedBody,
-                size: modifiedBody?.length || 0,
-                duration
-              })
-            }
-          }
-
-          return finalResponse
-        }
-      }
-
-      // No response breakpoint - read body normally from the existing clone
+      // Read body normally from the existing clone
       const taken = await takeResponseBody(response, clone)
       responseBody = taken.body
       const media = taken.media
@@ -1057,7 +971,7 @@ function interceptFetch(): void {
         })
       }
       
-      return finalResponse
+      return response
     } catch (error) {
       originalFormDataBodies.delete(requestId)
       if (!isPageTransportError(error)) {
@@ -1658,147 +1572,23 @@ function interceptXHR(): void {
 
       const contentLength = parseInt(this.getResponseHeader('content-length') || '0', 10)
       const size = contentLength || originalSize
-      
-      // ========================================
-      // RESPONSE BREAKPOINT CHECK FOR XHR
-      // ========================================
 
-      if (callbacks?.onBreakpointCheck) {
-        const match = callbacks.onBreakpointCheck(data.url, 'response', data.method)
-
-        if (match) {
-          
-          // ✅ Notify UI about the response BEFORE pausing (so user can see/edit body)
-          // NOTE: Always notify for breakpoints, regardless of isPaused
-          if (callbacks?.onResponse) {
-            callbacks.onResponse(data.id, {
-              status: this.status,
-              statusText: this.statusText,
-              headers: responseHeaders,
-              body: responseBody,
-              media,
-              size,
-              duration,
-              truncated,
-              originalSize
-            })
-          }
-
-          // NOW pause and wait for user to modify and click Apply
-          const modifications = await waitForBreakpointResume(
-            data.id,
-            match.breakpointId,
-            'response'
-          ) as BreakpointModifiedResponse | undefined
-
-          // Apply any modifications from user
-          if (modifications) {
-            // For XHR, we need to override the response properties
-            if (modifications.responseBody !== undefined) {
-              // Override responseText and response
-              const modifiedBody = modifications.responseBody
-              Object.defineProperty(this, 'responseText', {
-                get: () => modifiedBody || '',
-                configurable: true
-              })
-              Object.defineProperty(this, 'response', {
-                get: () => modifiedBody || null,
-                configurable: true
-              })
-
-              // Update responseBody for logging
-              responseBody = modifiedBody
-            }
-
-            if (modifications.status !== undefined) {
-              Object.defineProperty(this, 'status', {
-                get: () => modifications.status,
-                configurable: true
-              })
-            }
-
-            if (modifications.statusText !== undefined) {
-              Object.defineProperty(this, 'statusText', {
-                get: () => modifications.statusText,
-                configurable: true
-              })
-            }
-
-            if (modifications.responseHeaders) {
-              // Override getAllResponseHeaders and getResponseHeader
-              const headerString = modifications.responseHeaders.map(h => `${h.name}: ${h.value}`).join('\r\n') + '\r\n\r\n'
-              Object.defineProperty(this, 'getAllResponseHeaders', {
-                value: () => headerString,
-                configurable: true
-              })
-
-              const headerMap = new Map(modifications.responseHeaders.map(h => [h.name.toLowerCase(), h.value]))
-              Object.defineProperty(this, 'getResponseHeader', {
-                value: (name: string) => headerMap.get(name.toLowerCase()) || null,
-                configurable: true
-              })
-
-              // Update responseHeaders for logging
-              responseHeaders = modifications.responseHeaders
-            }
-
-            // Update UI with modified response
-            if (callbacks?.onResponse) {
-              callbacks.onResponse(data.id, {
-                status: this.status,
-                statusText: this.statusText,
-                headers: responseHeaders,
-                body: responseBody,
-                size: responseBody?.length || 0,
-                duration
-              })
-            }
-          }
-          
-          // ✅ NOW call stored app handlers (they see modified data)
-          callStoredHandlers(this, data)
-        } else {
-          // No breakpoint match - notify UI normally
-          // Check for status 0 which indicates CORS or network error
-          if (this.status === 0 && callbacks?.onError) {
-            callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
-          } else if (callbacks?.onResponse) {
-            callbacks.onResponse(data.id, {
-              status: this.status,
-              statusText: this.statusText,
-              headers: responseHeaders,
-              body: responseBody,
-              media,
-              size,
-              duration,
-              truncated,
-              originalSize
-            })
-          }
-          // Call stored app handlers
-          callStoredHandlers(this, data)
-        }
-      } else {
-        // No breakpoint check available - notify UI normally
-        // Check for status 0 which indicates CORS or network error
-        if (this.status === 0 && callbacks?.onError) {
-          callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
-        } else if (callbacks?.onResponse) {
-          callbacks.onResponse(data.id, {
-            status: this.status,
-            statusText: this.statusText,
-            headers: responseHeaders,
-            body: responseBody,
-            media,
-            size,
-            duration,
-            truncated,
-            originalSize
-          })
-        }
-        // Call stored app handlers
-        callStoredHandlers(this, data)
+      if (this.status === 0 && callbacks?.onError) {
+        callbacks.onError(data.id, 'Network error (CORS blocked or connection failed)')
+      } else if (callbacks?.onResponse) {
+        callbacks.onResponse(data.id, {
+          status: this.status,
+          statusText: this.statusText,
+          headers: responseHeaders,
+          body: responseBody,
+          media,
+          size,
+          duration,
+          truncated,
+          originalSize
+        })
       }
+      callStoredHandlers(this, data)
     })
     
     // Listen for errors - use original addEventListener

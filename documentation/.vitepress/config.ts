@@ -82,6 +82,13 @@ const sidebarEn = [
     ],
   },
   {
+    text: 'AI',
+    items: [
+      { text: 'Assistant', link: '/ai/general' },
+      { text: 'AI settings', link: '/ai/settings' },
+    ],
+  },
+  {
     text: 'Options',
     items: [
       { text: 'Display modes', link: '/options/display_mode' },
@@ -90,6 +97,7 @@ const sidebarEn = [
       { text: 'Update settings', link: '/options/update_settings' },
       { text: 'Auto run', link: '/options/auto_run' },
       { text: 'Settings management', link: '/options/settings_management' },
+      { text: 'About', link: '/options/about' },
     ],
   },
   {
@@ -229,6 +237,13 @@ export default defineConfig({
             ],
           },
           {
+            text: 'AI',
+            items: [
+              { text: 'Ассистент', link: '/ru/ai/general' },
+              { text: 'Настройки AI', link: '/ru/ai/settings' },
+            ],
+          },
+          {
             text: 'Options',
             items: [
               { text: 'Режимы отображения', link: '/ru/options/display_mode' },
@@ -237,6 +252,7 @@ export default defineConfig({
               { text: 'Параметры обновления', link: '/ru/options/update_settings' },
               { text: 'Автозапуск', link: '/ru/options/auto_run' },
               { text: 'Менеджер настроек', link: '/ru/options/settings_management' },
+              { text: 'About', link: '/ru/options/about' },
             ],
           },
           {

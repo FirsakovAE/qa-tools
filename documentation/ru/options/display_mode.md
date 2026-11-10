@@ -4,11 +4,13 @@ title: Режимы отображения
 
 # Режимы отображения (Display Mode)
 
-В **Options → General → Display Mode** выбирается, **где** живёт интерфейс Vue Inspector относительно страницы. Доступны варианты **Overlay** (оверлей на странице) и **DevTools tab** (вкладка в инструментах разработчика браузера).
+В **Options → General → Display Mode** выбирается, **где** живёт интерфейс Vue Inspector относительно страницы. Доступны варианты **Overlay** (оверлей на странице) и **DevTools tab** (вкладка в инструментах разработчика браузера). По умолчанию выбран **Overlay**.
 
-> **Режим DevTools доступен только в установленном расширении** (Chrome / Edge). В **автономном (standalone)** запуске переключатель отключён: инспектор работает как оверлей на странице, отдельной вкладки в DevTools нет.
+Дальше на **Options → General**, по порядку: [Customize](/ru/options/customize), [Search Parameters и Auto Refresh](/ru/options/update_settings), [Auto Run](/ru/options/auto_run) (только расширение), [JSON Mode](/ru/options/json_mode), сохранённые файлы на странице Customize, [менеджер настроек](/ru/options/settings_management). Следующий раздел Options — [About](/ru/options/about).
 
-После смены режима расширение подсказывает **перезагрузить страницу**, чтобы применить выбор.
+> **Режим DevTools доступен только в установленном расширении** (Chrome / Edge). В **standalone** переключатели недоступны, и показана строка **Display Mode is only available for the browser extension version.** Инспектор работает как оверлей.
+
+Выбор **DevTools tab**, пока панель ещё оверлей, показывает **Reload the page to apply changes.** и **Open DevTools (F12) to access the panel.** Выбор **Overlay**, пока панель уже вкладка DevTools, показывает **Reload the page to apply changes.**
 
 ---
 

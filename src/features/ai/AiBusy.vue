@@ -30,7 +30,7 @@ const status = computed(() => {
         <Loader2 class="h-3.5 w-3.5 animate-spin" />
         {{ status }}
       </div>
-      <AiSteps v-if="liveSteps.length" :steps="liveSteps" />
+      <AiSteps v-if="liveSteps.length" :steps="liveSteps" live />
       <div v-if="pendingApproval" class="rounded-md border border-foreground/40 bg-foreground/5 p-2 space-y-2 text-foreground">
         <div class="flex items-center gap-1.5 font-medium">
           <ShieldQuestion class="h-3.5 w-3.5" />
@@ -45,7 +45,7 @@ const status = computed(() => {
           <Button size="sm" variant="outline" class="h-7 text-xs" @click="answerApproval('deny')">Deny</Button>
         </div>
       </div>
-      <AiThought v-if="liveReasoning" :text="liveReasoning" active />
+      <AiThought v-if="liveReasoning" :text="liveReasoning" />
       <div v-if="html" class="ai-answer markdown-body text-sm text-foreground break-words leading-relaxed" @click="$emit('click', $event)" v-html="html" />
     </div>
   </div>

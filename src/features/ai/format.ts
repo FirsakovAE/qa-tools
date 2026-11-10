@@ -19,6 +19,57 @@ export function isShownThought(step: AiStep): boolean {
   return !!step.thought && hasVisibleText(step.summary)
 }
 
+/**
+ * Collapsed tally of an answer's tool calls, in the order a person scans them.
+ * Cursor's "files / searches / Grepped / Read", mapped onto Vue Inspector:
+ * page code, log searches, code search, event details, the live page.
+ */
+const ACTION_TALLY: Array<{ id: string; text: (n: number) => string }> = [
+  { id: 'files', text: n => `${n} ${n === 1 ? 'file' : 'files'}` },
+  { id: 'searches', text: n => `${n} ${n === 1 ? 'search' : 'searches'}` },
+  { id: 'grepped', text: n => `Grepped ${n}` },
+  { id: 'events', text: n => `Read ${n} ${n === 1 ? 'event' : 'events'}` },
+  { id: 'page', text: n => `${n} ${n === 1 ? 'page' : 'pages'}` },
+  { id: 'stores', text: n => `${n} ${n === 1 ? 'store' : 'stores'}` },
+  { id: 'docs', text: n => `${n} ${n === 1 ? 'doc' : 'docs'}` },
+  { id: 'skills', text: n => `${n} ${n === 1 ? 'skill' : 'skills'}` },
+]
+
+function actionId(step: AiStep): string | undefined {
+  if (step.thought || step.declined) return
+  const summary = step.summary
+  switch (step.tool) {
+    case 'Logs':
+      if (summary.startsWith('Search') || summary.startsWith('Find items')) return 'searches'
+      if (summary.startsWith('Event details') || summary.startsWith('Read #')) return 'events'
+      return
+    case 'Sources':
+      if (summary.startsWith('Search code')) return 'grepped'
+      if (summary.startsWith('List files') || summary.startsWith('Read ')) return 'files'
+      return
+    case 'Page':
+      if (summary.startsWith('Store state') || summary.startsWith('List stores')) return 'stores'
+      if (summary.startsWith('Inspect')) return 'page'
+      return
+    case 'Docs':
+      return 'docs'
+    case 'Skill':
+      return 'skills'
+    default:
+      return
+  }
+}
+
+/** `2 files · 3 searches · Grepped 1 · Read 4 events`, or empty when nothing was explored */
+export function actionSummary(steps: AiStep[]): string {
+  const counts = new Map<string, number>()
+  for (const step of steps) {
+    const id = actionId(step)
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  return ACTION_TALLY.filter(item => counts.has(item.id)).map(item => item.text(counts.get(item.id)!)).join(' · ')
+}
+
 function kilo(n: number): string {
   return n < 1000 ? String(n) : `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}K`
 }

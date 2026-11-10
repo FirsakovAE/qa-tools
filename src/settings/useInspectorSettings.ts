@@ -260,6 +260,17 @@ function migrateNetworkPinnedHeaders(saved: any): void {
         }))
 }
 
+/** Saved breakpoints only pause before the request is sent */
+function migrateBreakpointTriggers(saved: any): void {
+    const lists = [saved.breakpoints?.active, saved.breakpoints?.inactive]
+    for (const list of lists) {
+        if (!Array.isArray(list)) continue
+        for (const bp of list) {
+            if (bp && typeof bp === 'object') bp.trigger = 'request'
+        }
+    }
+}
+
 function migrateSearchSettings(saved: any): void {
     if (saved.search && typeof saved.search === 'object') {
         const oldSearch = saved.search
@@ -300,6 +311,9 @@ function migrateSearchSettings(saved: any): void {
         delete saved.piniaSearch.byLabel
         delete saved.piniaSearch.byRootElement
     }
+
+    // Миграция: удаляем byLabel из propsSearch (флажок не фильтровал список)
+    if (saved.propsSearch) delete saved.propsSearch.byLabel
 
     // Миграция: добавляем piniaFavorites если отсутствует
     if (!Array.isArray(saved.piniaFavorites)) {
@@ -447,6 +461,7 @@ function migrateNetworkRingLimits(saved: Partial<InspectorSettings> & { networkM
 function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSettings>) {
     migrateNetworkRingLimits(saved)
     migrateNetworkHeaderLinksLegacy(saved)
+    migrateBreakpointTriggers(saved)
     migrateSearchSettings(saved)
     migrateJsonMode(saved)
     migrateFavoriteIds(saved)

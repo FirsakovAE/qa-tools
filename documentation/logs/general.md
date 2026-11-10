@@ -6,7 +6,7 @@ title: Working with logs
 
 The **Logs** tab is a single chronological journal of what happens on the page: network requests, component props and emits, **Pinia** changes and actions, SPA navigation, clicks and JS errors. It helps to reconstruct a scenario step by step and to hand it over as a file.
 
-The tab is always visible, comes after **Pinia Store**, and records events the same way in the extension and in **Bookmark** ([Standalone](/standalone)) mode.
+The tab is always visible, comes after **Pinia Stores**, and records events the same way in the extension and in **Bookmark** ([Standalone](/standalone)) mode.
 
 ## Event types
 
@@ -32,37 +32,39 @@ Each network call produces **two** events that share one network entry. **Send r
 
 ### Search
 
-The search box filters the table. The active criteria are set in **Options → Logs → Search Settings** (see [Logs settings](./settings.md)):
+The search box placeholder is **Search events...**. The active criteria are set in **Options → Logs → Search Settings** (see [Logs settings](./settings.md)):
 
 | Mode | Description |
 | ---- | ----------- |
-| **By event name** | Title, component, store, URL |
-| **By key** | Keys in the payload and changed paths |
-| **By value** | Values in the payload |
+| **Search by event name** | Title, subtitle, the event key, and the request URL. On by default |
+| **Search by key** | Keys in the payload and changed paths |
+| **Search by value** | Values in the payload |
 
-For **Change store** and **Change props**, key and value search looks at the changed paths and values; full states are searched in the **Store initialized**, **Store snapshot** and **Store checkpoint** events.
+**Search by event name** stays on when **Search by key** and **Search by value** are both off, so a query still matches names.
 
-As in other tabs, a query **without** quotes matches a substring, a query wrapped in **double quotes** `"..."` matches exactly. The minimum query length comes from the inspector search settings (default **2** characters).
+For **Change store** and **Change props**, key and value search looks at the changed paths and values; full states are searched in the **Store initialized**, **Store snapshot** and **Store checkpoint** events. The index walks nested data to depth 20 and keeps at most 200 000 characters of keys and 200 000 of values per event.
+
+A query **without** quotes matches a substring. A query wrapped in **double quotes** `"..."` matches the whole string. Both ignore case. Minimum length and debounce come from **Options → General → Search Parameters** (default **2** characters and **300 ms**, [Update settings](/options/update_settings)). The length is the text inside the quotes. A shorter non-empty query does not start a new search; the previous result stays until the field is cleared or the query reaches the minimum.
 
 ### Type
 
-**Type** limits the table to the selected event types. All types are enabled by default. If every type is turned off, the table is empty and shows a hint to enable types again.
+**Type** limits the table to the selected event types. All types are on by default. The menu footer has **Select all** and **Clear**. With every type off the table says **No event types selected — enable them in the Type filter**. A search or type filter that matches nothing says **No events match the filters**. An empty buffer says **No events logged yet**.
 
 ### Status indicators
 
 | Item | Purpose |
 | ---- | ------- |
-| **N** or **N/M** | Rows after filters; with an active search or **Type** filter, **M** is the total number of events in the buffer |
-| **ignored** | Number of ignored event groups. Click opens **Options → Logs**, the **Ignore list** table |
-| **Paused** | Recording of new events is paused |
+| **N** or **N/M** | **N** is visible rows. **/M** appears when a search or a **Type** filter is active and the counts differ. **M** is every event in the buffer |
+| **ignored** | Shown only when at least one group is ignored. The number is the ignore list. Click opens **Options → Logs**, the **Ignore list** table |
+| **Paused** | Shown while recording of new events is paused |
 
 ### Log controls
 
 | Control | Purpose |
 | ------- | ------- |
-| **Pause** / **Resume** | Stop and resume recording new events |
-| **Clear** | Remove all recorded events |
-| **Export Logs** | Export events to an **HTML** report (see [Export](./export.md)) |
+| **Pause** / **Resume** | Icon button. Tooltip **Pause logging** or **Resume logging**. The icon is orange while paused |
+| **Clear** | Tooltip **Clear all**. Disabled when the buffer is empty. Removes every recorded event and the row selection |
+| **Export Logs** | Export events to an **HTML** report (see [Export](./export.md)). On a narrow toolbar the button moves to the row under the search field |
 
 ## Work area
 
@@ -148,7 +150,7 @@ Events keep only primary data; titles, descriptions and full states are derived 
 
 ### Limits
 
-A shared memory budget keeps long sessions stable. When it is reached, the log is cut at a **Navigation**: every event recorded before that navigation is removed, whatever its type — network requests and responses, WebSocket, props, Pinia, emits, store actions and errors. Events from the navigation onward stay. Each earlier navigation is a cut in turn, so the oldest period goes first. The last navigation is rewritten as a snapshot of the page at that moment (`from` is cleared), and events before it are removed the same way. If the log is still over the budget, the oldest remaining events are removed by age. The newest event is always kept, even if it alone exceeds the budget. Events are kept whole by default; a maximum event size can be switched on. Groups of events can be switched off completely. Defaults and settings are described in [Logs settings](./settings.md).
+A shared memory budget keeps long sessions stable. When it is reached, the log is cut at a **Navigation**: every event recorded before that navigation is removed, whatever its type — network requests and responses, WebSocket, props, Pinia, emits, store actions and errors. Events from the navigation onward stay. Each earlier navigation is a cut in turn, so the oldest period goes first. The last navigation is rewritten as a snapshot of the page at that moment (`from` is cleared), and events before it are removed the same way. If the log is still over the budget, the oldest remaining events are removed by age. The newest event is always kept, even if it alone exceeds the budget. **Limit event size** is on by default at **512 KB**, so larger parts of an event are cut. Groups of events can be switched off completely. Defaults and settings are described in [Logs settings](./settings.md).
 
 **Send request** and **Receive response** follow **Maximum HTTP requests** (**Options → Network**, default **500**): an older request leaves the log together with its response. **WebSocket open**, **WebSocket sent**, **WebSocket received** and **WebSocket closed** follow **Maximum WebSocket events** (the same screen, default **500**): each of those records counts as one, and the oldest are dropped. Both rings are separate from the memory budget.
 

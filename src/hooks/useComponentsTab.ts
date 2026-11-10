@@ -287,9 +287,6 @@ export function useComponentsTab(
                         if (searchSettings.byName === true && node.name.toLowerCase().includes(q)) {
                             searchCheck = true
                         }
-                        if (!searchCheck && searchSettings.byLabel === true && node.label && node.label.toLowerCase().includes(q)) {
-                            searchCheck = true
-                        }
                         if (!searchCheck && searchSettings.byRootElement === true) {
                             // Используем ту же логику, что и в TreeNode.vue для генерации elementInfo
                             const elementInfo = (() => {

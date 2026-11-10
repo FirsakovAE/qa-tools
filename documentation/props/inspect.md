@@ -14,11 +14,11 @@ Overview: [Props overview](/props/general).
 
 ## Start and stop
 
-The **Inspect** control (pointer icon) lives on the **Props** toolbar and enables picking an element to filter components.
+The **Inspect** control (pointer icon) lives on the **Props** toolbar and enables picking an element to filter components. Tooltip: **Select element on page to filter Props**. The button is disabled while the list is loading. On a narrow toolbar it moves to the row under the search field.
 
 Before activation the component list **refreshes** so the tree matches the page.
 
-By default **Inspect** temporarily **hides** the inspector overlay so it does not cover the page. Change this under **Options → Inspect Mode → Hide overlay while inspecting**.
+By default **Inspect** temporarily **hides** the inspector overlay so it does not cover the page. The checkbox is **Options → Props → Inspect Mode → Hide overlay while inspecting**, and it is on by default. The value is read when Inspect starts. Changing it during a pick does not move the overlay until the next start.
 
 Clicking **Inspect** again stops picking **without** clearing an applied filter.
 
@@ -54,8 +54,8 @@ If **Hide overlay while inspecting** is on, the UI returns after pick or cancel.
 When a page element is chosen:
 
 * Inspect mode ends;
-* the **Props** table keeps components for that **root** subtree;
-* a **Filtered** chip shows the list is scoped.
+* the **Props** table keeps components whose root element is the picked element or inside it. If that element is gone, the list is empty;
+* a **Filtered** chip shows the list is scoped. Its tooltip is **Clear element filter, show full list**. The chip does not add **/M** to the search counter.
 
 Click **Filtered** to clear the filter and reload the full list.
 

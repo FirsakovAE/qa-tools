@@ -18,19 +18,23 @@ More on editing **state** and **getters**, and **favorites** for stores:
 
 ### Store search
 
-The search field and **Search by** switch work like on other tabs. Search types can be preset in **Options** for **Stores**.
+The field placeholder is **Search stores...**. Active criteria come from **Search by**. The same checkboxes are the first block on **Options → Pinia Store**, under **Search Settings**: **Search by store name**, **Search by key**, **Search by value**. Defaults: name on; key and value off. A change applies to the open list immediately.
 
-| Mode      | Purpose                                                                                    |
-| --------- | ------------------------------------------------------------------------------------------ |
-| **Name**  | filter by store name (local to the panel)                                                |
-| **Key**   | match field names in **state** and **getters** (search runs in the page context)           |
-| **Value** | match field values in **state** and **getters** (also in the page context)                 |
+On **Options → Pinia Store** the blocks follow in this order: **Search Settings**, then **Favorite Stores**.
 
-**Key** and **Value** use a minimum query length (default **2** characters; configurable in inspector search settings).
+| Mode      | What the list uses                                                                 |
+| --------- | ---------------------------------------------------------------------------------- |
+| **Name**  | the displayed store name (`baseId`), in the panel                                  |
+| **Key**   | field names in **state** and **getters**, asked from the page                      |
+| **Value** | field values in **state** and **getters**, asked from the page                     |
 
-**Partial vs exact.** If the query is **not** wrapped in quotes, **substring** matching is used (case-insensitive). **Exact** matching applies when the **entire** query is wrapped in **double quotes** `"..."`.
+A non-empty query keeps a store when any enabled mode matches. With all three off, the query matches nothing.
 
-Content search limits how many results are returned so very broad queries do not overload the page.
+Minimum length applies to every mode. Default **2** characters and **300 ms** debounce, from **Options → General → Search Parameters** ([Update settings](/options/update_settings)). A shorter non-empty query does not start a new search; the previous result stays until the field is cleared or the query reaches the minimum.
+
+**Key** and **Value** also skip the page search below that length. The page walks state and getters to depth 20 and returns at most **100** stores. If that request fails, **Key** and **Value** match nothing; **Name** still filters in the panel.
+
+**Partial vs exact.** If the query is **not** wrapped in quotes, matching is a **substring** (case-insensitive). **Exact** whole-string match applies when the **entire** query is wrapped in **double quotes** `"..."`.
 
 ### Status chips
 
@@ -38,11 +42,11 @@ Right side of **Stores**:
 
 | Item              | Purpose                                                                                                                                 |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **N** or **N/M**  | Number of stores after filtering; with a non-empty search, **M** after the slash is the total stores in the last summary.              |
-| **Favorites** ★   | Overlap with favorited stores. Click opens **Options** (Pinia favorites).                                                              |
-| **Update**        | **Refresh** button, loading indicator, and time of the last successful summary (or text like `Loading...`).                             |
+| **N** or **N/M**  | **N** is visible stores. **/M** appears only when the search field is not empty and the counts differ. **M** is the last summary. |
+| **Favorites** ★   | Visible favorites / saved total, or `0` when none are saved. Yellow when at least one visible row is a favorite. Click opens **Options → Pinia Store → Favorite Stores**. |
+| **Update**        | **Refresh** (disabled while a summary load runs) and the local time of the last successful summary, or `Loading...`. |
 
-Before requesting a summary, the panel checks that the bridge to the page is available; if the context is unavailable, data is not requested.
+Before a summary, the panel pings the page. If that ping fails, nothing is requested: the list stays empty (**No stores found**) and there is no error overlay. A summary that never arrives shows **Timeout: Pinia stores not found or not initialized** after 3 seconds. A failed request shows **Failed to load Pinia stores. Make sure Pinia is installed and initialized.** The message covers the tab.
 
 ## Work area
 
@@ -50,28 +54,28 @@ Before requesting a summary, the panel checks that the bridge to the page is ava
 
 ### Store list
 
-Left: the store table. Main columns (visibility in table settings):
+Left: the store table. **Name** is always shown. The column menu toggles **State** and **Getters**; both default to on. An empty list says **No stores found**.
 
-* **Name** — display name of the store (**baseId**);
-* **State** — number of keys in state (dash if none);
-* **Getters** — number of getters (dash if none).
+* **Name** — displayed store name (`baseId`), or **Unknown Store** when it is missing;
+* **State** — number of state keys, or **—** when the count is 0;
+* **Getters** — number of getters, or **—** when the count is 0.
 
-Rows expose a **favorite** star and a context menu. Favorites are stored in inspector settings — see [Favorites](/store/favorite).
+Any row opens the card. Favorite rows stay on top. The row menu is **Ask AI** and **Add favorite** / **Remove favorite**. The star on the row does the same favorite toggle. See [Favorites](/store/favorite).
 
-**Ask AI** in the row menu attaches the current state and getters of the store to a question for the assistant. The **AI** tab opens with a chip above the input, for example *Store cart*: **×** removes it from the question. Type a question, or send the chip without one. When **Logs** has changes of this store, the assistant also gets the id `#N` of the latest one. Values are masked by the AI settings and cut; with **Values of store state, props, emits and actions** off, the assistant gets only names and types.
+**Ask AI** is always available. It loads the store from the page and attaches state and getters. If that read fails, a toast says **Could not read the store {name}**. Otherwise the **AI** tab opens with a chip above the input, for example *Store cart*: **×** removes it from the question. Type a question, or send the chip without one. When **Logs** has a change of this store, the attachment also names the latest one as `#N`. Values are masked by the AI settings and cut; with **Values of store state, props, emits and actions** off, the assistant gets only names and types.
 
 ## Store details
 
-Selecting a store row opens a detail panel for that store.
+Selecting a row opens the detail panel. With nothing selected it says **Select a store to see details**. Below **1000** px the card covers the list.
 
 ### Summary header
 
 The top of the panel shows:
 
 * store name;
-* number of **State** keys;
-* number of **Getters** keys;
-* an **Updated:** line with the timestamp of the last card data refresh.
+* **State: N** when the state count is above zero;
+* **Getters: N** when the getter count is above zero;
+* an **Updated:** line. While the first load runs it says `Loading...`. After a successful read it is UTC `YYYY-MM-DD HH:mm:ss` (the toolbar clock is local).
 
 ### Store data
 
@@ -82,34 +86,34 @@ Below that, tabs:
 | **State**   | snapshot of reactive **state**; view and save changes                                                                         |
 | **Getters** | snapshot of current **getter** values in serialized form; view and limited editing depending on the scenario                |
 
-Only tabs that have data are shown.
+A tab is shown only when its count is above zero. The card opens on **State** when that count is above zero, otherwise on **Getters**. While the snapshot loads, the body says **Loading store data...**. A missing section says **No state data** or **No getters data**.
 
 The active tab is shown as **JSON**—text or tree—according to inspector settings.
 
 ### Navigation
 
-* **← Back** closes details and returns to the table;
-* **Esc** in edit mode discards edits;
-* **Esc** outside edit mode returns to the list.
+* **← Back** closes the card, including during edit;
+* **Esc** in edit mode discards the draft and stays on the card;
+* **Esc** outside edit mode closes the card.
 
 ### Controls
 
 | Control     | Purpose                                                                                              |
 | ----------- | ---------------------------------------------------------------------------------------------------- |
-| **Star**    | add or remove the store from favorites                                                                |
-| **Refresh** | re-fetch the selected store’s data from the page; available outside **Edit** mode                     |
-| **Edit**    | enter edit mode for the active tab (**State** or **Getters**)                                       |
+| **Star**    | add or remove the store from favorites. Tooltip: **Add to favorites** / **Remove from favorites** |
+| **Refresh** | re-fetch this store. Tooltip **Refresh data**. Disabled while the card is loading. Hidden in edit mode |
+| **Edit**    | enter edit mode for the active tab. Tooltip **Edit state** or **Edit getters** |
 
 ### Edit mode
 
-After **Edit**, **Refresh** and **Edit** are replaced by **Cancel** and **Save**.
+Button order in view mode: **Star → Refresh → Edit**. After **Edit**, **Refresh** and **Edit** become **Cancel** and **Save**. **Star** stays.
 
 | Before editing | In edit mode                                                    |
 | -------------- | --------------------------------------------------------------- |
 | **Refresh**    | **Cancel** — discard changes and leave edit mode                |
 | **Edit**       | **Save** — apply changes to the app                            |
 
-Changes are applied only after **Save**.
+**Save** is disabled when the JSON does not parse. Changes apply only after **Save**. There is no toast. If the page rejects the write, edit mode stays open and the failure is in the console. On success, edit mode ends and a result message reloads the snapshot.
 
 For **State**, the store’s current state is updated; for **Getters**, writing is only supported in valid scenarios, and limits depend on how the store is implemented.
 
@@ -126,13 +130,13 @@ Card data reflects a **snapshot from the last request**: changes in the app are 
 
 **State** and **getter** serialization uses depth and size limits: cycles, functions, and special objects may be truncated or shown differently than in raw runtime.
 
-**Key** / **Value** search hit lists are also capped.
+**Key** / **Value** search returns at most **100** stores and walks values to depth 20.
 
 ### Capacity
 
 There is no fixed cap on how many stores appear in the table: typical **Pinia** summary responses list them all.
 
-Unusual registration or extreme setups may be incomplete; whether writes succeed depends on the store—if save fails, use the UI message or the console.
+Unusual registration or extreme setups may be incomplete. Whether a write succeeds depends on the store. A failed save stays in edit mode and is logged in the console.
 
 ## How it works
 

@@ -23,9 +23,9 @@ export interface PiniaFavoriteItem {
 }
 
 /**
- * Breakpoint trigger type - when to intercept
+ * Breakpoint always pauses before the request is sent.
  */
-export type BreakpointTrigger = 'request' | 'response' | 'both'
+export type BreakpointTrigger = 'request'
 
 /**
  * Breakpoint item for network request interception
@@ -47,7 +47,7 @@ export interface BreakpointItem {
     query?: string
     /** HTTP method (GET, POST, etc.) - optional, matches all if not set */
     method?: string
-    /** When to trigger: request, response, or both */
+    /** Always pauses before the request is sent */
     trigger: BreakpointTrigger
     /** Whether this breakpoint is active */
     enabled: boolean
@@ -162,7 +162,6 @@ export interface NetworkSearchSettings {
 /** Props tab search settings */
 export interface PropsSearchSettings {
     byName: boolean
-    byLabel: boolean
     byRootElement: boolean
     byKey: boolean
     byValue: boolean

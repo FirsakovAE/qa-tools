@@ -55,7 +55,7 @@ export interface BreakpointConfig {
   path: string
   query?: string
   method?: string
-  trigger: 'request' | 'response' | 'both'
+  trigger: 'request'
   enabled: boolean
 }
 

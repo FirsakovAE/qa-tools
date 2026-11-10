@@ -71,7 +71,6 @@ const {
   searchKey: 'propsSearch',
   typeMap: {
     'Name': 'byName',
-    'Label': 'byLabel',
     'Root': 'byRootElement',
     'Key': 'byKey',
     'Value': 'byValue',

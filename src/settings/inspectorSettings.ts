@@ -44,7 +44,6 @@ const defaultNetworkSearchSettings: NetworkSearchSettings = {
 /** Default Props search settings */
 const defaultPropsSearchSettings: PropsSearchSettings = {
     byName: true,
-    byLabel: true,
     byRootElement: true,
     byKey: false,
     byValue: false,

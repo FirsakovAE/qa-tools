@@ -4,11 +4,13 @@ title: Display modes
 
 # Display modes
 
-**Options → General → Display Mode** chooses **where** the Vue Inspector UI lives relative to the page: **Overlay** on the page or **DevTools tab** inside the browser’s developer tools.
+**Options → General → Display Mode** chooses **where** the Vue Inspector UI lives relative to the page: **Overlay** on the page or **DevTools tab** inside the browser’s developer tools. The default is **Overlay**.
 
-> **DevTools mode requires the installed extension** (Chrome / Edge). **Standalone** disables that toggle: the inspector only runs as an overlay; there is no DevTools panel.
+The rest of **Options → General**, in order: [Customize](/options/customize), [Search Parameters and Auto Refresh](/options/update_settings), [Auto Run](/options/auto_run) (extension only), [JSON Mode](/options/json_mode), saved files on the Customize page, [Settings management](/options/settings_management). **About** is the next Options section: [About](/options/about).
 
-After changing mode the extension suggests **reloading the page**.
+> **DevTools mode requires the installed extension** (Chrome / Edge). **Standalone** disables the radios and shows **Display Mode is only available for the browser extension version.** The inspector only runs as an overlay.
+
+Choosing **DevTools tab** while the panel is the overlay shows **Reload the page to apply changes.** and **Open DevTools (F12) to access the panel.** Choosing **Overlay** while the panel is already a DevTools tab shows **Reload the page to apply changes.**
 
 ---
 
