@@ -8,18 +8,23 @@ import {
   activeKey,
   aiCredentials,
   AUTO_MODEL,
+  connectionSignature,
+  customProvider,
+  hasConsent,
+  isConnected,
   loadAiCredentials,
   saveAiCredentials,
   selectedModel,
   type AiAccess,
   type AiToolGroup,
 } from './credentials'
-import { AiProviderError, PROVIDER_BUDGET, PROVIDER_LABELS, type ChatLive } from './providers'
+import { AiProviderError, providerBudget, providerLabel, providerOptions, toolSupport, type ChatLive } from './providers'
+import { baseUrlHost } from './customProviders'
 import { clearProviderStatus, loadModelStatus } from './modelStatus'
 import { loadModels, providerModels } from './models'
 import { clearAnswerCache } from './markdown'
 import { runAgent } from './agent'
-import { styleNote, systemPrompt } from './prompt'
+import { NO_TOOLS_NOTE, styleNote, systemPrompt } from './prompt'
 import { maskText } from './privacy'
 import { hasVisibleText } from './format'
 import { allowedTools, TOOL_GROUPS } from './tools'
@@ -98,11 +103,17 @@ function init(): void {
   if (initialized) return
   initialized = true
   void Promise.all([loadAiCredentials(), loadModelStatus()]).then(() => {
-    watch(() => [aiCredentials.provider, activeKey()] as const, () => void loadModels(aiCredentials.provider).then(pickUsableModel), { immediate: true })
-    // What failed with the old key says nothing about a new one
-    watch(() => [aiCredentials.openRouterKey, aiCredentials.geminiKey] as const, (next, prev) => {
-      const providers: AiProviderId[] = ['openrouter', 'gemini']
-      providers.forEach((id, i) => { if (next[i] !== prev[i]) clearProviderStatus(id) })
+    watch(
+      () => [aiCredentials.provider, connectionSignature(aiCredentials.provider)] as const,
+      () => { if (isConnected()) void loadModels(aiCredentials.provider).then(pickUsableModel) },
+      { immediate: true },
+    )
+    // What failed with the old key or address says nothing about a new one
+    const signatures = () => Object.fromEntries(providerOptions().map(p => [p.id, connectionSignature(p.id)])) as Record<AiProviderId, string>
+    watch(signatures, (next, prev) => {
+      for (const id of Object.keys(prev) as AiProviderId[]) {
+        if (next[id] !== prev[id]) clearProviderStatus(id)
+      }
     })
     watch(() => [aiCredentials.blockedModels, aiCredentials.addedModels], () => void pickUsableModel(), { deep: true })
   })
@@ -122,9 +133,13 @@ function contextStep(snapshot: LogsSnapshot, digest: string | undefined, from: n
   const attached = attachments.length ? `attached ${attachments.map(a => a.label).join(', ')}` : ''
   const shared = ['question', attached, logs].filter(Boolean)
   const hidden = [!access.headers && 'headers', !access.bodies && 'bodies and messages', !access.appData && 'app data values'].filter(Boolean)
+  const custom = customProvider()
+  const target = custom ? `${custom.label} (${baseUrlHost(custom.baseUrl)})` : providerLabel(aiCredentials.provider)
   const parts = [
-    `Sent to ${PROVIDER_LABELS[aiCredentials.provider]}: ${shared.join(', ')}`,
-    `logs tools ${accessLabel(access, 'logs')}, page code ${accessLabel(access, 'sources')}, live page ${accessLabel(access, 'page')}`,
+    `Sent to ${target}: ${shared.join(', ')}`,
+    toolSupport(aiCredentials.provider) === 'none'
+      ? 'no tools with this connection'
+      : `logs tools ${accessLabel(access, 'logs')}, page code ${accessLabel(access, 'sources')}, live page ${accessLabel(access, 'page')}`,
     hidden.length ? `hidden: ${hidden.join(', ')}` : '',
     snapshot.masked ? `${snapshot.masked} values masked` : '',
   ].filter(Boolean)
@@ -168,8 +183,10 @@ export function useAiChat() {
   const provider = computed(() => aiCredentials.provider)
   const model = computed(() => selectedModel())
   const auto = computed(() => model.value === AUTO_MODEL)
-  const hasKey = computed(() => !!activeKey())
-  const ready = computed(() => hasKey.value && aiCredentials.consent && (auto.value ? models.value.some(m => !m.paid) : !!model.value))
+  /** The provider can take requests: a key, or an own connection (local ones need no key) */
+  const hasKey = computed(() => isConnected())
+  const consent = computed(() => hasConsent())
+  const ready = computed(() => hasKey.value && consent.value && (auto.value ? models.value.some(m => !m.paid) : !!model.value))
 
   function setProvider(id: AiProviderId) {
     void saveAiCredentials({ provider: id })
@@ -188,7 +205,8 @@ export function useAiChat() {
     busy.value = true
     controller = new AbortController()
 
-    const budget = PROVIDER_BUDGET[aiCredentials.provider]
+    const budget = providerBudget(aiCredentials.provider)
+    const noTools = toolSupport(aiCredentials.provider) === 'none'
     const access = aiCredentials.access
     const snapshot = takeLogsSnapshot({ maxTimeline: budget.digestTimeline, maxChars: budget.digestChars, bodyChars: budget.digestBodyChars })
     // A small context may drop the earlier questions with their digests, so it always gets a full one
@@ -210,12 +228,12 @@ export function useAiChat() {
         digestCount: snapshot.count,
         digestFrom: update?.from,
         history,
-        systemPrompt: systemPrompt(access, aiCredentials.routing),
+        systemPrompt: noTools ? `${systemPrompt(access, aiCredentials.routing)}\n\n${NO_TOOLS_NOTE}` : systemPrompt(access, aiCredentials.routing),
         styleNote: styleNote(aiCredentials),
         request: { provider: aiCredentials.provider, key: activeKey(), model: modelId, signal },
         auto: isAuto,
         models: models.value,
-        tools: allowedTools(access, aiCredentials.routing),
+        tools: noTools ? [] : allowedTools(access, aiCredentials.routing),
         approve: (name, step) => approveTool(name, step, signal),
         protect: output => maskText(output, aiCredentials.masking),
         onStep: step => { liveSteps.value = [...liveSteps.value, step] },
@@ -321,6 +339,7 @@ export function useAiChat() {
     answerApproval,
     retryWithAuto,
     hasKey,
+    consent,
     ready,
     setProvider,
     setModel,

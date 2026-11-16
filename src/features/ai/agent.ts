@@ -5,10 +5,11 @@
 
 import {
   AiProviderError,
-  CHAIN_SIZE,
+  autoAttempts,
+  chainSize,
   chatCompletion,
-  PROVIDER_BUDGET,
-  PROVIDER_LABELS,
+  providerBudget,
+  providerLabel,
   type ChatLive,
   type ChatRequest,
   type ChatResult,
@@ -20,8 +21,6 @@ import { extractTextToolCalls } from './textToolCalls'
 import { hasVisibleText } from './format'
 import type { AiModel, AiProviderId, AiStep, AiUsage, ChatMessage, ChatToolCall, ToolDefinition } from './types'
 
-/** Requests per completion in Auto mode (OpenRouter tries up to CHAIN_SIZE models in each) */
-const AUTO_ATTEMPTS = { openrouter: 3, gemini: 4 } as const
 /** Waits for a per-minute limit within one completion */
 const MAX_RATE_WAITS = 2
 /** An overloaded model is skipped this long when the provider gave no time */
@@ -138,7 +137,7 @@ function noModelsError(run: AgentRun, failures: string[], last: AiProviderError 
     : run.models.filter(m => !m.paid).map(m => `${m.name}: ${statusLabel(provider, m.id)}`)
   const list = known.length ? `\n\n${known.map(line => `- ${line}`).join('\n')}` : ''
   return new AiProviderError(
-    `No ${PROVIDER_LABELS[provider]} model could answer.${list}\n\nTry again later, switch the provider, or pick a model by hand.`,
+    `No ${providerLabel(provider)} model could answer.${list}\n\nTry again later, switch the provider, or pick a model by hand.`,
     last?.status,
     last?.kind ?? 'other',
     undefined,
@@ -158,11 +157,11 @@ async function complete(run: AgentRun, messages: ChatMessage[], toolChoice: 'aut
   let lastError: AiProviderError | null = null
   let waits = 0
   let manualRetried = false
-  const attempts = run.auto ? AUTO_ATTEMPTS[provider] : 1
+  const attempts = run.auto ? autoAttempts(provider) : 1
   for (let attempt = 0; attempt < attempts; attempt++) {
     const chain = run.auto ? autoModels(provider, run.models, tried) : [run.request.model]
     if (!chain.length) break
-    const batch = provider === 'openrouter' ? chain.slice(0, CHAIN_SIZE) : chain.slice(0, 1)
+    const batch = chain.slice(0, chainSize(provider))
     run.onLive?.(NO_LIVE)
     try {
       const result = await chatCompletion({
@@ -307,7 +306,7 @@ function callKey(name: string, args: Record<string, unknown>): string {
 }
 
 export async function runAgent(run: AgentRun): Promise<AgentResult> {
-  const budget = PROVIDER_BUDGET[run.request.provider]
+  const budget = providerBudget(run.request.provider)
   const history = [...compactHistory(run.history, !!run.digest && !run.digestFrom), userMessage(run)]
   // A repeated call can point to the earlier result only while results stay whole in the context
   const done = Number.isFinite(budget.contextChars) ? null : new Set<string>()

@@ -10,15 +10,15 @@ Connection, what the assistant may read, masking, style and the model list are i
 
 ## Before the first question
 
-With no API key the tab says **Connect an AI provider** and offers **Connect in Options → AI**. The text names a free key of Gemini or OpenRouter.
+With no API key the tab says **Connect an AI provider** and offers **Connect in Options → AI**. The text names a free key of Gemini or OpenRouter, and your own provider: OpenAI, DeepSeek, a local model (Ollama, LM Studio) or any OpenAI-compatible agent. See [Your own providers](/ai/settings#your-own-providers).
 
-With a key but no confirmation, the tab says **Data sent to OpenRouter** or **Data sent to Gemini**:
+With a key but no confirmation, the tab says **Data sent to OpenRouter** or **Data sent to Gemini**, or **Data sent to {name} ({host})** for your own provider:
 
 * questions, a digest of the captured logs, the event data and the page code the assistant asks for;
 * tokens, passwords, API keys and other values from the AI masking list are replaced with `[MASKED]` before sending; what the assistant may read is set in **Options → AI → Agent access**;
-* free models may store prompts and use them for training.
+* OpenRouter and Gemini: free models may store prompts and use them for training. Your own provider: that the server is local, or that the data goes to its host under that service's terms; a remote `http://` address adds a warning that the key and the data travel unencrypted.
 
-**I understand** confirms. **Review access** opens **Options → AI → Agent access**. Until then the input stays disabled and reads **Connect a provider to ask questions**.
+OpenRouter and Gemini share one confirmation. Each of your own providers asks for its own. **I understand** confirms. **Review access** opens **Options → AI → Agent access**. Until then the input stays disabled and reads **Connect a provider to ask questions**.
 
 After confirmation, an empty chat offers four example questions. Clicking one sends it.
 
@@ -26,8 +26,8 @@ After confirmation, an empty chat offers four example questions. Clicking one se
 
 | Control | Behavior |
 | ------- | -------- |
-| Provider | **OpenRouter** or **Gemini** |
-| Model | Shown when a key is set and the model list has loaded. **Auto** is first: *free models, switches on limits*. Then **Recommended** and **Added**. A model note can say **paid**, a status, **unstable**, and how many requests it had today |
+| Provider | **OpenRouter**, **Gemini**, then your own providers by name |
+| Model | Shown when a key is set and the model list has loaded. **Auto** is first: *free models, switches on limits* (your own providers: *listed models, switches on errors*). Then **Recommended** and **Added**. A model note can say **paid**, a status, **unstable**, and how many requests it had today |
 | **Checking models...** | Shown while the list loads |
 | **Models failed to load, retry** | Shown when the list fails. The title is the error text |
 | Refresh | Tooltip **Check which models are available** |
@@ -48,6 +48,9 @@ Under the field, when the chat is ready:
 
 * OpenRouter: **Today: N of M free OpenRouter requests (counted in this browser). Each assistant step is one request.** **M** is the limit the provider reported, or **50** when it has not. In **Auto**, a second sentence says how many models are skipped because they are out of quota or unavailable.
 * Gemini: **Today: N Gemini requests. Daily limits depend on the model and your Google AI Studio project.** The same **Auto** sentence can follow.
+* Your own provider: **Today: N requests to {name} (runs on your server).** for a local one, or **(limits and billing are set by your account there)**, then **Each assistant step is one request.** The same **Auto** sentence can follow.
+
+The first step of an answer names where the data went: **Sent to {name} ({host})** for your own provider. With **Tools: No tools** it says **no tools with this connection** instead of the tool access.
 
 **Auto** can be selected only when the list has a model that is not marked paid. A hand-picked model must be selected for the field to accept a question.
 

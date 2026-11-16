@@ -35,18 +35,20 @@ Decorative media uses the same storage perimeter with a **total size budget** (s
 
 ## Export
 
-**Export** downloads text named like `vue-inspector-settings-YYYY-MM-DD.txt` containing pretty-printed JSON of in-memory settings. **Options → AI** is stored separately and is not in this file. See [Options → AI](/ai/settings).
+**Export** downloads a JSON file named like `vue-inspector-settings-YYYY-MM-DD.json` (`application/json`, pretty-printed) of in-memory settings. The same file includes **Options → AI** under `ai`: the selected provider, models, personalization, agent access, and data masking. API keys are left out. Today's request counts and model quota marks stay in this browser. See [Options → AI](/ai/settings).
 
 * **Standalone:** for `savedFiles` rows backed by blobs, export may inline **data URIs** so the backup is **portable** across browsers/machines.
 * **Extension:** data URI payloads for heavy files are usually **stripped** — you get structure/options; re-copy media locally or re-import a **rich** standalone export if you need bytes.
 
-Use Export for **backups**, **migration** (especially standalone), and **versioning** presets as plain text.
+Use Export for **backups**, **migration** (especially standalone), and **versioning** presets as JSON.
 
 ---
 
 ## Import
 
-**Import** picks a file; expected **JSON** matches export (filter often `*.txt`).
+**Import** picks a file. The picker accepts `*.json`. The payload must be the same JSON as export. Older exports named `*.txt` still import: the file was already that JSON, only the extension changed.
+
+When the file contains `ai`, those **Options → AI** choices replace the local ones. API keys in the file are ignored; keys already saved in this browser stay. A file with no `ai` object leaves **Options → AI** unchanged.
 
 1. Parse and **merge with defaults**: unknown keys drop; legacy shapes **migrate** when possible.
 2. Result loads into the same options model, then **writes once** to durable storage (extension or standalone).

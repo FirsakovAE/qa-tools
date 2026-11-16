@@ -2,7 +2,8 @@
  * Short labels for the AI tab and Options: usage, steps, quota, model state.
  */
 
-import { AUTO_MODEL } from './credentials'
+import { AUTO_MODEL, customProvider } from './credentials'
+import { CUSTOM_PRESETS, isLocalUrl } from './customProviders'
 import { modelStatus, reportedLimit, requestsToday, statusLabel, unavailableCount } from './modelStatus'
 import type { AiModel, AiProviderId, AiStep, AiUsage } from './types'
 
@@ -112,6 +113,11 @@ export function quotaLine(provider: AiProviderId, model: string, models: AiModel
   if (provider === 'openrouter') {
     const limit = reportedLimit('openrouter')?.limit ?? 50
     return `Today: ${used} of ${limit} free OpenRouter requests (counted in this browser). Each assistant step is one request.${skippedNote}`
+  }
+  const custom = customProvider(provider)
+  if (custom) {
+    const billing = CUSTOM_PRESETS[custom.preset].local || isLocalUrl(custom.baseUrl) ? 'runs on your server' : 'limits and billing are set by your account there'
+    return `Today: ${used} requests to ${custom.label} (${billing}). Each assistant step is one request.${skippedNote}`
   }
   return `Today: ${used} Gemini requests. Daily limits depend on the model and your Google AI Studio project.${skippedNote}`
 }

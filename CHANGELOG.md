@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### AI
+
+* Own AI providers in **Options → AI → Connection → Your own providers**: OpenAI, DeepSeek, Ollama, LM Studio or any OpenAI-compatible server or agent, with an optional API key, extra headers, tool mode (native, as text, none), context size, streaming and **Test connection**.
 
 
 ## [1.0.1] - 2026-01-23

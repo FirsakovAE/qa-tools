@@ -15,7 +15,8 @@ import { useAiChat } from './useAiChat'
 import { AUTO_MODEL } from './credentials'
 import { modelName, modelNote } from './format'
 import { modelStatus } from './modelStatus'
-import { PROVIDER_LABELS } from './providers'
+import { providerOptions } from './providers'
+import { isCustomProvider } from './customProviders'
 import type { AiProviderId } from './types'
 import AiIconButton from './AiIconButton.vue'
 
@@ -41,11 +42,11 @@ const groups = computed(() => [
     <h3 class="text-lg font-semibold shrink-0">AI</h3>
 
     <Select :model-value="provider" @update:model-value="setProvider($event as AiProviderId)">
-      <SelectTrigger class="h-8 w-[120px] text-xs">
+      <SelectTrigger class="h-8 w-[140px] text-xs">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem v-for="(label, id) in PROVIDER_LABELS" :key="id" :value="id">{{ label }}</SelectItem>
+        <SelectItem v-for="p in providerOptions()" :key="p.id" :value="p.id">{{ p.label }}</SelectItem>
       </SelectContent>
     </Select>
 
@@ -55,7 +56,7 @@ const groups = computed(() => [
       </SelectTrigger>
       <SelectContent>
         <SelectItem :value="AUTO_MODEL" class="text-xs">
-          Auto<span class="ml-1 text-muted-foreground">· free models, switches on limits</span>
+          Auto<span class="ml-1 text-muted-foreground">· {{ isCustomProvider(provider) ? 'listed models, switches on errors' : 'free models, switches on limits' }}</span>
         </SelectItem>
         <template v-for="group in groups" :key="group.label">
           <SelectSeparator />

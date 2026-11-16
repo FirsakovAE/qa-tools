@@ -20,7 +20,7 @@ const emit = defineEmits<{
   (e: 'navigate-to-options', anchor: string): void
 }>()
 
-const { credentials, entries, busy, liveSteps, liveText, liveReasoning, models, provider, model, pendingApproval, ready, send, stop } = useAiChat()
+const { consent, entries, busy, liveSteps, liveText, liveReasoning, models, provider, model, pendingApproval, ready, send, stop } = useAiChat()
 const { getEvent } = useLogs()
 
 function openSettings(anchor = 'ai-connection-section') {
@@ -104,7 +104,7 @@ watch([liveText, liveReasoning], () => {
     <ScrollArea ref="conversation" :horizontal="false" class="flex-1 min-h-0">
       <div class="p-3 space-y-3">
         <AiWelcome @open-settings="openSettings" @submit="submit" />
-        <template v-if="credentials.consent">
+        <template v-if="consent">
           <AiEntry
             v-for="entry in entries"
             :key="entry.id"

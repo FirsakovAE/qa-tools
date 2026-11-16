@@ -428,11 +428,11 @@ async function handleExport() {
   if (!settings.value) return
   try {
     const settingsJson = await exportSettings()
-    const blob = new Blob([settingsJson], { type: 'text/plain' })
+    const blob = new Blob([settingsJson], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `vue-inspector-settings-${new Date().toISOString().split('T')[0]}.txt`
+    a.download = `vue-inspector-settings-${new Date().toISOString().split('T')[0]}.json`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -449,7 +449,7 @@ async function handleImport() {
   importError.value = null
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = '.txt'
+  input.accept = '.json,.txt,application/json'
   input.onchange = async (event) => {
     const file = (event.target as HTMLInputElement).files?.[0]
     if (!file) return

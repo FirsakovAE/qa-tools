@@ -8,7 +8,7 @@ title: Options → AI
 
 The blocks follow this order: **Connection**, **Models**, **Personalization**, **Agent access**, **Data masking for AI**.
 
-These choices are stored in this browser, apart from the inspector settings. **Options → Settings management** does not export, import, or reset them. The screen says: *Keys stay in this browser and are not included in settings export.*
+These choices are stored in this browser, apart from the inspector profile. **Export** and **Import** in [Settings management](/options/settings_management) include them, under `ai` in the JSON file. API keys and the **Extra headers** of your own providers are not written to the file and are not applied on import. Your own providers are written without them; on import a provider with the same id keeps the key, headers and confirmation stored in this browser, a new one comes without a key and asks for confirmation again, and providers that exist only in this browser stay. **Reset** does not clear **Options → AI**, including the keys and today's request counts. The screen says: *Keys stay in this browser and are not included in settings export.*
 
 ## Connection
 
@@ -22,13 +22,52 @@ Under OpenRouter: **Get a free key in** [OpenRouter](https://openrouter.ai/setti
 
 Until a key is saved, the AI tab uses **Gemini**.
 
+### Your own providers {#your-own-providers}
+
+Under the built-in providers: **Your own providers** — *OpenAI, DeepSeek, local models, OpenAI-compatible agents*. Any server that answers `POST {Base URL}/chat/completions` in the OpenAI format works: a cloud API key, a model on your machine or your own agent. Each provider is a row with its name, then the host, **local** for an address on this machine or the local network, the key as eight dots and its last four characters (or **no key**), and the tool mode. **Edit the connection** opens the same dialog as **Add provider**. **Remove the connection** asks once more in the row (**Remove** / **Keep**); removing drops the key, the model choices and the model marks of that provider, and the AI tab falls back to a built-in provider.
+
+**Add provider** opens **Add your own provider**:
+
+| Field | Meaning |
+| ----- | ------- |
+| **Type** | A preset that fills the fields below; see the table after this one. Changing it replaces only the fields still at the previous preset's values |
+| **Name** | Up to 40 characters, shown in the provider menus |
+| **Base URL** | Up to and including the API version, such as `https://api.openai.com/v1`. A trailing `/` or `/chat/completions` is removed. Under the field: where requests go, or a warning for a remote `http://` address (the key and the data travel unencrypted) |
+| **API key** | Required for OpenAI and DeepSeek, optional for the other types. Sent as `Authorization: Bearer …` |
+| **Tools** (Advanced) | **Native tool calls** — the `tools` field of the API. **Tools as text** — for servers that reject `tools`: the tools are described in the system prompt and the model writes `<tool_call>{…}</tool_call>`; tool results go back as user messages. **No tools** — the model answers from the question, attachments and the logs digest only |
+| **Context size** (Advanced) | **Small (8K tokens)**, **Medium (32K)** or **Large (128K+)**. Smaller sizes send a shorter logs digest, cut tool results, drop earlier questions sooner and allow fewer tool rounds (6, 8 and 10) |
+| **Stream answers** (Advanced) | On by default. Turn it off when the server breaks streamed responses |
+| **Extra headers** (Advanced) | One per line, `Name: value`, for gateways and proxies (for example `api-key: …`). They override the `Authorization` header when they name it |
+
+| Type | Base URL | Key | Context | Notes |
+| ---- | -------- | --- | ------- | ----- |
+| **OpenAI** | `https://api.openai.com/v1` | required | Large | Billed to your OpenAI account. Reasoning models (`o…`, `gpt-5…`) are sent without `temperature` |
+| **DeepSeek** | `https://api.deepseek.com/v1` | required | Large | Billed to your DeepSeek balance. The reasoning of `deepseek-reasoner` is shown as thinking |
+| **Ollama** | `http://localhost:11434/v1` | — | Small | Start Ollama with `OLLAMA_ORIGINS=chrome-extension://*` (or `*`); otherwise it answers 403 to the extension. Raise `OLLAMA_CONTEXT_LENGTH` (for example 16384) for longer chats. Pick a model with tool support |
+| **LM Studio** | `http://localhost:1234/v1` | — | Medium | Start the server in **Developer** and turn on **CORS** |
+| **OpenAI-compatible** | yours | optional | Medium | vLLM, llama.cpp, LiteLLM, Groq, Mistral, xAI, Together, your own agent |
+
+**Test connection** lists the models (`GET {Base URL}/models`) and sends one short request with a test tool. It picks **Tools**: **Native tool calls** when the model called the tool, **Tools as text** when it ignored the tool or the server rejected the `tools` field. **Model id for the test** is optional; without it the first offered model is used. A server without a model list needs this id; it is added to the provider's models on **Add**/**Save**. A failure shows the message and **Server response**.
+
+The first question to a new provider asks for confirmation again: **Data sent to {name} ({host})**. The text says whether the server is local, or that the data goes to that host under its terms.
+
+Common errors of your own providers:
+
+* **Could not reach {name} ({host})** — the server is not running, the address is wrong, or (in the [standalone](/standalone) page) the server does not allow cross-origin requests.
+* **{name} refused the request from the extension** — a local server rejected the extension origin (Ollama: `OLLAMA_ORIGINS`).
+* **{name}: {host} has no such endpoint** — check **Base URL**; it usually ends with `/v1`.
+* **{name} rejected tool calls** — set **Tools** to **Tools as text** or **No tools**.
+* **{name}: the account has no credits or quota left.**
+
+When a server rejects `temperature`, `stream_options` or `tool_choice` with HTTP 400, the request is repeated once without that parameter, and the parameter is left out for that server until the extension page reloads.
+
 ## Models
 
 The provider menu here only chooses whose list to edit. It starts as the provider selected on the AI tab. Changing it does not change that selection.
 
 **Reload the model list** is disabled while the list is loading. When the list is loaded, the right side shows **N of M available**: **M** is the recommended models plus the ones you added, **N** is how many of them are still checked.
 
-The field **Add or search model** is disabled until that provider has a key. Without a key the line is **Connect OpenRouter above to see its models.** or **Connect Gemini above to see its models.** While the list loads: **Loading models...** A failure shows the error text.
+The provider menu lists OpenRouter, Gemini and your own providers. The field **Add or search model** is disabled until that provider has a key (your own providers count as connected once added). Without a key the line is **Connect OpenRouter above to see its models.** or **Connect Gemini above to see its models.** While the list loads: **Loading models...** A failure shows the error text; for your own providers the models already added stay listed under it.
 
 The dropdown opens on focus. **Escape** or a click outside closes it.
 
@@ -38,6 +77,8 @@ The dropdown opens on focus. **Escape** or a click outside closes it.
 * Nothing matched: **No models found**.
 
 A row shows the name, the id, and **free** or **paid**. **recommended** models are already in the list; their checkbox is disabled. Checking another model adds it. The AI tab shows added models under **Added**.
+
+For your own providers the list comes from `GET {Base URL}/models`, without embedding, speech and image models, and has no **free**/**paid** badges; the hint is **Models the server lists**. Local providers and lists of up to 8 models offer every model as recommended; longer lists recommend up to three (OpenAI: `gpt-5-mini`, `gpt-5`, `gpt-4.1-mini`…; DeepSeek: `deepseek-chat`, `deepseek-reasoner`). The field reads **Add or search model, or type a model id**: a typed id the server does not list shows **Add model id …**, and **Enter** adds it too. This is how models of agents and gateways without a model list are added. **Auto** for your own providers picks among the listed models and switches on errors.
 
 The list under the field is those recommended and added models.
 

@@ -1,16 +1,43 @@
 /**
- * Chat completions for OpenRouter and Gemini through their OpenAI-compatible endpoints,
- * and the free models each of them offers.
+ * Chat completions through OpenAI-compatible endpoints: OpenRouter, Gemini and the user's own
+ * connections (OpenAI, DeepSeek, local servers, own agents), and the models each of them offers.
  */
 
 import { formatDuration } from './modelStatus'
 import { GITHUB_REPO_SLUG } from '@/services/githubReleaseService'
-import type { AiModel, AiProviderId, AiTokens, ChatMessage, ChatToolCall, ToolDefinition } from './types'
+import { BUILTIN_PROVIDERS, aiCredentials, connectionSignature, customProvider } from './credentials'
+import { CUSTOM_PRESETS, baseUrlHost, isCustomProvider, isLocalUrl } from './customProviders'
+import type {
+  AiModel,
+  AiProviderId,
+  AiTokens,
+  BuiltinProviderId,
+  ChatMessage,
+  ChatToolCall,
+  ContextSize,
+  CustomPreset,
+  CustomProvider,
+  ToolDefinition,
+  ToolSupport,
+} from './types'
 
 const OPENROUTER_API = 'https://openrouter.ai/api/v1'
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta'
 
-export const PROVIDER_LABELS: Record<AiProviderId, string> = { openrouter: 'OpenRouter', gemini: 'Gemini' }
+const BUILTIN_LABELS: Record<BuiltinProviderId, string> = { openrouter: 'OpenRouter', gemini: 'Gemini' }
+
+export function providerLabel(provider: AiProviderId, connection?: CustomProvider): string {
+  if (!isCustomProvider(provider)) return BUILTIN_LABELS[provider]
+  return (connection ?? customProvider(provider))?.label ?? 'Own provider'
+}
+
+/** Built-in providers, then the user's connections, for the provider pickers */
+export function providerOptions(): Array<{ id: AiProviderId; label: string }> {
+  return [
+    ...BUILTIN_PROVIDERS.map(id => ({ id: id as AiProviderId, label: BUILTIN_LABELS[id] })),
+    ...aiCredentials.customProviders.map(p => ({ id: p.id as AiProviderId, label: p.label })),
+  ]
+}
 
 export interface ProviderBudget {
   /** Timeline lines of the logs digest sent with a question */
@@ -26,9 +53,33 @@ export interface ProviderBudget {
   toolRounds: number
 }
 
-export const PROVIDER_BUDGET: Record<AiProviderId, ProviderBudget> = {
-  openrouter: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity, toolRounds: 10 },
-  gemini: { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity, toolRounds: 10 },
+const LARGE_BUDGET: ProviderBudget = { digestTimeline: 250, toolResultChars: 24_000, contextChars: Infinity, toolRounds: 10 }
+
+/** Own connections: the system prompt and tool definitions come on top of `contextChars` */
+const CONTEXT_BUDGET: Record<ContextSize, ProviderBudget> = {
+  small: { digestTimeline: 60, digestChars: 6_000, digestBodyChars: 300, toolResultChars: 4_000, contextChars: 14_000, toolRounds: 6 },
+  medium: { digestTimeline: 150, digestChars: 20_000, digestBodyChars: 1_000, toolResultChars: 12_000, contextChars: 60_000, toolRounds: 8 },
+  large: LARGE_BUDGET,
+}
+
+export function providerBudget(provider: AiProviderId): ProviderBudget {
+  const custom = customProvider(provider)
+  return custom ? CONTEXT_BUDGET[custom.context] : LARGE_BUDGET
+}
+
+/** Requests per completion in Auto mode (OpenRouter tries up to CHAIN_SIZE models in each) */
+export function autoAttempts(provider: AiProviderId): number {
+  return provider === 'gemini' ? 4 : 3
+}
+
+/** Models one request may name: OpenRouter switches among them itself */
+export function chainSize(provider: AiProviderId): number {
+  return provider === 'openrouter' ? CHAIN_SIZE : 1
+}
+
+/** How the model gets the tools; built-in providers always use the `tools` field */
+export function toolSupport(provider: AiProviderId): ToolSupport {
+  return customProvider(provider)?.tools ?? 'native'
 }
 
 /**
@@ -208,6 +259,77 @@ async function listGeminiModels(all: Promise<AiModel[]>): Promise<AiModel[]> {
   return free.length ? withRecommended(free, GEMINI_PREFERRED) : GEMINI_FALLBACK
 }
 
+/** Embeddings, speech, images and other models that do not chat */
+const NON_CHAT = /(embed|tts|whisper|dall-e|davinci|babbage|moderation|transcribe|realtime|audio|image|search|rerank|speech|sora|computer-use)/i
+const CUSTOM_PREFERRED: Partial<Record<CustomPreset, RegExp[]>> = {
+  openai: [/^gpt-5[\d.]*-mini$/i, /^gpt-5[\d.]*$/i, /^gpt-4\.1-mini$/i, /^gpt-4\.1$/i, /^gpt-4o-mini$/i, /^o\d-mini$/i],
+  deepseek: [/^deepseek-chat$/i, /^deepseek-reasoner$/i],
+}
+const GENERIC_PREFERRED = [/gpt/i, /deepseek/i, /qwen/i, /llama/i, /mistral/i, /gemma/i, /claude/i, /gemini/i]
+/** A catalog this small is the user's own selection (a local server, an agent): every model is offered */
+const SMALL_CATALOG = 8
+
+function customHeaders(connection: CustomProvider): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...(connection.apiKey ? { Authorization: `Bearer ${connection.apiKey}` } : {}),
+    ...connection.headers,
+  }
+}
+
+function connectionOf(provider: AiProviderId, connection?: CustomProvider): CustomProvider | undefined {
+  return connection ?? customProvider(provider)
+}
+
+/** `fetch` failed before any response: server down, wrong address, CORS or a blocked mixed-content request */
+function networkError(provider: AiProviderId, e: unknown, connection?: CustomProvider): AiProviderError {
+  const custom = connectionOf(provider, connection)
+  const where = custom ? `${custom.label} (${baseUrlHost(custom.baseUrl)})` : providerLabel(provider)
+  const hint = !custom ? 'Check the internet connection.'
+    : isLocalUrl(custom.baseUrl) ? 'Check that the server is running and accepts requests from the extension (CORS / allowed origins).'
+    : 'Check the base URL and the internet connection.'
+  return new AiProviderError(`Could not reach ${where}. ${hint}`, undefined, 'other', undefined, String((e as Error)?.message || e))
+}
+
+async function providerFetch(provider: AiProviderId, url: string, init: RequestInit, connection?: CustomProvider): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (e) {
+    if (init.signal?.aborted) throw e
+    throw networkError(provider, e, connection)
+  }
+}
+
+/** Models of an own connection from `GET {baseUrl}/models`; local servers list what is installed */
+export async function customCatalog(connection: CustomProvider): Promise<AiModel[]> {
+  const res = await providerFetch(connection.id, `${connection.baseUrl}/models`, { headers: customHeaders(connection) }, connection)
+  if (!res.ok) throw providerError(res.status, await errorMessage(res), connection.id, res, connection)
+  const data = await res.json().catch(() => null)
+  const raw: any[] = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : Array.isArray(data) ? data : []
+  const seen = new Set<string>()
+  const models: AiModel[] = []
+  for (const item of raw) {
+    const id = typeof item === 'string' ? item : String(item?.id ?? item?.model ?? item?.name ?? '')
+    if (!id || seen.has(id) || NON_CHAT.test(id)) continue
+    seen.add(id)
+    const name = typeof item?.name === 'string' && item.name && item.name !== id ? item.name : id
+    const contextLength = Number(item?.context_length ?? item?.max_context_length ?? item?.context_window) || undefined
+    models.push({ id, name, ...(contextLength ? { contextLength } : {}) })
+  }
+  return models
+}
+
+async function listCustomModels(connection: CustomProvider, all: Promise<AiModel[]>): Promise<AiModel[]> {
+  const list = (await all).map(m => ({ ...m }))
+  if (CUSTOM_PRESETS[connection.preset].local || list.length <= SMALL_CATALOG) {
+    for (const m of list) m.recommended = true
+    return list.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+  }
+  const sorted = withRecommended(list, CUSTOM_PREFERRED[connection.preset] ?? GENERIC_PREFERRED)
+  if (!sorted.some(m => m.recommended)) sorted.slice(0, RECOMMENDED_COUNT).forEach(m => { m.recommended = true })
+  return sorted
+}
+
 /** The lists are shared by the AI tab and Options; OpenRouter health checks cost one fetch per model */
 const MODELS_TTL_MS = 10 * 60_000
 const modelLists = new Map<string, { at: number; list: Promise<AiModel[]> }>()
@@ -221,16 +343,25 @@ function cached(id: string, force: boolean, load: () => Promise<AiModel[]>): Pro
   return list
 }
 
-/** Every chat model of the provider the key can call, free and paid (`paid` marks billed ones) */
-export function catalogModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
-  return cached(`all\u0000${provider}\u0000${key}`, force, () =>
-    provider === 'openrouter' ? openRouterCatalog() : geminiCatalog(key))
+function noConnection(provider: AiProviderId): Promise<AiModel[]> {
+  return Promise.reject(new AiProviderError(`${providerLabel(provider)} is not configured.`, undefined, 'auth'))
 }
 
-/** Free models of the provider with the recommended ones marked, cached per key for a while */
+/** Every chat model of the provider the key can call, free and paid (`paid` marks billed ones) */
+export function catalogModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
+  const custom = customProvider(provider)
+  return cached(`all\u0000${provider}\u0000${custom ? connectionSignature(provider) : key}`, force, () => {
+    if (isCustomProvider(provider)) return custom ? customCatalog(custom) : noConnection(provider)
+    return provider === 'openrouter' ? openRouterCatalog() : geminiCatalog(key)
+  })
+}
+
+/** Models offered by default (free ones of the built-in providers) with the recommended ones marked, cached per key for a while */
 export function listModels(provider: AiProviderId, key: string, force = false): Promise<AiModel[]> {
-  return cached(`free\u0000${provider}\u0000${key}`, force, () => {
+  const custom = customProvider(provider)
+  return cached(`free\u0000${provider}\u0000${custom ? connectionSignature(provider) : key}`, force, () => {
     const all = catalogModels(provider, key, force)
+    if (isCustomProvider(provider)) return custom ? listCustomModels(custom, all) : noConnection(provider)
     return provider === 'openrouter' ? listOpenRouterModels(all) : listGeminiModels(all)
   })
 }
@@ -269,8 +400,40 @@ const GONE = /no longer available|not found|does not exist|deprecated|decommissi
 /** One model or its provider is overloaded / rate-limited: another model may answer */
 const MODEL_BUSY = /upstream|overload|temporar|rate[- ]limit|unavailable|capacity|timeout|try again|retry/i
 
-function providerError(status: number, message: string, provider: AiProviderId, res: Response | null = null): AiProviderError {
-  const label = PROVIDER_LABELS[provider]
+/** OpenAI / DeepSeek report an empty balance with 429 or 402 */
+const NO_CREDITS = /insufficient[_ ]quota|exceeded your current quota|insufficient balance|billing|out of credits/i
+/** The server does not take the `tools` field or `tool_choice` */
+const TOOLS_REJECTED = /\btools?\b|function[_ ]call|tool[_ ]choice/i
+
+/** Errors only an own connection gives: a local server refusing the origin, a wrong base URL, no tool support */
+function customProviderError(status: number, message: string, connection: CustomProvider): AiProviderError | null {
+  const label = connection.label
+  if (status === 403 && isLocalUrl(connection.baseUrl) && /^HTTP 403$|forbidden|origin/i.test(message)) {
+    const fix = connection.preset === 'ollama'
+      ? 'Start Ollama with OLLAMA_ORIGINS=chrome-extension://* (or *) and restart it.'
+      : 'Allow requests from the extension in the server settings (CORS / allowed origins).'
+    return new AiProviderError(`${label} refused the request from the extension. ${fix}`, status, 'auth', undefined, message)
+  }
+  if (status === 401 || status === 403) {
+    return new AiProviderError(`${label} rejected the request: ${connection.apiKey ? 'check the API key' : 'it needs an API key'}.`, status, 'auth', undefined, message)
+  }
+  if ((status === 402 || status === 429) && NO_CREDITS.test(message)) {
+    return new AiProviderError(`${label}: the account has no credits or quota left.`, status, 'credits', undefined, message)
+  }
+  if (status === 404 && !/model/i.test(message)) {
+    return new AiProviderError(`${label}: ${baseUrlHost(connection.baseUrl)} has no such endpoint. Check the base URL; it usually ends with /v1.`, status, 'other', undefined, message)
+  }
+  if ((status === 400 || status === 422) && connection.tools === 'native' && TOOLS_REJECTED.test(message) && !GONE.test(message)) {
+    return new AiProviderError(`${label} rejected tool calls. Set Tools to "Tools as text" or "No tools" for this connection in Options → AI → Connection.`, status, 'other', undefined, message)
+  }
+  return null
+}
+
+function providerError(status: number, message: string, provider: AiProviderId, res: Response | null = null, connection?: CustomProvider): AiProviderError {
+  const custom = connectionOf(provider, connection)
+  const own = custom ? customProviderError(status, message, custom) : null
+  if (own) return own
+  const label = providerLabel(provider, custom)
   if (status === 401 || status === 403) {
     return new AiProviderError(provider === 'openrouter' ? 'OpenRouter rejected the key. Sign in again.' : `${label} rejected the API key.`, status, 'auth', undefined, message)
   }
@@ -324,6 +487,8 @@ export interface ChatRequest {
   signal?: AbortSignal
   /** Streams the response: called with the text received so far */
   onDelta?: (live: ChatLive) => void
+  /** An own connection not saved yet (Test connection); saved ones are found by `provider` */
+  connection?: CustomProvider
 }
 
 export interface ChatLive {
@@ -375,14 +540,14 @@ function joinReasoning(...parts: string[]): string {
 }
 
 /** OpenRouter reports upstream failures with HTTP 200 and an `error` object, also inside a stream */
-function upstreamError(data: any, provider: AiProviderId): AiProviderError {
+function upstreamError(data: any, req: ChatRequest): AiProviderError {
   const raw = data.error.metadata?.raw
   const message = `${String(data.error.message || 'Provider error')}${typeof raw === 'string' ? `: ${raw.slice(0, 300)}` : ''}`
-  return providerError(Number(data.error.code) || 500, message, provider)
+  return providerError(Number(data.error.code) || 500, message, req.provider, null, req.connection)
 }
 
 function parseJson(data: any, req: ChatRequest): ChatResult {
-  if (data?.error) throw upstreamError(data, req.provider)
+  if (data?.error) throw upstreamError(data, req)
   const message = data?.choices?.[0]?.message
   if (!message) throw new AiProviderError('The model returned an empty response', undefined, 'empty')
   const split = splitThink(typeof message.content === 'string' ? message.content : '')
@@ -429,7 +594,7 @@ async function readStream(res: Response, req: ChatRequest): Promise<ChatResult> 
   let received = false
 
   const onData = (data: any) => {
-    if (data?.error) throw upstreamError(data, req.provider)
+    if (data?.error) throw upstreamError(data, req)
     if (typeof data?.model === 'string' && data.model) model = data.model
     tokens = readTokens(data?.usage) ?? tokens
     const choice = data?.choices?.[0]
@@ -475,11 +640,74 @@ async function readStream(res: Response, req: ChatRequest): Promise<ChatResult> 
   return { content: split.content, reasoning: joinReasoning(reasoning, split.reasoning), toolCalls: calls, model, tokens }
 }
 
-export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
-  const url = {
-    openrouter: `${OPENROUTER_API}/chat/completions`,
-    gemini: `${GEMINI_API}/openai/chat/completions`,
-  }[req.provider]
+/** Tool instructions for models of a server that rejects the `tools` field; calls come back as `<tool_call>` text */
+function toolsAsText(tools: ToolDefinition[]): string {
+  const list = tools.map(t => `- ${t.function.name}: ${t.function.description}\n  arguments: ${JSON.stringify(t.function.parameters)}`)
+  return `# Calling tools
+Native function calling is not available. To call a tool, write the call in this exact form and stop:
+<tool_call>{"name": "tool_name", "arguments": {"arg": "value"}}</tool_call>
+Independent calls may go one after another in the same message. The results come back in the next user message inside <tool_result> tags. Write no <tool_call> when you answer.
+
+Available tools (arguments as JSON Schema):
+${list.join('\n')}`
+}
+
+function argumentsJson(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw || '{}'))
+  } catch {
+    return '{}'
+  }
+}
+
+/**
+ * The chat for a server without native tool calls: tool calls become `<tool_call>` text, tool
+ * results user messages; adjacent user messages are joined (strict chat templates need turns to alternate).
+ */
+function textToolMessages(messages: ChatMessage[], tools: ToolDefinition[] | undefined, withSpec: boolean): ChatMessage[] {
+  const out: ChatMessage[] = []
+  const pushUser = (content: string) => {
+    const prev = out[out.length - 1]
+    if (prev?.role === 'user') out[out.length - 1] = { role: 'user', content: `${prev.content}\n\n${content}` }
+    else out.push({ role: 'user', content })
+  }
+  for (const m of messages) {
+    if (m.role === 'system') {
+      out.push(withSpec && tools?.length ? { role: 'system', content: `${m.content}\n\n${toolsAsText(tools)}` } : m)
+    } else if (m.role === 'assistant') {
+      const calls = (m.tool_calls ?? []).map(c => `<tool_call>{"name": ${JSON.stringify(c.function.name)}, "arguments": ${argumentsJson(c.function.arguments)}}</tool_call>`)
+      out.push({ role: 'assistant', content: [m.content, ...calls].filter(Boolean).join('\n') })
+    } else if (m.role === 'tool') {
+      pushUser(`<tool_result name="${m.name}">\n${m.content}\n</tool_result>`)
+    } else {
+      pushUser(m.content)
+    }
+  }
+  return out
+}
+
+/** Optional parameters a server rejected (HTTP 400 naming them): left out of its next requests in this session */
+const OPTIONAL_PARAMS = ['temperature', 'stream_options', 'tool_choice'] as const
+const rejectedParams = new Map<string, Set<string>>()
+
+function rejectedParam(body: Record<string, unknown>, status: number, message: string): string | undefined {
+  if (status !== 400 && status !== 422) return undefined
+  const lower = message.toLowerCase()
+  return OPTIONAL_PARAMS.find(param => param in body && (lower.includes(param) || lower.includes(param.replace('_', ' '))))
+}
+
+/** OpenAI reasoning models accept only the default temperature */
+const FIXED_TEMPERATURE = /^(o\d|gpt-5)/i
+
+interface Endpoint {
+  url: string
+  headers: Record<string, string>
+  body: Record<string, unknown>
+  /** Key of `rejectedParams` */
+  paramsKey: string
+}
+
+function builtinEndpoint(req: ChatRequest, stream: boolean): Endpoint {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${req.key}`,
@@ -488,10 +716,7 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
     headers['HTTP-Referer'] = `https://github.com/${GITHUB_REPO_SLUG}`
     headers['X-Title'] = 'Vue Inspector'
   }
-  const body: Record<string, unknown> = {
-    messages: req.messages,
-    temperature: 0.2,
-  }
+  const body: Record<string, unknown> = { messages: req.messages, temperature: 0.2 }
   const fallbacks = req.provider === 'openrouter' ? (req.fallbacks ?? []).filter(id => id !== req.model) : []
   if (fallbacks.length) body.models = [req.model, ...fallbacks].slice(0, CHAIN_SIZE)
   else body.model = req.model
@@ -499,17 +724,120 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
     body.tools = req.tools
     body.tool_choice = req.toolChoice ?? 'auto'
   }
-
-  if (req.onDelta) {
+  if (stream) {
     body.stream = true
     // Gemini adds the usage to the last chunk on its own
     if (req.provider === 'openrouter') body.stream_options = { include_usage: true }
   }
+  const url = req.provider === 'openrouter' ? `${OPENROUTER_API}/chat/completions` : `${GEMINI_API}/openai/chat/completions`
+  return { url, headers, body, paramsKey: req.provider }
+}
 
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: req.signal })
-  if (!res.ok) throw providerError(res.status, await errorMessage(res), req.provider, res)
-  const result = req.onDelta && res.body && res.headers.get('content-type')?.includes('text/event-stream')
-    ? await readStream(res, req)
-    : parseJson(await res.json(), req)
-  return { ...result, dailyRequests: dailyRequests(res) }
+function customEndpoint(req: ChatRequest, connection: CustomProvider, stream: boolean): Endpoint {
+  const tools = connection.tools === 'native' ? req.tools : undefined
+  const messages = connection.tools === 'text'
+    ? textToolMessages(req.messages, req.tools, req.toolChoice !== 'none')
+    : req.messages
+  const body: Record<string, unknown> = { model: req.model, messages }
+  if (!(connection.preset === 'openai' && FIXED_TEMPERATURE.test(req.model))) body.temperature = 0.2
+  if (tools?.length) {
+    body.tools = tools
+    body.tool_choice = req.toolChoice ?? 'auto'
+  }
+  if (stream) {
+    body.stream = true
+    body.stream_options = { include_usage: true }
+  }
+  return { url: `${connection.baseUrl}/chat/completions`, headers: customHeaders(connection), body, paramsKey: `${connection.id}\u0000${connection.baseUrl}` }
+}
+
+export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
+  const connection = isCustomProvider(req.provider) ? connectionOf(req.provider, req.connection) : undefined
+  if (isCustomProvider(req.provider) && !connection) throw new AiProviderError(`${providerLabel(req.provider)} is not configured.`, undefined, 'auth')
+  const stream = !!req.onDelta && (connection?.stream ?? true)
+  const endpoint = connection ? customEndpoint(req, connection, stream) : builtinEndpoint(req, stream)
+  const rejected = rejectedParams.get(endpoint.paramsKey) ?? new Set<string>()
+  rejectedParams.set(endpoint.paramsKey, rejected)
+
+  for (;;) {
+    const body = { ...endpoint.body }
+    for (const param of rejected) delete body[param]
+    const init: RequestInit = { method: 'POST', headers: endpoint.headers, body: JSON.stringify(body), signal: req.signal }
+    const res = await providerFetch(req.provider, endpoint.url, init, connection)
+    if (!res.ok) {
+      const message = await errorMessage(res)
+      const param = rejectedParam(body, res.status, message)
+      if (param && !rejected.has(param)) {
+        rejected.add(param)
+        continue
+      }
+      throw providerError(res.status, message, req.provider, res, connection)
+    }
+    const result = stream && res.body && res.headers.get('content-type')?.includes('text/event-stream')
+      ? await readStream(res, req)
+      : parseJson(await res.json(), req)
+    return { ...result, dailyRequests: dailyRequests(res) }
+  }
+}
+
+const PROBE_TOOL: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'get_current_time',
+    description: 'Returns the current time. Call it whenever the user asks for the time.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+}
+
+export interface ConnectionTest {
+  models: AiModel[]
+  /** Model the test requests went to */
+  model: string
+  tools: ToolSupport
+  /** Shown to the user: what was found */
+  note: string
+}
+
+/**
+ * Checks an own connection: lists its models, then sends one short request with a tool to learn
+ * how the model takes tools. Costs one or two tiny requests.
+ */
+export async function testConnection(connection: CustomProvider, preferredModel = ''): Promise<ConnectionTest> {
+  let models: AiModel[] = []
+  let listNote = ''
+  try {
+    models = await listCustomModels(connection, customCatalog(connection))
+  } catch (e) {
+    if (!preferredModel || (e instanceof AiProviderError && e.kind === 'auth')) throw e
+    listNote = 'The server does not list its models; add model ids by hand in Options → AI → Models. '
+  }
+  const model = preferredModel || models.find(m => m.recommended)?.id || models[0]?.id
+  if (!model) throw new AiProviderError('The server lists no chat models. Enter a model id to test.', undefined, 'other')
+
+  const base = { provider: connection.id, key: connection.apiKey, model, connection: { ...connection, stream: false } }
+  const found = `${listNote}${models.length ? `${models.length} model${models.length === 1 ? '' : 's'} found. ` : ''}`
+  try {
+    const result = await chatCompletion({
+      ...base,
+      connection: { ...base.connection, tools: 'native' },
+      messages: [
+        { role: 'system', content: 'You are a test assistant. Use the tools you have.' },
+        { role: 'user', content: 'What time is it? Use the tool.' },
+      ],
+      tools: [PROBE_TOOL],
+      toolChoice: 'auto',
+    })
+    if (result.toolCalls.length || result.content.includes('<tool_call>') || result.content.includes('<function=')) {
+      return { models, model, tools: 'native', note: `${found}${model} answered and called a tool.` }
+    }
+    return { models, model, tools: 'text', note: `${found}${model} answered but ignored the tools field, so tools are sent as text.` }
+  } catch (e) {
+    if (!(e instanceof AiProviderError) || (e.status !== 400 && e.status !== 422)) throw e
+  }
+  await chatCompletion({
+    ...base,
+    connection: { ...base.connection, tools: 'none' },
+    messages: [{ role: 'user', content: 'Reply with the single word OK.' }],
+  })
+  return { models, model, tools: 'text', note: `${found}${model} answered; the server rejects the tools field, so tools are sent as text.` }
 }

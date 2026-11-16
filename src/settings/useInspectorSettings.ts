@@ -6,6 +6,7 @@ import { initMediaStore, initWallpapersStore, getMediaBlob, getWallpaperBlob, bl
 import { newPinnedHeaderId } from '@/utils/networkHeaderLinks'
 import type { NetworkPinnedHeaderItem, NetworkPinnedHeaderScope } from '@/types/inspector'
 import { normalizeNetworkMaxEntries } from '@/types/network'
+import { aiSettingsForExport, importAiSettings } from '@/features/ai/credentials'
 
 const SETTINGS_STORAGE_KEY = 'inspector-settings'
 const STANDALONE_STORAGE_KEY = '__vue_inspector_storage__'
@@ -595,12 +596,16 @@ export async function exportSettings(): Promise<string> {
             delete sf.dataUri
         }
     }
-    return JSON.stringify(data, null, 2)
+    const payload = { ...(data as InspectorSettings), ai: await aiSettingsForExport() }
+    return JSON.stringify(payload, null, 2)
 }
 
 export async function importSettings(json: string): Promise<void> {
     const imported = JSON.parse(json)
+    const ai = imported && typeof imported === 'object' ? imported.ai : undefined
+    if (imported && typeof imported === 'object') delete imported.ai
     Object.assign(state, mergeSettings(defaultInspectorSettings, imported))
     coerceNetworkCaptureModeForStandalone()
     await saveToStorage()
+    if (ai && typeof ai === 'object') await importAiSettings(ai)
 }

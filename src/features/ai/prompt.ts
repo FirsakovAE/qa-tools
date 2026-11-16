@@ -120,5 +120,8 @@ export function systemPrompt(access?: AiAccess, routing: AiRouting = 'lite'): st
   return parts.join('\n\n')
 }
 
+/** Added to the system prompt when the connection is set to "No tools": the rules above still describe them */
+export const NO_TOOLS_NOTE = '# No tools with this model\nTool calls are not available with this connection: the tools and skills named above cannot be called. Answer from the question, the attached items and the logs digest only. When the answer needs data they do not contain (full events, page code, the live page), say exactly what is missing and how the user can get it in Vue Inspector.'
+
 /** Sent with the last request only: tools are off, some models still write calls as text */
 export const FINAL_ROUND_NOTE = 'Tool calls are not available any more. Answer the question now in plain text from the data above, in the answer style. For a problem: what went wrong, the most likely cause, the evidence and the fix. For steps to reproduce: the steps from the clicks you collected, and the gaps. If something stays unknown, say what to check next.'

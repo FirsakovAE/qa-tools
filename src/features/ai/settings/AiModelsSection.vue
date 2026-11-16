@@ -9,8 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
-  activeKey,
   aiCredentials,
+  isConnected,
   isModelAdded,
   isModelBlocked,
   loadAiCredentials,
@@ -19,7 +19,8 @@ import {
 } from '../credentials'
 import { loadCatalog, loadModels, providerModels } from '../models'
 import { modelStatus, requestsToday, statusLabel } from '../modelStatus'
-import { PROVIDER_LABELS } from '../providers'
+import { providerLabel, providerOptions } from '../providers'
+import { isCustomProvider } from '../customProviders'
 import type { AiModel, AiProviderId } from '../types'
 import AiSettingsHead from './AiSettingsHead.vue'
 
@@ -29,7 +30,8 @@ const SEARCH_LIMIT = 60
 const modelsProvider = ref<AiProviderId>('openrouter')
 const { all, free, loading, error, reload, catalog, catalogLoading, catalogError } = providerModels(() => modelsProvider.value)
 
-const hasKey = computed(() => !!activeKey(modelsProvider.value))
+const hasKey = computed(() => isConnected(modelsProvider.value))
+const custom = computed(() => isCustomProvider(modelsProvider.value))
 const blockedCount = computed(() => all.value.filter(m => isModelBlocked(m.id, modelsProvider.value)).length)
 const recommendedIds = computed(() => new Set(free.value.filter(m => m.recommended).map(m => m.id)))
 
@@ -62,6 +64,20 @@ const results = computed(() => {
 })
 const shown = computed(() => results.value.slice(0, SEARCH_LIMIT))
 
+/** Own connections may serve models their `/models` does not list (agents, gateways): the id is added as typed */
+const manualId = computed(() => {
+  const id = query.value.trim()
+  if (!custom.value || !id || /\s/.test(id)) return ''
+  return catalog.value.some(m => m.id === id) || all.value.some(m => m.id === id) ? '' : id
+})
+
+function addManual() {
+  const id = manualId.value
+  if (!id) return
+  void setModelAdded(modelsProvider.value, { id, name: id }, true)
+  query.value = ''
+}
+
 function openPicker() {
   if (!hasKey.value) return
   open.value = true
@@ -80,13 +96,18 @@ function toggleAdded(model: AiModel, added: boolean) {
 watch(modelsProvider, id => {
   query.value = ''
   open.value = false
-  if (activeKey(id)) void loadModels(id)
+  if (isConnected(id)) void loadModels(id)
+})
+
+// A removed connection leaves the picker on a built-in provider
+watch(() => providerOptions().some(p => p.id === modelsProvider.value), known => {
+  if (!known) modelsProvider.value = aiCredentials.provider
 })
 
 onMounted(async () => {
   await loadAiCredentials()
   modelsProvider.value = aiCredentials.provider
-  if (activeKey(modelsProvider.value)) void loadModels(modelsProvider.value)
+  if (isConnected(modelsProvider.value)) void loadModels(modelsProvider.value)
 })
 </script>
 
@@ -98,11 +119,11 @@ onMounted(async () => {
 
     <div class="flex items-center gap-2">
       <Select v-model="modelsProvider">
-        <SelectTrigger class="h-8 w-[140px] text-sm">
+        <SelectTrigger class="h-8 w-[160px] text-sm">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem v-for="(label, id) in PROVIDER_LABELS" :key="id" :value="id">{{ label }}</SelectItem>
+          <SelectItem v-for="p in providerOptions()" :key="p.id" :value="p.id">{{ p.label }}</SelectItem>
         </SelectContent>
       </Select>
       <Button
@@ -126,11 +147,12 @@ onMounted(async () => {
       <Input
         v-model="query"
         class="h-8 pl-8 text-sm"
-        placeholder="Add or search model"
+        :placeholder="custom ? 'Add or search model, or type a model id' : 'Add or search model'"
         :disabled="!hasKey"
         @focus="openPicker"
         @click="openPicker"
         @keydown.esc="open = false"
+        @keydown.enter.prevent="addManual"
       />
       <div
         v-if="open"
@@ -138,12 +160,21 @@ onMounted(async () => {
       >
         <ScrollArea class="[&>[data-scroll-viewport]]:max-h-72" :horizontal="false">
           <div class="py-1">
+            <button
+              v-if="manualId"
+              type="button"
+              class="w-full px-3 py-1.5 text-left text-sm hover:bg-muted/50"
+              @click="addManual"
+            >
+              Add model id <span class="font-mono">{{ manualId }}</span>
+              <span class="block text-[11px] text-muted-foreground">For models the server does not list; Enter adds it too.</span>
+            </button>
             <p v-if="catalogLoading && !catalog.length" class="px-3 py-2 text-xs text-muted-foreground">Loading models...</p>
             <p v-else-if="catalogError" class="px-3 py-2 text-xs text-destructive_text">{{ catalogError }}</p>
             <p v-else-if="!shown.length" class="px-3 py-2 text-xs text-muted-foreground">No models found</p>
             <template v-else>
               <p class="px-3 pt-1 pb-1.5 text-[11px] text-muted-foreground">
-                {{ query.trim() ? 'All models of the provider, free and paid' : 'Free models. Type to search paid ones too.' }}
+                {{ custom ? 'Models the server lists' : query.trim() ? 'All models of the provider, free and paid' : 'Free models. Type to search paid ones too.' }}
               </p>
               <label
                 v-for="m in shown"
@@ -162,6 +193,7 @@ onMounted(async () => {
                 </span>
                 <span v-if="recommendedIds.has(m.id)" class="text-[10px] text-muted-foreground shrink-0">recommended</span>
                 <span
+                  v-if="!custom"
                   class="text-[10px] shrink-0 rounded px-1.5"
                   :class="m.paid ? 'bg-orange-500/15 text-orange-500' : 'bg-muted text-muted-foreground'"
                 >{{ m.paid ? 'paid' : 'free' }}</span>
@@ -176,11 +208,14 @@ onMounted(async () => {
     </div>
 
     <p v-if="!hasKey" class="text-xs text-muted-foreground">
-      Connect {{ PROVIDER_LABELS[modelsProvider] }} above to see its models.
+      Connect {{ providerLabel(modelsProvider) }} above to see its models.
     </p>
     <p v-else-if="loading && !all.length" class="text-xs text-muted-foreground">Loading models...</p>
-    <p v-else-if="error" class="text-sm text-destructive_text">{{ error }}</p>
-    <div v-else class="space-y-1">
+    <p v-if="hasKey && error" class="text-sm text-destructive_text">{{ error }}</p>
+    <p v-if="hasKey && custom && error && !all.length" class="text-xs text-muted-foreground">
+      Type a model id in the field above to use it without the model list.
+    </p>
+    <div v-if="hasKey && (!error || custom) && all.length" class="space-y-1">
       <div v-for="m in all" :key="m.id" class="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50">
         <Checkbox
           :id="`ai-model-${m.id}`"

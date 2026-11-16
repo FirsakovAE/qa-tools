@@ -10,15 +10,15 @@ title: AI-ассистент
 
 ## До первого вопроса
 
-Без ключа API вкладка пишет **Connect an AI provider** и предлагает **Connect in Options → AI**. В тексте назван бесплатный ключ Gemini или OpenRouter.
+Без ключа API вкладка пишет **Connect an AI provider** и предлагает **Connect in Options → AI**. В тексте назван бесплатный ключ Gemini или OpenRouter, а также свой провайдер: OpenAI, DeepSeek, локальная модель (Ollama, LM Studio) или любой OpenAI-совместимый агент. См. [Свои провайдеры](/ru/ai/settings#your-own-providers).
 
-С ключом, но без подтверждения, вкладка пишет **Data sent to OpenRouter** или **Data sent to Gemini**:
+С ключом, но без подтверждения, вкладка пишет **Data sent to OpenRouter** или **Data sent to Gemini**, а для своего провайдера — **Data sent to {имя} ({хост})**:
 
 * вопросы, выжимка записанных логов, данные событий и код страницы, который ассистент запросит;
 * токены, пароли, ключи API и другие значения из списка маскирования AI заменяются на `[MASKED]` до отправки; что ассистенту можно читать, задаётся в **Options → AI → Agent access**;
-* бесплатные модели могут сохранять запросы и использовать их для обучения.
+* OpenRouter и Gemini: бесплатные модели могут сохранять запросы и использовать их для обучения. Свой провайдер: что сервер локальный или что данные уходят на его хост по условиям этого сервиса; для удалённого адреса `http://` добавляется предупреждение, что ключ и данные идут без шифрования.
 
-**I understand** подтверждает. **Review access** открывает **Options → AI → Agent access**. До этого поле ввода недоступно и показывает **Connect a provider to ask questions**.
+У OpenRouter и Gemini одно общее подтверждение. Каждый свой провайдер спрашивает своё. **I understand** подтверждает. **Review access** открывает **Options → AI → Agent access**. До этого поле ввода недоступно и показывает **Connect a provider to ask questions**.
 
 После подтверждения пустой чат предлагает четыре примера вопросов. Клик по примеру отправляет его.
 
@@ -26,8 +26,8 @@ title: AI-ассистент
 
 | Элемент | Поведение |
 | ------- | --------- |
-| Провайдер | **OpenRouter** или **Gemini** |
-| Модель | Видна, когда ключ задан и список моделей загружен. Первой идёт **Auto**: *free models, switches on limits*. Дальше группы **Recommended** и **Added**. У модели может быть пометка **paid**, статус, **unstable** и сколько запросов к ней было сегодня |
+| Провайдер | **OpenRouter**, **Gemini**, затем свои провайдеры по имени |
+| Модель | Видна, когда ключ задан и список моделей загружен. Первой идёт **Auto**: *free models, switches on limits* (у своих провайдеров — *listed models, switches on errors*). Дальше группы **Recommended** и **Added**. У модели может быть пометка **paid**, статус, **unstable** и сколько запросов к ней было сегодня |
 | **Checking models...** | Пока список загружается |
 | **Models failed to load, retry** | Если список не загрузился. В подсказке — текст ошибки |
 | Обновление | Подсказка **Check which models are available** |
@@ -48,6 +48,9 @@ title: AI-ассистент
 
 * OpenRouter: **Today: N of M free OpenRouter requests (counted in this browser). Each assistant step is one request.** **M** — лимит, который сообщил провайдер, или **50**, если он его не сообщил. В режиме **Auto** второй фразой идёт, сколько моделей пропущено из-за квоты или недоступности.
 * Gemini: **Today: N Gemini requests. Daily limits depend on the model and your Google AI Studio project.** Та же фраза про **Auto** может идти следом.
+* Свой провайдер: **Today: N requests to {имя} (runs on your server).** для локального или **(limits and billing are set by your account there)**, затем **Each assistant step is one request.** Та же фраза про **Auto** может идти следом.
+
+Первый шаг ответа называет, куда ушли данные: для своего провайдера — **Sent to {имя} ({хост})**. При **Tools: No tools** вместо доступа к инструментам там написано **no tools with this connection**.
 
 **Auto** можно выбрать, только если в списке есть модель без пометки paid. Для ручной модели она должна быть выбрана, иначе поле вопрос не примет.
 

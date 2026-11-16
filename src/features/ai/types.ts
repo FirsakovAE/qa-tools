@@ -1,6 +1,35 @@
 import type { AiAttachment } from './attachments'
 
-export type AiProviderId = 'openrouter' | 'gemini'
+export type BuiltinProviderId = 'openrouter' | 'gemini'
+/** A connection the user added: any server with an OpenAI-compatible chat completions API */
+export type CustomProviderId = `custom:${string}`
+export type AiProviderId = BuiltinProviderId | CustomProviderId
+
+export type CustomPreset = 'openai' | 'deepseek' | 'ollama' | 'lmstudio' | 'compatible'
+/**
+ * native: tools go in the `tools` field; text: tools are described in the system prompt and the model
+ * writes `<tool_call>` blocks (servers that reject `tools`); none: the model answers from the digest only
+ */
+export type ToolSupport = 'native' | 'text' | 'none'
+/** Sets the request budget: small ≈ 8K tokens, medium ≈ 32K, large 128K and more */
+export type ContextSize = 'small' | 'medium' | 'large'
+
+export interface CustomProvider {
+  id: CustomProviderId
+  preset: CustomPreset
+  label: string
+  /** Up to and including the API version, without the trailing slash: `https://api.openai.com/v1` */
+  baseUrl: string
+  /** Empty for servers without authorization (local ones) */
+  apiKey: string
+  /** Extra request headers (gateways, proxies, own agents); stay in this browser like the key */
+  headers: Record<string, string>
+  tools: ToolSupport
+  stream: boolean
+  context: ContextSize
+  /** The user accepted that logs and page sources are sent to this server */
+  consent: boolean
+}
 
 export interface AiModel {
   id: string
