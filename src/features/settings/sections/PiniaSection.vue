@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from '@/i18n'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { PiniaFavoriteItem } from '@/types/inspector'
 import { TableCell } from '@/components/ui/table'
@@ -19,14 +20,16 @@ const emit = defineEmits<{
   (e: 'edit', item: { type: 'pinia-favorite'; id: string }): void
 }>()
 
+const { t } = useI18n()
+
 // -------------------- SEARCH SETTINGS --------------------
 type SearchKey = 'byName' | 'byKey' | 'byValue'
 
-const searchItems: Array<{ key: SearchKey; label: string }> = [
-  { key: 'byName', label: 'Search by store name' },
-  { key: 'byKey', label: 'Search by key' },
-  { key: 'byValue', label: 'Search by value' },
-]
+const searchItems = computed(() => [
+  { key: 'byName' as const, label: t('search.byStore') },
+  { key: 'byKey' as const, label: t('search.byKey') },
+  { key: 'byValue' as const, label: t('search.byValue') },
+])
 
 function toggleSearch(key: SearchKey) {
   props.settings.piniaSearch[key] = !props.settings.piniaSearch[key]
@@ -38,23 +41,23 @@ const addStoreError = ref<string | null>(null)
 
 const piniaFavoritesList = computed<PiniaFavoriteItem[]>(() => props.settings.piniaFavorites || [])
 
-const favoritesColumns: TableColumn[] = [
-  { header: 'Store Name' },
-  { header: 'Added', width: '80px', class: 'text-center' },
-]
+const favoritesColumns = computed<TableColumn[]>(() => [
+  { header: t('stores.storeName') },
+  { header: t('general.added'), width: '80px', class: 'text-center' },
+])
 
 function addToFavoritesByName() {
   const value = newStoreName.value.trim()
   addStoreError.value = null
 
   if (!value) {
-    addStoreError.value = 'Name cannot be empty'
+    addStoreError.value = t('stores.nameEmpty')
     return
   }
 
   const exists = props.settings.piniaFavorites.some(f => f.id === value || f.name === value)
   if (exists) {
-    addStoreError.value = 'This store is already in favorites'
+    addStoreError.value = t('stores.alreadyFav')
     return
   }
 
@@ -72,8 +75,8 @@ function removeFromFavorites(id: string) {
 
 function getPiniaFavoriteActions(fav: PiniaFavoriteItem): MenuAction[] {
   return [
-    { label: 'Edit', icon: Pencil, onClick: () => emit('edit', { type: 'pinia-favorite', id: fav.id }) },
-    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructiveText: true },
+    { label: t('general.edit'), icon: Pencil, onClick: () => emit('edit', { type: 'pinia-favorite', id: fav.id }) },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeFromFavorites(fav.id), destructiveText: true },
   ]
 }
 </script>
@@ -89,15 +92,15 @@ function getPiniaFavoriteActions(fav: PiniaFavoriteItem): MenuAction[] {
 
     <SettingsTableSection
       section-id="pinia-favorites-section"
-      title="Favorite Stores"
+      :title="t('stores.favorites')"
       :columns="favoritesColumns"
       :rows="piniaFavoritesList"
       :row-key="(r) => (r as PiniaFavoriteItem).id"
       :get-actions="(row) => getPiniaFavoriteActions(row as PiniaFavoriteItem)"
-      empty-message="No favorite stores"
+      :empty-message="t('stores.noFavorites')"
       :selected-item-id="selectedItemId"
       show-add
-      add-placeholder="Store name (supports wildcards: *Store*)"
+      :add-placeholder="t('stores.placeholder')"
       v-model:add-model-value="newStoreName"
       :add-error="addStoreError"
       @add="addToFavoritesByName"

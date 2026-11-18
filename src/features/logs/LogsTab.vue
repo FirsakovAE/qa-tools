@@ -15,7 +15,7 @@ import { useInspectorSettingsSync } from '@/settings/useInspectorSettings'
 import { useCurlCopy } from '@/composables/useCurlCopy'
 import { useRowSelection } from '@/composables/useRowSelection'
 import type { LogEvent, LogKind } from '@/types/logs'
-import { LOG_KINDS, LOG_KIND_META } from '@/types/logs'
+import { LOG_KINDS } from '@/types/logs'
 import { toast } from '@/components/ui/Toaster'
 import LogsTable from './LogsTable.vue'
 import LogDetails from './LogDetails.vue'
@@ -26,12 +26,15 @@ import { exportLogEvent, exportLogs } from './exportLogs'
 import { networkEntryOf, pairedNetworkEvent } from './view'
 import { canCompressReport } from './report/compressSupport'
 import { pendingLogsEvent } from './logsNavigation'
+import { useI18n } from '@/i18n'
+import { logKindLabel } from './labels'
 
 const emit = defineEmits<{
   (e: 'navigateToOptions', anchor: string): void
 }>()
 
 const settings = useInspectorSettingsSync()
+const { t } = useI18n()
 
 const {
   events,
@@ -51,12 +54,17 @@ const { curlCopied, copyCurl } = useCurlCopy(() => settings.value ?? undefined)
 // Filters
 // ============================================================================
 
-const kindByLabel = Object.fromEntries(LOG_KINDS.map(k => [LOG_KIND_META[k].label, k])) as Record<string, LogKind>
-const typeOptions = LOG_KINDS.map(k => LOG_KIND_META[k].label)
-// All types are shown by default; deselecting every type shows nothing
-const selectedTypes = ref<string[]>([...typeOptions])
+const hiddenKinds = ref<Set<LogKind>>(new Set())
+const typeOptions = computed(() => LOG_KINDS.map(k => logKindLabel(k)))
+const selectedTypes = computed({
+  get: () => LOG_KINDS.filter(k => !hiddenKinds.value.has(k)).map(k => logKindLabel(k)),
+  set(labels: string[]) {
+    const selected = new Set(labels)
+    hiddenKinds.value = new Set(LOG_KINDS.filter(k => !selected.has(logKindLabel(k))))
+  },
+})
 
-const selectedKinds = computed(() => new Set(selectedTypes.value.map(l => kindByLabel[l])))
+const selectedKinds = computed(() => new Set(LOG_KINDS.filter(k => !hiddenKinds.value.has(k))))
 const allTypesSelected = computed(() => LOG_KINDS.every(k => selectedKinds.value.has(k)))
 
 const kindFiltered = computed(() => {
@@ -147,9 +155,9 @@ function pairOf(event: LogEvent | null): LogEvent | null {
 const relatedEvent = computed(() => pairOf(selectedEvent.value))
 
 const emptyMessage = computed(() => {
-  if (selectedTypes.value.length === 0) return 'No event types selected — enable them in the Type filter'
-  if (isFiltered.value && events.value.length > 0) return 'No events match the filters'
-  return 'No events logged yet'
+  if (selectedTypes.value.length === 0) return t('log.emptyTypes')
+  if (isFiltered.value && events.value.length > 0) return t('log.emptyFilter')
+  return t('log.empty')
 })
 
 watch(events, list => {
@@ -163,7 +171,7 @@ watch(pendingLogsEvent, id => {
   if (!id) return
   pendingLogsEvent.value = null
   if (!getEvent(id)) {
-    toast.error('The event is no longer in the logs')
+    toast.error(t('log.gone'))
     return
   }
   selectedId.value = id
@@ -173,7 +181,7 @@ watch(pendingLogsEvent, id => {
     return
   }
   searchTerm.value = ''
-  selectedTypes.value = [...typeOptions]
+  selectedTypes.value = [...typeOptions.value]
   // The search term is applied after its debounce
   const stop = watch(filteredEvents, () => {
     if (!shown()) return
@@ -190,7 +198,7 @@ function handleCopyCurl(event: LogEvent) {
   // Both events share the entry, so a response event also has its request data
   const entry = networkEntryOf(event, source.value)
   if (!entry) {
-    toast.error('The network entry of this event is no longer in the logs')
+    toast.error(t('log.networkGone'))
     return
   }
   copyCurl(entry)
@@ -213,12 +221,12 @@ function handleClear() {
     <!-- Toolbar -->
     <div class="shrink-0 flex flex-wrap items-center gap-2 p-2 border-b toolbar-container" :class="{ 'toolbar-hide-on-details': selectedEvent }">
       <div class="flex items-center gap-2 toolbar-left-block">
-        <h3 class="text-lg font-semibold shrink-0 toolbar-title">Logs</h3>
+        <h3 class="text-lg font-semibold shrink-0 toolbar-title">{{ t('log.title') }}</h3>
 
         <div class="flex-1 min-w-[155px] max-w-xs relative">
           <Input
             v-model="searchTerm"
-            placeholder="Search events..."
+            :placeholder="t('log.search')"
             class="pl-8 h-8"
           />
           <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
@@ -227,10 +235,10 @@ function handleClear() {
         <div class="flex items-center gap-2 toolbar-row1-right">
           <FacetedFilter
             v-model="selectedTypes"
-            title="Type"
+            :title="t('log.type')"
             :options="typeOptions"
             :max-badges="1"
-            all-label="All"
+            :all-label="t('common.all')"
           >
             <template #footer>
               <div class="flex items-center gap-2">
@@ -241,7 +249,7 @@ function handleClear() {
                   :disabled="allTypesSelected"
                   @click="selectedTypes = [...typeOptions]"
                 >
-                  Select all
+                  {{ t('common.selectAll') }}
                 </Button>
                 <Button
                   variant="outline"
@@ -250,7 +258,7 @@ function handleClear() {
                   :disabled="selectedTypes.length === 0"
                   @click="selectedTypes = []"
                 >
-                  Clear
+                  {{ t('common.clear') }}
                 </Button>
               </div>
             </template>
@@ -279,11 +287,11 @@ function handleClear() {
           @click="emit('navigateToOptions', 'logs-ignore-section')"
         >
           <EyeOff class="h-3 w-3" />
-          <span class="ml-1">{{ ignoreRules.length }}</span><span class="badge-label">ignored</span>
+          <span class="ml-1">{{ ignoreRules.length }}</span><span class="badge-label">{{ t('log.ignored') }}</span>
         </Badge>
 
         <Badge v-if="paused" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
-          Paused
+          {{ t('common.paused') }}
         </Badge>
 
         <TooltipProvider>
@@ -301,7 +309,7 @@ function handleClear() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {{ paused ? 'Resume logging' : 'Pause logging' }}
+              {{ paused ? t('log.resume') : t('log.pause') }}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -320,7 +328,7 @@ function handleClear() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Clear all
+              {{ t('common.clearAll') }}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -366,7 +374,7 @@ function handleClear() {
           v-else
           class="h-full flex items-center justify-center text-muted-foreground"
         >
-          Select an event to see details
+          {{ t('log.select') }}
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { Loader2, ShieldQuestion } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import AiThought from './AiThought.vue'
@@ -8,19 +9,24 @@ import { useAiChat } from './useAiChat'
 import { renderMarkdown } from './markdown'
 import { isToolStep } from './format'
 
-const GROUP_LABELS = { logs: 'logs', sources: 'page code', page: 'the live page' } as const
-
 defineEmits<{ (e: 'click', event: MouseEvent): void }>()
 
+const { t } = useI18n()
 const { liveSteps, liveText, liveReasoning, pendingApproval, answerApproval } = useAiChat()
 
 const html = computed(() => (liveText.value ? renderMarkdown(liveText.value) : ''))
 const status = computed(() => {
-  if (pendingApproval.value) return 'Waiting for your permission...'
-  if (liveText.value) return 'Answering...'
-  if (liveReasoning.value) return 'Thinking...'
-  return liveSteps.value.some(isToolStep) ? 'Investigating...' : 'Waiting for the model...'
+  if (pendingApproval.value) return t('ai.waitPermission')
+  if (liveText.value) return t('ai.answering')
+  if (liveReasoning.value) return t('ai.thinking')
+  return liveSteps.value.some(isToolStep) ? t('ai.investigating') : t('ai.waitingModel')
 })
+
+function permissionPrompt(group: 'logs' | 'sources' | 'page') {
+  if (group === 'logs') return t('ai.allowLogs')
+  if (group === 'sources') return t('ai.allowCode')
+  return t('ai.allowPage')
+}
 </script>
 
 <template>
@@ -34,15 +40,15 @@ const status = computed(() => {
       <div v-if="pendingApproval" class="rounded-md border border-foreground/40 bg-foreground/5 p-2 space-y-2 text-foreground">
         <div class="flex items-center gap-1.5 font-medium">
           <ShieldQuestion class="h-3.5 w-3.5" />
-          Allow the assistant to read {{ GROUP_LABELS[pendingApproval.group] }}?
+          {{ permissionPrompt(pendingApproval.group) }}
         </div>
         <div class="font-mono break-all text-muted-foreground">
           <span class="text-foreground/70">{{ pendingApproval.step.tool }}</span> {{ pendingApproval.step.summary }}
         </div>
         <div class="flex flex-wrap gap-1.5">
-          <Button size="sm" class="h-7 text-xs" @click="answerApproval('once')">Allow</Button>
-          <Button size="sm" variant="outline" class="h-7 text-xs" @click="answerApproval('chat')">Allow in this chat</Button>
-          <Button size="sm" variant="outline" class="h-7 text-xs" @click="answerApproval('deny')">Deny</Button>
+          <Button size="sm" class="h-7 text-xs" @click="answerApproval('once')">{{ t('ai.allow') }}</Button>
+          <Button size="sm" variant="outline" class="h-7 text-xs" @click="answerApproval('chat')">{{ t('ai.allowChat') }}</Button>
+          <Button size="sm" variant="outline" class="h-7 text-xs" @click="answerApproval('deny')">{{ t('ai.deny') }}</Button>
         </div>
       </div>
       <AiThought v-if="liveReasoning" :text="liveReasoning" />

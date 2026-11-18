@@ -5,13 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### AI
-
-* Own AI providers in **Options → AI → Connection → Your own providers**: OpenAI, DeepSeek, Ollama, LM Studio or any OpenAI-compatible server or agent, with an optional API key, extra headers, tool mode (native, as text, none), context size, streaming and **Test connection**.
-
-
 ## [1.0.1] - 2026-01-23
 ### Added
 ping
@@ -441,101 +434,81 @@ Saving removed keys in **Edit** mode is fixed.
 
 ### AI assistant
 
-* New **AI** tab: a chat that diagnoses the inspected site. Describe the problem, and the assistant explains what went wrong, the likely cause, the evidence (event ids and code locations) and how to fix it.
-* The assistant starts from a short logs digest. When that is not enough, it reads full events (bodies, headers, store states, stacks) and searches the logs. When the logs do not explain the cause, it reads the page code.
-* Page code is read from the scripts the page loaded. When the site ships source maps, stack frames are mapped to the original files (Vue components, stores) and those files can be listed, read and searched.
-* The assistant explains UI conditions: when a button is enabled or blocked, when an element is shown, when a toast or an error message appears, also when the logs recorded nothing. It inspects the live page: why an element is disabled, hidden or covered, the Vue component that renders it, the current props and state, the code of its event handlers and of the methods they call, and the current state of Pinia / Vuex stores. It then follows the conditions in the code to their data and lists each condition with its code location, its current value and whether it holds.
-* **Live page** in **Agent access** controls these tools: **Ask each time** by default. With app data values off, the assistant gets only names and types of component and store values.
-* Later questions in a chat send only the logs events captured since the last digest, or no digest when nothing new was captured. A full digest is sent again after the logs are cleared or trimmed, or when the masking settings change.
-* The assistant traces where a component prop comes from: the parent component that sets it with the expression from its code, or the place in the parent state or a store where the value lies; wrappers that only pass props on are skipped.
-* Code search lists every match in minified scripts, not only the first one in a line, and the assistant reads the code around a found text without a line and column.
-* Code search and code reading skip CSS selectors with the same name and list the same code in several bundles once; a name matches in any spelling (`or-tooltip` finds `ORTooltip`). The default code window is smaller, which cuts the size of every following request.
-* Props a parent did not pass are reported as default values, not traced to unrelated parent state.
-* Long lists and deep objects in component and store state are cut with the path to read them; the assistant reads only that part with a path, pages of a list and a text filter instead of getting `[Object]`.
-* The assistant does not repeat searches and code reads it already made, and finishes once a cause explained by the code is found, marking an unverified cause as a hypothesis.
-* The assistant has up to 10 tool rounds per question.
-* An empty **Reasoning** step is no longer shown; some models return empty reasoning even with reasoning turned off.
-* When the assistant reads an error, it gets the code at the first app frames of the stack in the same step. Library and extension frames are skipped. This saves a request per frame on the free tier.
-* The answer appears as the model writes it. A stopped answer keeps the text written so far.
-* The message field grows with the text up to about five lines. The send / stop button sits inside the field.
-* Reasoning is collapsed to one line: the current thought while the model thinks, the first line afterwards. Click it to expand the full text.
-* The chat uses the scrollbars of the inspector theme.
-* The reasoning of thinking models and the notes the assistant writes between tool calls are shown live and kept in the steps of the answer. They are not sent back to the model, so they do not cost tokens in later requests. `<think>` blocks that some models put into the text are moved to the reasoning as well.
-* Tool calls that a model writes into the text (`<tool_call>` and `<function=…>` markup) are run as tool calls. Such markup never shows up in the answer.
-* Near the tool round limit the assistant is told how many rounds are left, and the last request asks for a text answer from the data collected. A repeated identical tool call is not run again: the assistant is pointed to the earlier result, so the same data is not sent twice.
-* Reading minified page code is cheaper. Code search shows the line and column of a match in a minified line, with the code around it. Reading a minified script as a range, or at a line without a column, returns a short hint instead of thousands of characters of minified code. Search results also say when the page has no source maps, so the assistant does not look for original files.
-* The assistant explains common harmless browser notices, such as `ResizeObserver loop completed with undelivered notifications` and `Script error.`, without spending requests on searching the code.
-* Under each answer the tab shows what it cost: requests to the provider, prompt and completion tokens as the provider reports them (with the cached part), and time. The numbers are also shown for a stopped or failed answer.
-* The assistant also answers questions about Vue Inspector itself.
-* Options → AI → Connection takes a free API key of **Gemini** (from Google AI Studio) or **OpenRouter**. The extension and the bookmarklet work the same way. The quick-switch list offers the recommended models and the ones you added in Options → AI → Models.
-* **Groq** is no longer a provider, and the settings that existed only for it are gone. A saved Groq choice opens as Gemini.
-* Models whose providers are down are hidden, and models that fail often are marked **unstable**. The check uses the public OpenRouter status and does not spend your free requests. The refresh button next to the model list repeats it.
-* The model list starts with **Auto** (the default). Auto picks an available model and moves to the next one when a model runs out of quota, is no longer available for the key, or is overloaded; the steps of the answer say which model was skipped and why. The answer shows which model gave it.
-* Auto remembers these problems across sessions: a model out of quota is skipped until its quota resets (the time the provider names, e.g. "retry in 14h57m"), a model the key cannot use is skipped until the key changes, an overloaded model for a few minutes.
-* A hand-picked model is always used as chosen, without fallbacks. When it fails, the error says why and offers **Switch to Auto and try again**. The provider's own message is available under **Provider message**.
-* When the provider asks to wait a few seconds (a per-minute limit), the assistant waits and repeats the request with the same model.
-* The line under the message field shows today's requests: of the 50 (or 1000) free OpenRouter requests of the key, and how many models Auto skips. The model list and Options → AI → Models show the state of each model and its requests today.
-* The daily limit of free OpenRouter requests applies to the whole account, so the assistant reports it instead of switching models.
-* Keys are stored in the browser apart from the settings and are not included in settings export.
-* Before the first question the tab shows what is sent to the provider. Values hidden by **Data masking** are never sent.
-* **Data masking for AI** in Options → AI: an own list of key fragments (passwords, tokens, API keys, `authorization`, `x-api-key`, cookies, sessions, CSRF, signatures and more by default) plus token-like values (JWT, Bearer / Basic credentials, card numbers). It applies to everything the assistant sends: the logs digest, event data, headers, bodies, WebSocket messages and `name: "value"` pairs in the page code. It works on top of the Logs masking and does not change the Logs view or exports.
-* **Agent access** in Options → AI sets what the assistant may use: the logs digest on or off; logs tools and page code tools **Allowed**, **Ask each time** or **Off**; and whether headers, bodies and WebSocket messages, and values of store state, props, emits and actions are shared. Turned-off tools are not offered to the model at all, and the model is told what is hidden.
-* With **Ask each time** the AI tab shows the call the assistant wants to make and waits for **Allow**, **Allow in this chat** or **Deny**. A declined call is marked in the steps of the answer.
-* Every answer starts with a **Context** step: what was sent to the provider (the digest and its size), the access settings in force and how many values were masked.
-* Logs search reads whole request and response bodies, headers, URL params, WebSocket messages and app data, and searches by property: by name (`dealId`, a path ending such as `data.items.id`, or a part of the name) and by value, exact or partial. Each match shows the path and the value, many matches are grouped by endpoint, and the results are paged. Matching values inside one event are listed in full; events stay paged.
-* A long request or response body, or long event data, that the assistant got cut is read on page by page. When the answer depends on the cut part (a full list, a count, a value that is not in the shown part), the assistant reads the rest instead of asking for it. For a body cut when it was logged, it says so and points to **Limit event size** in **Options → Logs**.
-* Questions such as "list the filters with `isVisibleByDefault: true`" or "how many rows have no price" are answered in one step: the assistant filters the items of arrays in request / response bodies, WebSocket messages and event data by property conditions (equal, contains, not equal, greater / less, has / lacks a property) and lists every match with its index, instead of reading the array item by item. A body cut when it was logged is searched as far as it was stored.
-* Headers sent to the assistant are the ones the page itself can see, the same set as in Bookmark mode. CORS-only headers are not sent.
-* **Data masking for AI** also hides `passcode`, including a header such as `x-passcode`. The Logs view and its exports are unchanged.
-* The action list under an answer is collapsed to the latest action and moves on as the next tool call arrives. The expand icon, the same one as for reasoning, opens the full list.
-* **Your style instructions** accept up to 2000 characters.
-* The assistant is not interrupted to force another tool call. A step that used to insert “Check / Answer without evidence, verifying with tools” no longer appears. When to call a tool stays in the prompt.
-* Tables in an answer keep a `|` that sits inside inline code, so that cell stays one column.
-* The **recommended** mark is removed from the Gemini provider. Recommended models and the **Recommended** group in the model list stay.
-* Opening the AI tab scrolls the chat to the latest message.
-* **Ask AI** in the row menus of **Network**, **Props**, **Pinia** and **Logs**, and in the details header menus of **Network** and **Logs**, attaches the item to a question: a request, the current props of a component, the current state and getters of a store, or a logs event. The **AI** tab opens with a chip above the message field that shows the short name of the item; **×** removes it. Several items can be attached. Type a question, or send the chips without one.
-* The assistant gets the attached item in full, masked by **Data masking for AI** and **Agent access** and cut like a tool result. A logs event and a request that is in the logs come with the event id `#N`; a store comes with the id of its latest logged change. The **Context** step lists the attached items, and the chips stay on the question in the chat and on **Try again**.
+A new **AI** tab, after **Logs**. Describe the problem: the assistant explains what went wrong, the likely cause, the evidence and how to fix it. The same chat works in the extension and in **Bookmark** mode.
+
+**What you can ask**
+
+* Why a request failed, where an error comes from, or what changed after a navigation. The assistant starts from the captured logs and reads the page code when the logs are not enough. With source maps, the answer points at the original Vue file.
+* Why a button is disabled, an element is hidden or a message appears — also when the logs recorded nothing. It checks the live page: the component, the current props and store state, and the conditions in the code.
+* Where a value sits in the logged data: find it, list the matching rows or count them (for example filters that are visible by default, or rows with no price).
+* How to reproduce the session: the clicks, in order, as a scenario.
+* How Vue Inspector itself works: where a setting is and what a feature does.
+
+**Ask AI** on a row in **Network**, **Props**, **Pinia** or **Logs** attaches that item to the question. Several items can be attached. An event id in the answer opens that event on **Logs**.
+
+The answer appears as it is written. Stopping keeps the text written so far; reasoning stays on one line until you expand it. Under the answer: which model answered, how many requests it took, tokens and time. A follow-up sends only the events captured since the last answer.
+
+**Connection and models**
+
+**Options → AI → Connection** takes a free API key of **Gemini** (Google AI Studio) or **OpenRouter**. **Your own providers** adds OpenAI, DeepSeek, Ollama, LM Studio or any OpenAI-compatible server or agent, with an optional API key. The key stays in this browser: it is not part of settings export, and **Reset** does not remove it.
+
+The model list starts with **Auto**. Auto picks an available model and moves to the next when one runs out of quota, cannot be used with the key, or is overloaded, and it remembers that until the quota resets, the key changes, or the model is free again. A model you pick yourself is always the one used. When it fails, the answer says why and offers **Switch to Auto and try again**. The line under the message field shows today's requests and how many models Auto is skipping.
+
+**Options → AI → Models** lists the recommended models and the ones you add, free and paid. Uncheck a model to hide it from the tab and from **Auto**. Each row shows today's requests and, when it applies, that the quota is used up, the key cannot use it, or it is busy. Models whose providers are down are hidden; models that fail often are marked **unstable**.
+
+**How answers are written**
+
+**Options → AI → Personalization**:
+
+* **Base style and tone** — **Default**, **Professional**, **Friendly**, **Direct** or **Mentor**.
+* **Answer detail** — **Brief** (cause, evidence and the fix), **Normal**, or **Detailed** (the chain of events, ruled-out causes, steps to reproduce).
+* **Instruction routing** — **Full** sends every task instruction with each request, for strong models. **Lite** sends the core rules and loads the instructions of the current task.
+* **Your style instructions** — your own text, up to 2000 characters. For example: answer in Russian, end with a checklist for the bug report.
+
+**What may be sent**
+
+Before the first question the tab shows what goes to the provider. **I understand** confirms it. **Review access** opens **Agent access**.
+
+**Options → AI → Agent access** sets what the assistant may read and send:
+
+* **Attach the logs digest** — a short summary of errors and the timeline. On by default; off, the question goes out without it.
+* **Logs**, **Page code** and **Live page** — each is **Allowed**, **Ask each time** or **Off**. **Off** means that group is not offered. **Ask each time** (the default) shows the call and waits for **Allow**, **Allow in this chat** or **Deny**.
+* **Request and response headers**, **bodies and WebSocket messages**, and **values of store state, props, emits and actions** — each **Allowed** or **Off**. Off, names and types stay, values do not. Headers are the ones the page itself can see.
+
+The first step of an answer says what was sent, which access is in force and how many values were masked.
+
+**Options → AI → Data masking for AI** is a separate list from **Logs**. Passwords, tokens, API keys, cookies, sessions and token-like values (JWT, Bearer, card numbers) are sent as `[MASKED]`, including values found in page code. The **Logs** view and its exports stay as they are.
+
+---
 
 ### Logs
 
-* **Export for AI**, next to **Export Logs**, downloads a compact Markdown digest of the selected events, or of every event that matches the filters. It is many times smaller than the full report.
-* The digest begins with a built-in guide for the AI assistant. The guide explains how to read the file, tells the assistant to start from the problems, and to ask for specific events by id instead of the whole report.
-* Next comes a **Summary**: event counts by type, errors, failed requests and WebSocket connections, and the slowest requests.
-* **Problems** groups identical failures and shows their evidence once: the status, error, stack, a shortened response body and the WebSocket close code. An error that came without a stack says so.
-* The **Timeline** has one line per event, with the changed keys of Pinia and props changes. Repeated lines are folded.
-* An event id `#N` opens the same event in the HTML report with the link `#all/N`.
-* **Click** records a primary click on the page. The event keeps an **XPath** of the field or button (its `id` when that id is unique and stable, otherwise an absolute path) and the **Text** inside that control. A click on an icon inside a button is recorded as the button, and a click on a label as the linked field. The value of a password or hidden field is not stored. Clicks on Vue Inspector itself are skipped.
-* **Clicks** is its own switch in **Options → Logs → Logged events**, on by default.
-* Checking a request or a response for export also checks its pair, and clearing one clears the other. WebSocket events are not paired this way. The menu entry is **Export event**.
-* The **ignored** badge opens **Options → Logs** at the ignore list, instead of a menu.
+**Export for AI**, next to **Export Logs**, downloads a short Markdown digest of the selected events, or of every event that matches the filters. It is meant to be handed to an assistant and is many times smaller than the full report: how to read the file, a **Summary**, grouped **Problems** and a **Timeline**. An event id `#N` opens the same event in the HTML report.
+
+**Click** records a primary click: the control and the text on it. A click on an icon inside a button is recorded as the button. Clicks on Vue Inspector itself are skipped, and the value of a password or hidden field is not stored. **Clicks** is its own switch in **Options → Logs**, on by default.
+
+A request and its response are exported together. The **ignored** badge opens **Options → Logs** at the ignore list.
 
 ### Network
 
-* The row menu of a WebSocket row is no longer disabled: it has **Ask AI**.
-* The **bp** and **mock** badges open **Options → Network** at the breakpoints or mocks table, instead of a menu. A pulsing pending breakpoint still selects the first pending row.
-* In WebSocket **Messages** the composer sits at the bottom, and **Received** and **Sent** stay to the right of the field. Frames run in time order, newest at the bottom, in the style of the AI chat: sent on the right, received on the left. Opening **Messages**, and each new frame, scrolls to the end.
+* A WebSocket row can be sent to the assistant with **Ask AI**.
+* The **bp** and **mock** badges open **Options → Network** at the breakpoints or mocks. A pulsing pending breakpoint still selects the first pending row.
+* WebSocket **Messages** read as a chat: the composer at the bottom, sent frames on the right, received on the left, newest at the bottom.
 
 ### HTML report
 
-* **Export for AI** downloads the same Markdown digest as an `.md` file.
-* **Export JSON** saves the full report data, also from a compressed report.
-* On a narrow screen the header buttons are shortened to **Export AI** and **JSON**.
-* The **Failed requests / WS** card also counts WebSocket connections that closed with an error code, closed without automatic reconnect, or failed.
-* The **Page** section lists **Click** next to **Navigation** and **JS error**.
-
-### Options
-
-* The **Support Vue Inspector** title and the line **Fund features and experiments.** line up with the text of the card.
+* **Export for AI** downloads the same digest. **Export JSON** saves the full report data, including from a compressed report. On a narrow screen the buttons are **Export AI** and **JSON**.
+* **Failed requests / WS** also counts WebSocket connections that closed with an error, closed without reconnecting, or failed.
+* **Page** lists **Click** next to **Navigation** and **JS error**.
 
 ### Options → Logs
 
-* **Export → Compress report**, on by default, stores the report data as gzip encoded in base64. The file becomes several times smaller and is unpacked when it opens.
-* In a browser without gzip streams the option is disabled and reports are exported uncompressed.
-* A compressed report needs Chrome / Edge 80+, Firefox 113+ or Safari 16.4+, and its data cannot be read in the file source. Use **Export JSON** or **Export for AI** in the report instead.
+* **Compress report**, on by default, stores the report as gzip. The file is several times smaller and opens the same way. It needs Chrome / Edge 80+, Firefox 113+ or Safari 16.4+. In a browser without gzip the option is off and the report stays uncompressed.
+* **Requests** and **WebSocket** are separate switches. WebSocket can be turned off while HTTP requests stay on.
 * The **Ignore list** is shown again, above **Data masking**.
-* **Logged events** splits capture into **Requests** and **WebSocket**. WebSocket can be turned off while HTTP requests stay on. A saved setting that had one Network switch applies to both until one of them is changed.
 
 ### Fixes
 
-* Fixed the false **Body truncated** notice on complete responses with non-ASCII text, such as Cyrillic. The body length in characters was compared with `Content-Length` in bytes. The notice now appears only when the body was actually cut.
-* Reports exported before this fix no longer show the false notice either.
+* Fixed the false **Body truncated** notice on complete responses with non-ASCII text, such as Cyrillic. Reports exported before this fix no longer show that notice either.
+* Removed **Search by Label** in **Props**. The checkbox did not filter the list.
+* The **Support Vue Inspector** title lines up with the text of the card.

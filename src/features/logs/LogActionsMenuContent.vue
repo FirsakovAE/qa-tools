@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/DropdownMenu'
 import type { LogEvent } from '@/types/logs'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{
   variant: 'context' | 'dropdown'
@@ -20,6 +21,8 @@ const props = defineProps<{
   /** Label of the paired request/response event, when it exists */
   relatedLabel?: string
 }>()
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'export', event: LogEvent): void
@@ -54,17 +57,17 @@ function handleClick(e: Event, action: () => void) {
 <template>
   <component
     :is="Content"
-    class="w-52"
+    class="w-max whitespace-nowrap"
     v-bind="variant === 'dropdown' ? { align: 'end' } : {}"
   >
     <component :is="Item" @click="handleClick($event, () => askAiAboutLog(event))">
       <Sparkles class="h-4 w-4 mr-2" />
-      Ask AI
+      {{ t('network.askAi') }}
     </component>
     <component :is="Separator" />
     <component :is="Item" @click="handleClick($event, () => emit('export', event))">
       <Upload class="h-4 w-4 mr-2" />
-      Export event
+      {{ t('log.exportEvent') }}
     </component>
     <component
       :is="Item"
@@ -72,7 +75,7 @@ function handleClick(e: Event, action: () => void) {
       @click="handleClick($event, () => emit('copyCurl', event))"
     >
       <Terminal class="h-4 w-4 mr-2" />
-      Copy cURL
+      {{ t('network.copyCurl') }}
     </component>
     <component
       :is="Item"
@@ -85,7 +88,7 @@ function handleClick(e: Event, action: () => void) {
     <component :is="Separator" />
     <component :is="Item" @click="handleClick($event, () => emit('ignore', event))">
       <EyeOff class="h-4 w-4 mr-2" />
-      Ignore
+      {{ t('log.ignore') }}
     </component>
   </component>
 </template>

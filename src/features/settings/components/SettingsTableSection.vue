@@ -21,6 +21,9 @@ import {
 } from '@/components/ui/ContextMenu'
 import { OptionsItemActionsMenuContent, type MenuAction } from '@/components/OptionsItemActionsMenu'
 import { MoreHorizontal } from 'lucide-vue-next'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 export interface TableColumn {
   header: string
@@ -116,7 +119,7 @@ function onAddInputKeydown(e: KeyboardEvent) {
         :aria-invalid="!!addError"
         class="flex-1 h-8"
       />
-      <Button size="sm" @click="onAdd" class="h-8">Add</Button>
+      <Button size="sm" @click="onAdd" class="h-8">{{ t('general.add') }}</Button>
     </div>
 
     <p v-if="addError" class="text-sm text-destructive_text">{{ addError }}</p>

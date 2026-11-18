@@ -63,6 +63,7 @@ const defaultSearchParams: GlobalSearchSettings = {
 }
 
 export const defaultInspectorSettings: InspectorSettings = {
+    language: 'en',
     theme: 'dark',
     displayMode: 'overlay',
     blacklist: { active: [], inactive: [] },

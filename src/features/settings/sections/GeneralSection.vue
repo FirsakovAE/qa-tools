@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
 import type { InspectorSettings, DisplayMode, ThemeMode, SiteListEntry } from '@/settings/inspectorSettings'
+import { isUiLanguage, LANGUAGE_LABELS, UI_LANGUAGES, useI18n } from '@/i18n'
 import { addMedia, removeMedia, putWallpaperBlob, removeWallpaperBlob, initWallpapersStore } from '@/settings/mediaStore'
 import { getStorageClient } from '@/storage/storage-client'
 import { MEDIA_LIMIT_BYTES } from '@/storage/storage-protocol'
@@ -62,6 +63,12 @@ const emit = defineEmits<{
   (e: 'select', item: { type: 'saved-file' | 'site-blacklist' | 'site-whitelist'; id: string }): void
   (e: 'edit', item: { type: 'site-blacklist' | 'site-whitelist'; id: string }): void
 }>()
+
+const { t, seconds, locale } = useI18n()
+
+function setLanguage(value: unknown) {
+  props.settings.language = isUiLanguage(value) ? value : 'en'
+}
 
 const runtime = getRuntimeAdapter()
 const isRunningInDevtools = runtime?.id === 'devtools'
@@ -154,13 +161,9 @@ const jsonEditorImplementation = computed({
   }
 })
 
-const refreshIntervals = [
-  { value: 1000, label: '1 second' },
-  { value: 2000, label: '2 seconds' },
-  { value: 5000, label: '5 seconds' },
-  { value: 10000, label: '10 seconds' },
-  { value: 30000, label: '30 seconds' },
-]
+const refreshIntervals = computed(() =>
+  [1, 2, 5, 10, 30].map(secondsCount => ({ value: secondsCount * 1000, label: seconds(secondsCount) })),
+)
 
 // -------------------- CUSTOMIZE --------------------
 
@@ -435,8 +438,8 @@ const savedFilesNeedsScroll = computed(() => savedFilesForTable.value.length > 4
 type SavedFileRow = { id: string; name: string; size: number; mimeType: string; _isWallpaper: boolean }
 function getSavedFileActions(file: SavedFileRow): MenuAction[] {
   return [
-    { label: 'Edit', icon: Pencil, slot: 'edit' },
-    { label: 'Delete', icon: Trash, onClick: () => removeSavedFile(file.id, file._isWallpaper), destructiveText: true },
+    { label: t('general.edit'), icon: Pencil, slot: 'edit' },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeSavedFile(file.id, file._isWallpaper), destructiveText: true },
   ]
 }
 
@@ -504,15 +507,15 @@ function isWhitelistRowSelected(entry: SiteListEntry): boolean {
 
 function getSiteBlacklistActions(entry: SiteListEntry): MenuAction[] {
   return [
-    { label: 'Edit', icon: Pencil, onClick: () => emit('edit', { type: 'site-blacklist', id: entry.id }) },
-    { label: 'Delete', icon: Trash, onClick: () => removeFromBlacklist(entry.id), destructiveText: true },
+    { label: t('general.edit'), icon: Pencil, onClick: () => emit('edit', { type: 'site-blacklist', id: entry.id }) },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeFromBlacklist(entry.id), destructiveText: true },
   ]
 }
 
 function getSiteWhitelistActions(entry: SiteListEntry): MenuAction[] {
   return [
-    { label: 'Edit', icon: Pencil, onClick: () => emit('edit', { type: 'site-whitelist', id: entry.id }) },
-    { label: 'Delete', icon: Trash, onClick: () => removeFromWhitelist(entry.id), destructiveText: true },
+    { label: t('general.edit'), icon: Pencil, onClick: () => emit('edit', { type: 'site-whitelist', id: entry.id }) },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeFromWhitelist(entry.id), destructiveText: true },
   ]
 }
 
@@ -530,19 +533,19 @@ const siteWhitelistTableHeight = computed(() =>
   <div class="space-y-6 min-w-0">
     <!-- DISPLAY MODE -->
     <div class="space-y-4">
-      <h4 class="text-sm font-semibold">Display Mode</h4>
+      <h4 class="text-sm font-semibold">{{ t('general.displayMode') }}</h4>
 
-      <RadioGroup v-model="displayMode" :disabled="isStandalone" class="gap-3">
+      <RadioGroup :key="locale" v-model="displayMode" :disabled="isStandalone" class="gap-3">
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="overlay" id="mode-overlay" />
           <Label for="mode-overlay" class="text-sm font-normal" :class="isStandalone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'">
-            Overlay
+            {{ t('general.overlay') }}
           </Label>
         </div>
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="devtools" id="mode-devtools" />
           <Label for="mode-devtools" class="text-sm font-normal" :class="isStandalone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'">
-            DevTools tab
+            {{ t('general.devtoolsTab') }}
           </Label>
         </div>
       </RadioGroup>
@@ -552,7 +555,7 @@ const siteWhitelistTableHeight = computed(() =>
         class="flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400"
       >
         <Info class="h-4 w-4 shrink-0 mt-0.5" />
-        <p>Display Mode is only available for the browser extension version.</p>
+        <p>{{ t('general.displayModeStandalone') }}</p>
       </div>
 
       <div
@@ -561,8 +564,8 @@ const siteWhitelistTableHeight = computed(() =>
       >
         <Info class="h-4 w-4 shrink-0 mt-0.5" />
         <div>
-          <p>Reload the page to apply changes.</p>
-          <p class="mt-0.5">Open DevTools (F12) to access the panel.</p>
+          <p>{{ t('general.reload') }}</p>
+          <p class="mt-0.5">{{ t('general.openDevtools') }}</p>
         </div>
       </div>
 
@@ -571,24 +574,24 @@ const siteWhitelistTableHeight = computed(() =>
         class="flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-400"
       >
         <Info class="h-4 w-4 shrink-0 mt-0.5" />
-        <p>Reload the page to apply changes.</p>
+        <p>{{ t('general.reload') }}</p>
       </div>
     </div>
 
     <!-- CUSTOMIZE -->
     <div class="space-y-4 border-t pt-4">
-      <h4 class="text-sm font-semibold">Customize</h4>
+      <h4 class="text-sm font-semibold">{{ t('general.customize') }}</h4>
 
       <!-- Image -->
       <div class="space-y-2 min-w-0">
-        <Label class="text-xs font-medium text-muted-foreground">Image</Label>
+        <Label class="text-xs font-medium text-muted-foreground">{{ t('general.image') }}</Label>
         <div class="grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-2 min-w-0">
           <span class="text-xs text-muted-foreground truncate block min-w-0" :title="currentImageLabel">{{ currentImageLabel }}</span>
           <Button
             variant="outline"
             size="sm"
             class="h-8 w-8 p-0 shrink-0"
-            :title="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+            :title="theme === 'dark' ? t('general.switchLight') : t('general.switchDark')"
             @click="theme = theme === 'dark' ? 'light' : 'dark'"
           >
             <Sun v-if="theme === 'dark'" class="h-4 w-4" />
@@ -600,7 +603,7 @@ const siteWhitelistTableHeight = computed(() =>
             class="h-8 px-3 text-xs shrink-0"
             @click="imagePickerOpen = true"
           >
-            Change background
+            {{ t('general.changeBackground') }}
           </Button>
         </div>
       </div>
@@ -608,7 +611,7 @@ const siteWhitelistTableHeight = computed(() =>
       <!-- Position X -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
-          <Label class="text-xs">Position X</Label>
+          <Label class="text-xs">{{ t('general.positionX') }}</Label>
           <span class="text-xs text-muted-foreground tabular-nums">{{ customize.positionX }}%</span>
         </div>
         <Slider
@@ -621,7 +624,7 @@ const siteWhitelistTableHeight = computed(() =>
       <!-- Position Y -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
-          <Label class="text-xs">Position Y</Label>
+          <Label class="text-xs">{{ t('general.positionY') }}</Label>
           <span class="text-xs text-muted-foreground tabular-nums">{{ customize.positionY }}%</span>
         </div>
         <Slider
@@ -634,7 +637,7 @@ const siteWhitelistTableHeight = computed(() =>
       <!-- Scale -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
-          <Label class="text-xs">Scale</Label>
+          <Label class="text-xs">{{ t('general.scale') }}</Label>
           <span class="text-xs text-muted-foreground tabular-nums">{{ customize.scale }}%</span>
         </div>
         <Slider
@@ -647,7 +650,7 @@ const siteWhitelistTableHeight = computed(() =>
       <!-- Image Opacity -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
-          <Label class="text-xs">Image Opacity</Label>
+          <Label class="text-xs">{{ t('general.imageOpacity') }}</Label>
           <span class="text-xs text-muted-foreground tabular-nums">{{ customize.imageOpacity.toFixed(2) }}</span>
         </div>
         <Slider
@@ -660,7 +663,7 @@ const siteWhitelistTableHeight = computed(() =>
       <!-- Blur -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
-          <Label class="text-xs">Blur</Label>
+          <Label class="text-xs">{{ t('general.blur') }}</Label>
           <span class="text-xs text-muted-foreground tabular-nums">{{ customize.blur }}px</span>
         </div>
         <Slider
@@ -673,10 +676,10 @@ const siteWhitelistTableHeight = computed(() =>
 
     <!-- SEARCH DEBOUNCE & MIN LENGTH -->
     <div class="space-y-4 border-t pt-4">
-      <h4 class="text-sm font-semibold">Search Parameters</h4>
+      <h4 class="text-sm font-semibold">{{ t('general.searchParameters') }}</h4>
       <div class="grid grid-cols-2 gap-x-6 gap-y-2">
-        <Label for="search-debounce">Search Debounce (ms)</Label>
-        <Label for="search-min-length">Minimum Search Length</Label>
+        <Label for="search-debounce">{{ t('general.searchDebounce') }}</Label>
+        <Label for="search-min-length">{{ t('general.minSearchLength') }}</Label>
 
         <Input
           id="search-debounce"
@@ -700,21 +703,22 @@ const siteWhitelistTableHeight = computed(() =>
 
     <!-- AUTO REFRESH -->
     <div class="space-y-4 border-t pt-4">
-      <h4 class="text-sm font-semibold">Auto Refresh</h4>
+      <h4 class="text-sm font-semibold">{{ t('general.autoRefresh') }}</h4>
 
       <div class="flex items-center space-x-3">
         <Checkbox
           id="auto-refresh"
           v-model="settings.updates!.autoRefresh"
+          :aria-label="t('general.enableAutoRefresh')"
         />
-        <Label for="auto-refresh" class="text-sm">Enable auto refresh</Label>
+        <Label for="auto-refresh" class="text-sm">{{ t('general.enableAutoRefresh') }}</Label>
       </div>
 
       <div v-if="settings.updates?.autoRefresh" class="pt-2">
-        <Label for="refresh-interval" class="block mb-2">Refresh Interval</Label>
+        <Label for="refresh-interval" class="block mb-2">{{ t('general.refreshInterval') }}</Label>
         <Select v-model="settings.updates!.autoRefreshInterval">
           <SelectTrigger class="w-full h-8">
-            <SelectValue :placeholder="`${(settings.updates?.autoRefreshInterval ?? 5000) / 1000} seconds`" />
+            <SelectValue :placeholder="seconds((settings.updates?.autoRefreshInterval ?? 5000) / 1000)" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem v-for="interval in refreshIntervals" :key="interval.value" :value="interval.value">
@@ -728,9 +732,9 @@ const siteWhitelistTableHeight = computed(() =>
     <!-- AUTO RUN (extension only) — intro spacing matches Saved Files (title / description / checkbox) -->
     <div v-if="!isStandalone" class="space-y-4 border-t pt-4">
       <div class="space-y-2">
-        <h4 class="text-sm font-semibold">Auto Run</h4>
+        <h4 class="text-sm font-semibold">{{ t('general.autoRun') }}</h4>
         <p class="text-xs text-muted-foreground">
-          Enable auto run application
+          {{ t('general.enableAutoRun') }}
         </p>
 
         <!-- Advanced mode -->
@@ -738,24 +742,25 @@ const siteWhitelistTableHeight = computed(() =>
           <Checkbox
             id="auto-run-advanced"
             :model-value="autoRun.advancedMode"
+            :aria-label="t('general.enableWhitelist')"
             @update:model-value="autoRun.advancedMode = $event as boolean"
           />
-          <Label for="auto-run-advanced" class="text-sm">Enable whitelist mode</Label>
+          <Label for="auto-run-advanced" class="text-sm">{{ t('general.enableWhitelist') }}</Label>
         </div>
       </div>
 
       <!-- SITE BLACKLIST -->
       <div class="space-y-2">
-        <h4 class="text-sm font-semibold">Site Blacklist</h4>
+        <h4 class="text-sm font-semibold">{{ t('general.siteBlacklist') }}</h4>
         <div class="flex gap-2">
           <Input
             v-model="blacklistUrl"
-            placeholder="e.g. https://app.example/ or *localhost*"
+            :placeholder="t('general.sitePlaceholder')"
             class="flex-1 h-8"
             @keydown.enter="addToBlacklist"
           />
           <Button size="sm" class="h-8" @click="addToBlacklist">
-            Add
+            {{ t('general.add') }}
           </Button>
         </div>
 
@@ -764,8 +769,8 @@ const siteWhitelistTableHeight = computed(() =>
             <Table class="table-fixed">
               <TableHeader class="[&_th]:h-10">
                 <TableRow class="hover:bg-transparent">
-                  <TableHead class="text-xs font-semibold">Name</TableHead>
-                  <TableHead class="text-xs font-semibold w-[100px] text-center">Added</TableHead>
+                  <TableHead class="text-xs font-semibold">{{ t('general.name') }}</TableHead>
+                  <TableHead class="text-xs font-semibold w-[100px] text-center">{{ t('general.added') }}</TableHead>
                   <TableHead class="w-[48px] text-center p-0" />
                 </TableRow>
               </TableHeader>
@@ -852,7 +857,7 @@ const siteWhitelistTableHeight = computed(() =>
                 </ContextMenu>
                 <TableRow v-if="!autoRun.siteBlacklist.length">
                   <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                    No site in blacklist
+                    {{ t('general.noBlacklist') }}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -863,22 +868,22 @@ const siteWhitelistTableHeight = computed(() =>
 
       <!-- SITE WHITELIST (whitelist mode only) -->
       <div v-if="autoRun.advancedMode" class="space-y-2">
-        <h4 class="text-sm font-semibold">Site Whitelist</h4>
+        <h4 class="text-sm font-semibold">{{ t('general.siteWhitelist') }}</h4>
 
         <div class="flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400">
           <AlertTriangle class="h-4 w-4 shrink-0 mt-0.5" />
-          <p>When the whitelist is not empty, the application will only run when the page origin (scheme, host including www, port) matches a pattern.</p>
+          <p>{{ t('general.whitelistHint') }}</p>
         </div>
 
         <div class="flex gap-2">
           <Input
             v-model="whitelistUrl"
-            placeholder="e.g. https://app.example/ or *localhost*"
+            :placeholder="t('general.sitePlaceholder')"
             class="flex-1 h-8"
             @keydown.enter="addToWhitelist"
           />
           <Button size="sm" class="h-8" @click="addToWhitelist">
-            Add
+            {{ t('general.add') }}
           </Button>
         </div>
 
@@ -887,8 +892,8 @@ const siteWhitelistTableHeight = computed(() =>
             <Table class="table-fixed">
               <TableHeader class="[&_th]:h-10">
                 <TableRow class="hover:bg-transparent">
-                  <TableHead class="text-xs font-semibold">Name</TableHead>
-                  <TableHead class="text-xs font-semibold w-[100px] text-center">Added</TableHead>
+                  <TableHead class="text-xs font-semibold">{{ t('general.name') }}</TableHead>
+                  <TableHead class="text-xs font-semibold w-[100px] text-center">{{ t('general.added') }}</TableHead>
                   <TableHead class="w-[48px] text-center p-0" />
                 </TableRow>
               </TableHeader>
@@ -975,7 +980,7 @@ const siteWhitelistTableHeight = computed(() =>
                 </ContextMenu>
                 <TableRow v-if="!autoRun.siteWhitelist.length">
                   <TableCell colspan="3" class="text-center text-muted-foreground py-8">
-                    No site in whitelist
+                    {{ t('general.noWhitelist') }}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -987,23 +992,23 @@ const siteWhitelistTableHeight = computed(() =>
 
     <!-- JSON VIEWER IMPLEMENTATION -->
     <div class="space-y-4 border-t pt-4">
-      <h4 class="text-sm font-semibold">JSON Mode</h4>
+      <h4 class="text-sm font-semibold">{{ t('general.jsonMode') }}</h4>
 
       <Tabs v-model="jsonEditorImplementation">
         <TabsList class="grid w-full grid-cols-2">
-          <TabsTrigger value="classic">Classic</TabsTrigger>
-          <TabsTrigger value="jsoneditor">Advanced</TabsTrigger>
+          <TabsTrigger value="classic">{{ t('general.classic') }}</TabsTrigger>
+          <TabsTrigger value="jsoneditor">{{ t('general.advanced') }}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="classic" class="mt-4">
           <p class="text-xs text-muted-foreground">
-            JSON in text format with syntax highlighting
+            {{ t('general.classicHint') }}
           </p>
         </TabsContent>
 
         <TabsContent value="jsoneditor" class="mt-4">
           <p class="text-xs text-muted-foreground">
-            Advanced mode with support for tree mode.
+            {{ t('general.advancedHint') }}
           </p>
         </TabsContent>
       </Tabs>
@@ -1011,9 +1016,9 @@ const siteWhitelistTableHeight = computed(() =>
 
     <!-- SAVED FILES -->
     <div id="saved-files-section" class="space-y-2 border-t pt-4">
-      <h4 class="text-sm font-semibold">Saved Files</h4>
+      <h4 class="text-sm font-semibold">{{ t('general.savedFiles') }}</h4>
       <p class="text-xs text-muted-foreground">
-        Files saved from breakpoint form-data editing for quick reuse.
+        {{ t('general.savedFilesHint') }}
       </p>
 
       <div v-if="isStandalone" class="flex items-center gap-3">
@@ -1029,10 +1034,11 @@ const siteWhitelistTableHeight = computed(() =>
         <Checkbox
           id="auto-save-files"
           :model-value="settings.autoSaveFiles"
+          :aria-label="t('general.autoSaveFiles')"
           @update:model-value="settings.autoSaveFiles = $event as boolean"
         />
         <Label for="auto-save-files" class="text-sm">
-          Auto-save new files selected via Browse
+          {{ t('general.autoSaveFiles') }}
         </Label>
       </div>
 
@@ -1041,8 +1047,8 @@ const siteWhitelistTableHeight = computed(() =>
           <Table class="table-fixed">
             <TableHeader class="[&_th]:h-10">
               <TableRow class="hover:bg-transparent">
-                <TableHead class="text-xs font-semibold">Name</TableHead>
-                <TableHead class="text-xs font-semibold w-[80px] text-center">Size</TableHead>
+                <TableHead class="text-xs font-semibold">{{ t('general.name') }}</TableHead>
+                <TableHead class="text-xs font-semibold w-[80px] text-center">{{ t('general.size') }}</TableHead>
                 <TableHead class="w-[48px] text-center p-0" />
               </TableRow>
             </TableHeader>
@@ -1118,7 +1124,7 @@ const siteWhitelistTableHeight = computed(() =>
                     <TableCell colspan="3" class="!p-0">
                       <label class="flex items-center justify-center gap-1.5 cursor-pointer text-sm text-primary hover:text-primary/80 transition-colors w-full h-[41px]">
                         <Plus class="h-3.5 w-3.5" />
-                        Add new file
+                        {{ t('general.addNewFile') }}
                         <input type="file" multiple class="sr-only" @change="handleAddNewFile" />
                       </label>
                     </TableCell>
@@ -1193,7 +1199,7 @@ const siteWhitelistTableHeight = computed(() =>
                 <TableCell colspan="3" class="!p-0">
                   <label class="flex items-center justify-center gap-1.5 cursor-pointer text-sm text-primary hover:text-primary/80 transition-colors w-full h-[41px]">
                     <Plus class="h-3.5 w-3.5" />
-                    Add new file
+                    {{ t('general.addNewFile') }}
                     <input type="file" multiple class="sr-only" @change="handleAddNewFile" />
                   </label>
                 </TableCell>
@@ -1205,21 +1211,33 @@ const siteWhitelistTableHeight = computed(() =>
       </div>
     </div>
 
+    <div class="space-y-2 border-t pt-4">
+      <h4 class="text-sm font-semibold">{{ t('general.language') }}</h4>
+      <Select :model-value="settings.language || 'en'" @update:model-value="setLanguage">
+        <SelectTrigger class="h-8 w-56">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem v-for="code in UI_LANGUAGES" :key="code" :value="code">{{ LANGUAGE_LABELS[code] }}</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
     <!-- IMPORT / EXPORT / RESET -->
     <div class="space-y-4 border-t pt-4">
-      <h4 class="text-sm font-semibold">Settings Management</h4>
+      <h4 class="text-sm font-semibold">{{ t('general.settingsManagement') }}</h4>
       <div class="flex items-center gap-2">
         <Button size="sm" variant="outline" class="h-8 gap-1.5" @click="emit('import')">
           <Download class="w-3.5 h-3.5" />
-          Import
+          {{ t('general.import') }}
         </Button>
         <Button size="sm" variant="outline" class="h-8 gap-1.5" @click="emit('export')">
           <Upload class="w-3.5 h-3.5" />
-          Export
+          {{ t('general.export') }}
         </Button>
         <Button size="sm" variant="destructive" class="h-8 gap-1.5" @click="emit('reset')">
           <RotateCcw class="w-3.5 h-3.5" />
-          Reset
+          {{ t('general.reset') }}
         </Button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import type { HeaderLinkRuleRowDraft, NetworkHeaderLinkRule } from '@/types/inspector'
 import HeaderLinkRulesPanel from '@/features/settings/components/HeaderLinkRulesPanel.vue'
@@ -9,6 +10,8 @@ defineProps<{
   readonlyRules: NetworkHeaderLinkRule[]
   lastUpdated: string | null
 }>()
+
+const { t } = useI18n()
 
 const rows = defineModel<HeaderLinkRuleRowDraft[]>({ required: true })
 
@@ -32,7 +35,7 @@ function removeAllHeaderLinkRows() {
   <div class="space-y-4">
     <template v-if="!editMode">
       <div>
-        <span class="text-xs text-muted-foreground">Header</span>
+        <span class="text-xs text-muted-foreground">{{ t('netset.header') }}</span>
         <p class="font-mono text-sm font-semibold mt-1">{{ displayHeader }}</p>
       </div>
       <HeaderLinkRulesPanel
@@ -44,7 +47,7 @@ function removeAllHeaderLinkRows() {
     <template v-else>
       <div class="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
         <div class="min-w-0 flex-1">
-          <span class="text-xs text-muted-foreground">Header</span>
+          <span class="text-xs text-muted-foreground">{{ t('netset.header') }}</span>
           <p class="font-mono text-sm font-semibold mt-1 break-all">{{ displayHeader }}</p>
         </div>
         <div class="flex shrink-0 items-center gap-2">
@@ -55,10 +58,10 @@ function removeAllHeaderLinkRows() {
             :disabled="rows.length === 0"
             @click="removeAllHeaderLinkRows"
           >
-            Remove all
+            {{ t('common.removeAll') }}
           </Button>
           <Button variant="outline" size="sm" class="h-7 text-xs" @click="addHeaderLinkRow">
-            Add Rule
+            {{ t('netset.addRule') }}
           </Button>
         </div>
       </div>
@@ -71,7 +74,7 @@ function removeAllHeaderLinkRows() {
     </template>
 
     <div v-if="lastUpdated">
-      <span class="text-xs text-muted-foreground">Last updated</span>
+      <span class="text-xs text-muted-foreground">{{ t('netset.lastUpdated') }}</span>
       <p class="text-sm mt-1">{{ new Date(lastUpdated).toLocaleString() }}</p>
     </div>
   </div>

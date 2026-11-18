@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue'
+import { useI18n } from '@/i18n'
 import { useElementSize } from '@vueuse/core'
 import VirtualTable from '@/components/VirtualTable.vue'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +25,7 @@ import { useRuntime } from '@/runtime'
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
+const { t } = useI18n()
 
 const props = defineProps<{
   rows: PropsRow[]
@@ -47,11 +49,11 @@ function setColumn(key: keyof PropsTableColumnsSettings, value: boolean) {
 }
 
 
-const propsColumnDefs = [
-  { key: 'rootElement', label: 'Root Element' },
-  { key: 'propsReceived', label: 'Received' },
-  { key: 'propsDeclared', label: 'Declared' },
-] as const
+const propsColumnDefs = computed(() => [
+  { key: 'rootElement', label: t('props.root') },
+  { key: 'propsReceived', label: t('props.received') },
+  { key: 'propsDeclared', label: t('props.declared') },
+])
 
 const ROW_HEIGHT = 40
 const HEADER_HEIGHT = 40
@@ -188,8 +190,13 @@ onUnmounted(() => {
 // Data helpers (use pre-calculated fields)
 // ============================================================================
 
+function elementLabel(info: string): string {
+  return info === 'Logic only' ? t('props.logicOnly') : info
+}
+
 function truncateElementInfo(info: string): string {
-  return info.length > 25 ? info.substring(0, 25) + '...' : info
+  const label = elementLabel(info)
+  return label.length > 25 ? label.substring(0, 25) + '...' : label
 }
 
 function getPropsPassed(row: PropsRow): number {
@@ -222,16 +229,16 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
       key-field="id"
       :item-size="40"
       min-width="360px"
-      empty-message="No components found"
+      :empty-message="t('props.none')"
       :is-loading="isLoading"
       @mouseleave="onScrollerLeave"
     >
       <template #header>
         <div class="props-cell props-cell-star"></div>
-        <div class="props-cell props-cell-name text-xs font-semibold">Name</div>
-        <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">Root Element</div>
-        <div v-if="columns.propsReceived" class="props-cell props-cell-props text-xs font-semibold">Received</div>
-        <div v-if="columns.propsDeclared" class="props-cell props-cell-props text-xs font-semibold">Declared</div>
+        <div class="props-cell props-cell-name text-xs font-semibold">{{ t('props.name') }}</div>
+        <div v-if="columns.rootElement" class="props-cell props-cell-element text-xs font-semibold">{{ t('props.root') }}</div>
+        <div v-if="columns.propsReceived" class="props-cell props-cell-props text-xs font-semibold">{{ t('props.received') }}</div>
+        <div v-if="columns.propsDeclared" class="props-cell props-cell-props text-xs font-semibold">{{ t('props.declared') }}</div>
               <div class="props-cell props-cell-actions virtual-table__cell-actions">
                 <TableColumnSelector
             :columns="{ ...columns }"
@@ -262,7 +269,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                     'star-visible': row.isFavoriteFlag,
                     'star-favorite': row.isFavoriteFlag
                   }"
-                  :title="row.isFavoriteFlag ? 'Remove from favorites' : 'Add to favorites'"
+                  :title="row.isFavoriteFlag ? t('stores.removeFav') : t('stores.addFav')"
                   @click="(e) => handleToggleFavorite(e, row)"
                 >
                   <Star 
@@ -282,7 +289,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                 <Badge 
                   :variant="row.elementInfo === 'Logic only' ? 'destructive_text' : 'secondary'"
                   class="text-xs truncate max-w-full"
-                  :title="row.elementInfo"
+                  :title="elementLabel(row.elementInfo)"
                 >
                   {{ truncateElementInfo(row.elementInfo) }}
                 </Badge>

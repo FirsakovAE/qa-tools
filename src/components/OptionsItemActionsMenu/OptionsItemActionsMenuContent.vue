@@ -31,7 +31,7 @@ const props = withDefaults(
     item?: unknown
     contentClass?: string
   }>(),
-  { contentClass: 'w-44' }
+  { contentClass: 'w-max whitespace-nowrap' }
 )
 
 const Content = computed(() =>

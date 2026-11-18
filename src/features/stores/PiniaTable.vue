@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from '@/i18n'
 import { useElementSize } from '@vueuse/core'
 import {
   Table,
@@ -50,6 +51,8 @@ const emit = defineEmits<{
   (e: 'toggleFavorite', store: StoreEntry): void
 }>()
 
+const { t } = useI18n()
+
 function isFavorite(store: StoreEntry): boolean {
   if (!props.piniaFavorites?.length) return false
   const name = store.baseId || ''
@@ -91,10 +94,10 @@ function setColumn(key: keyof PiniaTableColumnsSettings, value: boolean) {
 }
 
 
-const piniaColumnDefs = [
-  { key: 'state', label: 'State' },
-  { key: 'getters', label: 'Getters' },
-] as const
+const piniaColumnDefs = computed(() => [
+  { key: 'state', label: t('stores.state') },
+  { key: 'getters', label: t('stores.getters') },
+])
 
 const ROW_HEIGHT = 40
 const HEADER_HEIGHT = 40
@@ -118,9 +121,9 @@ const skeletonRowCount = computed(() => {
           <TableHeader class="[&_th]:h-10 [&_th]:px-2">
             <TableRow class="hover:bg-transparent">
               <TableHead class="pinia-cell-star" />
-              <TableHead class="text-xs font-semibold">Name</TableHead>
-              <TableHead v-if="columns.state" class="pinia-cell-state text-xs font-semibold text-center">State</TableHead>
-              <TableHead v-if="columns.getters" class="pinia-cell-getters text-xs font-semibold text-center">Getters</TableHead>
+              <TableHead class="text-xs font-semibold">{{ t('stores.name') }}</TableHead>
+              <TableHead v-if="columns.state" class="pinia-cell-state text-xs font-semibold text-center">{{ t('stores.state') }}</TableHead>
+              <TableHead v-if="columns.getters" class="pinia-cell-getters text-xs font-semibold text-center">{{ t('stores.getters') }}</TableHead>
               <TableHead class="pinia-cell-actions">
                 <div class="flex justify-center">
                   <TableColumnSelector
@@ -138,7 +141,7 @@ const skeletonRowCount = computed(() => {
       <ScrollArea class="flex-1 min-h-0 pinia-scroll-area">
         <div class="pinia-scroll-content">
         <div v-if="entries.length === 0 && !isLoading" class="pinia-empty-container">
-          No stores found
+          {{ t('stores.empty') }}
         </div>
         <Table v-else no-scroll class="pinia-table">
         <TableBody>
@@ -157,7 +160,7 @@ const skeletonRowCount = computed(() => {
                     <button
                       class="star-btn"
                       :class="{ 'star-visible': isFavorite(store), 'star-favorite': isFavorite(store) }"
-                      :title="isFavorite(store) ? 'Remove from favorites' : 'Add to favorites'"
+                      :title="isFavorite(store) ? t('stores.removeFav') : t('stores.addFav')"
                       @click="handleToggleFavorite($event, store)"
                     >
                       <Star
@@ -169,7 +172,7 @@ const skeletonRowCount = computed(() => {
                 </TableCell>
                 <TableCell class="py-2 max-w-0">
                   <div class="truncate text-sm font-medium" :title="store.baseId">
-                    {{ store.baseId || 'Unknown Store' }}
+                    {{ store.baseId || t('stores.unknown') }}
                   </div>
                 </TableCell>
                 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick, onUnmounted, defineAsyncComponent } from 'vue'
+import { useI18n } from '@/i18n'
 import { useDebounceFn } from '@vueuse/core'
 import { ArrowLeft, Copy, Check, Send, MoreHorizontal, ChevronDown } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
@@ -66,7 +67,11 @@ import {
 const JsonEditor = defineAsyncComponent({
   loader: () => import('@/components/JsonEditor.vue'),
   loadingComponent: {
-    template: '<div class="flex items-center justify-center h-full text-sm text-muted-foreground">Loading...</div>'
+    setup() {
+      const { t } = useI18n()
+      return { t }
+    },
+    template: '<div class="flex items-center justify-center h-full text-sm text-muted-foreground">{{ t(\'common.loading\') }}</div>',
   },
   delay: 100
 })
@@ -176,6 +181,7 @@ const { lastNetworkDetailsSection, networkHeadersCollapse } = useNetworkUIState(
 // ============================================================================
 
 const settings = useInspectorSettingsSync()
+const { t } = useI18n()
 const jsonMode = ref<'text' | 'tree'>('text')
 const jsonEditorImpl = ref<'classic' | 'jsoneditor'>('jsoneditor')
 const copiedHeaderIndex = ref<number | null>(null)
@@ -242,18 +248,18 @@ const sections = computed<Array<{ id: SectionId; label: string }>>(() => {
   if (isWebSocket.value) {
     const count = props.entry.websocket?.frames.length ?? 0
     return [
-      { id: 'headers', label: 'Headers' },
-      { id: 'messages', label: count ? `Messages (${count})` : 'Messages' },
+      { id: 'headers', label: t('common.headers') },
+      { id: 'messages', label: count ? `${t('log.messages')} (${count})` : t('log.messages') },
     ]
   }
   const baseSections: Array<{ id: SectionId; label: string }> = [
-    { id: 'params', label: 'Params' },
-    { id: 'headers', label: 'Headers' },
-    { id: 'request', label: 'Request' },
-    { id: 'response', label: 'Response' }
+    { id: 'params', label: t('network.params') },
+    { id: 'headers', label: t('common.headers') },
+    { id: 'request', label: t('common.request') },
+    { id: 'response', label: t('common.response') }
   ]
   if (canEditRequest.value) {
-    return [{ id: 'url' as SectionId, label: 'URL' }, ...baseSections]
+    return [{ id: 'url' as SectionId, label: t('picker.url') }, ...baseSections]
   }
   return baseSections
 })
@@ -538,10 +544,10 @@ function submitWsFrame(direction: 'sent' | 'received') {
 
 const wsStatusText = computed(() => {
   const socket = props.entry.websocket
-  if (socket?.state === 'open') return 'Open'
-  if (props.entry.pending || socket?.state === 'connecting') return 'Connecting'
-  if (socket?.closeCode && socket.closeCode !== 1005) return `Closed ${socket.closeCode}`
-  return socket?.state === 'closed' ? 'Closed' : String(props.entry.status)
+  if (socket?.state === 'open') return t('log.open')
+  if (props.entry.pending || socket?.state === 'connecting') return t('status.connecting')
+  if (socket?.closeCode && socket.closeCode !== 1005) return t('status.closedCode', { code: socket.closeCode })
+  return socket?.state === 'closed' ? t('status.closed') : String(props.entry.status)
 })
 
 function handleApplyBreakpoint() {
@@ -602,7 +608,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               {{ displayMethod }}
             </Badge>
             <Badge variant="outline" :class="statusClass" class="font-mono text-xs">
-              {{ isWebSocket ? wsStatusText : (entry.pending ? '⏳ Pending' : entry.status) }}
+              {{ isWebSocket ? wsStatusText : (entry.pending ? '⏳ ' + t('network.pending') : entry.status) }}
             </Badge>
             <span class="text-xs text-muted-foreground">
               {{ formatDuration(entry.duration) }}
@@ -611,7 +617,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               {{ formatBytes(entry.size) }}
             </span>
             <Badge v-if="breakpointMode" variant="outline" class="text-xs text-amber-500 border-amber-500/50">
-              Breakpoint
+              {{ t('network.breakpoint') }}
             </Badge>
           </div>
           <Tooltip v-if="isUrlTruncated">
@@ -649,11 +655,11 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               @click="copyCurlCommand(props.entry)"
             >
               <component :is="curlCopied ? Check : Copy" class="h-3.5 w-3.5" />
-              {{ curlCopied ? 'Copied!' : 'Copy cURL' }}
+              {{ curlCopied ? t('common.copied') : t('network.copyCurl') }}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            Copy as cURL command (for Postman)
+            {{ t('network.copyCurlPostman') }}
           </TooltipContent>
         </Tooltip>
 
@@ -695,11 +701,11 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               @click="handleApplyBreakpoint"
             >
               <Send class="h-3.5 w-3.5" />
-              Apply
+              {{ t('common.apply') }}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            Apply changes and continue request
+            {{ t('network.applyContinue') }}
           </TooltipContent>
         </Tooltip>
           </div>
@@ -742,14 +748,14 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         <div v-if="activeSection === 'messages'" class="h-full flex flex-col">
           <div class="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 border-b text-xs text-muted-foreground">
             <span>{{ wsStatusText }}</span>
-            <span v-if="entry.websocket?.protocol">Protocol {{ entry.websocket.protocol }}</span>
+            <span v-if="entry.websocket?.protocol">{{ t('network.protocol', { name: entry.websocket.protocol }) }}</span>
             <span v-if="entry.websocket?.closeReason">{{ entry.websocket.closeReason }}</span>
-            <span v-if="entry.websocket?.droppedFrames">Earlier messages dropped: {{ entry.websocket.droppedFrames }}</span>
+            <span v-if="entry.websocket?.droppedFrames">{{ t('network.dropped', { n: entry.websocket.droppedFrames }) }}</span>
           </div>
           <ScrollArea ref="wsScroll" :horizontal="false" class="flex-1 min-h-0" @scroll="onWsScroll">
             <div class="space-y-3 p-3">
               <div v-if="!entry.websocket?.frames.length" class="py-8 text-center text-sm text-muted-foreground">
-                No messages yet
+                {{ t('network.noMessages') }}
               </div>
               <div
                 v-for="frame in entry.websocket?.frames"
@@ -760,18 +766,18 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 <div class="mb-0.5 flex max-w-[85%] items-center gap-2 px-1 text-[10px] text-muted-foreground">
                   <span class="font-mono">{{ wsClock(frame.time) }}</span>
                   <span :class="frame.direction === 'sent' ? 'text-sky-400' : 'text-green-500'">
-                    {{ frame.direction === 'sent' ? 'Sent' : 'Received' }}
+                    {{ frame.direction === 'sent' ? t('common.sent') : t('common.received') }}
                   </span>
-                  <span v-if="frame.kind === 'binary'">Binary</span>
-                  <span v-if="frame.mocked" class="text-purple-400">Mock</span>
+                  <span v-if="frame.kind === 'binary'">{{ t('common.binary') }}</span>
+                  <span v-if="frame.mocked" class="text-purple-400">{{ t('network.mockLabel') }}</span>
                   <span>{{ formatBytes(frame.size) }}</span>
-                  <span v-if="frame.truncated">truncated</span>
+                  <span v-if="frame.truncated">{{ t('network.truncated') }}</span>
                   <Button
                     v-if="frame.kind === 'text' && frame.data"
                     variant="ghost"
                     size="icon"
                     class="h-6 w-6"
-                    title="Copy message"
+                    :title="t('network.copyMessage')"
                     @click="copyToClipboard(frame.data)"
                   >
                     <Copy class="h-3.5 w-3.5" />
@@ -793,7 +799,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 ref="wsInput"
                 v-model="wsDraft"
                 rows="1"
-                placeholder="Message"
+                :placeholder="t('common.message')"
                 class="block min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-2.5 pl-3 pr-1 text-sm leading-5 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
                 :disabled="entry.websocket?.state === 'closed'"
               />
@@ -803,25 +809,25 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   size="sm"
                   class="h-8 rounded-full border-green-500/40 px-3 text-xs text-green-500"
                   :disabled="entry.websocket?.state === 'closed'"
-                  title="Deliver this message to the page"
+                  :title="t('network.deliver')"
                   @click="submitWsFrame('received')"
                 >
-                  Received
+                  {{ t('network.receiveAction') }}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   class="h-8 rounded-full border-sky-400/40 px-3 text-xs text-sky-400"
                   :disabled="entry.websocket?.state !== 'open'"
-                  title="Send this message on the socket"
+                  :title="t('network.sendSocket')"
                   @click="submitWsFrame('sent')"
                 >
-                  Sent
+                  {{ t('network.sendAction') }}
                 </Button>
               </div>
             </div>
             <p v-if="centrifugeEmptyFrame" class="px-1 text-xs text-amber-500">
-              This frame may trigger a protocol error and disconnect the WebSocket.
+              {{ t('network.wsWarn') }}
             </p>
           </div>
         </div>
@@ -830,13 +836,13 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
           <div class="p-3 space-y-4">
             <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md">
               <p class="text-sm text-amber-600 dark:text-amber-400">
-                Modify the URL components before sending the request. Changes will override the original request URL.
+                {{ t('network.urlHint') }}
               </p>
             </div>
             
             <div class="grid grid-cols-2 gap-3">
               <div class="space-y-1.5">
-                <Label class="text-xs">Method</Label>
+                <Label class="text-xs">{{ t('common.method') }}</Label>
                 <Input
                   :model-value="editableMethod"
                   @update:model-value="updateUrlField('method', String($event))"
@@ -845,7 +851,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 />
               </div>
               <div class="space-y-1.5">
-                <Label class="text-xs">Scheme</Label>
+                <Label class="text-xs">{{ t('common.scheme') }}</Label>
                 <Input
                   :model-value="editableScheme"
                   @update:model-value="updateUrlField('scheme', String($event))"
@@ -856,28 +862,28 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
             </div>
             
             <div class="space-y-1.5">
-              <Label class="text-xs">Host</Label>
+              <Label class="text-xs">{{ t('common.host') }}</Label>
               <Input
                 :model-value="editableHost"
                 @update:model-value="updateUrlField('host', String($event))"
-                placeholder="api.example.com"
+                :placeholder="t('network.phHost')"
                 class="h-8 text-sm font-mono"
               />
             </div>
             
             <div class="space-y-1.5">
-              <Label class="text-xs">Path</Label>
+              <Label class="text-xs">{{ t('common.path') }}</Label>
               <Input
                 :model-value="editablePath"
                 @update:model-value="updateUrlField('path', String($event))"
-                placeholder="/api/v1/users"
+                :placeholder="t('network.phPathExact')"
                 class="h-8 text-sm font-mono"
               />
             </div>
             
             <!-- Preview -->
             <div class="p-3 bg-muted/50 rounded-md">
-              <Label class="text-xs text-muted-foreground">URL Preview (includes query params)</Label>
+              <Label class="text-xs text-muted-foreground">{{ t('network.urlPreview') }}</Label>
               <div class="font-mono text-sm mt-1 break-all">
                 {{ fullUrlPreview }}
               </div>
@@ -890,7 +896,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
           <div class="p-3 space-y-3">
             <!-- Add/Remove buttons for edit mode -->
             <div v-if="canEditRequest" class="flex items-center justify-between">
-              <span class="text-sm font-semibold">Query Parameters</span>
+              <span class="text-sm font-semibold">{{ t('network.query') }}</span>
               <div class="flex items-center gap-2">
                 <Button 
                   variant="outline" 
@@ -899,22 +905,22 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   :disabled="editableParams.length === 0"
                   @click="removeAllParams"
                 >
-                  Remove all
+                  {{ t('common.removeAll') }}
                 </Button>
                 <Button variant="outline" size="sm" class="h-7 text-xs" @click="addParam">
-                  Add Param
+                  {{ t('network.addParam') }}
                 </Button>
               </div>
             </div>
             
             <div v-if="(canEditRequest ? editableParams : entry.params).length === 0" class="text-sm text-muted-foreground text-center py-8">
-              No query parameters
+              {{ t('network.noQuery') }}
             </div>
             <Table v-else>
               <TableHeader>
                 <TableRow>
-                  <TableHead class="w-1/3">Key</TableHead>
-                  <TableHead>Value</TableHead>
+                  <TableHead class="w-1/3">{{ t('common.key') }}</TableHead>
+                  <TableHead>{{ t('common.value') }}</TableHead>
                   <TableHead v-if="canEditRequest" class="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -985,18 +991,18 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                     class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
                     :class="open ? '' : '-rotate-90'"
                   />
-                  <h4 class="text-sm font-semibold">Pinned Request Headers</h4>
+                  <h4 class="text-sm font-semibold">{{ t('network.pinnedRequest') }}</h4>
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-2">
               <Table class="network-headers-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead class="w-1/3">Name</TableHead>
-                    <TableHead>Value</TableHead>
+                    <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                    <TableHead>{{ t('common.value') }}</TableHead>
                     <TableHead class="w-10 text-center">
                       <span v-if="showAdvancedHeaderMenus" />
-                      <span v-else>Copy</span>
+                      <span v-else>{{ t('common.copy') }}</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1101,18 +1107,18 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                     class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
                     :class="open ? '' : '-rotate-90'"
                   />
-                  <h4 class="text-sm font-semibold">Pinned Response Headers</h4>
+                  <h4 class="text-sm font-semibold">{{ t('network.pinnedResponse') }}</h4>
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-2">
               <Table class="network-headers-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead class="w-1/3">Name</TableHead>
-                    <TableHead>Value</TableHead>
+                    <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                    <TableHead>{{ t('common.value') }}</TableHead>
                     <TableHead class="w-10 text-center">
                       <span v-if="showAdvancedHeaderMenus" />
-                      <span v-else>Copy</span>
+                      <span v-else>{{ t('common.copy') }}</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1212,7 +1218,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                     class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
                     :class="open ? '' : '-rotate-90'"
                   />
-                  <h4 class="text-sm font-semibold">Request Headers</h4>
+                  <h4 class="text-sm font-semibold">{{ t('network.requestHeaders') }}</h4>
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent class="space-y-2 pt-2">
@@ -1224,23 +1230,23 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   :disabled="editableRequestHeaders.length === 0"
                   @click="removeAllRequestHeaders"
                 >
-                  Remove all
+                  {{ t('common.removeAll') }}
                 </Button>
                 <Button variant="outline" size="sm" class="h-7 text-xs" @click="addRequestHeader">
-                  Add Header
+                  {{ t('network.addHeader') }}
                 </Button>
               </div>
               <div
                 v-if="canEditRequest ? editableRequestHeaders.length === 0 : readonlyRequestHeadersForDisplay.length === 0"
                 class="text-sm text-muted-foreground"
               >
-                No request headers
+                {{ t('network.noRequestHeaders') }}
               </div>
               <Table v-else-if="canEditRequest" class="network-headers-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead class="w-1/3">Name</TableHead>
-                    <TableHead>Value</TableHead>
+                    <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                    <TableHead>{{ t('common.value') }}</TableHead>
                     <TableHead class="w-10 text-center" />
                   </TableRow>
                 </TableHeader>
@@ -1250,7 +1256,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                       <Input
                         :model-value="header.name"
                         @update:model-value="updateRequestHeader(index, 'name', $event)"
-                        placeholder="Header name"
+                        :placeholder="t('network.headerName')"
                         class="h-7 text-xs font-mono"
                       />
                     </TableCell>
@@ -1258,7 +1264,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                       <Input
                         :model-value="header.value"
                         @update:model-value="updateRequestHeader(index, 'value', $event)"
-                        placeholder="Header value"
+                        :placeholder="t('network.headerValue')"
                         class="h-7 text-xs font-mono"
                       />
                     </TableCell>
@@ -1278,11 +1284,11 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               <Table v-else-if="unpinnedRequestHeadersReadonly.length > 0" class="network-headers-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead class="w-1/3">Name</TableHead>
-                    <TableHead>Value</TableHead>
+                    <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                    <TableHead>{{ t('common.value') }}</TableHead>
                     <TableHead class="w-10 text-center">
                       <span v-if="showAdvancedHeaderMenus" />
-                      <span v-else>Copy</span>
+                      <span v-else>{{ t('common.copy') }}</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1372,7 +1378,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 v-else-if="!canEditRequest && readonlyRequestHeadersForDisplay.length > 0 && unpinnedRequestHeadersReadonly.length === 0"
                 class="text-sm text-muted-foreground"
               >
-                All request headers are listed under Pinned Request Headers above.
+                {{ t('network.allPinnedRequest') }}
               </p>
               </CollapsibleContent>
             </Collapsible>
@@ -1388,7 +1394,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                     class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
                     :class="open ? '' : '-rotate-90'"
                   />
-                  <h4 class="text-sm font-semibold">Response Headers</h4>
+                  <h4 class="text-sm font-semibold">{{ t('network.responseHeaders') }}</h4>
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent class="space-y-2 pt-2">
@@ -1396,13 +1402,13 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 v-if="(canEditResponse ? editableResponseHeaders : readonlyResponseHeadersForDisplay).length === 0"
                 class="text-sm text-muted-foreground"
               >
-                {{ entry.pending ? 'Waiting for response...' : 'No response headers' }}
+                {{ entry.pending ? t('network.waiting') : t('network.noHeaders') }}
               </div>
               <Table v-else-if="canEditResponse" class="network-headers-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead class="w-1/3">Name</TableHead>
-                    <TableHead>Value</TableHead>
+                    <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                    <TableHead>{{ t('common.value') }}</TableHead>
                     <TableHead class="w-10 text-center" />
                   </TableRow>
                 </TableHeader>
@@ -1439,11 +1445,11 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               <Table v-else-if="unpinnedResponseHeadersReadonly.length > 0" class="network-headers-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead class="w-1/3">Name</TableHead>
-                    <TableHead>Value</TableHead>
+                    <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                    <TableHead>{{ t('common.value') }}</TableHead>
                     <TableHead class="w-10 text-center">
                       <span v-if="showAdvancedHeaderMenus" />
-                      <span v-else>Copy</span>
+                      <span v-else>{{ t('common.copy') }}</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1533,7 +1539,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 v-else-if="!canEditResponse && readonlyResponseHeadersForDisplay.length > 0 && unpinnedResponseHeadersReadonly.length === 0"
                 class="text-sm text-muted-foreground"
               >
-                All response headers are shown in Pinned Response Headers at the top of this tab.
+                {{ t('network.allPinnedResponse') }}
               </p>
               </CollapsibleContent>
             </Collapsible>
@@ -1544,11 +1550,11 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         <div v-else-if="activeSection === 'request'" class="h-full flex flex-col">
           <!-- GET/HEAD methods cannot have body -->
           <div v-if="!methodAllowsBody" class="flex-1 flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
-            <span>{{ displayMethod }} requests cannot have a body</span>
-            <span v-if="canEditRequest" class="text-xs">(Change method in URL tab to add body)</span>
+            <span>{{ t('network.noBodyMethod', { method: displayMethod }) }}</span>
+            <span v-if="canEditRequest" class="text-xs">{{ t('network.changeMethod') }}</span>
           </div>
           <div v-else-if="!entry.requestBody && !canEditRequest" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            No request body
+            {{ t('network.noRequestBody') }}
           </div>
           <template v-else>
             <!-- Header bar -->
@@ -1566,7 +1572,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                     </SelectContent>
                   </Select>
                   <Badge variant="outline" class="text-xs text-amber-500 border-amber-500/50">
-                    Editable
+                    {{ t('common.editable') }}
                   </Badge>
                 </template>
                 <!-- Read-only mode: just show content type -->
@@ -1579,16 +1585,16 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   ({{ formatBytes(entry.requestBody.originalSize) }})
                 </span>
                 <Badge v-if="entry.requestBody?.truncated" variant="outline" class="text-xs">
-                  Truncated
+                  {{ t('network.truncated') }}
                 </Badge>
                 <Badge v-if="entry.requestBody?.isBinary" variant="outline" class="text-xs">
-                  Binary
+                  {{ t('common.binary') }}
                 </Badge>
               </div>
             </div>
             
             <div v-if="entry.requestBody?.isBinary" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-              Binary content cannot be displayed
+              {{ t('network.binaryHidden') }}
             </div>
             <!-- ======== Breakpoint EDIT mode ======== -->
             <template v-else-if="canEditRequest">
@@ -1596,7 +1602,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
               <ScrollArea v-if="bodyFormatMode === 'form-data'" class="flex-1">
                 <div class="p-3 space-y-3">
                   <div class="flex items-center justify-between">
-                    <span class="text-sm font-semibold">Form Data</span>
+                    <span class="text-sm font-semibold">{{ t('network.formData') }}</span>
                     <div class="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -1605,23 +1611,23 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                         :disabled="editableFormData.length === 0"
                         @click="removeAllFormDataEntries"
                       >
-                        Remove all
+                        {{ t('common.removeAll') }}
                       </Button>
                       <Button variant="outline" size="sm" class="h-7 text-xs" @click="addFormDataEntry">
-                        Add Field
+                        {{ t('network.addField') }}
                       </Button>
                     </div>
                   </div>
 
                   <div v-if="editableFormData.length === 0" class="text-sm text-muted-foreground text-center py-8">
-                    No form data fields
+                    {{ t('network.noForm') }}
                   </div>
                   <Table v-else class="network-headers-table">
                     <TableHeader>
                       <TableRow>
-                        <TableHead class="w-[30%]">Key</TableHead>
-                        <TableHead class="w-20">Type</TableHead>
-                        <TableHead>Value</TableHead>
+                        <TableHead class="w-[30%]">{{ t('common.key') }}</TableHead>
+                        <TableHead class="w-20">{{ t('common.type') }}</TableHead>
+                        <TableHead>{{ t('common.value') }}</TableHead>
                         <TableHead class="w-10"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1631,7 +1637,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                           <Input
                             :model-value="fd.key"
                             @update:model-value="updateFormDataField(index, 'key', String($event))"
-                            placeholder="Key"
+                            :placeholder="t('common.key')"
                             class="h-7 text-xs font-mono"
                           />
                         </TableCell>
@@ -1641,8 +1647,8 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="text">Text</SelectItem>
-                              <SelectItem value="file">File</SelectItem>
+                              <SelectItem value="text">{{ t('editor.text') }}</SelectItem>
+                              <SelectItem value="file">{{ t('common.file') }}</SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
@@ -1651,7 +1657,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                             v-if="fd.type === 'text'"
                             :model-value="fd.value"
                             @update:model-value="updateFormDataField(index, 'value', String($event))"
-                            placeholder="Value"
+                            :placeholder="t('common.value')"
                             class="h-7 text-xs font-mono"
                           />
                           <div v-else class="flex items-center gap-1">
@@ -1682,7 +1688,7 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                               {{ getFileDisplayLabel(fd) }}
                             </span>
                             <label class="shrink-0 inline-flex items-center justify-center h-7 px-2 text-xs rounded-md border cursor-pointer hover:bg-muted/50 transition-colors">
-                              Browse
+                              {{ t('common.browse') }}
                               <input
                                 type="file"
                                 class="sr-only"
@@ -1730,17 +1736,17 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   <Table class="network-headers-table">
                     <TableHeader>
                       <TableRow>
-                        <TableHead class="w-[30%]">Key</TableHead>
-                        <TableHead class="w-16">Type</TableHead>
-                        <TableHead>Value</TableHead>
-                        <TableHead class="w-10 text-center">Copy</TableHead>
+                        <TableHead class="w-[30%]">{{ t('common.key') }}</TableHead>
+                        <TableHead class="w-16">{{ t('common.type') }}</TableHead>
+                        <TableHead>{{ t('common.value') }}</TableHead>
+                        <TableHead class="w-10 text-center">{{ t('common.copy') }}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       <TableRow v-for="(fd, index) in readonlyFormData" :key="index">
                         <TableCell class="font-mono text-xs py-2 align-top">{{ fd.key }}</TableCell>
                         <TableCell class="font-mono text-xs py-2 align-top text-muted-foreground">
-                          {{ fd.type === 'file' ? 'File' : 'Text' }}
+                          {{ fd.type === 'file' ? t('common.file') : t('editor.text') }}
                         </TableCell>
                         <TableCell class="font-mono text-xs py-2 break-all align-top whitespace-pre-wrap">
                           <template v-if="fd.type === 'file'">
@@ -1786,13 +1792,13 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
         <!-- Response Body Section -->
         <div v-else-if="activeSection === 'response'" class="h-full flex flex-col">
           <div v-if="entry.pending && !canEditResponse" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            Waiting for response...
+            {{ t('network.waiting') }}
           </div>
           <div v-else-if="entry.error && !canEditResponse" class="flex-1 flex items-center justify-center text-sm text-destructive_text">
             {{ entry.error }}
           </div>
           <div v-else-if="!entry.responseBody && !canEditResponse" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            No response body
+            {{ t('network.noResponseBody') }}
           </div>
           <template v-else>
             <div class="shrink-0 flex items-center justify-between px-3 py-2 border-b">
@@ -1804,13 +1810,13 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   ({{ formatBytes(entry.responseBody.originalSize) }})
                 </span>
                 <Badge v-if="entry.responseBody?.truncated" variant="outline" class="text-xs">
-                  Truncated
+                  {{ t('network.truncated') }}
                 </Badge>
                 <Badge v-if="entry.responseBody?.isBinary" variant="outline" class="text-xs">
-                  Binary
+                  {{ t('common.binary') }}
                 </Badge>
                 <Badge v-if="canEditResponse" variant="outline" class="text-xs text-amber-500 border-amber-500/50">
-                  Editable
+                  {{ t('common.editable') }}
                 </Badge>
               </div>
             </div>

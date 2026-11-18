@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from '@/i18n'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Copy, Check } from 'lucide-vue-next'
@@ -26,6 +27,7 @@ const parsedValue = computed(() => {
   }
 })
 
+const { t } = useI18n()
 const copied = ref(false)
 
 function copyToClipboard() {
@@ -81,7 +83,7 @@ function emitStringified(newValue: any) {
       @click="copyToClipboard"
     >
       <component :is="copied ? Check : Copy" class="w-4 h-4" />
-      {{ copied ? 'Copied' : 'Copy' }}
+      {{ copied ? t('common.copiedShort') : t('common.copy') }}
     </Button>
 
     <ScrollArea :class="fullHeight ? 'flex-1 min-h-0' : 'h-[330px]'">

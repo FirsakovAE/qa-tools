@@ -109,6 +109,6 @@ export function normalizeMasking(raw: Partial<LogsMasking> | null | undefined): 
   return {
     enabled: raw?.enabled !== false,
     keys,
-    valuePatterns: raw?.valuePatterns !== false,
+    valuePatterns: raw?.enabled !== false,
   }
 }

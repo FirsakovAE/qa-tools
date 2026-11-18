@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,6 +13,7 @@ import {
 
 /** Replaces vanilla-jsoneditor’s “Copying and pasting” modal (clipboard blocked) with UI-kit primitives. */
 
+const { t } = useI18n()
 const modelOpen = defineModel<boolean>({ default: false })
 
 const modifier = computed(() => {
@@ -31,9 +33,9 @@ const modifier = computed(() => {
   <AlertDialog v-model:open="modelOpen">
     <AlertDialogContent class="gap-6 sm:max-w-md">
       <AlertDialogHeader>
-        <AlertDialogTitle>Copying and pasting</AlertDialogTitle>
+        <AlertDialogTitle>{{ t('editor.clipboardTitle') }}</AlertDialogTitle>
         <AlertDialogDescription class="text-left">
-          Clipboard permission is disabled by your browser. You can use:
+          {{ t('editor.clipboardBody') }}
         </AlertDialogDescription>
       </AlertDialogHeader>
 
@@ -41,7 +43,7 @@ const modifier = computed(() => {
         class="grid grid-cols-3 gap-1.5 sm:gap-2 text-sm border border-border rounded-md bg-muted/30 px-2 py-4 sm:px-3"
       >
         <div class="flex flex-col items-center justify-center gap-2 text-center min-w-0">
-          <span class="text-muted-foreground leading-tight">for copy</span>
+          <span class="text-muted-foreground leading-tight">{{ t('editor.forCopy') }}</span>
           <kbd
             class="inline-flex items-center justify-center rounded border bg-background px-2 py-1 font-mono text-xs shadow-sm"
           >
@@ -49,7 +51,7 @@ const modifier = computed(() => {
           </kbd>
         </div>
         <div class="flex flex-col items-center justify-center gap-2 text-center min-w-0">
-          <span class="text-muted-foreground leading-tight">for cut</span>
+          <span class="text-muted-foreground leading-tight">{{ t('editor.forCut') }}</span>
           <kbd
             class="inline-flex items-center justify-center rounded border bg-background px-2 py-1 font-mono text-xs shadow-sm"
           >
@@ -57,7 +59,7 @@ const modifier = computed(() => {
           </kbd>
         </div>
         <div class="flex flex-col items-center justify-center gap-2 text-center min-w-0">
-          <span class="text-muted-foreground leading-tight">for paste</span>
+          <span class="text-muted-foreground leading-tight">{{ t('editor.forPaste') }}</span>
           <kbd
             class="inline-flex items-center justify-center rounded border bg-background px-2 py-1 font-mono text-xs shadow-sm"
           >
@@ -68,7 +70,7 @@ const modifier = computed(() => {
 
       <AlertDialogFooter class="sm:justify-end">
         <AlertDialogAction>
-          Close
+          {{ t('common.close') }}
         </AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>

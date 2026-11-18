@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from '@/i18n'
 import { useDebounceFn } from '@vueuse/core'
 import { SearchIcon, RefreshCw, Star } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ import { isStoreInFavorites, matchFavoritePattern } from '@/utils/piniaFavorites
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'navigateToOptions', anchor: string): void
@@ -62,11 +64,11 @@ const {
 } = useSearchSettings({
   settings,
   searchKey: 'piniaSearch',
-  typeMap: {
-    'Name': 'byName',
-    'Key': 'byKey',
-    'Value': 'byValue',
-  }
+  typeMap: computed(() => ({
+    [t('search.name')]: 'byName',
+    [t('search.key')]: 'byKey',
+    [t('search.value')]: 'byValue',
+  }))
 })
 
 // Matched store IDs from PINIA_SEARCH (for key/value filter)
@@ -135,7 +137,7 @@ async function loadStoresSummary() {
         if (isLoading.value) {
           isLoading.value = false
           if (entries.value.length === 0) {
-            error.value = 'Timeout: Pinia stores not found or not initialized'
+            error.value = t('stores.timeout')
           }
         }
       }, 3000)
@@ -149,7 +151,7 @@ async function loadStoresSummary() {
     if (isExpectedExtensionError(err)) {
       error.value = null
     } else {
-      error.value = 'Failed to load Pinia stores. Make sure Pinia is installed and initialized.'
+      error.value = t('stores.loadFailed')
     }
 
     isLoading.value = false
@@ -342,7 +344,7 @@ async function handleRefresh() {
 async function toggleFavorite(store: StoreEntry) {
   if (!settings.value) return
 
-  const name = store.baseId || 'Unknown Store'
+  const name = store.baseId || t('stores.unknown')
   const isFav = isFavoriteStore(store)
 
   if (isFav) {
@@ -396,14 +398,14 @@ onUnmounted(() => {
         <!-- Left block: Title + Search + Filter -->
         <div class="flex items-center gap-2 toolbar-left-block">
           <h3 class="text-lg font-semibold shrink-0 toolbar-title">
-            Stores
+            {{ t('stores.title') }}
           </h3>
           
           <!-- Search bar (stays left) -->
           <div class="flex-1 min-w-[155px] max-w-xs relative">
             <Input
               v-model="searchTerm"
-              placeholder="Search stores..."
+              :placeholder="t('stores.search')"
               class="pl-8 h-8"
             />
             <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
@@ -414,7 +416,7 @@ onUnmounted(() => {
             <!-- Search type filter -->
             <FacetedFilter
               v-model="selectedSearchTypes"
-              title="Search by"
+              :title="t('common.searchBy')"
               :options="piniaSearchTypeOptions"
             />
           </div>
@@ -451,13 +453,13 @@ onUnmounted(() => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Refresh
+              {{ t('common.refresh') }}
             </TooltipContent>
           </Tooltip>
           
           <!-- Updated time -->
           <span class="text-xs text-muted-foreground whitespace-nowrap">
-            {{ isLoading ? 'Loading...' : lastUpdated }}
+            {{ isLoading ? t('stores.loading') : lastUpdated }}
           </span>
         </div>
       </div>
@@ -489,7 +491,7 @@ onUnmounted(() => {
             v-else
             class="h-full flex items-center justify-center text-muted-foreground"
           >
-            Select a store to see details
+            {{ t('stores.select') }}
           </div>
         </div>
       </div>

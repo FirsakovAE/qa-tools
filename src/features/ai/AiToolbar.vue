@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { MessageSquarePlus, Settings, RefreshCw } from 'lucide-vue-next'
 import {
   Select,
@@ -23,6 +24,8 @@ import AiIconButton from './AiIconButton.vue'
 const emit = defineEmits<{
   (e: 'open-settings', anchor?: string): void
 }>()
+
+const { t } = useI18n()
 
 const {
   entries, busy, models, modelsLoading, modelsError, provider, model, auto,
@@ -51,12 +54,12 @@ const groups = computed(() => [
     </Select>
 
     <Select v-if="hasKey && models.length" :model-value="model" @update:model-value="setModel(String($event))">
-      <SelectTrigger class="h-8 w-[230px] text-xs" :title="auto ? 'Picks an available model and switches when one hits a limit' : model">
-        <SelectValue placeholder="Model">{{ modelName(models, model) }}</SelectValue>
+      <SelectTrigger class="h-8 w-[230px] text-xs" :title="auto ? t('ai.autoTip') : model">
+        <SelectValue :placeholder="t('ai.model')">{{ auto ? t('ai.auto') : modelName(models, model) }}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem :value="AUTO_MODEL" class="text-xs">
-          Auto<span class="ml-1 text-muted-foreground">· {{ isCustomProvider(provider) ? 'listed models, switches on errors' : 'free models, switches on limits' }}</span>
+          {{ t('ai.auto') }}<span class="ml-1 text-muted-foreground">· {{ isCustomProvider(provider) ? t('ai.listedSwitches') : t('ai.freeSwitches') }}</span>
         </SelectItem>
         <template v-for="group in groups" :key="group.label">
           <SelectSeparator />
@@ -69,19 +72,19 @@ const groups = computed(() => [
         </template>
       </SelectContent>
     </Select>
-    <span v-if="modelsLoading" class="text-xs text-muted-foreground">Checking models...</span>
+    <span v-if="modelsLoading" class="text-xs text-muted-foreground">{{ t('ai.checkingModels') }}</span>
     <button v-else-if="modelsError" type="button" class="text-xs text-destructive_text underline" :title="modelsError" @click="reloadModels()">
-      Models failed to load, retry
+      {{ t('ai.modelsFailed') }}, {{ t('common.retry') }}
     </button>
-    <AiIconButton v-else-if="hasKey && models.length" tooltip="Check which models are available" @click="reloadModels()">
+    <AiIconButton v-else-if="hasKey && models.length" :tooltip="t('ai.checkModels')" @click="reloadModels()">
       <RefreshCw class="h-3.5 w-3.5" />
     </AiIconButton>
 
     <div class="ml-auto flex items-center gap-1">
-      <AiIconButton tooltip="AI settings: connection, access, masking, style, models" @click="emit('open-settings')">
+      <AiIconButton :tooltip="t('ai.settingsTip')" @click="emit('open-settings')">
         <Settings class="h-4 w-4" />
       </AiIconButton>
-      <AiIconButton tooltip="New chat" :disabled="entries.length === 0 && !busy" @click="newChat">
+      <AiIconButton :tooltip="t('ai.newChat')" :disabled="entries.length === 0 && !busy" @click="newChat">
         <MessageSquarePlus class="h-4 w-4" />
       </AiIconButton>
     </div>

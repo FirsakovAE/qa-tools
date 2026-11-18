@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
+import { useI18n } from '@/i18n'
 import { Check, Copy, ExternalLink } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,6 +15,7 @@ import usdtQr from '@/assets/usdt.jpg'
 const BOOSTY_URL = 'https://boosty.to/adambarmy'
 const USDT_ADDRESS = 'TPStwFujav3ZZATYb43iwHrrpMCZaoud84'
 
+const { t } = useI18n()
 const donateOpen = ref(false)
 const copied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null
@@ -44,9 +46,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="mt-2 w-full">
     <div class="border border-transparent px-2">
-      <h4 class="text-sm font-semibold leading-tight">Support Vue Inspector</h4>
+      <h4 class="text-sm font-semibold leading-tight">{{ t('support.title') }}</h4>
       <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-        Fund features and experiments.
+        {{ t('support.fund') }}
       </p>
     </div>
 
@@ -58,11 +60,11 @@ onBeforeUnmount(() => {
         class="rounded-md border px-2 py-1.5 text-left hover:bg-accent"
       >
         <span class="flex items-center gap-1 text-sm font-medium leading-tight">
-          Monthly support
+          {{ t('support.monthly') }}
           <ExternalLink class="h-3 w-3 shrink-0 opacity-60" />
         </span>
         <span class="mt-0.5 block text-xs leading-snug text-muted-foreground">
-          Boosty support levels.
+          {{ t('support.boosty') }}
         </span>
       </a>
 
@@ -71,9 +73,9 @@ onBeforeUnmount(() => {
         class="rounded-md border px-2 py-1.5 text-left hover:bg-accent"
         @click="donateOpen = true"
       >
-        <span class="block text-sm font-medium leading-tight">Donate with USDT</span>
+        <span class="block text-sm font-medium leading-tight">{{ t('support.usdt') }}</span>
         <span class="mt-0.5 block text-xs leading-snug text-muted-foreground">
-          One-time, direct to the author.
+          {{ t('support.usdtShort') }}
         </span>
       </button>
     </div>
@@ -81,14 +83,14 @@ onBeforeUnmount(() => {
     <Dialog v-model:open="donateOpen">
       <DialogContent class="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Donate with USDT</DialogTitle>
+          <DialogTitle>{{ t('support.usdt') }}</DialogTitle>
           <DialogDescription>
-            A one-time transfer directly to the author. USDT on Tron (TRC-20).
+            {{ t('support.usdtLong') }}
           </DialogDescription>
         </DialogHeader>
         <img
           :src="usdtQr"
-          alt="USDT TRC-20 QR code"
+          :alt="t('about.qrAlt')"
           class="mx-auto w-full max-w-[280px] rounded-md bg-white"
         />
         <p class="select-all break-all text-center font-mono text-xs leading-relaxed">
@@ -96,7 +98,7 @@ onBeforeUnmount(() => {
         </p>
         <Button variant="outline" size="sm" class="w-full gap-1.5" @click="copyAddress">
           <component :is="copied ? Check : Copy" class="h-3.5 w-3.5" />
-          {{ copied ? 'Copied' : 'Copy address' }}
+          {{ copied ? t('support.copied') : t('about.copyAddress') }}
         </Button>
       </DialogContent>
     </Dialog>

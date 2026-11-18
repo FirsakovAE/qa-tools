@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useI18n } from '@/i18n'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-json'
 import 'prismjs/components/prism-markup'
@@ -38,6 +39,7 @@ const emit = defineEmits<{
 }>()
 
 const editedJson = ref(props.modelValue.trim())
+const { t } = useI18n()
 const copied = ref(false)
 
 watch(() => props.modelValue, v => {
@@ -138,7 +140,7 @@ function onInput(e: Event) {
       @click="copyToClipboard"
     >
       <component :is="copied ? Check : Copy" class="w-4 h-4" />
-      {{ copied ? 'Copied' : 'Copy' }}
+      {{ copied ? t('common.copiedShort') : t('common.copy') }}
     </Button>
 
     <ScrollArea :class="[fullHeight ? 'flex-1 min-h-0 full-height-scroll' : 'h-[330px]']">

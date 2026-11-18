@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import VirtualTable from '@/components/VirtualTable.vue'
 import RowCheckCell from '@/components/RowCheckCell.vue'
 import type { RowCheckState } from '@/composables/useRowSelection'
@@ -61,6 +62,8 @@ const emit = defineEmits<{
   (e: 'deleteMock', entry: NetworkEntry): void
 }>()
 
+const { t } = useI18n()
+
 // Method badge variant based on HTTP method
 function getMethodVariant(method: string): 'default' | 'secondary' | 'destructive_text' | 'outline' {
   switch (method.toUpperCase()) {
@@ -77,11 +80,11 @@ function getMethodVariant(method: string): 'default' | 'secondary' | 'destructiv
 function formatStatus(entry: NetworkEntry): string {
   if (entry.initiator === 'websocket') {
     const socket = entry.websocket
-    if (socket?.state === 'open') return 'Open'
+    if (socket?.state === 'open') return t('log.open')
     if (entry.pending || socket?.state === 'connecting') return '⏳'
     if (entry.error && socket?.state !== 'closed') return '✗'
     if (socket?.closeCode && socket.closeCode !== 1005) return String(socket.closeCode)
-    return 'Closed'
+    return t('status.closed')
   }
   if (entry.pending) return '⏳'
   if (entry.error) return '✗'
@@ -138,14 +141,14 @@ const networkDisabledColumns = computed(() => {
 })
 
 
-const networkColumnDefs = [
-  { key: 'status', label: 'Status' },
-  { key: 'method', label: 'Method' },
-  { key: 'name', label: 'Name' },
-  { key: 'path', label: 'Path' },
-  { key: 'time', label: 'Time' },
-  { key: 'size', label: 'Size' },
-] as const
+const networkColumnDefs = computed(() => [
+  { key: 'status', label: t('network.status') },
+  { key: 'method', label: t('network.method') },
+  { key: 'name', label: t('network.name') },
+  { key: 'path', label: t('network.path') },
+  { key: 'time', label: t('common.time') },
+  { key: 'size', label: t('general.size') },
+])
 
 // Sorted entries (newest first) — virtualization requires array for scroll height
 const sortedEntries = computed(() => [...props.entries].reverse())
@@ -187,22 +190,22 @@ const ROW_HEIGHT = 40
     key-field="id"
     :item-size="ROW_HEIGHT"
     min-width="460px"
-    empty-message="No network requests captured yet"
+    :empty-message="t('network.empty')"
   >
     <template #header>
       <RowCheckCell
         header
         :state="headerCheckState"
         :disabled="headerCheckDisabled"
-        :title="headerCheckDisabled ? 'WebSocket is not included in Export Collection' : (headerCheckState === true ? 'Unselect all' : 'Select all for export')"
+        :title="headerCheckDisabled ? t('network.wsExcluded') : (headerCheckState === true ? t('common.unselectAll') : t('common.selectAllExport'))"
         @toggle="emit('checkAll')"
       />
-      <div v-if="columns.status" class="network-cell network-cell-status">Status</div>
-      <div v-if="columns.method" class="network-cell network-cell-method">Method</div>
-      <div v-if="columns.name" :class="['network-cell network-cell-name', columns.path ? 'network-cell-name-with-path' : '']">Name</div>
-      <div v-if="columns.path" class="network-cell network-cell-path">Path</div>
-      <div v-if="columns.time" class="network-cell network-cell-time">Time</div>
-      <div v-if="columns.size" class="network-cell network-cell-size">Size</div>
+      <div v-if="columns.status" class="network-cell network-cell-status">{{ t('network.status') }}</div>
+      <div v-if="columns.method" class="network-cell network-cell-method">{{ t('network.method') }}</div>
+      <div v-if="columns.name" :class="['network-cell network-cell-name', columns.path ? 'network-cell-name-with-path' : '']">{{ t('network.name') }}</div>
+      <div v-if="columns.path" class="network-cell network-cell-path">{{ t('network.path') }}</div>
+      <div v-if="columns.time" class="network-cell network-cell-time">{{ t('common.time') }}</div>
+      <div v-if="columns.size" class="network-cell network-cell-size">{{ t('general.size') }}</div>
       <div class="network-cell network-cell-actions virtual-table__cell-actions">
         <TableColumnSelector
           :columns="{ ...columns }"
@@ -236,7 +239,7 @@ const ROW_HEIGHT = 40
                   <RowCheckCell
                     :state="checkedIds.has(entry.id)"
                     :disabled="entry.initiator === 'websocket'"
-                    :title="entry.initiator === 'websocket' ? 'WebSocket is not included in Export Collection' : 'Select for export (Shift — range, Ctrl/Cmd+click on row — toggle)'"
+                    :title="entry.initiator === 'websocket' ? t('network.wsExcluded') : t('row.selectExport')"
                     @toggle="emit('check', entry.id, $event)"
                   />
                   <div v-if="columns.status" class="network-cell network-cell-status">

@@ -4,6 +4,7 @@
  * Avoids Prism and tree rendering which create thousands of DOM nodes and freeze the UI.
  */
 import { ref } from 'vue'
+import { useI18n } from '@/i18n'
 import { Copy, Check } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -16,6 +17,7 @@ const props = withDefaults(
   { fullHeight: false }
 )
 
+const { t } = useI18n()
 const copied = ref(false)
 
 function copyToClipboard() {
@@ -51,7 +53,7 @@ function copyToClipboard() {
       @click="copyToClipboard"
     >
       <component :is="copied ? Check : Copy" class="w-4 h-4" />
-      {{ copied ? 'Copied' : 'Copy' }}
+      {{ copied ? t('common.copiedShort') : t('common.copy') }}
     </Button>
 
     <ScrollArea :class="[fullHeight ? 'flex-1 min-h-0 full-height-scroll' : 'h-[330px]']">

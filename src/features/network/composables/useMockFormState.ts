@@ -1,4 +1,5 @@
 import { ref, computed, watch } from 'vue'
+import { t } from '@/i18n'
 import type { NetworkEntry } from '@/types/network'
 import type { MockRule, MockHeaderEntry, BaseInspectorSettings } from '@/types/inspector'
 import { useInspectorSettings } from '@/settings/useInspectorSettings'
@@ -132,7 +133,7 @@ export function useMockFormState(options: UseMockFormStateOptions) {
     }
 
     delay.value = 0
-    description.value = `Mock for ${e.method} ${e.path}`
+    description.value = t('network.mockFor', { method: e.method, path: e.path })
   }
 
   function fillFromExisting(mock: MockRule) {
@@ -200,11 +201,11 @@ export function useMockFormState(options: UseMockFormStateOptions) {
     return getStatusClass(entry().status, entry().pending)
   })
 
-  const sections: Array<{ id: SectionId; label: string }> = [
-    { id: 'matching', label: 'URL Matching' },
-    { id: 'headers', label: 'Headers' },
-    { id: 'response', label: 'Response' },
-  ]
+  const sections = computed<Array<{ id: SectionId; label: string }>>(() => [
+    { id: 'matching', label: t('network.urlMatching') },
+    { id: 'headers', label: t('common.headers') },
+    { id: 'response', label: t('common.response') },
+  ])
 
   function handleConfirm() {
     if (!entry() || !isValid.value) return

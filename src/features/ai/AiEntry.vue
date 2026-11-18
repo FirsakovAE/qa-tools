@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { Copy, Check, RotateCcw, Wand2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import AiSteps from './AiSteps.vue'
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void
 }>()
 
+const { t } = useI18n()
 const { busy, ready, models, entries, retry, retryWithAuto } = useAiChat()
 
 const lastAnswer = computed(() => {
@@ -44,7 +46,7 @@ const lastAnswer = computed(() => {
       <template v-if="entry.error">
         <div class="text-sm text-destructive_text whitespace-pre-wrap break-words">{{ entry.text }}</div>
         <details v-if="entry.errorDetails" class="mt-1 text-xs text-muted-foreground">
-          <summary class="cursor-pointer select-none">Provider message</summary>
+          <summary class="cursor-pointer select-none">{{ t('ai.providerMessage') }}</summary>
           <div class="mt-1 whitespace-pre-wrap break-words font-mono">{{ entry.errorDetails }}</div>
         </details>
         <Button
@@ -56,7 +58,7 @@ const lastAnswer = computed(() => {
           @click="retryWithAuto"
         >
           <Wand2 class="h-3.5 w-3.5" />
-          Switch to Auto and try again
+          {{ t('ai.switchAuto') }}
         </Button>
       </template>
       <div v-else class="ai-answer markdown-body text-sm break-words leading-relaxed" v-html="renderAnswer(entry.id, entry.text, entry.events)" />
@@ -67,7 +69,7 @@ const lastAnswer = computed(() => {
       </div>
     </div>
     <div class="ai-entry-actions mt-0.5 flex items-center gap-0.5">
-      <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground" :title="copied ? 'Copied' : 'Copy'" @click="emit('copy')">
+      <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground" :title="copied ? t('common.copiedShort') : t('common.copy')" @click="emit('copy')">
         <Check v-if="copied" class="h-3.5 w-3.5" />
         <Copy v-else class="h-3.5 w-3.5" />
       </Button>
@@ -76,7 +78,7 @@ const lastAnswer = computed(() => {
         variant="ghost"
         size="icon"
         class="h-6 w-6 text-muted-foreground"
-        title="Try again"
+        :title="t('common.tryAgain')"
         :disabled="busy || !ready"
         @click="retry"
       >

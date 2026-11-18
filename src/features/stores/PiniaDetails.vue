@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useI18n } from '@/i18n'
 import { ArrowLeft, Edit, X, Save, RefreshCw, Star } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,7 @@ import { isExpectedExtensionError } from '@/utils/expectedErrors'
 import { findRemovedPaths } from '@/utils/removedPaths'
 
 const runtime = useRuntime()
+const { t } = useI18n()
 
 interface StoreData {
   id: string
@@ -67,7 +69,7 @@ const jsonEditorImpl = ref<'classic' | 'jsoneditor'>('jsoneditor')
 
 // --- Favorites (by store name) ---
 const settings = useInspectorSettingsSync()
-const storeName = computed(() => props.store.baseId || 'Unknown Store')
+const storeName = computed(() => props.store.baseId || t('stores.unknown'))
 const isFavorite = computed(() => {
   if (!settings.value?.piniaFavorites) return false
   const name = storeName.value
@@ -108,10 +110,10 @@ const sections = computed(() => {
   const list: Array<{ id: SectionId; label: string }> = []
   
   if (props.store.stateKeys > 0) {
-    list.push({ id: 'state', label: 'State' })
+    list.push({ id: 'state', label: t('stores.state') })
   }
   if (props.store.getterKeys > 0) {
-    list.push({ id: 'getters', label: 'Getters' })
+    list.push({ id: 'getters', label: t('stores.getters') })
   }
   
   return list
@@ -119,7 +121,7 @@ const sections = computed(() => {
 
 // Computed
 const storeId = props.store.id // NOT reactive - this component is disposable
-const displayName = computed(() => props.store.baseId || 'Unknown Store')
+const displayName = computed(() => props.store.baseId || t('stores.unknown'))
 const hasState = computed(() => props.store.stateKeys > 0)
 const hasGetters = computed(() => props.store.getterKeys > 0)
 
@@ -354,14 +356,14 @@ onUnmounted(() => {
           <div class="flex items-center gap-2 mb-1">
             <span class="font-semibold truncate">{{ displayName }}</span>
             <Badge v-if="hasState" variant="secondary" class="text-xs">
-              State: {{ store.stateKeys }}
+              {{ t('stores.state') }}: {{ store.stateKeys }}
             </Badge>
             <Badge v-if="hasGetters" variant="outline" class="text-xs">
-              Getters: {{ store.getterKeys }}
+              {{ t('stores.getters') }}: {{ store.getterKeys }}
             </Badge>
           </div>
           <div class="text-xs text-muted-foreground">
-            Updated: {{ lastFetched || 'Loading...' }}
+            {{ t('common.updated') }} {{ lastFetched || t('stores.loading') }}
           </div>
         </div>
         
@@ -383,7 +385,7 @@ onUnmounted(() => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {{ isFavorite ? 'Remove from favorites' : 'Add to favorites' }}
+              {{ isFavorite ? t('stores.removeFav') : t('stores.addFav') }}
             </TooltipContent>
           </Tooltip>
           
@@ -401,7 +403,7 @@ onUnmounted(() => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Refresh data
+              {{ t('common.refreshData') }}
             </TooltipContent>
           </Tooltip>
           
@@ -417,7 +419,7 @@ onUnmounted(() => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Edit {{ activeSection }}
+              {{ activeSection === 'state' ? t('stores.editState') : t('stores.editGetters') }}
             </TooltipContent>
           </Tooltip>
           
@@ -433,7 +435,7 @@ onUnmounted(() => {
                   <X class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Cancel</TooltipContent>
+              <TooltipContent side="bottom">{{ t('common.cancel') }}</TooltipContent>
             </Tooltip>
             
             <Tooltip>
@@ -448,7 +450,7 @@ onUnmounted(() => {
                   <Save class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Save</TooltipContent>
+              <TooltipContent side="bottom">{{ t('common.save') }}</TooltipContent>
             </Tooltip>
           </template>
         </div>
@@ -474,13 +476,13 @@ onUnmounted(() => {
       <div class="flex-1 min-h-0 overflow-hidden">
         <!-- Loading state -->
         <div v-if="isLoading" class="h-full flex items-center justify-center text-sm text-muted-foreground">
-          Loading store data...
+          {{ t('stores.loadingData') }}
         </div>
         
         <!-- State Section -->
         <div v-else-if="activeSection === 'state'" class="h-full flex flex-col">
           <div v-if="!hasState" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            No state data
+            {{ t('stores.noState') }}
           </div>
           <template v-else-if="isStateDataReady">
             <div class="flex-1 min-h-0">
@@ -501,7 +503,7 @@ onUnmounted(() => {
         <!-- Getters Section -->
         <div v-else-if="activeSection === 'getters'" class="h-full flex flex-col">
           <div v-if="!hasGetters" class="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            No getters data
+            {{ t('stores.noGetters') }}
           </div>
           <template v-else-if="isGettersDataReady">
             <div class="flex-1 min-h-0">

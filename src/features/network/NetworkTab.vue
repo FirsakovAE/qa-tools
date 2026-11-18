@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from '@/i18n'
 import { Trash2, Pause, Play, SearchIcon, Upload, PauseCircle, Shuffle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -59,6 +60,7 @@ const emit = defineEmits<{
 // ============================================================================
 
 const settings = useInspectorSettingsSync()
+const { t } = useI18n()
 
 const {
   searchSettings,
@@ -67,14 +69,14 @@ const {
 } = useSearchSettings({
   settings,
   searchKey: 'networkSearch',
-  typeMap: {
-    'Status code': 'byStatus',
-    'Method': 'byMethod',
-    'Path': 'byPath',
-    'Name': 'byName',
-    'Key': 'byKey',
-    'Value': 'byValue',
-  }
+  typeMap: computed(() => ({
+    [t('search.statusCode')]: 'byStatus',
+    [t('search.method')]: 'byMethod',
+    [t('search.path')]: 'byPath',
+    [t('search.name')]: 'byName',
+    [t('search.key')]: 'byKey',
+    [t('search.value')]: 'byValue',
+  })),
 })
 
 const activeBreakpoints = computed<BreakpointItem[]>(() => 
@@ -227,11 +229,11 @@ const trafficFilter = computed<NetworkTrafficFilter>({
     inspectorState.networkTrafficFilter = value
   },
 })
-const trafficOptions: { id: NetworkTrafficFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'xhr', label: 'XHR' },
-  { id: 'ws', label: 'WS' },
-]
+const trafficOptions = computed<{ id: NetworkTrafficFilter; label: string }[]>(() => [
+  { id: 'all', label: t('common.all') },
+  { id: 'xhr', label: t('network.xhr') },
+  { id: 'ws', label: t('network.ws') },
+])
 
 /** Search results narrowed to HTTP or WebSocket. The store itself keeps every row. */
 const listedEntries = computed(() => {
@@ -256,13 +258,13 @@ const entriesToExport = computed(() => {
 })
 
 const exportLabel = computed(() =>
-  rowSelection.count.value ? `Export Collection (${rowSelection.count.value})` : 'Export Collection',
+  rowSelection.count.value ? t('network.exportCount', { n: rowSelection.count.value }) : t('network.export'),
 )
 
 const exportTooltip = computed(() =>
   rowSelection.count.value
-    ? `Export ${rowSelection.count.value} selected requests as Postman collection`
-    : 'Export filtered HTTP requests as Postman collection. WebSocket rows are skipped.',
+    ? t('network.exportSelected', { n: rowSelection.count.value })
+    : t('network.exportAll'),
 )
 
 const entriesForPostmanExport = computed(() =>
@@ -429,13 +431,13 @@ watch(settings, (s) => {
     <div class="shrink-0 flex flex-wrap items-center gap-2 p-2 border-b toolbar-container" :class="{ 'toolbar-hide-on-details': selectedEntry || mockFormMode || breakpointFormMode || headerLinkEditor }">
       <!-- Left block: Title + Search + Filter + Export (inline) -->
       <div class="flex items-center gap-2 toolbar-left-block">
-        <h3 class="text-lg font-semibold shrink-0 toolbar-title">Network</h3>
+        <h3 class="text-lg font-semibold shrink-0 toolbar-title">{{ t('network.title') }}</h3>
         
         <!-- Search bar (stays left) -->
         <div class="flex-1 min-w-[155px] max-w-xs relative">
           <Input
             v-model="searchTerm"
-            placeholder="Search requests..."
+            :placeholder="t('network.search')"
             class="pl-8 h-8"
           />
           <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
@@ -446,11 +448,11 @@ watch(settings, (s) => {
           <!-- Search type filter -->
           <FacetedFilter
             v-model="selectedSearchTypes"
-            title="Search by"
+            :title="t('common.searchBy')"
             :options="searchTypeOptions"
           />
 
-          <div class="traffic-inline inline-flex h-8 items-center rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Traffic">
+          <div class="traffic-inline inline-flex h-8 items-center rounded-md border bg-muted/40 p-0.5" role="group" :aria-label="t('network.traffic')">
             <button
               v-for="option in trafficOptions"
               :key="option.id"
@@ -491,7 +493,7 @@ watch(settings, (s) => {
       <!-- Right block: Status badges and controls -->
       <div class="flex items-center gap-2 shrink-0 ml-auto toolbar-right-block">
         <!-- All / XHR / WS and Export move to this row together when the toolbar is narrow -->
-        <div class="traffic-wrapped hidden h-8 items-center rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Traffic">
+        <div class="traffic-wrapped hidden h-8 items-center rounded-md border bg-muted/40 p-0.5" role="group" :aria-label="t('network.traffic')">
           <button
             v-for="option in trafficOptions"
             :key="option.id"
@@ -530,7 +532,7 @@ watch(settings, (s) => {
           {{ entriesCount }}<span v-if="(searchTerm || trafficFilter !== 'all') && entriesCount !== totalCount" class="text-muted-foreground">/{{ totalCount }}</span>
         </Badge>
         <Badge v-if="pendingCount > 0" variant="outline" class="whitespace-nowrap text-yellow-500 border-yellow-500/30">
-          {{ pendingCount }}<span class="badge-label">pending</span>
+          {{ pendingCount }}<span class="badge-label">{{ t('network.pending') }}</span>
         </Badge>
         <Badge 
           v-if="pendingBreakpointIds.length > 0" 
@@ -541,7 +543,7 @@ watch(settings, (s) => {
             : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
           @click="selectFirstPendingBreakpoint"
         >
-          {{ pendingBreakpointIds.length }}<span class="badge-label">bp</span>
+          {{ pendingBreakpointIds.length }}<span class="badge-label">{{ t('network.bp') }}</span>
         </Badge>
         <Badge
           v-if="activeBreakpoints.length > 0"
@@ -552,7 +554,7 @@ watch(settings, (s) => {
             : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
           @click="emit('navigateToOptions', 'breakpoints-section')"
         >
-          {{ activeBreakpoints.length }}<span class="badge-label">bp</span>
+          {{ activeBreakpoints.length }}<span class="badge-label">{{ t('network.bp') }}</span>
         </Badge>
         <Badge
           v-if="activeMocks.length > 0"
@@ -563,10 +565,10 @@ watch(settings, (s) => {
             : 'text-muted-foreground border-muted-foreground/35 hover:bg-muted/50'"
           @click="emit('navigateToOptions', 'mocks-section')"
         >
-          {{ activeMocks.length }}<span class="badge-label">mock</span>
+          {{ activeMocks.length }}<span class="badge-label">{{ t('network.mock') }}</span>
         </Badge>
         <Badge v-if="paused" variant="outline" class="whitespace-nowrap text-orange-500 border-orange-500/30">
-          Paused
+          {{ t('common.paused') }}
         </Badge>
 
         <TooltipProvider>
@@ -583,7 +585,7 @@ watch(settings, (s) => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {{ breakpointsRulesActive ? 'Breakpoints on (click to suspend)' : 'Breakpoints suspended (click to enable)' }}
+              {{ breakpointsRulesActive ? t('network.breakpointsOn') : t('network.breakpointsOff') }}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -602,7 +604,7 @@ watch(settings, (s) => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {{ mocksRulesActive ? 'Mock responses on (click to suspend)' : 'Mock responses suspended (click to enable)' }}
+              {{ mocksRulesActive ? t('network.mocksOn') : t('network.mocksOff') }}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -622,7 +624,7 @@ watch(settings, (s) => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {{ paused ? 'Resume recording' : 'Pause recording' }}
+              {{ paused ? t('network.resume') : t('network.pause') }}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -641,7 +643,7 @@ watch(settings, (s) => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Clear all
+              {{ t('common.clearAll') }}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -731,7 +733,7 @@ watch(settings, (s) => {
           v-else
           class="h-full flex items-center justify-center text-muted-foreground"
         >
-          Select a request to see details
+          {{ t('network.select') }}
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
   shallowRef,
   watch,
 } from 'vue'
+import { useI18n } from '@/i18n'
 import { createJSONEditor, expandAll, expandNone, Mode, createMultiSelection, getFocusPath, SelectionType } from 'vanilla-jsoneditor'
 import type {
   Content,
@@ -55,6 +56,8 @@ import 'vanilla-jsoneditor/themes/jse-theme-dark.css'
 import './jse-theme.css'
 
 type JsonMode = 'text' | 'tree'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -964,27 +967,27 @@ let unregisterSearchHandle: (() => void) | null = null
         <div
           class="inline-flex rounded-md border border-border/80 bg-muted/40 p-0.5 gap-0.5"
           role="group"
-          aria-label="Editor mode"
+          :aria-label="t('editor.mode')"
         >
           <Button
             variant="ghost"
             size="sm"
             class="h-7 px-2 text-xs rounded-sm"
             :class="isTextMode ? 'bg-background shadow-sm' : ''"
-            title="Text mode"
+            :title="t('editor.textMode')"
             @click="setMode('text')"
           >
-            Text
+            {{ t('editor.text') }}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             class="h-7 px-2 text-xs rounded-sm"
             :class="isTreeMode ? 'bg-background shadow-sm' : ''"
-            title="Tree mode"
+            :title="t('editor.treeMode')"
             @click="setMode('tree')"
           >
-            Tree
+            {{ t('editor.tree') }}
           </Button>
         </div>
 
@@ -993,41 +996,41 @@ let unregisterSearchHandle: (() => void) | null = null
             variant="ghost"
             size="sm"
             class="h-7 gap-1 px-2 text-xs"
-            title="Expand all"
+            :title="t('editor.expandAll')"
             @click="expandAllNodes"
           >
             <ChevronsUpDown class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Expand all</span>
+            <span class="hidden sm:inline">{{ t('editor.expandAll') }}</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             class="h-7 gap-1 px-2 text-xs"
-            title="Collapse all"
+            :title="t('editor.collapseAll')"
             @click="collapseAllNodes"
           >
             <ChevronsDownUp class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Collapse all</span>
+            <span class="hidden sm:inline">{{ t('editor.collapseAll') }}</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             class="h-7 gap-1 px-2 text-xs"
-            title="Undo (Ctrl+Z)"
+            :title="t('editor.undoShortcut')"
             @click="editorUndo"
           >
             <Undo class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Undo</span>
+            <span class="hidden sm:inline">{{ t('editor.undo') }}</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             class="h-7 gap-1 px-2 text-xs"
-            title="Redo (Ctrl+Shift+Z)"
+            :title="t('editor.redoShortcut')"
             @click="editorRedo"
           >
             <Redo class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Redo</span>
+            <span class="hidden sm:inline">{{ t('editor.redo') }}</span>
           </Button>
         </template>
 
@@ -1036,41 +1039,41 @@ let unregisterSearchHandle: (() => void) | null = null
             variant="ghost"
             size="sm"
             class="h-7 gap-1 px-2 text-xs"
-            title="Format JSON"
+            :title="t('editor.format')"
             @click="formatJson"
           >
             <AlignLeft class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Format</span>
+            <span class="hidden sm:inline">{{ t('editor.format') }}</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             class="h-7 gap-1 px-2 text-xs"
-            title="Compact JSON"
+            :title="t('editor.compact')"
             @click="compactJson"
           >
             <Minimize2 class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Compact</span>
+            <span class="hidden sm:inline">{{ t('editor.compact') }}</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             class="h-7 gap-1 px-2 text-xs"
-            title="Undo (Ctrl+Z)"
+            :title="t('editor.undoShortcut')"
             @click="editorUndo"
           >
             <Undo class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Undo</span>
+            <span class="hidden sm:inline">{{ t('editor.undo') }}</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             class="h-7 gap-1 px-2 text-xs"
-            title="Redo (Ctrl+Shift+Z)"
+            :title="t('editor.redoShortcut')"
             @click="editorRedo"
           >
             <Redo class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Redo</span>
+            <span class="hidden sm:inline">{{ t('editor.redo') }}</span>
           </Button>
         </template>
       </div>
@@ -1080,11 +1083,11 @@ let unregisterSearchHandle: (() => void) | null = null
           variant="ghost"
           size="sm"
           class="h-7 gap-1 px-2 text-xs"
-          title="Search (Ctrl+F)"
+          :title="`${t('editor.search')} (Ctrl+F)`"
           @click="openSearchFromToolbar"
         >
           <Search class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">Search</span>
+          <span class="hidden sm:inline">{{ t('editor.search') }}</span>
         </Button>
 
         <Button
@@ -1092,11 +1095,11 @@ let unregisterSearchHandle: (() => void) | null = null
           variant="ghost"
           size="sm"
           class="h-7 gap-1 px-2 text-xs"
-          :title="copied ? 'Copied' : 'Copy to clipboard'"
+          :title="copied ? t('common.copiedShort') : t('editor.copyClipboard')"
           @click="copyJsonToolbar"
         >
           <component :is="copied ? Check : Copy" class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">{{ copied ? 'Copied' : 'Copy' }}</span>
+          <span class="hidden sm:inline">{{ copied ? t('common.copiedShort') : t('common.copy') }}</span>
         </Button>
       </div>
     </div>

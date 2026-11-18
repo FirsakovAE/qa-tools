@@ -12,6 +12,9 @@ import type { LogEvent } from '@/types/logs'
 import LogActionsMenuContent from './LogActionsMenuContent.vue'
 import { formatLogTime } from './format'
 import { describeLog, logBadgeClass, logLabel, type LogsSource } from './view'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   events: LogEvent[]
@@ -69,18 +72,18 @@ const ROW_HEIGHT = 40
     key-field="id"
     :item-size="ROW_HEIGHT"
     min-width="460px"
-    :empty-message="emptyMessage ?? 'No events logged yet'"
+    :empty-message="emptyMessage ?? t('log.empty')"
   >
     <template #header>
       <RowCheckCell
         header
         :state="headerCheckState"
-        :title="headerCheckState === true ? 'Unselect all' : 'Select all for export'"
+        :title="headerCheckState === true ? t('common.unselectAll') : t('common.selectAllExport')"
         @toggle="emit('checkAll')"
       />
-      <div class="log-cell log-cell-time">Time</div>
-      <div class="log-cell log-cell-type">Type</div>
-      <div class="log-cell log-cell-event">Event</div>
+      <div class="log-cell log-cell-time">{{ t('log.time') }}</div>
+      <div class="log-cell log-cell-type">{{ t('log.type') }}</div>
+      <div class="log-cell log-cell-event">{{ t('log.event') }}</div>
       <div class="log-cell virtual-table__cell-actions" />
     </template>
 
@@ -99,7 +102,7 @@ const ROW_HEIGHT = 40
           >
             <RowCheckCell
               :state="checkedIds.has(event.id)"
-              title="Select for export (Shift — range, Ctrl/Cmd+click on row — toggle)"
+              :title="t('row.selectExport')"
               @toggle="emit('check', event.id, $event)"
             />
             <div class="log-cell log-cell-time">

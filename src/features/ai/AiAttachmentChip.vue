@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { Box, Database, FileText, Globe, X } from 'lucide-vue-next'
 import type { AiAttachment } from './attachments'
 
@@ -11,6 +12,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'remove'): void
 }>()
+
+const { t } = useI18n()
 
 const ICONS = { log: FileText, network: Globe, props: Box, store: Database }
 const icon = computed(() => ICONS[props.item.kind])
@@ -27,8 +30,8 @@ const icon = computed(() => ICONS[props.item.kind])
       v-if="removable"
       type="button"
       class="-mr-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-      :aria-label="`Remove ${item.label}`"
-      title="Remove from the question"
+      :aria-label="t('ai.removeNamed', { name: item.label })"
+      :title="t('ai.removeAttach')"
       @click.stop="emit('remove')"
     >
       <X class="h-3 w-3" />

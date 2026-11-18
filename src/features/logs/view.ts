@@ -6,7 +6,9 @@
  */
 
 import type { LogEvent } from '@/types/logs'
-import { LOG_KIND_LABELS, LOG_KIND_META } from '@/types/logs'
+import { LOG_KIND_META } from '@/types/logs'
+import { locale, t, type MessageKey } from '@/i18n'
+import { logKindLabels } from './labels'
 import type { NetworkEntry } from '@/types/network'
 import { logsRuntime as rt, type HydratedEvent, type StoreChains } from '@/injected/logs/runtime'
 import type { NetworkPool } from './networkPool'
@@ -26,7 +28,39 @@ const HYDRATE_CACHE_SIZE = 16
 
 const storeIndexes = new WeakMap<LogEvent[], StoreChains>()
 const descriptions = new WeakMap<LogEvent, { title: string; subtitle?: string }>()
-const hydrated = new Map<LogEvent, HydratedEvent>()
+const hydrated = new Map<LogEvent, { lang: string; view: HydratedEvent }>()
+
+const LOG_PHRASES: Record<string, MessageKey> = {
+  'Initial state of the store': 'log.phrase.storeInitial',
+  'State at the start of observation': 'log.phrase.storeSnapshot',
+  'Store initialized': 'log.op.init',
+  'Store snapshot': 'log.op.snapshot',
+  'Store checkpoint': 'log.op.checkpoint',
+  'Network entry is not available': 'log.phrase.noEntry',
+  Sent: 'common.sent',
+  Received: 'common.received',
+  Click: 'log.kind.click',
+}
+
+/** Display copy that the logs runtime still produces in English. */
+export function localizeLogText(text: string | undefined): string | undefined {
+  if (!text) return text
+  const exact = LOG_PHRASES[text]
+  if (exact) return t(exact)
+  const compacted = text.match(/^Compacted state \((\d+) earlier changes\)$/)
+  if (compacted) return t('log.phrase.compacted', { n: compacted[1] })
+  const error = text.match(/^Error: ([\s\S]*)$/)
+  if (error) return t('log.phrase.error', { message: error[1] })
+  const direction = text.match(/^(Sent|Received) ([\s\S]*)$/)
+  if (direction) return `${t(direction[1] === 'Sent' ? 'common.sent' : 'common.received')} ${direction[2]}`
+  return text
+    .replaceAll('args: empty', t('log.phrase.argsEmpty'))
+    .replaceAll('result: null', t('log.phrase.resultNull'))
+    .replaceAll('data: null', t('log.phrase.dataNull'))
+    .replaceAll('not loaded', t('log.phrase.notLoaded'))
+    .replaceAll('store error', t('log.phrase.storeError'))
+    .replaceAll('loading', t('log.phrase.loading'))
+}
 
 function storeChains(events: LogEvent[]): StoreChains {
   let index = storeIndexes.get(events)
@@ -57,12 +91,15 @@ export function describeLog(event: LogEvent, source: LogsSource): { title: strin
     description = rt.describe(event, { getEntry: id => source.pool.get(id) as Record<string, any> | undefined })
     descriptions.set(event, description)
   }
-  return description
+  return {
+    title: localizeLogText(description.title) || description.title,
+    subtitle: localizeLogText(description.subtitle),
+  }
 }
 
 /** Type label (store bases have their own names within "Change store") */
 export function logLabel(event: LogEvent): string {
-  return rt.eventLabel(event, LOG_KIND_LABELS)
+  return localizeLogText(rt.eventLabel(event, logKindLabels())) || event.kind
 }
 
 export function logBadgeClass(event: LogEvent): string {
@@ -74,14 +111,24 @@ export function logBadgeClass(event: LogEvent): string {
  * of the network entry...). A few recent views are cached; states are shared, do not mutate.
  */
 export function hydrateLog(event: LogEvent, source: LogsSource): HydratedEvent {
+  const lang = locale.value
   const cached = hydrated.get(event)
-  if (cached) {
+  if (cached?.lang === lang) {
     hydrated.delete(event)
     hydrated.set(event, cached)
-    return cached
+    return cached.view
   }
-  const view = rt.hydrate(event, context(source), LOG_KIND_LABELS)
-  hydrated.set(event, view)
+  const raw = rt.hydrate(event, context(source), logKindLabels())
+  const view: HydratedEvent = {
+    ...raw,
+    event: {
+      ...raw.event,
+      label: localizeLogText(raw.event.label) || raw.event.label,
+      title: localizeLogText(raw.event.title) || raw.event.title,
+      subtitle: localizeLogText(raw.event.subtitle),
+    },
+  }
+  hydrated.set(event, { lang, view })
   if (hydrated.size > HYDRATE_CACHE_SIZE) hydrated.delete(hydrated.keys().next().value as LogEvent)
   return view
 }

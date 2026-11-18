@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from '@/components/ui/Toaster'
 import { useAiChat } from './useAiChat'
@@ -20,6 +21,8 @@ const emit = defineEmits<{
   (e: 'navigate-to-options', anchor: string): void
 }>()
 
+const { t } = useI18n()
+
 const { consent, entries, busy, liveSteps, liveText, liveReasoning, models, provider, model, pendingApproval, ready, send, stop } = useAiChat()
 const { getEvent } = useLogs()
 
@@ -39,7 +42,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
 
 async function copyText(text: string): Promise<boolean> {
   const ok = await copyToClipboard(text)
-  if (!ok) toast.error('Could not copy to the clipboard')
+  if (!ok) toast.error(t('common.copyFailed'))
   return ok
 }
 
@@ -57,7 +60,7 @@ async function onAnswerClick(event: MouseEvent) {
     event.preventDefault()
     const id = link.dataset.event!
     if (getEvent(id)) openLogsEvent(id)
-    else toast.error('The event is no longer in the logs')
+    else toast.error(t('log.gone'))
     return
   }
   const button = target?.closest<HTMLElement>('[data-copy-code]')

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Upload } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{
   /** Events passing the filters */
@@ -14,8 +15,9 @@ const emit = defineEmits<{
   (e: 'export'): void
 }>()
 
+const { t } = useI18n()
 const selectedCount = computed(() => props.selected ?? 0)
-const buttonLabel = computed(() => (selectedCount.value ? `Export Logs (${selectedCount.value})` : 'Export Logs'))
+const buttonLabel = computed(() => (selectedCount.value ? t('log.exportCount', { n: selectedCount.value }) : t('log.export')))
 </script>
 
 <template>

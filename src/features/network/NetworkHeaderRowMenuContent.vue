@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { Copy, Link2, ExternalLink, Pencil, Trash2, Pin, PinOff } from 'lucide-vue-next'
 import {
   ContextMenuContent,
@@ -12,6 +13,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/DropdownMenu'
 
+const { t } = useI18n()
+
 const props = withDefaults(
   defineProps<{
     variant: 'context' | 'dropdown'
@@ -21,7 +24,7 @@ const props = withDefaults(
     canOpenLink: boolean
     contentClass?: string
   }>(),
-  { contentClass: 'w-48' }
+  { contentClass: 'w-max whitespace-nowrap' }
 )
 
 const emit = defineEmits<{
@@ -48,12 +51,12 @@ const Separator = computed(() =>
   <component :is="Content" :class="contentClass" align="start">
     <component :is="Item" @click="emit('copy')">
       <Copy class="mr-2 h-4 w-4" />
-      Copy
+      {{ t('network.copyHeader') }}
     </component>
 
     <component :is="Item" @click="emit('toggle-pin')">
       <component :is="isPinned ? PinOff : Pin" class="mr-2 h-4 w-4" />
-      {{ isPinned ? 'Unpin' : 'Pin' }}
+      {{ isPinned ? t('network.unpin') : t('network.pin') }}
     </component>
 
     <component :is="Separator" />
@@ -61,21 +64,21 @@ const Separator = computed(() =>
     <template v-if="!linkRuleId">
       <component :is="Item" @click="emit('create-link')">
         <Link2 class="mr-2 h-4 w-4" />
-        Create link
+        {{ t('network.createLink') }}
       </component>
     </template>
     <template v-else>
       <component :is="Item" :disabled="!canOpenLink" @click="emit('open-link')">
         <ExternalLink class="mr-2 h-4 w-4" />
-        Open link
+        {{ t('network.openLink') }}
       </component>
       <component :is="Item" @click="emit('edit-link')">
         <Pencil class="mr-2 h-4 w-4" />
-        Edit link
+        {{ t('network.editLink') }}
       </component>
       <component :is="Item" class="text-destructive_text focus:text-destructive_text" @click="emit('delete-link')">
         <Trash2 class="mr-2 h-4 w-4" />
-        Delete link
+        {{ t('network.deleteLink') }}
       </component>
     </template>
   </component>

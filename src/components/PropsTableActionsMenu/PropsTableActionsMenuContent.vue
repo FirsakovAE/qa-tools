@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { Star, StarOff, EyeOff, Sparkles } from 'lucide-vue-next'
 import { askAiAboutProps } from '@/features/ai/attachments'
 import {
@@ -20,13 +21,15 @@ const props = withDefaults(
     row: PropsRow
     contentClass?: string
   }>(),
-  { contentClass: 'w-48' }
+  { contentClass: 'w-max whitespace-nowrap' }
 )
 
 const emit = defineEmits<{
   (e: 'toggleFavorite', row: PropsRow): void
   (e: 'ignoreByName', row: PropsRow): void
 }>()
+
+const { t } = useI18n()
 
 const Content = computed(() =>
   props.variant === 'context' ? ContextMenuContent : DropdownMenuContent
@@ -58,7 +61,7 @@ function handleClick(e: Event, action: () => void) {
       @click="handleClick($event, () => void askAiAboutProps(row))"
     >
       <Sparkles class="h-4 w-4 mr-2" />
-      Ask AI
+      {{ t('network.askAi') }}
     </component>
     <component :is="Separator" />
     <component
@@ -67,7 +70,7 @@ function handleClick(e: Event, action: () => void) {
     >
       <StarOff v-if="row.isFavoriteFlag" class="h-4 w-4 mr-2" />
       <Star v-else class="h-4 w-4 mr-2" />
-      {{ row.isFavoriteFlag ? 'Remove favorite' : 'Add favorite' }}
+      {{ row.isFavoriteFlag ? t('stores.removeFavorite') : t('stores.addFavorite') }}
     </component>
     <component :is="Separator" />
     <component
@@ -76,7 +79,7 @@ function handleClick(e: Event, action: () => void) {
       @click="handleClick($event, () => emit('ignoreByName', row))"
     >
       <EyeOff class="h-4 w-4 mr-2" />
-      Ignore by name
+      {{ t('props.ignore') }}
     </component>
   </component>
 </template>

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
   import { Button } from '@/components/ui/button'
+  import { useI18n } from '@/i18n'
   
   export type UpdateNotificationData = {
     id: number | string
@@ -15,6 +16,7 @@
   }
   
   const props = defineProps<Props>()
+  const { t } = useI18n()
   </script>
   
   <template>
@@ -35,7 +37,7 @@
           {{ props.data.title }}
         </div>
         <div class="text-sm text-white/90">
-          {{ props.data.description }} {{ props.data.version }}
+          {{ props.data.description }}
         </div>
       </div>
   
@@ -45,7 +47,7 @@
           class="bg-white/10 hover:bg-white/20 border-white/20 text-white"
           @click="props.data.onPreview"
         >
-          Preview
+          {{ t('update.preview') }}
         </Button>
   
         <Button
@@ -54,7 +56,7 @@
           class="bg-black/10 hover:bg-black/20 border-white/20 text-white"
           @click="props.data.onDismiss"
         >
-          Later
+          {{ t('update.later') }}
         </Button>
       </div>
     </div>

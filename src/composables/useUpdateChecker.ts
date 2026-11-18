@@ -1,4 +1,5 @@
 import { ref, onMounted, readonly, markRaw } from 'vue'
+import { t } from '@/i18n'
 import { toast, CustomUpdateNotification } from '@/components/ui/Toaster'
 import { useRuntime } from '@/runtime'
 import {
@@ -76,8 +77,8 @@ export function useUpdateChecker() {
         componentProps: {
           data: {
             id: '',
-            title: 'Update Available',
-            description: 'Download new version',
+            title: t('update.available'),
+            description: t('about.downloadVersion', { version: remoteVersion }),
             version: remoteVersion,
             onPreview: () => {
               toast.dismiss(id)

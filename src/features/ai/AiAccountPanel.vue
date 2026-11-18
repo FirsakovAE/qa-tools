@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { useI18n } from '@/i18n'
 import { KeyRound, Pencil, Plus, Server, Trash2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { aiCredentials, removeCustomProvider, saveAiCredentials } from './credentials'
-import { CUSTOM_PRESETS, TOOL_SUPPORTS, baseUrlHost, isLocalUrl } from './customProviders'
+import { CUSTOM_PRESETS, baseUrlHost, isLocalUrl } from './customProviders'
 import type { BuiltinProviderId, CustomProvider } from './types'
 import CustomProviderDialog from './settings/CustomProviderDialog.vue'
 
@@ -19,6 +20,7 @@ const KEY_PROVIDERS: {
   { id: 'gemini', field: 'geminiKey', label: 'Gemini', consoleName: 'Google AI Studio', consoleUrl: 'https://aistudio.google.com/apikey' },
 ]
 
+const { t } = useI18n()
 const drafts = reactive<Record<BuiltinProviderId, string>>({ gemini: '', openrouter: '' })
 const dialogOpen = ref(false)
 const editing = ref<CustomProvider | null>(null)
@@ -39,12 +41,19 @@ function openDialog(provider: CustomProvider | null) {
   dialogOpen.value = true
 }
 
+function toolLabel(id: string): string {
+  if (id === 'native') return t('ai.nativeTools')
+  if (id === 'text') return t('ai.textTools')
+  if (id === 'none') return t('ai.noTools')
+  return id
+}
+
 function summary(p: CustomProvider): string {
-  const tools = TOOL_SUPPORTS.find(t => t.id === p.tools)?.label.toLowerCase()
+  const tools = toolLabel(p.tools).toLowerCase()
   return [
     baseUrlHost(p.baseUrl),
-    CUSTOM_PRESETS[p.preset].local || isLocalUrl(p.baseUrl) ? 'local' : '',
-    p.apiKey ? `key ${masked(p.apiKey)}` : 'no key',
+    CUSTOM_PRESETS[p.preset].local || isLocalUrl(p.baseUrl) ? t('ai.local') : '',
+    p.apiKey ? `key ${masked(p.apiKey)}` : t('ai.noKey'),
     tools,
   ].filter(Boolean).join(' · ')
 }
@@ -67,27 +76,27 @@ function remove(p: CustomProvider) {
     <div v-for="(p, i) in KEY_PROVIDERS" :key="p.id" class="space-y-2" :class="{ 'border-t pt-3': i > 0 }">
       <div class="flex items-center gap-2 font-medium">
         {{ p.label }}
-        <span class="text-xs font-normal text-muted-foreground">your own API key</span>
+        <span class="text-xs font-normal text-muted-foreground">{{ t('ai.ownKey') }}</span>
       </div>
       <div v-if="aiCredentials[p.field]" class="flex items-center gap-2">
         <KeyRound class="h-4 w-4 text-muted-foreground" />
         <span class="flex-1 font-mono text-xs">{{ masked(aiCredentials[p.field]) }}</span>
-        <Button variant="ghost" size="sm" class="h-7 text-xs" @click="saveAiCredentials({ [p.field]: '' })">Remove</Button>
+        <Button variant="ghost" size="sm" class="h-7 text-xs" @click="saveAiCredentials({ [p.field]: '' })">{{ t('ai.remove') }}</Button>
       </div>
       <form v-else class="flex items-center gap-2" @submit.prevent="saveKey(p)">
-        <Input v-model="drafts[p.id]" type="password" :placeholder="`${p.label} API key`" class="h-8 flex-1" autocomplete="off" />
-        <Button type="submit" size="sm" variant="outline" class="h-8" :disabled="!drafts[p.id].trim()">Save</Button>
+        <Input v-model="drafts[p.id]" type="password" :placeholder="t('ai.keyFor', { name: p.label })" class="h-8 flex-1" autocomplete="off" />
+        <Button type="submit" size="sm" variant="ghost" class="h-7 text-xs" :disabled="!drafts[p.id].trim()">{{ t('ai.save') }}</Button>
       </form>
       <p class="text-xs text-muted-foreground">
-        Get a free key in
+        {{ t('ai.getKey') }}
         <a :href="p.consoleUrl" target="_blank" rel="noopener noreferrer" class="underline">{{ p.consoleName }}</a>.
       </p>
     </div>
 
     <div class="space-y-2 border-t pt-3">
       <div class="flex items-center gap-2 font-medium">
-        Your own providers
-        <span class="text-xs font-normal text-muted-foreground">OpenAI, DeepSeek, local models, OpenAI-compatible agents</span>
+        {{ t('ai.ownProviders') }}
+        <span class="text-xs font-normal text-muted-foreground">{{ t('ai.ownProvidersHint') }}</span>
       </div>
       <div
         v-for="p in aiCredentials.customProviders"
@@ -99,24 +108,24 @@ function remove(p: CustomProvider) {
           <div class="truncate">{{ p.label }}</div>
           <div class="truncate text-[11px] text-muted-foreground" :title="p.baseUrl">{{ summary(p) }}</div>
         </div>
-        <Button variant="ghost" size="icon" class="h-7 w-7" title="Edit the connection" @click="openDialog(p)">
+        <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('ai.editConnection')" @click="openDialog(p)">
           <Pencil class="h-3.5 w-3.5" />
         </Button>
         <template v-if="removing === p.id">
-          <Button variant="ghost" size="sm" class="h-7 text-xs text-destructive_text" @click="remove(p)">Remove</Button>
-          <Button variant="ghost" size="sm" class="h-7 text-xs" @click="removing = null">Keep</Button>
+          <Button variant="ghost" size="sm" class="h-7 text-xs text-destructive_text" @click="remove(p)">{{ t('ai.remove') }}</Button>
+          <Button variant="ghost" size="sm" class="h-7 text-xs" @click="removing = null">{{ t('ai.keep') }}</Button>
         </template>
-        <Button v-else variant="ghost" size="icon" class="h-7 w-7" title="Remove the connection with its key and model choices" @click="remove(p)">
+        <Button v-else variant="ghost" size="icon" class="h-7 w-7" :title="t('ai.removeConnection')" @click="remove(p)">
           <Trash2 class="h-3.5 w-3.5" />
         </Button>
       </div>
-      <Button variant="outline" size="sm" class="h-8 gap-1.5" @click="openDialog(null)">
+      <Button variant="outline" size="sm" class="h-8 gap-1.5 font-normal" @click="openDialog(null)">
         <Plus class="h-3.5 w-3.5" />
-        Add provider
+        {{ t('ai.addProviderBtn') }}
       </Button>
     </div>
 
-    <p class="text-xs text-muted-foreground border-t pt-3">Keys stay in this browser and are not included in settings export.</p>
+    <p class="text-xs text-muted-foreground border-t pt-3">{{ t('ai.keysStay') }}</p>
 
     <CustomProviderDialog v-model:open="dialogOpen" :provider="editing" />
   </div>

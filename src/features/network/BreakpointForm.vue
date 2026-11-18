@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from '@/i18n'
 import { ArrowLeft, Check, CirclePause } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 
@@ -28,6 +29,8 @@ const emit = defineEmits<{
   (e: 'confirm', breakpoint: BreakpointItem): void
 }>()
 
+const { t } = useI18n()
+
 useEscapeClose(computed(() => true), () => emit('back'))
 
 // Whether we're editing an existing breakpoint
@@ -55,7 +58,7 @@ function fillFromEntry(entry: NetworkEntry) {
   path.value = parsed.path
   query.value = parsed.query
   method.value = entry.method || ''
-  description.value = `Breakpoint for ${entry.method} ${entry.path}`
+  description.value = t('network.bpFor', { method: entry.method, path: entry.path })
 }
 
 // Function to fill form from existing breakpoint
@@ -115,9 +118,9 @@ const statusClass = computed(() => {
 })
 
 // Section definitions
-const sections: Array<{ id: SectionId; label: string }> = [
-  { id: 'matching', label: 'URL Matching' }
-]
+const sections = computed<Array<{ id: SectionId; label: string }>>(() => [
+  { id: 'matching', label: t('network.urlMatching') },
+])
 </script>
 
 <template>
@@ -133,13 +136,13 @@ const sections: Array<{ id: SectionId; label: string }> = [
           <div class="flex items-center gap-2 mb-1">
             <Badge variant="outline" class="text-amber-500 border-amber-500/50 gap-1">
               <CirclePause class="h-3 w-3" />
-              Breakpoint Request
+              {{ t('network.breakpointRequest') }}
             </Badge>
             <Badge variant="outline" class="font-mono text-xs">
               {{ entry.method }}
             </Badge>
             <Badge variant="outline" :class="statusClass" class="font-mono text-xs">
-              {{ entry.pending ? '⏳ Pending' : entry.status }}
+              {{ entry.pending ? '⏳ ' + t('network.pending') : entry.status }}
             </Badge>
           </div>
           <div class="text-sm truncate text-muted-foreground" :title="entry.url">
@@ -158,11 +161,11 @@ const sections: Array<{ id: SectionId; label: string }> = [
               @click="handleConfirm"
             >
               <Check class="h-3.5 w-3.5" />
-              Save Breakpoint
+              {{ t('network.saveBreakpoint') }}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {{ isRewrite ? 'Update existing breakpoint' : 'Create breakpoint to intercept matching requests' }}
+            {{ isRewrite ? t('network.updateBreakpoint') : t('network.createBreakpoint') }}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -191,23 +194,22 @@ const sections: Array<{ id: SectionId; label: string }> = [
             <!-- Description -->
             <div class="p-3 bg-muted/50 rounded-md">
               <p class="text-sm text-muted-foreground">
-                Configure URL pattern to intercept requests before they are sent. 
-                When a matching request is made, it will pause and allow you to modify headers, params, and body.
+                {{ t('network.breakpointHint') }}
               </p>
             </div>
             
             <div class="grid grid-cols-3 gap-3">
               <div class="space-y-1.5">
-                <Label for="bp-method" class="text-xs">Method</Label>
+                <Label for="bp-method" class="text-xs">{{ t('common.method') }}</Label>
                 <Input
                   id="bp-method"
                   v-model="method"
-                  placeholder="All"
+                  :placeholder="t('common.all')"
                   class="h-8 text-sm font-mono"
                 />
               </div>
               <div class="space-y-1.5">
-                <Label for="scheme" class="text-xs">Scheme</Label>
+                <Label for="scheme" class="text-xs">{{ t('common.scheme') }}</Label>
                 <Input
                   id="scheme"
                   v-model="scheme"
@@ -216,7 +218,7 @@ const sections: Array<{ id: SectionId; label: string }> = [
                 />
               </div>
               <div class="space-y-1.5">
-                <Label for="port" class="text-xs">Port</Label>
+                <Label for="port" class="text-xs">{{ t('common.port') }}</Label>
                 <Input
                   id="port"
                   v-model="port"
@@ -227,48 +229,48 @@ const sections: Array<{ id: SectionId; label: string }> = [
             </div>
             
             <div class="space-y-1.5">
-              <Label for="host" class="text-xs">Host <span class="text-destructive_text">*</span></Label>
+              <Label for="host" class="text-xs">{{ t('common.host') }} <span class="text-destructive_text">*</span></Label>
               <Input
                 id="host"
                 v-model="host"
-                placeholder="api.example.com"
+                :placeholder="t('network.phHost')"
                 class="h-8 text-sm font-mono"
               />
             </div>
             
             <div class="space-y-1.5">
-              <Label for="path" class="text-xs">Path (supports * wildcard)</Label>
+              <Label for="path" class="text-xs">{{ t('network.pathWildcard') }}</Label>
               <Input
                 id="path"
                 v-model="path"
-                placeholder="/api/v1/users/*"
+                :placeholder="t('network.phPath')"
                 class="h-8 text-sm font-mono"
               />
             </div>
             
             <div class="space-y-1.5">
-              <Label for="query" class="text-xs">Query (optional)</Label>
+              <Label for="query" class="text-xs">{{ t('network.queryOptional') }}</Label>
               <Input
                 id="query"
                 v-model="query"
-                placeholder="page=*"
+                :placeholder="t('network.phQuery')"
                 class="h-8 text-sm font-mono"
               />
             </div>
             
             <div class="space-y-1.5">
-              <Label for="bp-description" class="text-xs">Description</Label>
+              <Label for="bp-description" class="text-xs">{{ t('common.description') }}</Label>
               <Input
                 id="bp-description"
                 v-model="description"
-                placeholder="Breakpoint for user API"
+                :placeholder="t('network.phBreakpoint')"
                 class="h-8 text-sm"
               />
             </div>
             
             <!-- Preview -->
             <div class="p-3 bg-muted/50 rounded-md">
-              <Label class="text-xs text-muted-foreground">URL Pattern Preview</Label>
+              <Label class="text-xs text-muted-foreground">{{ t('network.patternPreview') }}</Label>
               <div class="font-mono text-sm mt-1 break-all">{{ urlPreview }}</div>
             </div>
           </div>

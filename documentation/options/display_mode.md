@@ -4,7 +4,7 @@ title: Display modes
 
 # Display modes
 
-**Options → General → Display Mode** chooses **where** the Vue Inspector UI lives relative to the page: **Overlay** on the page or **DevTools tab** inside the browser’s developer tools. The default is **Overlay**.
+**Options → General** starts with **Language**. The default is **English**; **Русский** switches the inspector navigation, the Options sidebar, and this General page. **Display Mode** then chooses **where** the Vue Inspector UI lives relative to the page: **Overlay** on the page or **DevTools tab** inside the browser’s developer tools. The default is **Overlay**.
 
 The rest of **Options → General**, in order: [Customize](/options/customize), [Search Parameters and Auto Refresh](/options/update_settings), [Auto Run](/options/auto_run) (extension only), [JSON Mode](/options/json_mode), saved files on the Customize page, [Settings management](/options/settings_management). **About** is the next Options section: [About](/options/about).
 

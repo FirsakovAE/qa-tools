@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { useI18n } from '@/i18n'
 import { onClickOutside } from '@vueuse/core'
 import { RefreshCw, Search, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,7 @@ import AiSettingsHead from './AiSettingsHead.vue'
 /** Search results shown at once; the OpenRouter catalog has hundreds of models */
 const SEARCH_LIMIT = 60
 
+const { t } = useI18n()
 const modelsProvider = ref<AiProviderId>('openrouter')
 const { all, free, loading, error, reload, catalog, catalogLoading, catalogError } = providerModels(() => modelsProvider.value)
 
@@ -114,7 +116,7 @@ onMounted(async () => {
 <template>
   <div id="ai-models-section" class="space-y-4 border-t pt-4">
     <AiSettingsHead
-      title="Models"
+      :title="t('ai.models')"
     />
 
     <div class="flex items-center gap-2">
@@ -131,14 +133,14 @@ onMounted(async () => {
         variant="ghost"
         size="icon"
         class="h-8 w-8"
-        title="Reload the model list"
+        :title="t('ai.reloadModels')"
         :disabled="loading"
         @click="reload(true)"
       >
         <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': loading }" />
       </Button>
       <span v-if="all.length" class="text-xs text-muted-foreground ml-auto tabular-nums">
-        {{ all.length - blockedCount }} of {{ all.length }} available
+        {{ t('ai.ofAvailable', { have: all.length - blockedCount, total: all.length }) }}
       </span>
     </div>
 
@@ -147,7 +149,7 @@ onMounted(async () => {
       <Input
         v-model="query"
         class="h-8 pl-8 text-sm"
-        :placeholder="custom ? 'Add or search model, or type a model id' : 'Add or search model'"
+        :placeholder="custom ? t('ai.modelSearchCustom') : t('ai.modelSearch')"
         :disabled="!hasKey"
         @focus="openPicker"
         @click="openPicker"
@@ -166,15 +168,15 @@ onMounted(async () => {
               class="w-full px-3 py-1.5 text-left text-sm hover:bg-muted/50"
               @click="addManual"
             >
-              Add model id <span class="font-mono">{{ manualId }}</span>
-              <span class="block text-[11px] text-muted-foreground">For models the server does not list; Enter adds it too.</span>
+              {{ t('ai.addModel') }} <span class="font-mono">{{ manualId }}</span>
+              <span class="block text-[11px] text-muted-foreground">{{ t('ai.addModelHint') }}</span>
             </button>
-            <p v-if="catalogLoading && !catalog.length" class="px-3 py-2 text-xs text-muted-foreground">Loading models...</p>
+            <p v-if="catalogLoading && !catalog.length" class="px-3 py-2 text-xs text-muted-foreground">{{ t('ai.loadingModels') }}</p>
             <p v-else-if="catalogError" class="px-3 py-2 text-xs text-destructive_text">{{ catalogError }}</p>
-            <p v-else-if="!shown.length" class="px-3 py-2 text-xs text-muted-foreground">No models found</p>
+            <p v-else-if="!shown.length" class="px-3 py-2 text-xs text-muted-foreground">{{ t('ai.noModels') }}</p>
             <template v-else>
               <p class="px-3 pt-1 pb-1.5 text-[11px] text-muted-foreground">
-                {{ custom ? 'Models the server lists' : query.trim() ? 'All models of the provider, free and paid' : 'Free models. Type to search paid ones too.' }}
+                {{ custom ? t('ai.modelsListed') : query.trim() ? t('ai.modelsAll') : t('ai.modelsFree') }}
               </p>
               <label
                 v-for="m in shown"
@@ -191,15 +193,15 @@ onMounted(async () => {
                   <span class="block truncate">{{ m.name }}</span>
                   <span class="block truncate text-[11px] text-muted-foreground">{{ m.id }}</span>
                 </span>
-                <span v-if="recommendedIds.has(m.id)" class="text-[10px] text-muted-foreground shrink-0">recommended</span>
+                <span v-if="recommendedIds.has(m.id)" class="text-[10px] text-muted-foreground shrink-0">{{ t('ai.recommended') }}</span>
                 <span
                   v-if="!custom"
                   class="text-[10px] shrink-0 rounded px-1.5"
                   :class="m.paid ? 'bg-orange-500/15 text-orange-500' : 'bg-muted text-muted-foreground'"
-                >{{ m.paid ? 'paid' : 'free' }}</span>
+                >{{ m.paid ? t('ai.paid') : t('ai.free') }}</span>
               </label>
               <p v-if="results.length > shown.length" class="px-3 py-1.5 text-[11px] text-muted-foreground">
-                {{ results.length - shown.length }} more, refine the search
+                {{ t('ai.moreRefine', { n: results.length - shown.length }) }}
               </p>
             </template>
           </div>
@@ -208,12 +210,12 @@ onMounted(async () => {
     </div>
 
     <p v-if="!hasKey" class="text-xs text-muted-foreground">
-      Connect {{ providerLabel(modelsProvider) }} above to see its models.
+      {{ t('ai.connectAbove', { provider: providerLabel(modelsProvider) }) }}
     </p>
-    <p v-else-if="loading && !all.length" class="text-xs text-muted-foreground">Loading models...</p>
+    <p v-else-if="loading && !all.length" class="text-xs text-muted-foreground">{{ t('ai.loadingModels') }}</p>
     <p v-if="hasKey && error" class="text-sm text-destructive_text">{{ error }}</p>
     <p v-if="hasKey && custom && error && !all.length" class="text-xs text-muted-foreground">
-      Type a model id in the field above to use it without the model list.
+      {{ t('ai.typeModel') }}
     </p>
     <div v-if="hasKey && (!error || custom) && all.length" class="space-y-1">
       <div v-for="m in all" :key="m.id" class="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50">
@@ -236,17 +238,17 @@ onMounted(async () => {
           >{{ statusLabel(modelsProvider, m.id) }}</span>
         </Label>
         <span v-if="requestsToday(modelsProvider, m.id)" class="text-[10px] text-muted-foreground shrink-0 tabular-nums">
-          {{ requestsToday(modelsProvider, m.id) }} today
+          {{ t('ai.today', { n: requestsToday(modelsProvider, m.id) }) }}
         </span>
-        <span v-if="m.recommended" class="text-[10px] text-muted-foreground shrink-0">recommended</span>
-        <span v-if="m.unstable" class="text-[10px] text-orange-500 shrink-0">unstable</span>
-        <span v-if="m.paid" class="text-[10px] shrink-0 rounded px-1.5 bg-orange-500/15 text-orange-500">paid</span>
+        <span v-if="m.recommended" class="text-[10px] text-muted-foreground shrink-0">{{ t('ai.recommended') }}</span>
+        <span v-if="m.unstable" class="text-[10px] text-orange-500 shrink-0">{{ t('ai.unstable') }}</span>
+        <span v-if="m.paid" class="text-[10px] shrink-0 rounded px-1.5 bg-orange-500/15 text-orange-500">{{ t('ai.paid') }}</span>
         <Button
           v-if="!m.recommended"
           variant="ghost"
           size="icon"
           class="h-6 w-6 shrink-0"
-          title="Remove from the list"
+          :title="t('ai.removeFromList')"
           :disabled="isLastAllowed(m)"
           @click="setModelAdded(modelsProvider, m, false)"
         >

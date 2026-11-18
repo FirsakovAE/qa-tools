@@ -170,7 +170,7 @@ export function buildAiDigest(payload: LogsReportPayload, rt: LogsRuntime, optio
   if (!(options && options.noGuide)) {
     out.push('## How to read this file')
     out.push('')
-    out.push('You are helping to debug a Vue web application. This is a compact digest of events captured in the browser by Vue Inspector (network requests, WebSocket, component props and emits, Pinia store changes and actions, navigation, errors).')
+    out.push('You are helping to debug a Vue web application. This is a compact digest of events captured in the browser by Vue Inspector (network requests, WebSocket, component props and emits, Pinia store changes and actions, navigation, clicks, localStorage and sessionStorage changes, errors).')
     out.push('')
     out.push('- Work top-down: **Summary** -> **Problems** -> **Timeline**. Do not try to reconstruct everything; start from the problems.')
     out.push('- Every event has an id `#N` (its position in the report). The same event is opened in the HTML report by the URL hash `#all/N`.')

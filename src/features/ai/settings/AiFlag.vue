@@ -18,6 +18,7 @@ defineEmits<{ (e: 'update:modelValue', value: boolean): void }>()
       :id="id"
       class="mt-0.5"
       :model-value="modelValue"
+      :aria-label="label"
       @update:model-value="$emit('update:modelValue', !!$event)"
     />
     <Label :for="id" class="text-sm font-normal cursor-pointer">

@@ -1,5 +1,6 @@
 import type { LogEvent, StoredNetworkEntry } from '@/types/logs'
-import { LOG_KINDS, LOG_KIND_META } from '@/types/logs'
+import { LOG_KINDS } from '@/types/logs'
+import { logKindLabel } from './labels'
 import type { BodyContent } from '@/types/network'
 import { logsRuntime as rt, type RuntimeChange } from '@/injected/logs/runtime'
 import { createSnapshotStore, storedRecord } from '@/injected/logs/snapshots'
@@ -185,7 +186,7 @@ export function buildLogsReport(events: LogEvent[], source: LogsSource, now = Da
       generator: reportGeneratorName(),
       exportedAt: new Date(now).toISOString(),
       count: items.length,
-      kinds: Object.fromEntries(LOG_KINDS.map(k => [k, { label: LOG_KIND_META[k].label }])),
+      kinds: Object.fromEntries(LOG_KINDS.map(k => [k, { label: logKindLabel(k) }])),
     },
     events: items,
     snapshots: pooled,

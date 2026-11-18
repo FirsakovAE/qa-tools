@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { X, Save } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import type { HeaderLinkRuleRowDraft } from '@/types/inspector'
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const { t } = useI18n()
 const settings = useInspectorSettingsSync()
 const rows = ref<HeaderLinkRuleRowDraft[]>([])
 
@@ -106,12 +108,12 @@ function save() {
 <template>
   <div class="rounded-lg border bg-card/50 mb-4 overflow-hidden">
     <div class="shrink-0 flex items-center gap-2 p-2 border-b bg-muted/20">
-      <span class="text-sm font-semibold">Header Link Details</span>
+      <span class="text-sm font-semibold">{{ t('netset.linkDetails') }}</span>
       <div class="flex-1 min-w-0" />
-      <Button type="button" variant="ghost" size="icon" class="h-7 w-7 shrink-0" title="Cancel" @click="emit('close')">
+      <Button type="button" variant="ghost" size="icon" class="h-7 w-7 shrink-0" :title="t('common.cancel')" @click="emit('close')">
         <X class="h-4 w-4" />
       </Button>
-      <Button type="button" variant="ghost" size="icon" class="h-7 w-7 shrink-0" title="Save" @click="save">
+      <Button type="button" variant="ghost" size="icon" class="h-7 w-7 shrink-0" :title="t('common.save')" @click="save">
         <Save class="h-4 w-4" />
       </Button>
     </div>

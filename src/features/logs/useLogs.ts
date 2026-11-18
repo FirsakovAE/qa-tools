@@ -5,7 +5,7 @@
  * collected regardless of the active tab.
  *
  * Sources:
- *  - injected logs module (`__LOGS__` broadcasts): props, emit, store, action, navigation, click, error
+ *  - injected logs module (`__LOGS__` broadcasts): props, emit, store, action, navigation, click, storage, error
  *    (already sanitized, size-limited and compacted in page context)
  *  - existing network broadcasts (`__NETWORK__`): Send request / Receive response. Both events
  *    reference one masked network entry in the network pool (see networkPool.ts).
@@ -21,6 +21,7 @@ import { ref, shallowRef, computed, watch } from 'vue'
 import { normalizeNetworkMaxEntries, type NetworkEntry } from '@/types/network'
 import type { LogEvent, LogIgnoreRule, LogKind } from '@/types/logs'
 import { LOG_KIND_META } from '@/types/logs'
+import { logKindLabel } from './labels'
 import { inspectorState, useInspectorSettings } from '@/settings/useInspectorSettings'
 import { postToContentScript } from '@/utils/postToContentScript'
 import {
@@ -654,5 +655,5 @@ export function useLogs() {
 }
 
 export function ignoreRuleLabel(rule: Pick<LogIgnoreRule, 'kind' | 'key'>): string {
-  return `${LOG_KIND_META[rule.kind]?.label ?? rule.kind}: ${rule.key}`
+  return `${logKindLabel(rule.kind)}: ${rule.key}`
 }

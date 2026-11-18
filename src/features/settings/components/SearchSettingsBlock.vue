@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from '@/i18n'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+
+const { t } = useI18n()
 
 defineProps<{
   /** Search settings object to toggle (e.g. settings.propsSearch) */
@@ -22,12 +25,13 @@ function toggle(key: string) {
 
 <template>
   <div class="space-y-3">
-    <h4 class="text-sm font-semibold">Search Settings</h4>
+    <h4 class="text-sm font-semibold">{{ t('search.settings') }}</h4>
     <div class="grid grid-cols-1 gap-2">
       <div v-for="item in searchItems" :key="item.key" class="flex items-center space-x-3">
         <Checkbox
           :id="`${idPrefix}-${item.key}`"
           :model-value="searchSettings[item.key]"
+          :aria-label="item.label"
           @update:model-value="toggle(item.key)"
         />
         <Label :for="`${idPrefix}-${item.key}`" class="text-sm font-normal cursor-pointer">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
 import { ArrowUp, Square } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { aiAttachments, askAiRequest, removeAttachment } from './attachments'
@@ -14,6 +15,8 @@ const emit = defineEmits<{
   (e: 'submit', text: string): void
   (e: 'stop'): void
 }>()
+
+const { t } = useI18n()
 
 /** The input grows with the text up to this many lines, then scrolls */
 const INPUT_MAX_LINES = 5
@@ -132,7 +135,7 @@ function onKeydown(event: KeyboardEvent) {
         class="ai-scroll block resize-none overflow-hidden bg-transparent text-sm leading-5 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
         :class="oneRow ? 'min-w-0 flex-1 py-2.5 pl-3 pr-1' : 'w-full px-3 pt-2.5 pb-1'"
         :disabled="!ready"
-        :placeholder="!ready ? 'Connect a provider to ask questions' : aiAttachments.length ? 'Ask about the attached data' : 'Ask AI'"
+        :placeholder="!ready ? t('ai.placeholderOff') : aiAttachments.length ? t('ai.placeholderAttach') : t('ai.placeholderOn')"
         @keydown="onKeydown"
       />
       <div
@@ -141,10 +144,10 @@ function onKeydown(event: KeyboardEvent) {
         :class="oneRow ? 'pr-1.5' : 'px-2 pb-2'"
         @click.self="input?.focus()"
       >
-        <Button v-if="!busy" size="icon" class="h-8 w-8 rounded-full" :disabled="!canSend" title="Send (Enter; Shift+Enter for a new line)" @click="submit">
+        <Button v-if="!busy" size="icon" class="h-8 w-8 rounded-full" :disabled="!canSend" :title="t('ai.send')" @click="submit">
           <ArrowUp class="h-4 w-4" />
         </Button>
-        <Button v-else size="icon" variant="outline" class="h-8 w-8 rounded-full" title="Stop" @click="emit('stop')">
+        <Button v-else size="icon" variant="outline" class="h-8 w-8 rounded-full" :title="t('ai.stop')" @click="emit('stop')">
           <Square class="h-3.5 w-3.5 fill-current" />
         </Button>
       </div>

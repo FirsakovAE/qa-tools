@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
 import { ChevronDown, ChevronRight, Loader2, PlugZap } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,10 +9,8 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/Dialog'
 import { aiCredentials, saveCustomProvider, setModelAdded } from '../credentials'
 import {
-  CONTEXT_SIZES,
   CUSTOM_PRESETS,
   CUSTOM_PRESET_IDS,
-  TOOL_SUPPORTS,
   formatHeaders,
   isInsecureRemote,
   isValidBaseUrl,
@@ -31,7 +30,19 @@ const props = defineProps<{
 
 const open = defineModel<boolean>('open', { required: true })
 
+const { t } = useI18n()
+
 const PRESET_OPTIONS = CUSTOM_PRESET_IDS.map(id => ({ id, label: CUSTOM_PRESETS[id].label }))
+const toolOptions = computed(() => [
+  { id: 'native' as const, label: t('ai.nativeTools') },
+  { id: 'text' as const, label: t('ai.textTools') },
+  { id: 'none' as const, label: t('ai.noTools') },
+])
+const contextOptions = computed(() => [
+  { id: 'small' as const, label: t('ai.sizeSmall') },
+  { id: 'medium' as const, label: t('ai.sizeMedium') },
+  { id: 'large' as const, label: t('ai.sizeLarge') },
+])
 
 const form = reactive({
   preset: 'openai' as CustomPreset,
@@ -147,64 +158,64 @@ async function save() {
   <Dialog v-model:open="open">
     <DialogScrollContent class="max-w-lg">
       <DialogHeader>
-        <DialogTitle>{{ editing ? 'Edit connection' : 'Add your own provider' }}</DialogTitle>
+        <DialogTitle>{{ editing ? t('ai.editConnection') : t('ai.addProvider') }}</DialogTitle>
         <DialogDescription>
-          Any server with an OpenAI-compatible chat completions API: a cloud API key, a local model or your own agent.
+          {{ t('ai.providerIntro') }}
         </DialogDescription>
       </DialogHeader>
 
       <form class="space-y-3 text-sm" @submit.prevent="save">
-        <AiSelectRow id="ai-custom-preset" v-model="form.preset" label="Type" :options="PRESET_OPTIONS" />
+        <AiSelectRow id="ai-custom-preset" v-model="form.preset" :label="t('common.type')" :options="PRESET_OPTIONS" />
         <p class="text-xs text-muted-foreground">{{ preset.hint }}</p>
 
         <div class="space-y-1.5">
-          <Label for="ai-custom-label" class="block text-sm font-normal">Name</Label>
+          <Label for="ai-custom-label" class="block text-sm font-normal">{{ t('general.name') }}</Label>
           <Input id="ai-custom-label" v-model="form.label" class="h-8 text-sm" maxlength="40" :placeholder="preset.label" />
         </div>
 
         <div class="space-y-1.5">
-          <Label for="ai-custom-url" class="block text-sm font-normal">Base URL</Label>
+          <Label for="ai-custom-url" class="block text-sm font-normal">{{ t('ai.baseUrl') }}</Label>
           <Input id="ai-custom-url" v-model="form.baseUrl" class="h-8 text-sm" placeholder="https://host/v1" autocomplete="off" />
-          <p v-if="form.baseUrl && !urlValid" class="text-xs text-destructive_text">Enter an http(s) address, for example http://localhost:11434/v1.</p>
-          <p v-else-if="isInsecureRemote(baseUrl)" class="text-xs text-orange-500">A remote http address: the key and the data travel unencrypted.</p>
-          <p v-else class="text-xs text-muted-foreground break-all">Requests go to {{ baseUrl || '…' }}/chat/completions.</p>
+          <p v-if="form.baseUrl && !urlValid" class="text-xs text-destructive_text">{{ t('ai.baseUrlHint') }}</p>
+          <p v-else-if="isInsecureRemote(baseUrl)" class="text-xs text-orange-500">{{ t('ai.httpRemote') }}</p>
+          <p v-else class="text-xs text-muted-foreground break-all">{{ t('ai.requestsGo', { url: baseUrl || '…' }) }}</p>
         </div>
 
         <div class="space-y-1.5">
           <Label for="ai-custom-key" class="block text-sm font-normal">
-            API key <span v-if="!preset.needsKey" class="text-xs text-muted-foreground">(optional)</span>
+            {{ t('ai.apiKey') }} <span v-if="!preset.needsKey" class="text-xs text-muted-foreground">{{ t('common.optional') }}</span>
           </Label>
-          <Input id="ai-custom-key" v-model="form.apiKey" type="password" class="h-8 text-sm" autocomplete="off" :placeholder="preset.needsKey ? 'Required' : 'Leave empty if the server needs none'" />
+          <Input id="ai-custom-key" v-model="form.apiKey" type="password" class="h-8 text-sm" autocomplete="off" :placeholder="preset.needsKey ? t('common.required') : t('ai.keyOptional')" />
           <p v-if="preset.keyUrl" class="text-xs text-muted-foreground">
-            Create a key in
+            {{ t('ai.createKey') }}
             <a :href="preset.keyUrl" target="_blank" rel="noopener noreferrer" class="underline">{{ preset.keyConsole }}</a>.
           </p>
         </div>
 
         <button type="button" class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" @click="advanced = !advanced">
           <component :is="advanced ? ChevronDown : ChevronRight" class="h-3.5 w-3.5" />
-          Advanced: tools, context size, streaming, headers
+          {{ t('ai.advanced') }}
         </button>
         <div v-if="advanced" class="space-y-3 rounded-md border p-3">
           <AiSelectRow
             id="ai-custom-tools"
             v-model="form.tools"
-            label="Tools"
-            hint="Test connection picks it for you"
-            :options="TOOL_SUPPORTS"
+            :label="t('ai.tools')"
+            :hint="t('ai.testPicks')"
+            :options="toolOptions"
           />
           <AiSelectRow
             id="ai-custom-context"
             v-model="form.context"
-            label="Context size"
-            hint="Smaller sends a shorter logs digest and cuts tool results"
-            :options="CONTEXT_SIZES"
+            :label="t('ai.contextSize')"
+            :hint="t('ai.contextSmaller')"
+            :options="contextOptions"
           />
-          <AiFlag id="ai-custom-stream" v-model="form.stream" label="Stream answers" hint="Turn off when the server breaks streamed responses" />
+          <AiFlag id="ai-custom-stream" v-model="form.stream" :label="t('ai.stream')" :hint="t('ai.streamOff')" />
           <div class="space-y-1.5">
             <Label for="ai-custom-headers" class="block text-sm font-normal">
-              Extra headers
-              <span class="block mt-1 text-xs text-muted-foreground">One per line, Name: value. Stay in this browser like the key.</span>
+              {{ t('ai.extraHeaders') }}
+              <span class="block mt-1 text-xs text-muted-foreground">{{ t('ai.headersHint') }}</span>
             </Label>
             <Textarea id="ai-custom-headers" v-model="form.headers" class="min-h-16 text-sm" placeholder="api-key: ..." />
           </div>
@@ -212,30 +223,30 @@ async function save() {
 
         <div class="space-y-2 rounded-md border p-3">
           <Label for="ai-custom-test-model" class="block text-sm font-normal">
-            Model id for the test <span class="text-xs text-muted-foreground">(optional)</span>
+            {{ t('ai.testModel') }} <span class="text-xs text-muted-foreground">{{ t('common.optional') }}</span>
           </Label>
           <div class="flex items-center gap-2">
-            <Input id="ai-custom-test-model" v-model="form.testModel" class="h-8 flex-1 text-sm" placeholder="First listed model" autocomplete="off" />
-            <Button type="button" variant="outline" size="sm" class="h-8 gap-1.5" :disabled="!urlValid || testing" @click="runTest">
+            <Input id="ai-custom-test-model" v-model="form.testModel" class="h-8 flex-1 text-sm" :placeholder="t('ai.firstModel')" autocomplete="off" />
+            <Button type="button" variant="outline" size="sm" class="h-8 gap-1.5 font-normal" :disabled="!urlValid || testing" @click="runTest">
               <Loader2 v-if="testing" class="h-3.5 w-3.5 animate-spin" />
               <PlugZap v-else class="h-3.5 w-3.5" />
-              Test connection
+              {{ t('ai.test') }}
             </Button>
           </div>
-          <p class="text-xs text-muted-foreground">Lists the models and sends one short request to learn how the model takes tools.</p>
+          <p class="text-xs text-muted-foreground">{{ t('ai.testHint') }}</p>
           <p v-if="test" class="text-xs text-green-600">{{ test.note }}</p>
           <div v-if="testError" class="text-xs text-destructive_text space-y-1">
             <p>{{ testError.message }}</p>
             <details v-if="testError.details" class="text-muted-foreground">
-              <summary class="cursor-pointer">Server response</summary>
+              <summary class="cursor-pointer">{{ t('ai.serverResponse') }}</summary>
               <pre class="whitespace-pre-wrap break-all font-sans">{{ testError.details }}</pre>
             </details>
           </div>
         </div>
 
         <DialogFooter class="flex-row justify-end gap-2 pt-1">
-          <Button type="button" variant="outline" size="sm" @click="open = false">Cancel</Button>
-          <Button type="submit" size="sm" :disabled="!canSave">{{ editing ? 'Save' : 'Add' }}</Button>
+          <Button type="button" variant="outline" size="sm" @click="open = false">{{ t('common.cancel') }}</Button>
+          <Button type="submit" size="sm" :disabled="!canSave">{{ editing ? t('ai.save') : t('general.add') }}</Button>
         </DialogFooter>
       </form>
     </DialogScrollContent>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useI18n } from '@/i18n'
 import { useDebounceFn } from '@vueuse/core'
 import { SearchIcon, RefreshCw, Star, MousePointer2, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -33,6 +34,7 @@ import { getPropsFavoriteNodeId } from './propsFavorites'
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'navigateToOptions', anchor: string): void
@@ -69,12 +71,12 @@ const {
 } = useSearchSettings({
   settings,
   searchKey: 'propsSearch',
-  typeMap: {
-    'Name': 'byName',
-    'Root': 'byRootElement',
-    'Key': 'byKey',
-    'Value': 'byValue',
-  }
+  typeMap: computed(() => ({
+    [t('search.name')]: 'byName',
+    [t('search.root')]: 'byRootElement',
+    [t('search.key')]: 'byKey',
+    [t('search.value')]: 'byValue',
+  }))
 })
 
 // Favorites (pass full objects for proper matching)
@@ -629,14 +631,14 @@ onUnmounted(() => {
         <!-- Left block: Title + Search + Filter -->
         <div class="flex items-center gap-2 toolbar-left-block">
           <h3 class="text-lg font-semibold shrink-0 toolbar-title">
-            Props
+            {{ t('props.title') }}
           </h3>
           
           <!-- Search bar (stays left) -->
           <div class="flex-1 min-w-[155px] max-w-xs relative">
             <Input
               v-model="searchTerm"
-              placeholder="Search components..."
+              :placeholder="t('props.search')"
               class="pl-8 h-8"
             />
             <SearchIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
@@ -647,7 +649,7 @@ onUnmounted(() => {
             <!-- Search type filter -->
             <FacetedFilter
               v-model="selectedSearchTypes"
-              title="Search by"
+              :title="t('common.searchBy')"
               :options="propsSearchTypeOptions"
             />
 
@@ -664,11 +666,11 @@ onUnmounted(() => {
                     @click="toggleInspectorMode"
                   >
                     <MousePointer2 class="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    <span class="inspect-btn-label text-xs font-medium">Inspect</span>
+                    <span class="inspect-btn-label text-xs font-medium">{{ t('props.inspect') }}</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  Select element on page to filter Props
+                  {{ t('props.inspectTip') }}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -690,11 +692,11 @@ onUnmounted(() => {
                   @click="toggleInspectorMode"
                 >
                   <MousePointer2 class="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <span class="inspect-btn-label text-xs font-medium">Inspect</span>
+                  <span class="inspect-btn-label text-xs font-medium">{{ t('props.inspect') }}</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Select element on page to filter Props
+                {{ t('props.inspectTip') }}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -709,12 +711,12 @@ onUnmounted(() => {
                 @click="clearInspectFilter"
               >
                 <MousePointer2 class="h-3 w-3 shrink-0" aria-hidden />
-                <span class="filtered-badge-label text-xs font-medium">Filtered</span>
+                <span class="filtered-badge-label text-xs font-medium">{{ t('props.filtered') }}</span>
                 <X class="h-3 w-3 shrink-0 ml-0.5 opacity-70" aria-hidden />
               </Badge>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Clear element filter, show full list
+              {{ t('props.clearFilter') }}
             </TooltipContent>
           </Tooltip>
           <Badge variant="secondary" class="font-mono">
@@ -747,7 +749,7 @@ onUnmounted(() => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Refresh
+              {{ t('common.refresh') }}
             </TooltipContent>
           </Tooltip>
           
@@ -788,7 +790,7 @@ onUnmounted(() => {
             v-else
             class="h-full flex items-center justify-center text-muted-foreground"
           >
-            Select a component to see details
+            {{ t('props.select') }}
           </div>
         </div>
       </div>

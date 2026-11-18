@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from '@/i18n'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { FavoriteItem } from '@/types/inspector'
 import { TableCell } from '@/components/ui/table'
@@ -20,15 +21,17 @@ const emit = defineEmits<{
   (e: 'select', item: { type: 'blacklist' | 'favorite'; id: string }): void
 }>()
 
+const { t } = useI18n()
+
 // -------------------- SEARCH SETTINGS --------------------
 type SearchKey = 'byName' | 'byRootElement' | 'byKey' | 'byValue'
 
-const searchItems: Array<{ key: SearchKey; label: string }> = [
-  { key: 'byName', label: 'Search by component name' },
-  { key: 'byRootElement', label: 'Search by root element' },
-  { key: 'byKey', label: 'Search by key' },
-  { key: 'byValue', label: 'Search by value' },
-]
+const searchItems = computed(() => [
+  { key: 'byName' as const, label: t('search.byComponent') },
+  { key: 'byRootElement' as const, label: t('search.byRoot') },
+  { key: 'byKey' as const, label: t('search.byKey') },
+  { key: 'byValue' as const, label: t('search.byValue') },
+])
 
 function toggleSearch(key: SearchKey) {
   props.settings.propsSearch[key] = !props.settings.propsSearch[key]
@@ -46,22 +49,22 @@ const blacklistRows = computed<BlacklistRow[]>(() => {
   ]
 })
 
-const blacklistColumns: TableColumn[] = [
-  { header: 'Component Name' },
-  { header: 'Status', width: '70px', class: 'text-center' },
-]
+const blacklistColumns = computed<TableColumn[]>(() => [
+  { header: t('props.componentName') },
+  { header: t('common.status'), width: '70px', class: 'text-center' },
+])
 
 function addToBlacklist() {
   const value = newBlockedName.value.trim()
   blacklistError.value = null
 
   if (!value) {
-    blacklistError.value = 'Name cannot be empty'
+    blacklistError.value = t('props.nameEmpty')
     return
   }
 
   if (props.settings.blacklist.active.includes(value) || props.settings.blacklist.inactive.includes(value)) {
-    blacklistError.value = 'This name is already in the blacklist'
+    blacklistError.value = t('props.nameExists')
     return
   }
 
@@ -83,18 +86,18 @@ function removeFromBlacklist(name: string) {
 
 function getBlacklistActions(row: BlacklistRow): MenuAction[] {
   return [
-    { label: row.active ? 'Allow' : 'Block', icon: Power, onClick: () => toggleBlacklist(row.name, row.active) },
-    { label: 'Delete', icon: Trash, onClick: () => removeFromBlacklist(row.name), destructiveText: true },
+    { label: row.active ? t('ai.allow') : t('props.block'), icon: Power, onClick: () => toggleBlacklist(row.name, row.active) },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeFromBlacklist(row.name), destructiveText: true },
   ]
 }
 
 // -------------------- FAVORITES --------------------
 const favoritesList = computed<FavoriteItem[]>(() => props.settings.favorites || [])
 
-const favoritesColumns: TableColumn[] = [
-  { header: 'Component' },
-  { header: 'Added', width: '80px', class: 'text-center' },
-]
+const favoritesColumns = computed<TableColumn[]>(() => [
+  { header: t('common.component') },
+  { header: t('general.added'), width: '80px', class: 'text-center' },
+])
 
 function removeFromFavorites(id: string) {
   props.settings.favorites = props.settings.favorites.filter(f => f.id !== id)
@@ -102,7 +105,7 @@ function removeFromFavorites(id: string) {
 
 function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
   return [
-    { label: 'Delete', icon: Trash, onClick: () => removeFromFavorites(fav.id), destructiveText: true },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeFromFavorites(fav.id), destructiveText: true },
   ]
 }
 </script>
@@ -117,29 +120,30 @@ function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
     />
 
     <div class="space-y-4 border-t border-border pt-4">
-      <h4 class="text-sm font-semibold">Inspect Mode</h4>
+      <h4 class="text-sm font-semibold">{{ t('props.inspectMode') }}</h4>
       <div class="flex items-center space-x-3">
         <Checkbox
           id="props-collapse-overlay-inspect"
           :model-value="settings.collapseOverlayOnPropsInspect"
+          :aria-label="t('props.hideOverlay')"
           @update:model-value="settings.collapseOverlayOnPropsInspect = $event as boolean"
         />
         <Label for="props-collapse-overlay-inspect" class="text-sm leading-snug cursor-pointer">
-          Hide overlay while inspecting
+          {{ t('props.hideOverlay') }}
         </Label>
       </div>
     </div>
 
     <SettingsTableSection
-      title="Component Blacklist"
+      :title="t('props.blacklist')"
       :columns="blacklistColumns"
       :rows="blacklistRows"
       :row-key="(r) => (r as BlacklistRow).name"
       :get-actions="(row) => getBlacklistActions(row as BlacklistRow)"
-      empty-message="No components in blacklist"
+      :empty-message="t('props.noBlacklist')"
       :selected-item-id="selectedItemId"
       show-add
-      add-placeholder="Component name (supports wildcards: *Comp*)"
+      :add-placeholder="t('props.blacklistPh')"
       v-model:add-model-value="newBlockedName"
       :add-error="blacklistError"
       @add="addToBlacklist"
@@ -153,7 +157,7 @@ function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
         </TableCell>
         <TableCell class="w-[70px] text-center !py-2">
           <div :class="!(row as BlacklistRow).active ? 'opacity-50' : ''" class="text-xs">
-            {{ (row as BlacklistRow).active ? 'Blocked' : 'Allowed' }}
+            {{ (row as BlacklistRow).active ? t('props.blocked') : t('props.allowed') }}
           </div>
         </TableCell>
       </template>
@@ -161,12 +165,12 @@ function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
 
     <SettingsTableSection
       section-id="favorites-section"
-      title="Favorite Components"
+      :title="t('props.favorites')"
       :columns="favoritesColumns"
       :rows="favoritesList"
       :row-key="(r) => (r as FavoriteItem).id"
       :get-actions="(row) => getFavoritesActions(row as FavoriteItem)"
-      empty-message="No favorite components"
+      :empty-message="t('props.noFavorites')"
       :selected-item-id="selectedItemId"
       @select="(row) => emit('select', { type: 'favorite', id: (row as FavoriteItem).id })"
     >

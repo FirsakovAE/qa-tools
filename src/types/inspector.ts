@@ -1,3 +1,4 @@
+import type { UiLanguage } from '@/i18n/languages'
 import type { LogIgnoreRule } from './logs'
 import type { LogsLimits, LogsMasking } from '@/injected/logs/config'
 
@@ -300,7 +301,11 @@ export interface AutoRunSettings {
     siteWhitelist: SiteListEntry[]
 }
 
+export type { UiLanguage } from '@/i18n/languages'
+
 export interface BaseInspectorSettings {
+    /** Interface language. English until the user picks another one. */
+    language: UiLanguage
     theme: ThemeMode
     displayMode: DisplayMode
     blacklist: { active: string[]; inactive: string[] }

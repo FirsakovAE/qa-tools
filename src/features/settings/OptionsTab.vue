@@ -36,6 +36,7 @@ import SettingsDetails from './SettingsDetails.vue'
 import BreakpointForm from '@/features/network/BreakpointForm.vue'
 import MockForm from '@/features/network/MockForm.vue'
 import type { BreakpointItem, MockRule } from '@/types/inspector'
+import { useI18n, type MessageKey } from '@/i18n'
 import type { NetworkEntry } from '@/types/network'
 
 import type { GitHubRelease, ReleaseDisplayInfo } from '@/services/githubReleaseService'
@@ -74,15 +75,19 @@ function selectSection(id: SettingsSection) {
   sheetOpen.value = false
 }
 
-const sections = [
-  { id: 'general' as const, label: 'General', icon: Settings },
-  { id: 'network' as const, label: 'Network', icon: Globe },
-  { id: 'props' as const, label: 'Props', icon: Box },
-  { id: 'pinia' as const, label: 'Pinia Store', icon: Database },
-  { id: 'logs' as const, label: 'Logs', icon: FileText },
-  { id: 'ai' as const, label: 'AI', icon: Sparkles },
-  { id: 'about' as const, label: 'About', icon: Info },
+const { t } = useI18n()
+
+const sectionDefs = [
+  { id: 'general' as const, labelKey: 'options.general' as MessageKey, icon: Settings },
+  { id: 'network' as const, labelKey: 'options.network' as MessageKey, icon: Globe },
+  { id: 'props' as const, labelKey: 'options.props' as MessageKey, icon: Box },
+  { id: 'pinia' as const, labelKey: 'options.pinia' as MessageKey, icon: Database },
+  { id: 'logs' as const, labelKey: 'options.logs' as MessageKey, icon: FileText },
+  { id: 'ai' as const, labelKey: 'options.ai' as MessageKey, icon: Sparkles },
+  { id: 'about' as const, labelKey: 'options.about' as MessageKey, icon: Info },
 ]
+
+const sections = computed(() => sectionDefs.map(section => ({ ...section, label: t(section.labelKey) })))
 
 // -------------------- SELECTED ITEM --------------------
 type SelectedItemType = 'breakpoint' | 'mock' | 'header-link' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'
@@ -335,7 +340,7 @@ watch(() => props.pendingAboutRelease, (release) => {
 
   releaseInfo.value = {
     type: hasUpdate ? 'update-available' : 'release-notes',
-    body: release.body || 'No release notes available.',
+    body: release.body || t('update.noNotes'),
     version: remoteVersion,
     downloadUrl: release.assets?.[0]?.browser_download_url ?? null,
   }
@@ -437,10 +442,10 @@ async function handleExport() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    showAlert('Export Complete', 'Settings have been exported to a file.', 'success')
+    showAlert(t('alert.exportOkTitle'), t('alert.exportOk'), 'success')
   } catch (error) {
     console.error('[settings/OptionsTab] handleExport failed:', error)
-    showAlert('Export Failed', 'Failed to export settings. Please try again.', 'error')
+    showAlert(t('alert.exportFailTitle'), t('alert.exportFail'), 'error')
   }
 }
 
@@ -460,11 +465,11 @@ async function handleImport() {
       settings.value = newSettings
       syncBreakpoints()
       syncMocks()
-      showAlert('Import Complete', 'Settings have been imported successfully.', 'success')
+      showAlert(t('alert.importOkTitle'), t('alert.importOk'), 'success')
     } catch (error) {
       console.error('[settings/OptionsTab] handleImport failed:', error)
-      importError.value = error instanceof Error ? error.message : 'Invalid settings file'
-      showAlert('Import Failed', error instanceof Error ? error.message : 'Invalid settings file', 'error')
+      importError.value = error instanceof Error ? error.message : t('alert.importFail')
+      showAlert(t('alert.importFailTitle'), error instanceof Error ? error.message : t('alert.importFail'), 'error')
     }
   }
   input.click()
@@ -478,10 +483,10 @@ async function handleReset() {
     syncBreakpoints()
     syncMocks()
     selectedItem.value = null
-    showAlert('Reset Complete', 'All settings have been reset to defaults.', 'success')
+    showAlert(t('alert.resetOkTitle'), t('alert.resetOk'), 'success')
   } catch (error) {
     console.error('[settings/OptionsTab] handleReset failed:', error)
-    showAlert('Reset Failed', 'Failed to reset settings. Please try again.', 'error')
+    showAlert(t('alert.resetFailTitle'), t('alert.resetFail'), 'error')
   }
 }
 
@@ -580,20 +585,20 @@ onMounted(async () => {
       </Sheet>
 
       <Settings class="h-5 w-5 text-muted-foreground" />
-      <h3 class="text-lg font-semibold">Options</h3>
+      <h3 class="text-lg font-semibold">{{ t('tab.options') }}</h3>
     </div>
 
     <!-- Loading -->
     <div v-if="isLoading" class="flex-1 flex items-center justify-center">
       <div class="text-center">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-        <p class="mt-2 text-muted-foreground">Loading settings...</p>
+        <p class="mt-2 text-muted-foreground">{{ t('options.loading') }}</p>
       </div>
     </div>
 
     <!-- Error -->
     <div v-else-if="!settings" class="flex-1 flex items-center justify-center text-destructive_text">
-      Failed to load settings
+      {{ t('options.loadFailed') }}
     </div>
 
     <!-- Content: 2-panel grid -->
@@ -735,7 +740,7 @@ onMounted(async () => {
           <AlertDialogDescription>{{ alertDialog.description }}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter class="justify-center">
-          <AlertDialogAction @click="alertDialog.open = false">OK</AlertDialogAction>
+          <AlertDialogAction @click="alertDialog.open = false">{{ t('common.ok') }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

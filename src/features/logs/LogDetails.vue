@@ -26,6 +26,7 @@ import { isOmittedValue, type OmittedValue } from '@/injected/logs/sanitize'
 import LogActionsMenuContent from './LogActionsMenuContent.vue'
 import { formatLogDateTime, previewValue, toPrettyJson } from './format'
 import { hydrateLog, logBadgeClass, type LogsSource } from './view'
+import { useI18n } from '@/i18n'
 
 type SectionId =
   | 'overview' | 'changes' | 'before' | 'after' | 'state' | 'args' | 'result' | 'stack' | 'raw'
@@ -46,6 +47,8 @@ const emit = defineEmits<{
   (e: 'ignore', event: LogEvent): void
   (e: 'openRelated', event: LogEvent): void
 }>()
+
+const { t } = useI18n()
 
 useEscapeClose(computed(() => true), () => emit('back'))
 
@@ -83,9 +86,9 @@ function frameText(frame: { kind: string; data: string }): string {
 
 const relatedLabel = computed(() => {
   if (!props.related) return undefined
-  if (props.related.kind === 'ws-closed') return 'Open close event'
-  if (props.related.kind === 'ws') return 'Open connection event'
-  return props.related.kind === 'response' ? 'Open response event' : 'Open request event'
+  if (props.related.kind === 'ws-closed') return t('log.openClose')
+  if (props.related.kind === 'ws') return t('log.openConnection')
+  return props.related.kind === 'response' ? t('log.openResponse') : t('log.openRequest')
 })
 
 const changes = computed<LogChange[]>(() => (Array.isArray(data.value.changes) ? data.value.changes : []))
@@ -93,14 +96,10 @@ const changes = computed<LogChange[]>(() => (Array.isArray(data.value.changes) ?
 /** Explanation shown instead of a state that cannot be restored */
 const unavailableNotice = computed(() => {
   const section = activeSection.value
-  if (section === 'state' && missing.value.state) return 'The state was not saved (it could not be restored when older changes were compacted).'
-  if (section === 'before' && missing.value.before) {
-    return 'The state before this change cannot be restored: earlier events of this store are missing or incomplete. The changed values are shown in Changes.'
-  }
-  if (section === 'after' && missing.value.after) {
-    return 'The state after this change cannot be restored: earlier events of this store are missing or incomplete. The changed values are shown in Changes.'
-  }
-  if (missing.value.entry && section !== 'raw') return 'The network entry of this event is no longer available.'
+  if (section === 'state' && missing.value.state) return t('log.stateNotSaved')
+  if (section === 'before' && missing.value.before) return t('log.beforeMissing')
+  if (section === 'after' && missing.value.after) return t('log.afterMissing')
+  if (missing.value.entry && section !== 'raw') return t('log.entryGone')
   return ''
 })
 
@@ -109,43 +108,46 @@ const sections = computed(() => {
   const kind = props.event.kind
   const en = entry.value
   const socket = kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed' || en?.initiator === 'websocket' || en?.method === 'WS'
+  const overview = () => ({ id: 'overview' as const, label: t('common.overview') })
   if ((kind === 'request' || kind === 'response' || kind === 'ws' || kind === 'ws-sent' || kind === 'ws-received' || kind === 'ws-closed') && !en) {
-    list.push({ id: 'overview', label: 'Overview' })
+    list.push(overview())
   } else if (socket && en) {
-    list.push({ id: 'overview', label: 'Overview' })
+    list.push(overview())
     const responseHeaders = kind === 'response' || kind === 'ws-received' || kind === 'ws-closed'
-    list.push({ id: responseHeaders ? 'responseHeaders' : 'requestHeaders', label: 'Headers' })
+    list.push({ id: responseHeaders ? 'responseHeaders' : 'requestHeaders', label: t('common.headers') })
     const ownFrame = kind === 'ws-sent' || kind === 'ws-received'
     const count = ownFrame ? 1 : (en.websocket?.frames.length ?? 0)
-    list.push({ id: 'messages', label: ownFrame ? 'Message' : (count ? `Messages (${count})` : 'Messages') })
+    const messages = t('log.messages')
+    list.push({ id: 'messages', label: ownFrame ? t('common.message') : (count ? `${messages} (${count})` : messages) })
   } else if (kind === 'request' && en) {
-    list.push({ id: 'overview', label: 'Overview' })
-    if (en.params?.length) list.push({ id: 'params', label: `Params (${en.params.length})` })
-    list.push({ id: 'requestHeaders', label: 'Headers' })
-    if (en.requestBody) list.push({ id: 'requestBody', label: 'Body' })
+    list.push(overview())
+    if (en.params?.length) list.push({ id: 'params', label: t('log.params', { n: en.params.length }) })
+    list.push({ id: 'requestHeaders', label: t('common.headers') })
+    if (en.requestBody) list.push({ id: 'requestBody', label: t('common.body') })
   } else if (kind === 'response' && en) {
-    list.push({ id: 'overview', label: 'Overview' })
-    list.push({ id: 'responseHeaders', label: 'Headers' })
-    list.push({ id: 'responseBody', label: 'Body' })
+    list.push(overview())
+    list.push({ id: 'responseHeaders', label: t('common.headers') })
+    list.push({ id: 'responseBody', label: t('common.body') })
   } else if (isStoreBase.value) {
-    list.push({ id: 'overview', label: 'Overview' })
-    list.push({ id: 'state', label: 'State' })
+    list.push(overview())
+    list.push({ id: 'state', label: t('common.state') })
   } else if (kind === 'store' || kind === 'props') {
-    list.push({ id: 'changes', label: `Changes (${changes.value.length}${data.value.changesTruncated ? '+' : ''})` })
-    list.push({ id: 'before', label: 'Before' })
-    list.push({ id: 'after', label: 'After' })
+    list.push({ id: 'changes', label: data.value.changesTruncated ? t('log.changesMore', { n: changes.value.length }) : t('log.changes', { n: changes.value.length }) })
+    list.push({ id: 'before', label: t('common.before') })
+    list.push({ id: 'after', label: t('common.after') })
   } else if (kind === 'action') {
-    list.push({ id: 'overview', label: 'Overview' })
-    list.push({ id: 'args', label: 'Arguments' })
-    list.push({ id: 'result', label: data.value.status === 'error' ? 'Error' : 'Result' })
+    list.push(overview())
+    list.push({ id: 'args', label: t('common.arguments') })
+    list.push({ id: 'result', label: data.value.status === 'error' ? t('common.error') : t('common.result') })
   } else if (kind === 'emit') {
-    list.push({ id: 'args', label: `Arguments (${Array.isArray(data.value.args) ? data.value.args.length : 0})` })
-    list.push({ id: 'overview', label: 'Overview' })
+    const argCount = Array.isArray(data.value.args) ? data.value.args.length : 0
+    list.push({ id: 'args', label: `${t('common.arguments')} (${argCount})` })
+    list.push(overview())
   } else {
-    list.push({ id: 'overview', label: 'Overview' })
-    if (kind === 'error' && data.value.stack) list.push({ id: 'stack', label: 'Stack' })
+    list.push(overview())
+    if (kind === 'error' && data.value.stack) list.push({ id: 'stack', label: t('common.stack') })
   }
-  list.push({ id: 'raw', label: 'Raw' })
+  list.push({ id: 'raw', label: t('common.raw') })
   return list
 })
 
@@ -162,23 +164,23 @@ watch(
 
 function stackTruncatedLabel(info: { frames: number; kept: number; head?: number; tail?: number }): string {
   if (info.head && info.tail) {
-    return `Truncated: first ${info.head} and last ${info.tail} of ${info.frames} frames kept`
+    return t('log.truncEnds', { head: info.head, tail: info.tail, frames: info.frames })
   }
-  return `Truncated: top ${info.kept} of ${info.frames} frames kept`
+  return t('log.truncTop', { kept: info.kept, frames: info.frames })
 }
 
 const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
   const d = data.value
   const rows: Array<{ label: string; value: string }> = [
-    { label: 'Time', value: formatLogDateTime(props.event.timestamp) },
+    { label: t('common.time'), value: formatLogDateTime(props.event.timestamp) },
   ]
   const en = entry.value
   switch (props.event.kind) {
     case 'store':
-      rows.push({ label: 'Store', value: String(d.storeId) })
-      if (d.op === 'init') rows.push({ label: 'Recorded', value: 'Store created while logging (initial state)' })
-      else if (d.op === 'snapshot') rows.push({ label: 'Recorded', value: 'Logging started on an existing store (current state)' })
-      else if (d.op === 'checkpoint') rows.push({ label: 'Recorded', value: `State after ${d.compacted} older changes compacted by the limits` })
+      rows.push({ label: t('common.store'), value: String(d.storeId) })
+      if (d.op === 'init') rows.push({ label: t('log.recorded'), value: t('log.recordedInit') })
+      else if (d.op === 'snapshot') rows.push({ label: t('log.recorded'), value: t('log.recordedSnapshot') })
+      else if (d.op === 'checkpoint') rows.push({ label: t('log.recorded'), value: t('log.recordedCheckpoint', { n: d.compacted }) })
       break
     case 'ws':
     case 'ws-sent':
@@ -187,78 +189,78 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
     case 'request':
     case 'response':
       if (!en) {
-        rows.push({ label: 'Request', value: props.event.key })
+        rows.push({ label: t('common.request'), value: props.event.key })
         break
       }
-      rows.push({ label: 'URL', value: String(en.url ?? '') })
-      rows.push({ label: 'Method', value: String(en.method) })
+      rows.push({ label: t('picker.url'), value: String(en.url ?? '') })
+      rows.push({ label: t('common.method'), value: String(en.method) })
       if (en.initiator === 'websocket' || en.method === 'WS' || props.event.kind === 'ws' || props.event.kind === 'ws-sent' || props.event.kind === 'ws-received' || props.event.kind === 'ws-closed') {
         const socket = en.websocket
         if (props.event.kind === 'ws-sent' || props.event.kind === 'ws-received') {
-          rows.push({ label: 'Direction', value: props.event.kind === 'ws-sent' ? 'Sent' : 'Received' })
+          rows.push({ label: t('log.direction'), value: props.event.kind === 'ws-sent' ? t('common.sent') : t('common.received') })
         }
         if (props.event.kind === 'ws-closed' || props.event.kind === 'response' || (props.event.kind !== 'ws-sent' && props.event.kind !== 'ws-received' && socket?.state === 'closed')) {
           const code = socket?.closeCode
-          const status = code ? `Closed ${code}` : (en.statusText || 'Closed')
-          rows.push({ label: 'Status', value: status })
-          if (socket?.closeReason) rows.push({ label: 'Reason', value: socket.closeReason })
-          if (socket?.reconnect === false) rows.push({ label: 'Reconnect', value: 'No automatic reconnect' })
+          const status = code ? t('status.closedCode', { code }) : (en.statusText || t('status.closed'))
+          rows.push({ label: t('common.status'), value: status })
+          if (socket?.closeReason) rows.push({ label: t('common.reason'), value: socket.closeReason })
+          if (socket?.reconnect === false) rows.push({ label: t('log.reconnect'), value: t('log.noReconnect') })
         } else {
-          rows.push({ label: 'Status', value: 'Open' })
+          rows.push({ label: t('common.status'), value: t('log.open') })
         }
-        rows.push({ label: 'Messages', value: String(socket?.frames.length ?? 0) })
-        rows.push({ label: 'Duration', value: formatDurationMs(en.duration ?? 0) })
-        rows.push({ label: 'Size', value: formatBytes(en.size ?? 0) })
+        rows.push({ label: t('log.messages'), value: String(socket?.frames.length ?? 0) })
+        rows.push({ label: t('common.duration'), value: formatDurationMs(en.duration ?? 0) })
+        rows.push({ label: t('general.size'), value: formatBytes(en.size ?? 0) })
         break
       }
       if (props.event.kind === 'response') {
-        rows.push({ label: 'Status', value: en.error ? `Failed: ${en.error}` : `${en.status} ${en.statusText || ''}`.trim() })
-        rows.push({ label: 'Duration', value: formatDurationMs(en.duration ?? 0) })
-        rows.push({ label: 'Size', value: formatBytes(en.size ?? 0) })
+        rows.push({ label: t('common.status'), value: en.error ? t('log.failed', { message: en.error }) : `${en.status} ${en.statusText || ''}`.trim() })
+        rows.push({ label: t('common.duration'), value: formatDurationMs(en.duration ?? 0) })
+        rows.push({ label: t('general.size'), value: formatBytes(en.size ?? 0) })
       } else {
-        rows.push({ label: 'Initiator', value: String(en.initiator) })
-        if (en.authorization && en.authorization.type !== 'None') rows.push({ label: 'Authorization', value: String(en.authorization.type) })
+        rows.push({ label: t('log.initiator'), value: String(en.initiator) })
+        if (en.authorization && en.authorization.type !== 'None') rows.push({ label: t('log.authorization'), value: String(en.authorization.type) })
       }
       break
     case 'action':
-      rows.push({ label: 'Store', value: String(d.storeId) })
-      rows.push({ label: 'Action', value: String(d.action) })
-      rows.push({ label: 'Status', value: String(d.status) })
-      rows.push({ label: 'Duration', value: formatDurationMs(Number(d.duration)) })
+      rows.push({ label: t('common.store'), value: String(d.storeId) })
+      rows.push({ label: t('common.action'), value: String(d.action) })
+      rows.push({ label: t('common.status'), value: String(d.status) })
+      rows.push({ label: t('common.duration'), value: formatDurationMs(Number(d.duration)) })
       break
     case 'emit':
-      rows.push({ label: 'Component', value: String(d.component) })
-      rows.push({ label: 'Event', value: String(d.event) })
-      rows.push({ label: 'Listener', value: d.once ? 'once' : 'regular' })
+      rows.push({ label: t('common.component'), value: String(d.component) })
+      rows.push({ label: t('common.event'), value: String(d.event) })
+      rows.push({ label: t('log.listener'), value: d.once ? t('log.listenerOnce') : t('log.listenerRegular') })
       if (d.uid !== undefined) rows.push({ label: 'uid', value: String(d.uid) })
-      if (d.parents) rows.push({ label: 'Parents', value: String(d.parents) })
+      if (d.parents) rows.push({ label: t('log.parents'), value: String(d.parents) })
       break
     case 'navigation':
-      rows.push({ label: 'Type', value: String(d.navType) })
-      rows.push({ label: 'From', value: String(d.from || '—') })
-      rows.push({ label: 'To', value: String(d.to) })
+      rows.push({ label: t('common.type'), value: String(d.navType) })
+      rows.push({ label: t('common.from'), value: String(d.from || '—') })
+      rows.push({ label: t('common.to'), value: String(d.to) })
       break
     case 'click':
-      rows.push({ label: 'Text', value: String(d.text || '—') })
-      if (d.selector) rows.push({ label: 'CSS selector', value: String(d.selector) })
-      if (d.id) rows.push({ label: 'ID', value: String(d.id) })
+      rows.push({ label: t('editor.text'), value: String(d.text || '—') })
+      if (d.selector) rows.push({ label: t('log.selector'), value: String(d.selector) })
+      if (d.id) rows.push({ label: t('log.id'), value: String(d.id) })
       if (d.testId) rows.push({ label: String(d.testAttr || 'data-testid'), value: String(d.testId) })
       if (d.ariaLabel) rows.push({ label: 'aria-label', value: String(d.ariaLabel) })
       if (d.title) rows.push({ label: 'title', value: String(d.title) })
       if (d.href) rows.push({ label: 'href', value: String(d.href) })
       if (d.type) rows.push({ label: 'type', value: String(d.type) })
-      else if (d.inputType) rows.push({ label: 'Input', value: String(d.inputType) })
+      else if (d.inputType) rows.push({ label: t('log.input'), value: String(d.inputType) })
       if (d.className) rows.push({ label: 'class', value: String(d.className) })
       rows.push({ label: 'XPath', value: String(d.xpath || '—') })
-      if (d.tag) rows.push({ label: 'Tag', value: String(d.tag) })
+      if (d.tag) rows.push({ label: t('log.tag'), value: String(d.tag) })
       break
     case 'error':
-      rows.push({ label: 'Source', value: String(d.source) })
-      if (d.name) rows.push({ label: 'Name', value: String(d.name) })
-      rows.push({ label: 'Message', value: String(d.message) })
-      if (d.filename) rows.push({ label: 'Location', value: `${d.filename}:${d.lineno ?? 0}:${d.colno ?? 0}` })
-      if (d.stackTruncated) rows.push({ label: 'Stack', value: stackTruncatedLabel(d.stackTruncated) })
-      if (d.suppressedBefore) rows.push({ label: 'Suppressed', value: `${d.suppressedBefore} earlier console errors (more than 50 per second)` })
+      rows.push({ label: t('common.source'), value: String(d.source) })
+      if (d.name) rows.push({ label: t('general.name'), value: String(d.name) })
+      rows.push({ label: t('common.message'), value: String(d.message) })
+      if (d.filename) rows.push({ label: t('common.location'), value: `${d.filename}:${d.lineno ?? 0}:${d.colno ?? 0}` })
+      if (d.stackTruncated) rows.push({ label: t('common.stack'), value: stackTruncatedLabel(d.stackTruncated) })
+      if (d.suppressedBefore) rows.push({ label: t('log.suppressedLabel'), value: t('log.suppressed', { n: d.suppressedBefore }) })
       break
   }
   return rows
@@ -268,13 +270,13 @@ const overviewRows = computed<Array<{ label: string; value: string }>>(() => {
 const contextLine = computed(() => {
   const d = data.value
   if (props.event.kind === 'store' && !isStoreBase.value) {
-    const parts = [`Mutation: ${d.mutationType || 'direct'}`]
-    if (Array.isArray(d.actions) && d.actions.length) parts.push(`Action: ${d.actions.join(', ')}`)
+    const parts = [t('log.mutation', { type: d.mutationType || 'direct' })]
+    if (Array.isArray(d.actions) && d.actions.length) parts.push(`${t('common.action')}: ${d.actions.join(', ')}`)
     return parts.join(' · ')
   }
   if (props.event.kind === 'props' || props.event.kind === 'emit') {
     const parts = [`uid ${d.uid}`]
-    if (d.parents) parts.push(`Parents: ${d.parents}`)
+    if (d.parents) parts.push(`${t('log.parents')}: ${d.parents}`)
     return parts.join(' · ')
   }
   return ''
@@ -302,8 +304,8 @@ const body = computed<BodyContent | null | undefined>(() => {
 const bodyNotice = computed(() => {
   const b = body.value
   if (b === undefined) return ''
-  if (!b || (!b.text && !b.formData?.length)) return entry.value?.pending ? 'Response is pending' : 'No body'
-  if (b.isBinary) return activeSection.value === 'responseBody' ? '' : `Binary content (${b.contentType || 'unknown'})`
+  if (!b || (!b.text && !b.formData?.length)) return entry.value?.pending ? t('log.responsePending') : t('log.noBody')
+  if (b.isBinary) return activeSection.value === 'responseBody' ? '' : t('log.binaryTyped', { contentType: b.contentType || 'unknown' })
   return ''
 })
 
@@ -432,9 +434,7 @@ function changeTypeClass(type: LogChange['type']): string {
         <!-- Size-limited part -->
         <div v-if="omittedPart" class="h-full flex items-center justify-center p-6">
           <p class="max-w-md text-center text-sm text-muted-foreground">
-            This part ({{ formatBytes(omittedPart.size) }}) was not saved: it exceeds the per-event limit of
-            {{ formatBytes((data.__sizeLimited as { limit?: number } | undefined)?.limit ?? 0) }}.
-            Increase “Max event size” in Options › Logs to keep it.
+            {{ t('log.partDropped', { size: formatBytes(omittedPart.size), limit: formatBytes((data.__sizeLimited as { limit?: number } | undefined)?.limit ?? 0) }) }}
           </p>
         </div>
 
@@ -449,8 +449,8 @@ function changeTypeClass(type: LogChange['type']): string {
             <Table class="log-details-table">
               <TableHeader>
                 <TableRow>
-                  <TableHead class="w-1/3">Name</TableHead>
-                  <TableHead>Value</TableHead>
+                  <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                  <TableHead>{{ t('common.value') }}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -467,13 +467,13 @@ function changeTypeClass(type: LogChange['type']): string {
         <ScrollArea v-else-if="pairRows" class="h-full">
           <div class="p-3">
             <div v-if="pairRows.length === 0" class="text-sm text-muted-foreground text-center py-8">
-              {{ activeSection === 'params' ? 'No params' : 'No headers' }}
+              {{ activeSection === 'params' ? t('log.noParams') : t('log.noHeaders') }}
             </div>
             <Table v-else class="log-details-table">
               <TableHeader>
                 <TableRow>
-                  <TableHead class="w-1/3">Name</TableHead>
-                  <TableHead>Value</TableHead>
+                  <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                  <TableHead>{{ t('common.value') }}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -489,7 +489,7 @@ function changeTypeClass(type: LogChange['type']): string {
         <div v-else-if="binaryPreview" class="shrink-0 flex items-center gap-2 px-3 py-2 border-b">
           <span class="text-sm text-muted-foreground">{{ binaryPreview.contentType || 'application/octet-stream' }}</span>
           <span class="text-xs text-muted-foreground">({{ formatBytes(binaryPreview.originalSize) }})</span>
-          <Badge variant="outline" class="text-xs">Binary</Badge>
+          <Badge variant="outline" class="text-xs">{{ t('common.binary') }}</Badge>
         </div>
 
         <!-- Body that can't be shown -->
@@ -501,13 +501,13 @@ function changeTypeClass(type: LogChange['type']): string {
         <ScrollArea v-else-if="activeSection === 'changes'" class="h-full">
           <div class="p-3">
             <div v-if="changes.length === 0" class="text-sm text-muted-foreground text-center py-8">
-              No changes
+              {{ t('common.noChanges') }}
             </div>
             <Table v-else class="log-details-table">
               <TableHeader>
                 <TableRow>
-                  <TableHead class="w-1/3">Path</TableHead>
-                  <TableHead>Change</TableHead>
+                  <TableHead class="w-1/3">{{ t('common.path') }}</TableHead>
+                  <TableHead>{{ t('common.change') }}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -521,18 +521,18 @@ function changeTypeClass(type: LogChange['type']): string {
                   <TableCell class="font-mono text-xs py-2 align-top">
                     <div v-if="c.type !== 'added'" class="text-red-500/90">
                       − <template v-if="'before' in c">{{ previewValue(c.before) }}</template>
-                      <span v-else class="italic text-muted-foreground">not available</span>
+                      <span v-else class="italic text-muted-foreground">{{ t('log.notAvailable') }}</span>
                     </div>
                     <div v-if="c.type !== 'removed'" class="text-green-500/90">
                       + <template v-if="'after' in c">{{ previewValue(c.after) }}</template>
-                      <span v-else class="italic text-muted-foreground">not available</span>
+                      <span v-else class="italic text-muted-foreground">{{ t('log.notAvailable') }}</span>
                     </div>
                   </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
             <div v-if="data.changesTruncated" class="pt-3 text-xs text-muted-foreground">
-              Too many changes — list is truncated. See Before / After for full state.
+              {{ t('log.tooManyChanges') }}
             </div>
           </div>
         </ScrollArea>
@@ -540,12 +540,12 @@ function changeTypeClass(type: LogChange['type']): string {
         <ScrollArea v-else-if="activeSection === 'messages'" class="h-full">
           <div class="p-3 space-y-2">
             <div v-if="!messageFrames.length" class="text-sm text-muted-foreground text-center py-8">
-              {{ event.data?.frameId ? 'This message is no longer in the connection log.' : 'No messages' }}
+              {{ event.data?.frameId ? t('log.messageGone') : t('log.noMessages') }}
             </div>
             <div v-for="frame in messageFrames" :key="frame.id" class="rounded-md border px-3 py-2">
               <div class="flex items-center gap-2 text-xs">
                 <span :class="frame.direction === 'sent' ? 'text-sky-400' : 'text-green-500'">
-                  {{ frame.direction === 'sent' ? 'Sent' : 'Received' }}
+                  {{ frame.direction === 'sent' ? t('common.sent') : t('common.received') }}
                 </span>
                 <span class="text-muted-foreground">{{ formatBytes(frame.size) }}</span>
               </div>
@@ -557,7 +557,7 @@ function changeTypeClass(type: LogChange['type']): string {
         <!-- JSON / text blocks -->
         <div v-else-if="jsonBlock" class="h-full flex flex-col">
           <div v-if="body?.truncated" class="shrink-0 px-3 py-2 border-b text-xs text-amber-500">
-            Body truncated ({{ formatBytes(body.originalSize) }} originally)
+            {{ t('log.bodyTruncated', { size: formatBytes(body.originalSize) }) }}
           </div>
           <div class="flex-1 min-h-0">
             <JsonEditor

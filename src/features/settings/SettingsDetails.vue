@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { useI18n } from '@/i18n'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { marked } from 'marked'
 import '@/assets/markdown.css'
@@ -48,6 +49,8 @@ const renderedBody = computed(() => {
   }
 })
 
+const { t } = useI18n()
+
 const props = defineProps<{
   settings: InspectorSettings
   selectedItem: { type: 'breakpoint' | 'mock' | 'header-link' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'; id: string } | null
@@ -69,21 +72,21 @@ const emit = defineEmits<{
 }>()
 
 const detailsTitle = computed(() => {
-  const t = props.selectedItem?.type
-  if (!t) return 'Details'
-  switch (t) {
+  const kind = props.selectedItem?.type
+  if (!kind) return 'Details'
+  switch (kind) {
     case 'saved-file':
       return 'File Preview'
     case 'pinia-favorite':
       return 'Favorite Store Details'
     case 'header-link':
-      return 'Header Link Details'
+      return t('netset.linkDetails')
     case 'site-blacklist':
       return 'Site Blacklist Details'
     case 'site-whitelist':
       return 'Site Whitelist Details'
     default:
-      return t.charAt(0).toUpperCase() + t.slice(1) + ' Details'
+      return kind.charAt(0).toUpperCase() + kind.slice(1) + ' Details'
   }
 })
 
@@ -408,13 +411,13 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           <ArrowLeft class="h-4 w-4" />
         </Button>
         <span v-if="releaseInfo.type === 'update-available'" class="text-sm font-semibold">
-          Update Available
+          {{ t('update.available') }}
         </span>
         <span v-else-if="releaseInfo.type === 'up-to-date'" class="text-sm font-semibold">
-          Up to Date
+          {{ t('update.upToDate') }}
         </span>
         <span v-else class="text-sm font-semibold">
-          Release Notes
+          {{ t('update.notes') }}
         </span>
       </div>
 
@@ -435,15 +438,15 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
               <div class="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
                 <ArrowUpCircle class="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <p class="text-sm font-semibold">Update Available</p>
+                  <p class="text-sm font-semibold">{{ t('update.available') }}</p>
                   <p class="text-sm text-muted-foreground">
-                    Download new version {{ releaseInfo.version }}
+                    {{ t('about.downloadVersion', { version: releaseInfo.version }) }}
                   </p>
                 </div>
               </div>
 
               <div>
-                <span class="text-xs text-muted-foreground">What's New</span>
+                <span class="text-xs text-muted-foreground">{{ t('about.whatsNew') }}</span>
                 <div class="mt-2 text-sm break-words font-sans leading-relaxed markdown-body" v-html="renderedBody" />
               </div>
 
@@ -455,7 +458,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
                   @click="emit('ignore-version', releaseInfo!.version)"
                 >
                   <EyeOff class="w-3.5 h-3.5" />
-                  Ignore
+                  {{ t('about.ignore') }}
                 </Button>
                 <Button
                   size="sm"
@@ -464,7 +467,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
                   @click="releaseInfo!.downloadUrl && emit('download-update', releaseInfo!.downloadUrl)"
                 >
                   <Download class="w-3.5 h-3.5" />
-                  Download
+                  {{ t('about.download') }}
                 </Button>
               </div>
             </div>
@@ -475,15 +478,15 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
             <div class="flex items-start gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
               <CheckCircle2 class="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
               <div>
-                <p class="text-sm font-semibold">You're up to date!</p>
+                <p class="text-sm font-semibold">{{ t('about.upToDate') }}</p>
                 <p class="text-sm text-muted-foreground">
-                  Version {{ releaseInfo.version }} is the latest.
+                  {{ t('about.latest', { version: releaseInfo.version }) }}
                 </p>
               </div>
             </div>
 
             <div v-if="releaseInfo.body">
-              <span class="text-xs text-muted-foreground">Current Release Notes</span>
+              <span class="text-xs text-muted-foreground">{{ t('about.currentNotes') }}</span>
               <div class="mt-2 text-sm break-words font-sans leading-relaxed markdown-body" v-html="renderedBody" />
             </div>
           </template>
@@ -491,7 +494,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           <!-- Release Notes -->
           <template v-else>
             <div v-if="releaseInfo.version" class="text-xs text-muted-foreground">
-              Version {{ releaseInfo.version }}
+              {{ t('common.version') }} {{ releaseInfo.version }}
             </div>
             <div class="text-sm break-words font-sans leading-relaxed markdown-body" v-html="renderedBody" />
           </template>
@@ -519,50 +522,50 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           @click="emit('edit')"
         >
           <Pencil class="h-3.5 w-3.5" />
-          Edit
+          {{ t('general.edit') }}
         </Button>
         <!-- Pinia favorite: Edit/Cancel/Save icons -->
         <template v-else-if="selectedItem.type === 'pinia-favorite' && piniaFavoriteData">
           <template v-if="!piniaFavoriteEditMode">
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Edit" @click="emit('edit')">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('general.edit')" @click="emit('edit')">
               <Edit class="h-4 w-4" />
             </Button>
           </template>
           <template v-else>
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Cancel" @click="cancelPiniaFavoriteEdit">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('common.cancel')" @click="cancelPiniaFavoriteEdit">
               <X class="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Save" :disabled="!editedPiniaFavoriteName.trim()" @click="savePiniaFavoriteEdit">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('common.save')" :disabled="!editedPiniaFavoriteName.trim()" @click="savePiniaFavoriteEdit">
               <Save class="h-4 w-4" />
             </Button>
           </template>
         </template>
         <template v-else-if="selectedItem.type === 'header-link' && headerLinkGroup">
           <template v-if="!headerLinkEditMode">
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Edit" @click="emit('edit')">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('general.edit')" @click="emit('edit')">
               <Edit class="h-4 w-4" />
             </Button>
           </template>
           <template v-else>
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Cancel" @click="cancelHeaderLinkEdit">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('common.cancel')" @click="cancelHeaderLinkEdit">
               <X class="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Save" @click="saveHeaderLinkEdit">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('common.save')" @click="saveHeaderLinkEdit">
               <Save class="h-4 w-4" />
             </Button>
           </template>
         </template>
         <template v-else-if="(selectedItem.type === 'site-blacklist' || selectedItem.type === 'site-whitelist') && siteListDetailData">
           <template v-if="!siteListEditMode">
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Edit" @click="emit('edit')">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('general.edit')" @click="emit('edit')">
               <Edit class="h-4 w-4" />
             </Button>
           </template>
           <template v-else>
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Cancel" @click="cancelSiteListEdit">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('common.cancel')" @click="cancelSiteListEdit">
               <X class="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" class="h-7 w-7" title="Save" :disabled="!editedSiteListPattern.trim()" @click="saveSiteListEdit">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('common.save')" :disabled="!editedSiteListPattern.trim()" @click="saveSiteListEdit">
               <Save class="h-4 w-4" />
             </Button>
           </template>
@@ -577,50 +580,50 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           <template v-if="selectedItem.type === 'breakpoint' && breakpointData">
             <div class="space-y-3">
               <div>
-                <span class="text-xs text-muted-foreground">URL Pattern</span>
+                <span class="text-xs text-muted-foreground">{{ t('details.urlPattern') }}</span>
                 <p class="font-mono text-sm break-all mt-1">{{ formatBreakpointUrl(breakpointData) }}</p>
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <span class="text-xs text-muted-foreground">Method</span>
-                  <p class="text-sm font-mono mt-1">{{ breakpointData.method || 'All' }}</p>
+                  <span class="text-xs text-muted-foreground">{{ t('common.method') }}</span>
+                  <p class="text-sm font-mono mt-1">{{ breakpointData.method || t('common.all') }}</p>
                 </div>
                 <div>
-                  <span class="text-xs text-muted-foreground">Status</span>
-                  <p class="text-sm mt-1">{{ breakpointData.active ? 'Active' : 'Disabled' }}</p>
+                  <span class="text-xs text-muted-foreground">{{ t('common.status') }}</span>
+                  <p class="text-sm mt-1">{{ breakpointData.active ? t('common.active') : t('details.disabled') }}</p>
                 </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <span class="text-xs text-muted-foreground">Scheme</span>
+                  <span class="text-xs text-muted-foreground">{{ t('common.scheme') }}</span>
                   <p class="text-sm font-mono mt-1">{{ breakpointData.scheme }}</p>
                 </div>
                 <div>
-                  <span class="text-xs text-muted-foreground">Host</span>
+                  <span class="text-xs text-muted-foreground">{{ t('common.host') }}</span>
                   <p class="text-sm font-mono mt-1">{{ breakpointData.host }}</p>
                 </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div v-if="breakpointData.port">
-                  <span class="text-xs text-muted-foreground">Port</span>
+                  <span class="text-xs text-muted-foreground">{{ t('common.port') }}</span>
                   <p class="text-sm font-mono mt-1">{{ breakpointData.port }}</p>
                 </div>
                 <div>
-                  <span class="text-xs text-muted-foreground">Path</span>
+                  <span class="text-xs text-muted-foreground">{{ t('common.path') }}</span>
                   <p class="text-sm font-mono mt-1">{{ breakpointData.path }}</p>
                 </div>
               </div>
 
               <div v-if="breakpointData.query">
-                <span class="text-xs text-muted-foreground">Query</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.query') }}</span>
                 <p class="text-sm font-mono mt-1">{{ breakpointData.query }}</p>
               </div>
 
               <div>
-                <span class="text-xs text-muted-foreground">Created</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.created') }}</span>
                 <p class="text-sm mt-1">{{ new Date(breakpointData.timestamp).toLocaleString() }}</p>
               </div>
             </div>
@@ -630,7 +633,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           <template v-else-if="selectedItem.type === 'mock' && mockData">
             <div class="space-y-3">
               <div>
-                <span class="text-xs text-muted-foreground">URL Pattern</span>
+                <span class="text-xs text-muted-foreground">{{ t('details.urlPattern') }}</span>
                 <p class="font-mono text-sm break-all mt-1">
                   {{ mockData.method ? mockData.method + ' ' : '' }}{{ mockData.scheme || '*' }}://{{ mockData.host || '*' }}{{ mockData.port ? ':' + mockData.port : '' }}{{ mockData.path || '/*' }}{{ mockData.query ? '?' + mockData.query : '' }}
                 </p>
@@ -638,7 +641,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
 
               <div class="grid grid-cols-3 gap-3">
                 <div>
-                  <span class="text-xs text-muted-foreground">Status</span>
+                  <span class="text-xs text-muted-foreground">{{ t('common.status') }}</span>
                   <p
                     class="text-sm font-mono mt-1"
                     :class="{
@@ -651,17 +654,17 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
                   </p>
                 </div>
                 <div>
-                  <span class="text-xs text-muted-foreground">Delay</span>
-                  <p class="text-sm mt-1">{{ mockData.delay ? mockData.delay + 'ms' : 'None' }}</p>
+                  <span class="text-xs text-muted-foreground">{{ t('details.delay') }}</span>
+                  <p class="text-sm mt-1">{{ mockData.delay ? mockData.delay + 'ms' : t('common.none') }}</p>
                 </div>
                 <div>
-                  <span class="text-xs text-muted-foreground">State</span>
-                  <p class="text-sm mt-1">{{ mockData.active ? 'Active' : 'Disabled' }}</p>
+                  <span class="text-xs text-muted-foreground">{{ t('common.state') }}</span>
+                  <p class="text-sm mt-1">{{ mockData.active ? t('common.active') : t('details.disabled') }}</p>
                 </div>
               </div>
 
               <div v-if="mockData.headers?.length">
-                <span class="text-xs text-muted-foreground">Headers</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.headers') }}</span>
                 <div class="mt-1 space-y-1">
                   <div v-for="(h, i) in mockData.headers" :key="i" class="font-mono text-xs">
                     <span class="text-muted-foreground">{{ h.name }}:</span> {{ h.value }}
@@ -670,19 +673,19 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
               </div>
 
               <div v-if="mockData.body !== undefined">
-                <span class="text-xs text-muted-foreground">Body</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.body') }}</span>
                 <ScrollArea class="mt-1 rounded bg-muted/50 mock-body-scroll">
-                  <pre class="text-xs font-mono p-2 whitespace-pre-wrap break-all">{{ mockData.body || '(empty)' }}</pre>
+                  <pre class="text-xs font-mono p-2 whitespace-pre-wrap break-all">{{ mockData.body || t('common.emptyValue') }}</pre>
                 </ScrollArea>
               </div>
 
               <div v-if="mockData.description">
-                <span class="text-xs text-muted-foreground">Description</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.description') }}</span>
                 <p class="text-sm mt-1">{{ mockData.description }}</p>
               </div>
 
               <div>
-                <span class="text-xs text-muted-foreground">Created</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.created') }}</span>
                 <p class="text-sm mt-1">{{ new Date(mockData.timestamp).toLocaleString() }}</p>
               </div>
             </div>
@@ -692,12 +695,12 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           <template v-else-if="selectedItem.type === 'blacklist' && blacklistData">
             <div class="space-y-3">
               <div>
-                <span class="text-xs text-muted-foreground">Component Name</span>
+                <span class="text-xs text-muted-foreground">{{ t('props.componentName') }}</span>
                 <p class="font-mono text-sm mt-1">{{ blacklistData.name }}</p>
               </div>
               <div>
-                <span class="text-xs text-muted-foreground">Status</span>
-                <p class="text-sm mt-1">{{ blacklistData.active ? 'Blocked' : 'Allowed' }}</p>
+                <span class="text-xs text-muted-foreground">{{ t('common.status') }}</span>
+                <p class="text-sm mt-1">{{ blacklistData.active ? t('props.blocked') : t('props.allowed') }}</p>
               </div>
             </div>
           </template>
@@ -706,17 +709,17 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           <template v-else-if="selectedItem.type === 'favorite' && favoriteData">
             <div class="space-y-3">
               <div>
-                <span class="text-xs text-muted-foreground">Component Name</span>
+                <span class="text-xs text-muted-foreground">{{ t('props.componentName') }}</span>
                 <p class="font-mono text-sm mt-1">{{ favoriteData.name }}</p>
               </div>
               <div>
-                <span class="text-xs text-muted-foreground">Element</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.element') }}</span>
                 <p class="font-mono text-sm mt-1">
                   {{ favoriteData.tagName }}{{ favoriteData.className ? '.' + favoriteData.className : '' }}
                 </p>
               </div>
               <div>
-                <span class="text-xs text-muted-foreground">Added</span>
+                <span class="text-xs text-muted-foreground">{{ t('general.added') }}</span>
                 <p class="text-sm mt-1">{{ new Date(favoriteData.timestamp).toLocaleString() }}</p>
               </div>
             </div>
@@ -726,18 +729,18 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           <template v-else-if="selectedItem.type === 'pinia-favorite' && piniaFavoriteData">
             <div class="space-y-3">
               <div>
-                <span class="text-xs text-muted-foreground">Store Name</span>
+                <span class="text-xs text-muted-foreground">{{ t('stores.storeName') }}</span>
                 <Input
                   v-if="piniaFavoriteEditMode"
                   v-model="editedPiniaFavoriteName"
                   class="mt-1 font-mono"
-                  placeholder="Store name"
+                  :placeholder="t('stores.storeName')"
                   @keydown.enter.prevent="savePiniaFavoriteEdit"
                 />
                 <p v-else class="font-mono text-sm mt-1">{{ piniaFavoriteData.name }}</p>
               </div>
               <div>
-                <span class="text-xs text-muted-foreground">Added</span>
+                <span class="text-xs text-muted-foreground">{{ t('general.added') }}</span>
                 <p class="text-sm mt-1">{{ new Date(piniaFavoriteData.timestamp).toLocaleString() }}</p>
               </div>
             </div>
@@ -754,25 +757,25 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
               :last-updated="headerLinkLatestAdded"
               @submit="saveHeaderLinkEdit"
             />
-            <p v-else class="text-sm text-muted-foreground">This header link was removed.</p>
+            <p v-else class="text-sm text-muted-foreground">{{ t('details.removed') }}</p>
           </template>
 
           <!-- Site blacklist / whitelist entry -->
           <template v-else-if="(selectedItem.type === 'site-blacklist' || selectedItem.type === 'site-whitelist') && siteListDetailData">
             <div class="space-y-3">
               <div>
-                <span class="text-xs text-muted-foreground">Pattern</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.pattern') }}</span>
                 <Input
                   v-if="siteListEditMode"
                   v-model="editedSiteListPattern"
                   class="mt-1 font-mono"
-                  placeholder="Origin pattern"
+                  :placeholder="t('details.origin')"
                   @keydown.enter.prevent="saveSiteListEdit"
                 />
                 <p v-else class="font-mono text-sm mt-1 break-all">{{ siteListDetailData.pattern }}</p>
               </div>
               <div>
-                <span class="text-xs text-muted-foreground">Added</span>
+                <span class="text-xs text-muted-foreground">{{ t('general.added') }}</span>
                 <p class="text-sm mt-1">{{ new Date(siteListDetailData.addedAt).toLocaleString() }}</p>
               </div>
             </div>
@@ -783,22 +786,22 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
             <div class="space-y-3">
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <span class="text-xs text-muted-foreground">Name</span>
+                  <span class="text-xs text-muted-foreground">{{ t('general.name') }}</span>
                   <p class="text-sm font-mono mt-1 break-all">{{ savedFileData.name }}</p>
                 </div>
                 <div>
-                  <span class="text-xs text-muted-foreground">Size</span>
+                  <span class="text-xs text-muted-foreground">{{ t('general.size') }}</span>
                   <p class="text-sm mt-1">{{ formatFileSize(savedFileData.size) }}</p>
                 </div>
               </div>
               <div>
-                <span class="text-xs text-muted-foreground">Type</span>
+                <span class="text-xs text-muted-foreground">{{ t('common.type') }}</span>
                 <p class="text-sm font-mono mt-1">{{ savedFileData.mimeType }}</p>
               </div>
 
               <!-- Image -->
               <div v-if="isImageFile(savedFileData.mimeType)">
-                <span class="text-xs text-muted-foreground">Preview</span>
+                <span class="text-xs text-muted-foreground">{{ t('update.preview') }}</span>
                 <div class="mt-2 rounded-lg border overflow-hidden bg-muted/20 flex items-center justify-center p-2">
                   <img
                     :src="getFileUrl(savedFileData)"
@@ -810,13 +813,13 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
 
               <!-- Audio -->
               <div v-else-if="isAudioFile(savedFileData.mimeType)">
-                <span class="text-xs text-muted-foreground">Preview</span>
+                <span class="text-xs text-muted-foreground">{{ t('update.preview') }}</span>
                 <audio :src="getFileUrl(savedFileData)" controls class="w-full mt-2" />
               </div>
 
               <!-- Video -->
               <div v-else-if="isVideoFile(savedFileData.mimeType)">
-                <span class="text-xs text-muted-foreground">Preview</span>
+                <span class="text-xs text-muted-foreground">{{ t('update.preview') }}</span>
                 <video
                   :src="getFileUrl(savedFileData)"
                   controls
@@ -826,7 +829,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
 
               <!-- Text / JSON / XML / Code -->
               <div v-else-if="isTextFile(savedFileData.mimeType)">
-                <span class="text-xs text-muted-foreground">Preview</span>
+                <span class="text-xs text-muted-foreground">{{ t('update.preview') }}</span>
                 <ScrollArea class="mt-2 rounded bg-muted/50 saved-file-text-scroll">
                   <pre class="text-xs font-mono p-3 whitespace-pre-wrap break-all">{{ textPreviewContent }}</pre>
                 </ScrollArea>
@@ -834,7 +837,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
 
               <!-- PDF -->
               <div v-else-if="savedFileData.mimeType === 'application/pdf'">
-                <span class="text-xs text-muted-foreground">Preview</span>
+                <span class="text-xs text-muted-foreground">{{ t('update.preview') }}</span>
                 <iframe
                   :src="getFileUrl(savedFileData)"
                   class="w-full h-[300px] mt-2 rounded-lg border"
@@ -843,7 +846,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
 
               <!-- Word / Excel / PowerPoint -->
               <div v-else-if="isOfficeFile(savedFileData.mimeType)">
-                <span class="text-xs text-muted-foreground">Preview</span>
+                <span class="text-xs text-muted-foreground">{{ t('update.preview') }}</span>
                 <div class="mt-2 rounded-lg border bg-muted/20 overflow-hidden">
                   <div class="flex flex-col items-center justify-center py-8 px-4 gap-3">
                     <component
@@ -864,7 +867,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
                         :href="officeBlobUrl"
                         target="_blank"
                       >
-                        Open
+                        {{ t('common.open') }}
                       </Button>
                       <Button
                         variant="outline"
@@ -873,7 +876,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
                         @click="downloadSavedFile(savedFileData!)"
                       >
                         <Download class="h-3.5 w-3.5" />
-                        Download
+                        {{ t('common.download') }}
                       </Button>
                     </div>
                   </div>
@@ -882,7 +885,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
 
               <!-- SVG (may not start with image/) -->
               <div v-else-if="savedFileData.mimeType === 'image/svg+xml'">
-                <span class="text-xs text-muted-foreground">Preview</span>
+                <span class="text-xs text-muted-foreground">{{ t('update.preview') }}</span>
                 <div class="mt-2 rounded-lg border overflow-hidden bg-muted/20 flex items-center justify-center p-2">
                   <img
                     :src="getFileUrl(savedFileData)"
@@ -894,7 +897,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
 
               <!-- Unsupported type -->
               <div v-else class="mt-3 text-sm text-muted-foreground text-center py-6 border rounded-lg bg-muted/20">
-                Preview not available for this file type
+                {{ t('details.previewUnavailable') }}
               </div>
             </div>
           </template>
@@ -902,7 +905,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
           <!-- Item was deleted -->
           <template v-else>
             <div class="text-center py-8 text-muted-foreground">
-              Item no longer exists
+              {{ t('details.gone') }}
             </div>
           </template>
 

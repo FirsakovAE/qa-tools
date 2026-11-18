@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from '@/i18n'
 import { ChevronRight } from 'lucide-vue-next'
 
 defineProps<{ text: string }>()
+
+const { t } = useI18n()
 
 const open = ref(false)
 </script>
@@ -16,7 +19,7 @@ const open = ref(false)
       @click="open = !open"
     >
       <ChevronRight class="h-3 w-3 shrink-0 transition-transform" :class="{ 'rotate-90': open }" />
-      <span class="shrink-0 text-foreground/70">Thinking</span>
+      <span class="shrink-0 text-foreground/70">{{ t('ai.thinking') }}</span>
     </button>
     <!-- column-reverse keeps the scroll at the newest text while it streams -->
     <div

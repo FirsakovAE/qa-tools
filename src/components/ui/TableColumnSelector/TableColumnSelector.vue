@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Columns3Cog } from 'lucide-vue-next'
+import { useI18n } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -13,6 +14,8 @@ export interface ColumnDefinition {
   key: string
   label: string
 }
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -47,7 +50,8 @@ function isColumnDisabled(key: string): boolean {
         variant="ghost"
         size="icon"
         class="h-6 w-6 p-0"
-        title="Column visibility"
+        :title="t('editor.columns')"
+        :aria-label="t('editor.columns')"
       >
         <Columns3Cog class="h-4 w-4" />
       </Button>
@@ -62,6 +66,7 @@ function isColumnDisabled(key: string): boolean {
         <Checkbox
           :model-value="columns[def.key] ?? true"
           :disabled="isColumnDisabled(def.key)"
+          :aria-label="def.label"
           class="pointer-events-none mr-2 shrink-0"
         />
         {{ def.label }}

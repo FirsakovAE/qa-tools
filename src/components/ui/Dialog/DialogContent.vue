@@ -10,8 +10,10 @@ import {
 } from 'reka-ui';
 import { XIcon } from 'lucide-vue-next';
 import { cn } from '@/components/ui/utils';
+import { useI18n } from '@/i18n';
 
 const props = defineProps<DialogContentProps>();
+const { t } = useI18n();
 const emits = defineEmits<DialogContentEmits>();
 
 const forwarded = useForwardPropsEmits(props, emits);
@@ -36,7 +38,7 @@ const forwarded = useForwardPropsEmits(props, emits);
         class="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-2 focus:outline-ring focus:outline-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary data-[state=open]:text-muted-foreground"
       >
         <XIcon class="w-4 h-4" />
-        <span class="sr-only">Close</span>
+        <span class="sr-only">{{ t('common.close') }}</span>
       </DialogClose>
     </DialogContent>
   </DialogPortal>

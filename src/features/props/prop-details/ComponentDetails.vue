@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
+import { useI18n } from '@/i18n'
 import { ArrowLeft, Star, X, Save, Edit, RefreshCw } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ import { getPropsFavoriteNodeId, isPropsRowResolvedFavorite } from '../propsFavo
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
+const { t } = useI18n()
 
 // --- Props и Emits ---
 const props = withDefaults(
@@ -118,8 +120,8 @@ type SectionId = 'received' | 'declared'
 const activeSection = ref<SectionId>('received')
 
 const sections = computed<Array<{ id: SectionId; label: string }>>(() => [
-  { id: 'received', label: 'Received' },
-  { id: 'declared', label: 'Declared' }
+  { id: 'received', label: t('props.received') },
+  { id: 'declared', label: t('props.declared') }
 ])
 
 // --- JSON State ---
@@ -309,7 +311,7 @@ async function saveChanges() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {{ isFavorite ? 'Remove from favorites' : 'Add to favorites' }}
+              {{ isFavorite ? t('stores.removeFav') : t('stores.addFav') }}
             </TooltipContent>
           </Tooltip>
           
@@ -327,7 +329,7 @@ async function saveChanges() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Refresh data
+              {{ t('common.refreshData') }}
             </TooltipContent>
           </Tooltip>
           
@@ -344,7 +346,7 @@ async function saveChanges() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              Edit props
+              {{ t('props.edit') }}
             </TooltipContent>
           </Tooltip>
           
@@ -361,7 +363,7 @@ async function saveChanges() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Cancel
+                {{ t('common.cancel') }}
               </TooltipContent>
             </Tooltip>
             
@@ -378,7 +380,7 @@ async function saveChanges() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Save changes
+                {{ t('props.save') }}
               </TooltipContent>
             </Tooltip>
           </template>

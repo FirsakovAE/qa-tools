@@ -26,6 +26,7 @@ import { LogsTab, initLogsCollector } from '@/features/logs'
 import { pendingLogsEvent } from '@/features/logs/logsNavigation'
 import { askAiRequest } from '@/features/ai/attachments'
 import { postToContentScript } from '@/utils/postToContentScript'
+import { useI18n } from '@/i18n'
 
 const AiTab = defineAsyncComponent(() => import('@/features/ai/AiTab.vue'))
 
@@ -322,41 +323,45 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
    * ============================================================================
    */
   
+  const { t } = useI18n()
+
   const allTabs = [
   {
       id: 'network',
-      title: 'Network',
+      titleKey: 'tab.network',
       icon: GlobeIcon,
       requiresFlag: 'hasNetwork' as const, // 👈 ТОЛЬКО UI-флаг
     },
     {
       id: 'props',
-      title: 'Props',
+      titleKey: 'tab.props',
       icon: Box,
       requiresFlag: 'hasVue' as const,
     },
     {
       id: 'stores',
-      title: 'Pinia Stores',
+      titleKey: 'tab.stores',
       icon: DatabaseIcon,
       requiresFlag: 'hasPinia' as const,
     },
     {
       id: 'logs',
-      title: 'Logs',
+      titleKey: 'tab.logs',
       icon: FileTextIcon,
       requiresFlag: 'hasLogs' as const,
     },
     {
       id: 'ai',
-      title: 'AI assistant',
+      titleKey: 'tab.ai',
       icon: Sparkles,
       requiresFlag: 'hasAi' as const,
     },
   ] as const
   
   const tabs = computed(() =>
-    allTabs.filter(tab => featureFlags.value[tab.requiresFlag]),
+    allTabs
+      .filter(tab => featureFlags.value[tab.requiresFlag])
+      .map(tab => ({ ...tab, title: t(tab.titleKey) })),
   )
   
   /* ============================================================================
@@ -475,14 +480,14 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
                   size="icon"
                   class="rounded-lg"
                   :class="{ 'bg-muted': activeTab === optionsTab.id }"
-                  aria-label="Options"
+                  :aria-label="t('tab.options')"
                   @click="activeTab = optionsTab.id"
                 >
                   <SettingsIcon class="size-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right" :side-offset="5">
-                {{ optionsTab.title }}
+                {{ t('tab.options') }}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

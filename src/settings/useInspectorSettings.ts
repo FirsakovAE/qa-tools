@@ -1,4 +1,6 @@
 import { reactive, ref, watch, toRaw, onMounted, type Ref } from 'vue'
+import { setUiLanguage } from '@/i18n'
+import { isUiLanguage } from '@/i18n/languages'
 import { defaultInspectorSettings, type InspectorSettings } from '@/settings/inspectorSettings'
 import { safeRuntime, safeSendMessage } from '@/utils/extensionBridge'
 import { getRuntimeAdapter } from '@/runtime'
@@ -503,8 +505,11 @@ function mergeSettings(defaults: InspectorSettings, saved: Partial<InspectorSett
     if (result.networkTrafficFilter !== 'xhr' && result.networkTrafficFilter !== 'ws') {
         result.networkTrafficFilter = 'all'
     }
+    if (!isUiLanguage(result.language)) result.language = 'en'
     return result
 }
+
+watch(() => state.language, language => setUiLanguage(language), { immediate: true })
 
 // Дебаунс для сохранения
 function debouncedSave() {

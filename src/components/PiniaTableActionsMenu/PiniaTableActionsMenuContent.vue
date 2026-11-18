@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends { id: string; baseId?: string }">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { Star, StarOff, Sparkles } from 'lucide-vue-next'
 import {
   ContextMenuContent,
@@ -20,12 +21,14 @@ const props = withDefaults(
     isFavorite: boolean
     contentClass?: string
   }>(),
-  { contentClass: 'w-44' }
+  { contentClass: 'w-max whitespace-nowrap' }
 )
 
 const emit = defineEmits<{
   (e: 'toggleFavorite', event: Event, store: T): void
 }>()
+
+const { t } = useI18n()
 
 const Content = computed(() =>
   props.variant === 'context' ? ContextMenuContent : DropdownMenuContent
@@ -62,13 +65,13 @@ function handleAskAi(e: Event) {
   >
     <component :is="Item" @click="handleAskAi">
       <Sparkles class="h-4 w-4 mr-2" />
-      Ask AI
+      {{ t('network.askAi') }}
     </component>
     <component :is="Separator" />
     <component :is="Item" @click="handleClick">
       <StarOff v-if="isFavorite" class="h-4 w-4 mr-2" />
       <Star v-else class="h-4 w-4 mr-2" />
-      {{ isFavorite ? 'Remove favorite' : 'Add favorite' }}
+      {{ isFavorite ? t('stores.removeFavorite') : t('stores.addFavorite') }}
     </component>
   </component>
 </template>

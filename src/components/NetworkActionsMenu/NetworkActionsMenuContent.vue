@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { Terminal, PauseCircle, Shuffle, Power, Trash, Sparkles } from 'lucide-vue-next'
 import { askAiAboutRequest } from '@/features/ai/attachments'
 import {
@@ -19,6 +20,8 @@ import { matchesBreakpoint, matchesMock } from '@/features/network/composables/u
 type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
 type MockWithStatus = MockRule & { isActive: boolean }
 
+const { t } = useI18n()
+
 const props = withDefaults(
   defineProps<{
     variant: 'context' | 'dropdown'
@@ -29,7 +32,7 @@ const props = withDefaults(
     allMocks?: MockWithStatus[]
     contentClass?: string
   }>(),
-  { contentClass: 'w-48' }
+  { contentClass: 'w-max whitespace-nowrap' }
 )
 
 const emit = defineEmits<{
@@ -100,12 +103,12 @@ function handleClick(e: Event, action: () => void) {
       @click="handleClick($event, () => emit('copyCurl', entry))"
     >
       <Terminal class="h-4 w-4 mr-2" />
-      Copy cURL
+      {{ t('network.copyCurl') }}
     </component>
     <component v-if="entry.initiator !== 'websocket'" :is="Separator" />
     <component :is="Item" @click="handleClick($event, () => askAiAboutRequest(entry))">
       <Sparkles class="h-4 w-4 mr-2" />
-      Ask AI
+      {{ t('network.askAi') }}
     </component>
     <component v-if="entry.initiator !== 'websocket'" :is="Separator" />
     <component
@@ -114,7 +117,7 @@ function handleClick(e: Event, action: () => void) {
       @click="handleClick($event, () => emit('setBreakpoint', entry))"
     >
       <PauseCircle class="h-4 w-4 mr-2" />
-      {{ matchesBreakpointPattern(entry.id) ? 'Rewrite Breakpoint' : 'Breakpoint Request' }}
+      {{ matchesBreakpointPattern(entry.id) ? t('network.rewriteBreakpoint') : t('network.breakpointRequest') }}
     </component>
     <component
       v-if="entry.initiator !== 'websocket'"
@@ -122,7 +125,7 @@ function handleClick(e: Event, action: () => void) {
       @click="handleClick($event, () => emit('mockResponse', entry))"
     >
       <Shuffle class="h-4 w-4 mr-2" />
-      {{ matchesMockPattern(entry.id) ? 'Rewrite Mock' : 'Mock Response' }}
+      {{ matchesMockPattern(entry.id) ? t('network.rewriteMock') : t('network.mockResponse') }}
     </component>
     <template v-if="getMatchingBreakpointActive(entry) != null">
       <component :is="Separator" />
@@ -131,7 +134,7 @@ function handleClick(e: Event, action: () => void) {
         @click="handleClick($event, () => emit('toggleBreakpoint', entry))"
       >
         <Power class="h-4 w-4 mr-2" />
-        {{ getMatchingBreakpointActive(entry) ? 'Disable' : 'Enable' }} Breakpoint
+        {{ getMatchingBreakpointActive(entry) ? t('network.disableBreakpoint') : t('network.enableBreakpoint') }}
       </component>
       <component
         :is="Item"
@@ -139,7 +142,7 @@ function handleClick(e: Event, action: () => void) {
         @click="handleClick($event, () => emit('deleteBreakpoint', entry))"
       >
         <Trash class="h-4 w-4 mr-2" />
-        Delete Breakpoint
+        {{ t('network.deleteBreakpoint') }}
       </component>
     </template>
     <template v-if="getMatchingMockActive(entry) != null">
@@ -149,7 +152,7 @@ function handleClick(e: Event, action: () => void) {
         @click="handleClick($event, () => emit('toggleMock', entry))"
       >
         <Power class="h-4 w-4 mr-2" />
-        {{ getMatchingMockActive(entry) ? 'Disable' : 'Enable' }} Mock
+        {{ getMatchingMockActive(entry) ? t('network.disableMock') : t('network.enableMock') }}
       </component>
       <component
         :is="Item"
@@ -157,7 +160,7 @@ function handleClick(e: Event, action: () => void) {
         @click="handleClick($event, () => emit('deleteMock', entry))"
       >
         <Trash class="h-4 w-4 mr-2" />
-        Delete Mock
+        {{ t('general.delete') }} {{ t('network.mockLabel') }}
       </component>
     </template>
   </component>

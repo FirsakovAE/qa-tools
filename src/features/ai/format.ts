@@ -2,6 +2,7 @@
  * Short labels for the AI tab and Options: usage, steps, quota, model state.
  */
 
+import { t } from '@/i18n'
 import { AUTO_MODEL, customProvider } from './credentials'
 import { CUSTOM_PRESETS, isLocalUrl } from './customProviders'
 import { modelStatus, reportedLimit, requestsToday, statusLabel, unavailableCount } from './modelStatus'
@@ -96,12 +97,12 @@ export function usageTitle(u: AiUsage): string {
 }
 
 export function modelName(models: AiModel[], id: string): string {
-  return id === AUTO_MODEL ? 'Auto' : models.find(m => m.id === id)?.name ?? id
+  return id === AUTO_MODEL ? t('ai.auto') : models.find(m => m.id === id)?.name ?? id
 }
 
 export function modelNote(provider: AiProviderId, m: AiModel): string {
   const used = requestsToday(provider, m.id)
-  return [m.paid && 'paid', statusLabel(provider, m.id), m.unstable && 'unstable', used && `${used} today`].filter(Boolean).join(' · ')
+  return [m.paid && t('ai.paid'), statusLabel(provider, m.id), m.unstable && t('ai.unstable'), used && t('ai.today', { n: used })].filter(Boolean).join(' · ')
 }
 
 /** Requests of today and the limits the provider reported; every assistant step is one request */
@@ -109,15 +110,15 @@ export function quotaLine(provider: AiProviderId, model: string, models: AiModel
   const auto = model === AUTO_MODEL
   const used = requestsToday(provider)
   const skipped = auto ? unavailableCount(provider, models) : 0
-  const skippedNote = skipped ? ` Auto skips ${skipped} model${skipped === 1 ? '' : 's'} out of quota or unavailable.` : ''
+  const skippedNote = skipped ? t('ai.quotaSkip', { n: skipped }) : ''
   if (provider === 'openrouter') {
     const limit = reportedLimit('openrouter')?.limit ?? 50
-    return `Today: ${used} of ${limit} free OpenRouter requests (counted in this browser). Each assistant step is one request.${skippedNote}`
+    return t('ai.quotaOpenrouter', { used, limit, skip: skippedNote })
   }
   const custom = customProvider(provider)
   if (custom) {
-    const billing = CUSTOM_PRESETS[custom.preset].local || isLocalUrl(custom.baseUrl) ? 'runs on your server' : 'limits and billing are set by your account there'
-    return `Today: ${used} requests to ${custom.label} (${billing}). Each assistant step is one request.${skippedNote}`
+    const billing = CUSTOM_PRESETS[custom.preset].local || isLocalUrl(custom.baseUrl) ? t('ai.billingLocal') : t('ai.billingAccount')
+    return t('ai.quotaCustom', { used, name: custom.label, billing, skip: skippedNote })
   }
-  return `Today: ${used} Gemini requests. Daily limits depend on the model and your Google AI Studio project.${skippedNote}`
+  return t('ai.quotaGemini', { used, skip: skippedNote })
 }

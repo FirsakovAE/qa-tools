@@ -4,7 +4,7 @@ title: Режимы отображения
 
 # Режимы отображения (Display Mode)
 
-В **Options → General → Display Mode** выбирается, **где** живёт интерфейс Vue Inspector относительно страницы. Доступны варианты **Overlay** (оверлей на странице) и **DevTools tab** (вкладка в инструментах разработчика браузера). По умолчанию выбран **Overlay**.
+**Options → General** начинается с **Language**. По умолчанию **English**; **Русский** переключает навигацию инспектора, боковое меню Options и эту страницу General. Дальше **Display Mode** выбирает, **где** живёт интерфейс Vue Inspector относительно страницы. Доступны варианты **Overlay** (оверлей на странице) и **DevTools tab** (вкладка в инструментах разработчика браузера). По умолчанию выбран **Overlay**.
 
 Дальше на **Options → General**, по порядку: [Customize](/ru/options/customize), [Search Parameters и Auto Refresh](/ru/options/update_settings), [Auto Run](/ru/options/auto_run) (только расширение), [JSON Mode](/ru/options/json_mode), сохранённые файлы на странице Customize, [менеджер настроек](/ru/options/settings_management). Следующий раздел Options — [About](/ru/options/about).
 

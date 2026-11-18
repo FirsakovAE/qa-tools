@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
 import type { BreakpointItem, MockRule, NetworkCaptureMode, NetworkHeaderLinkRule, NetworkPinnedHeaderItem } from '@/types/inspector'
 import { TableCell } from '@/components/ui/table'
@@ -28,6 +29,8 @@ const emit = defineEmits<{
   (e: 'edit-header-link', item: { type: 'header-link'; id: string }): void
 }>()
 
+const { t } = useI18n()
+
 const runtime = getRuntimeAdapter()
 const isStandalone = runtime?.capabilities.mode === 'standalone'
 
@@ -48,14 +51,14 @@ const networkCaptureMode = computed({
 // -------------------- SEARCH SETTINGS --------------------
 type SearchKey = 'byName' | 'byPath' | 'byMethod' | 'byStatus' | 'byKey' | 'byValue'
 
-const searchItems: Array<{ key: SearchKey; label: string }> = [
-  { key: 'byStatus', label: 'Search by status code' },
-  { key: 'byMethod', label: 'Search by method' },
-  { key: 'byPath', label: 'Search by path' },
-  { key: 'byName', label: 'Search by name' },
-  { key: 'byKey', label: 'Search by key' },
-  { key: 'byValue', label: 'Search by value' },
-]
+const searchItems = computed((): Array<{ key: SearchKey; label: string }> => [
+  { key: 'byStatus', label: t('search.byStatus') },
+  { key: 'byMethod', label: t('search.byMethod') },
+  { key: 'byPath', label: t('search.byPath') },
+  { key: 'byName', label: t('search.byName') },
+  { key: 'byKey', label: t('search.byKey') },
+  { key: 'byValue', label: t('search.byValue') },
+])
 
 function toggleSearch(key: SearchKey) {
   props.settings.networkSearch[key] = !props.settings.networkSearch[key]
@@ -72,10 +75,10 @@ const breakpointRows = computed<BreakpointRow[]>(() => {
   ]
 })
 
-const breakpointColumns: TableColumn[] = [
-  { header: 'Description' },
-  { header: 'Status', width: '70px', class: 'text-center' },
-]
+const breakpointColumns = computed<TableColumn[]>(() => [
+  { header: t('common.description') },
+  { header: t('common.status'), width: '70px', class: 'text-center' },
+])
 
 function toggleBreakpoint(breakpointId: string, currentlyActive: boolean) {
   const bps = props.settings.breakpoints
@@ -103,9 +106,9 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
 
 function getBreakpointActions(row: BreakpointRow): MenuAction[] {
   return [
-    { label: 'Edit', icon: Pencil, onClick: () => emit('edit-breakpoint', row.id) },
-    { label: row.active ? 'Disable' : 'Enable', icon: Power, onClick: () => toggleBreakpoint(row.id, row.active) },
-    { label: 'Delete', icon: Trash, onClick: () => removeBreakpoint(row.id), destructiveText: true },
+    { label: t('general.edit'), icon: Pencil, onClick: () => emit('edit-breakpoint', row.id) },
+    { label: row.active ? t('common.disable') : t('common.enable'), icon: Power, onClick: () => toggleBreakpoint(row.id, row.active) },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeBreakpoint(row.id), destructiveText: true },
   ]
 }
 
@@ -120,12 +123,12 @@ const mockRows = computed<MockRow[]>(() => {
   ]
 })
 
-const mockColumns: TableColumn[] = [
-  { header: 'Description' },
-  { header: 'Code', width: '60px', class: 'text-center' },
-  { header: 'Delay', width: '60px', class: 'text-center' },
-  { header: 'Status', width: '60px', class: 'text-center' },
-]
+const mockColumns = computed<TableColumn[]>(() => [
+  { header: t('common.description') },
+  { header: t('netset.code'), width: '60px', class: 'text-center' },
+  { header: t('netset.delayCol'), width: '60px', class: 'text-center' },
+  { header: t('common.status'), width: '60px', class: 'text-center' },
+])
 
 function toggleMock(mockId: string, currentlyActive: boolean) {
   const mocks = props.settings.mocks
@@ -155,9 +158,9 @@ function formatMockUrl(mock: MockRule): string {
 
 function getMockActions(row: MockRow): MenuAction[] {
   return [
-    { label: 'Edit', icon: Pencil, onClick: () => emit('edit-mock', row.id) },
-    { label: row.active ? 'Disable' : 'Enable', icon: Power, onClick: () => toggleMock(row.id, row.active) },
-    { label: 'Delete', icon: Trash, onClick: () => removeMock(row.id), destructiveText: true },
+    { label: t('general.edit'), icon: Pencil, onClick: () => emit('edit-mock', row.id) },
+    { label: row.active ? t('common.disable') : t('common.enable'), icon: Power, onClick: () => toggleMock(row.id, row.active) },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeMock(row.id), destructiveText: true },
   ]
 }
 
@@ -168,10 +171,10 @@ type HeaderLinkGroupRow = {
   ruleCount: number
 }
 
-const headerLinkColumns: TableColumn[] = [
-  { header: 'Header', class: 'min-w-0' },
-  { header: 'Rules', width: '72px', class: 'text-center' },
-]
+const headerLinkColumns = computed<TableColumn[]>(() => [
+  { header: t('netset.header'), class: 'min-w-0' },
+  { header: t('netset.rules'), width: '72px', class: 'text-center' },
+])
 
 const headerLinkGroupRows = computed<HeaderLinkGroupRow[]>(() => {
   const list = props.settings.networkHeaderLinks
@@ -201,16 +204,16 @@ function removeHeaderLinkGroup(headerKey: string) {
 
 function getHeaderLinkGroupActions(row: HeaderLinkGroupRow): MenuAction[] {
   return [
-    { label: 'Edit', icon: Pencil, onClick: () => emit('edit-header-link', { type: 'header-link', id: row.headerKey }) },
-    { label: 'Delete', icon: Trash, onClick: () => removeHeaderLinkGroup(row.headerKey), destructiveText: true },
+    { label: t('general.edit'), icon: Pencil, onClick: () => emit('edit-header-link', { type: 'header-link', id: row.headerKey }) },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeHeaderLinkGroup(row.headerKey), destructiveText: true },
   ]
 }
 
 // -------------------- PINNED HEADERS (Advanced) --------------------
-const pinnedHeaderColumns: TableColumn[] = [
-  { header: 'Header', class: 'min-w-0' },
-  { header: 'Type', width: '100px', class: 'text-center' },
-]
+const pinnedHeaderColumns = computed<TableColumn[]>(() => [
+  { header: t('netset.header'), class: 'min-w-0' },
+  { header: t('common.type'), width: '100px', class: 'text-center' },
+])
 
 const pinnedHeaderRows = computed<NetworkPinnedHeaderItem[]>(() => {
   const list = props.settings.networkPinnedHeaders
@@ -240,7 +243,7 @@ function ensureAdvancedHeaderPolicy() {
 
 function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
   return [
-    { label: 'Delete', icon: Trash, onClick: () => removePinnedHeader(row.id), destructiveText: true },
+    { label: t('general.delete'), icon: Trash, onClick: () => removePinnedHeader(row.id), destructiveText: true },
   ]
 }
 </script>
@@ -255,9 +258,9 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
     />
 
     <div class="space-y-3 border-t border-border pt-4">
-      <h3 class="text-sm font-medium">Request history</h3>
+      <h3 class="text-sm font-medium">{{ t('netset.history') }}</h3>
       <div class="grid grid-cols-[auto_auto] items-center justify-start gap-x-3 gap-y-2">
-        <Label for="network-max-http" class="text-sm font-normal">Maximum HTTP requests</Label>
+        <Label for="network-max-http" class="text-sm font-normal">{{ t('netset.maxHttp') }}</Label>
         <Input
           id="network-max-http"
           type="number"
@@ -267,7 +270,7 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
           :model-value="normalizeNetworkMaxEntries(settings.networkMaxHttpRequests)"
           @change="setRingLimit($event, 'networkMaxHttpRequests')"
         />
-        <Label for="network-max-ws" class="text-sm font-normal">Maximum WebSocket events</Label>
+        <Label for="network-max-ws" class="text-sm font-normal">{{ t('netset.maxWs') }}</Label>
         <Input
           id="network-max-ws"
           type="number"
@@ -282,46 +285,46 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
 
     <div class="space-y-3 border-t border-border pt-4">
       <div>
-        <h3 class="text-sm font-medium">Capture mode</h3>
+        <h3 class="text-sm font-medium">{{ t('netset.capture') }}</h3>
         <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
-          Choose how Network captures request and response headers.
+          {{ t('netset.captureHint') }}
         </p>
       </div>
       <RadioGroup v-model="networkCaptureMode" :disabled="isStandalone" class="gap-3">
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center space-x-2">
-            <RadioGroupItem value="saved" id="network-capture-saved" />
+            <RadioGroupItem value="saved" id="network-capture-saved" :aria-label="t('netset.classic')" />
             <Label
               for="network-capture-saved"
               class="text-sm font-normal"
               :class="isStandalone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'"
             >
-              Classic mode
+              {{ t('netset.classic') }}
             </Label>
           </div>
           <p
             v-if="networkCaptureMode === 'saved'"
             class="text-xs text-muted-foreground leading-relaxed pl-6"
           >
-            Captures standard headers available in the classic (non-extension) view.
+            {{ t('netset.classicHint') }}
           </p>
         </div>
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center space-x-2">
-            <RadioGroupItem value="advanced" id="network-capture-advanced" />
+            <RadioGroupItem value="advanced" id="network-capture-advanced" :aria-label="t('netset.advanced')" />
             <Label
               for="network-capture-advanced"
               class="text-sm font-normal"
               :class="isStandalone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'"
             >
-              Advanced mode
+              {{ t('netset.advanced') }}
             </Label>
           </div>
           <p
             v-if="networkCaptureMode === 'advanced'"
             class="text-xs text-muted-foreground leading-relaxed pl-6"
           >
-            Captures full header data close to original DevTools output.
+            {{ t('netset.advancedHint') }}
           </p>
         </div>
       </RadioGroup>
@@ -330,55 +333,58 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
         class="flex items-start gap-2 rounded-md bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400"
       >
         <Info class="h-4 w-4 shrink-0 mt-0.5" />
-        <p>Capture Mode is only available for the browser extension version.</p>
+        <p>{{ t('netset.captureStandalone') }}</p>
       </div>
     </div>
 
     <div v-if="networkCaptureMode === 'advanced'" class="space-y-6">
       <div class="space-y-4 border-t border-border pt-4">
         <div>
-          <h3 class="text-sm font-medium">Advanced headers</h3>
+          <h3 class="text-sm font-medium">{{ t('netset.advancedHeaders') }}</h3>
           <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
-            Manage how headers captured only in Advanced mode are displayed and exported. Pinned headers are always shown.
+            {{ t('netset.advancedHeadersHint') }}
           </p>
         </div>
         <div class="space-y-3 max-w-xl">
           <div class="flex items-center gap-3">
             <Checkbox
               id="adv-hdr-show-details"
+              :aria-label="t('netset.showDetails')"
               :model-value="ensureAdvancedHeaderPolicy().showInDetails"
               @update:model-value="ensureAdvancedHeaderPolicy().showInDetails = !!$event"
             />
-            <Label for="adv-hdr-show-details" class="text-sm font-normal cursor-pointer">Show in details</Label>
+            <Label for="adv-hdr-show-details" class="text-sm font-normal cursor-pointer">{{ t('netset.showDetails') }}</Label>
           </div>
           <div class="flex items-center gap-3">
             <Checkbox
               id="adv-hdr-curl"
+              :aria-label="t('netset.inCurl')"
               :model-value="ensureAdvancedHeaderPolicy().includeInCurl"
               @update:model-value="ensureAdvancedHeaderPolicy().includeInCurl = !!$event"
             />
-            <Label for="adv-hdr-curl" class="text-sm font-normal cursor-pointer">Include in Copy cURL</Label>
+            <Label for="adv-hdr-curl" class="text-sm font-normal cursor-pointer">{{ t('netset.inCurl') }}</Label>
           </div>
           <div class="flex items-center gap-3">
             <Checkbox
               id="adv-hdr-export"
+              :aria-label="t('netset.inExport')"
               :model-value="ensureAdvancedHeaderPolicy().includeInExport"
               @update:model-value="ensureAdvancedHeaderPolicy().includeInExport = !!$event"
             />
-            <Label for="adv-hdr-export" class="text-sm font-normal cursor-pointer">Include in Collection export</Label>
+            <Label for="adv-hdr-export" class="text-sm font-normal cursor-pointer">{{ t('netset.inExport') }}</Label>
           </div>
         </div>
       </div>
 
       <SettingsTableSection
         section-id="header-links-section"
-        title="Header links"
-        description="URL templates for a header on a given host."
+        :title="t('netset.headerLinks')"
+        :description="t('netset.headerLinksHint')"
         :columns="headerLinkColumns"
         :rows="headerLinkGroupRows"
         :row-key="(r) => (r as HeaderLinkGroupRow).headerKey"
         :get-actions="(row) => getHeaderLinkGroupActions(row as HeaderLinkGroupRow)"
-        empty-message="No header links. Create one from the Network tab (Advanced) via a header row menu."
+        :empty-message="t('netset.noHeaderLinks')"
         :selected-item-id="selectedItemId"
         @select="(row) => emit('select', { type: 'header-link', id: (row as HeaderLinkGroupRow).headerKey })"
       >
@@ -401,13 +407,13 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
 
       <SettingsTableSection
         section-id="pinned-headers-section"
-        title="Pinned headers"
-        description="Headers pinned to the top of the Request or Response list."
+        :title="t('netset.pinned')"
+        :description="t('netset.pinnedHint')"
         :columns="pinnedHeaderColumns"
         :rows="pinnedHeaderRows"
         :row-key="(r) => (r as NetworkPinnedHeaderItem).id"
         :get-actions="(row) => getPinnedHeaderActions(row as NetworkPinnedHeaderItem)"
-        empty-message="No pinned headers. Add pins from the Network tab (header row menu)."
+        :empty-message="t('netset.noPins')"
         @select="() => {}"
       >
         <template #row="{ row }">
@@ -421,7 +427,7 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
           </TableCell>
           <TableCell class="w-[100px] text-center !py-2">
             <div class="text-xs text-muted-foreground">
-              {{ (row as NetworkPinnedHeaderItem).scope === 'request' ? 'Request' : 'Response' }}
+              {{ (row as NetworkPinnedHeaderItem).scope === 'request' ? t('common.request') : t('common.response') }}
             </div>
           </TableCell>
         </template>
@@ -430,13 +436,13 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
 
     <SettingsTableSection
       section-id="breakpoints-section"
-      title="Breakpoints Requests"
-      description="Network requests matching these patterns will be paused for inspection."
+      :title="t('netset.breakpoints')"
+      :description="t('netset.breakpointsHint')"
       :columns="breakpointColumns"
       :rows="breakpointRows"
       :row-key="(r) => (r as BreakpointRow).id"
       :get-actions="(row) => getBreakpointActions(row as BreakpointRow)"
-      empty-message="No breakpoints configured. Set breakpoints from the Network tab."
+      :empty-message="t('netset.noBreakpoints')"
       :selected-item-id="selectedItemId"
       @select="(row) => emit('select', { type: 'breakpoint', id: (row as BreakpointRow).id })"
     >
@@ -444,11 +450,12 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
         <div class="flex items-center gap-2">
           <Checkbox
             id="network-breakpoints-rules-enabled"
+            :aria-label="t('netset.enableBreakpoints')"
             :model-value="settings.networkBreakpointsEnabled !== false"
             @update:model-value="settings.networkBreakpointsEnabled = !!$event"
           />
           <Label for="network-breakpoints-rules-enabled" class="text-sm font-normal cursor-pointer">
-            Enable breakpoint rules
+            {{ t('netset.enableBreakpoints') }}
           </Label>
         </div>
       </template>
@@ -464,7 +471,7 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
         </TableCell>
         <TableCell class="w-[70px] text-center !py-2">
           <div :class="!(row as BreakpointRow).active ? 'opacity-50' : ''" class="text-xs">
-            {{ (row as BreakpointRow).active ? 'Active' : 'Off' }}
+            {{ (row as BreakpointRow).active ? t('common.active') : t('common.off') }}
           </div>
         </TableCell>
       </template>
@@ -472,13 +479,13 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
 
     <SettingsTableSection
       section-id="mocks-section"
-      title="Mocks Responses"
-      description="Matching requests will return fake responses without hitting the network."
+      :title="t('netset.mocks')"
+      :description="t('netset.mocksHint')"
       :columns="mockColumns"
       :rows="mockRows"
       :row-key="(r) => (r as MockRow).id"
       :get-actions="(row) => getMockActions(row as MockRow)"
-      empty-message="No mocks configured. Click &quot;Mock Response&quot; on any request in the Network tab."
+      :empty-message="t('netset.noMocks')"
       :selected-item-id="selectedItemId"
       @select="(row) => emit('select', { type: 'mock', id: (row as MockRow).id })"
     >
@@ -486,11 +493,12 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
         <div class="flex items-center gap-2">
           <Checkbox
             id="network-mocks-rules-enabled"
+            :aria-label="t('netset.enableMocks')"
             :model-value="settings.networkMocksEnabled !== false"
             @update:model-value="settings.networkMocksEnabled = !!$event"
           />
           <Label for="network-mocks-rules-enabled" class="text-sm font-normal cursor-pointer">
-            Enable mock responses
+            {{ t('netset.enableMocks') }}
           </Label>
         </div>
       </template>
@@ -524,7 +532,7 @@ function getPinnedHeaderActions(row: NetworkPinnedHeaderItem): MenuAction[] {
         </TableCell>
         <TableCell class="w-[60px] text-center !py-2">
           <div :class="!(row as MockRow).active ? 'opacity-50' : ''" class="text-xs">
-            {{ (row as MockRow).active ? 'Active' : 'Off' }}
+            {{ (row as MockRow).active ? t('common.active') : t('common.off') }}
           </div>
         </TableCell>
       </template>

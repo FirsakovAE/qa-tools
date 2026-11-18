@@ -19,6 +19,9 @@ import {
 import type { SavedFile } from '@/settings/inspectorSettings'
 import { mediaUrls } from '@/settings/mediaStore'
 import { wallpapers, defaultWallpaperId } from '@/assets/wallpapers'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   open: boolean
@@ -115,21 +118,21 @@ function formatFileSize(bytes: number): string {
     <DrawerContent class="image-picker-drawer">
       <div class="flex flex-col flex-1 min-h-0" @contextmenu.prevent>
         <DrawerHeader>
-          <DrawerTitle>Background Image / Video</DrawerTitle>
+          <DrawerTitle>{{ t('picker.title') }}</DrawerTitle>
         </DrawerHeader>
 
         <ScrollArea class="image-picker__scroll-area">
         <div class="image-picker__body">
           <!-- Custom backgrounds -->
           <div class="image-picker__section">
-            <h3 class="image-picker__section-title">Custom Backgrounds</h3>
+            <h3 class="image-picker__section-title">{{ t('picker.custom') }}</h3>
 
             <div class="image-picker__url-input-row">
               <GlobeIcon :size="16" class="image-picker__url-input-icon" />
               <Input
                 v-model="urlInput"
                 class="image-picker__url-input"
-                placeholder="Paste image or video URL and press Enter"
+                :placeholder="t('picker.urlPlaceholder')"
                 @keydown.enter="handleAddUrl"
               />
               <Button
@@ -138,7 +141,7 @@ function formatFileSize(bytes: number): string {
                 :disabled="!urlInput.trim()"
                 @click="handleAddUrl"
               >
-                Add
+                {{ t('general.add') }}
               </Button>
             </div>
 
@@ -149,8 +152,8 @@ function formatFileSize(bytes: number): string {
                 @click="fileInput?.click()"
               >
                 <PlusIcon :size="32" class="image-picker__drop-zone-icon" />
-                <span class="image-picker__drop-zone-title">Click to browse</span>
-                <span class="image-picker__drop-zone-hint">JPG, PNG, WebP, GIF, MP4, WebM</span>
+                <span class="image-picker__drop-zone-title">{{ t('picker.browse') }}</span>
+                <span class="image-picker__drop-zone-hint">{{ t('picker.formats') }}</span>
                 <input
                   ref="fileInput"
                   type="file"
@@ -195,15 +198,15 @@ function formatFileSize(bytes: number): string {
                     <div class="image-picker__item-overlay">
                       <div class="image-picker__item-overlay-text">
                         <span class="image-picker__item-name">{{ getUrlDisplayName(url) }}</span>
-                        <span class="image-picker__item-type">{{ isVideoUrl(url) ? 'Video URL' : 'URL' }}</span>
+                        <span class="image-picker__item-type">{{ isVideoUrl(url) ? t('picker.videoUrl') : t('picker.url') }}</span>
                       </div>
                     </div>
                   </div>
                 </ContextMenuTrigger>
-                <ContextMenuContent class="w-44">
+                <ContextMenuContent class="w-max whitespace-nowrap">
                   <ContextMenuItem class="text-destructive_text" @click="emit('remove-url', url)">
                     <Trash2Icon class="h-4 w-4 mr-2" />
-                    Delete
+                    {{ t('general.delete') }}
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
@@ -240,15 +243,15 @@ function formatFileSize(bytes: number): string {
                     <div class="image-picker__item-overlay">
                       <div class="image-picker__item-overlay-text">
                         <span class="image-picker__item-name">{{ file.name }}</span>
-                        <span class="image-picker__item-type">{{ formatFileSize(file.size) }} · {{ isVideoFile(file.mimeType) ? 'Video' : 'Image' }}</span>
+                        <span class="image-picker__item-type">{{ formatFileSize(file.size) }} · {{ isVideoFile(file.mimeType) ? t('picker.video') : t('picker.image') }}</span>
                       </div>
                     </div>
                   </div>
                 </ContextMenuTrigger>
-                <ContextMenuContent class="w-44">
+                <ContextMenuContent class="w-max whitespace-nowrap">
                   <ContextMenuItem class="text-destructive_text" @click="emit('remove-file', file.id)">
                     <Trash2Icon class="h-4 w-4 mr-2" />
-                    Delete
+                    {{ t('general.delete') }}
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
@@ -257,7 +260,7 @@ function formatFileSize(bytes: number): string {
 
           <!-- Default backgrounds -->
           <div class="image-picker__section">
-            <h3 class="image-picker__section-title">Default Backgrounds</h3>
+            <h3 class="image-picker__section-title">{{ t('picker.defaults') }}</h3>
 
             <div class="image-picker__grid">
               <div
@@ -279,7 +282,7 @@ function formatFileSize(bytes: number): string {
                 <div class="image-picker__item-overlay">
                   <div class="image-picker__item-overlay-text">
                     <span class="image-picker__item-name">{{ wp.name }}</span>
-                    <span class="image-picker__item-type">Built-in</span>
+                    <span class="image-picker__item-type">{{ t('picker.builtin') }}</span>
                   </div>
                 </div>
               </div>

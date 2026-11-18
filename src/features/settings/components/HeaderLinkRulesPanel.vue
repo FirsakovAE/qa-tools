@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -13,6 +14,8 @@ import type { HeaderLinkRuleRowDraft, NetworkHeaderLinkRule } from '@/types/insp
 import { normalizeNetworkHeaderHost } from '@/utils/networkHeaderLinks'
 
 export type { HeaderLinkRuleRowDraft }
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -53,13 +56,13 @@ function removeAllRows() {
         v-if="!readonlyRules?.length"
         class="text-sm text-muted-foreground text-center py-8"
       >
-        No link rules
+        {{ t('netset.noLinkRules') }}
       </div>
       <Table v-else>
         <TableHeader>
           <TableRow>
-            <TableHead class="w-1/3">Host</TableHead>
-            <TableHead>Link</TableHead>
+            <TableHead class="w-1/3">{{ t('common.host') }}</TableHead>
+            <TableHead>{{ t('netset.link') }}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -84,23 +87,23 @@ function removeAllRows() {
           :disabled="rows.length === 0"
           @click="removeAllRows"
         >
-          Remove all
+          {{ t('common.removeAll') }}
         </Button>
         <Button variant="outline" size="sm" class="h-7 text-xs" @click="addRow">
-          Add Rule
+          {{ t('netset.addRule') }}
         </Button>
       </div>
       <div
         v-if="rows.length === 0"
         class="text-sm text-muted-foreground text-center py-8"
       >
-        No link rules
+        {{ t('netset.noLinkRules') }}
       </div>
       <Table v-else>
         <TableHeader>
           <TableRow>
-            <TableHead class="w-1/3">Host</TableHead>
-            <TableHead>Link</TableHead>
+            <TableHead class="w-1/3">{{ t('common.host') }}</TableHead>
+            <TableHead>{{ t('netset.link') }}</TableHead>
             <TableHead class="w-10" />
           </TableRow>
         </TableHeader>
@@ -109,7 +112,7 @@ function removeAllRows() {
             <TableCell class="py-2 align-top">
               <Input
                 v-model="row.host"
-                placeholder="api.example.com"
+                :placeholder="t('network.phHost')"
                 class="h-7 text-xs font-mono"
                 autocomplete="off"
                 @keydown.enter.prevent="emit('submit')"
@@ -118,7 +121,7 @@ function removeAllRows() {
             <TableCell class="py-2 align-top">
               <Input
                 v-model="row.urlTemplate"
-                placeholder="https://example.com/trace/{value}"
+                :placeholder="t('netset.tracePh')"
                 class="h-7 text-xs font-mono"
                 autocomplete="off"
                 @keydown.enter.prevent="emit('submit')"
@@ -137,16 +140,8 @@ function removeAllRows() {
           </TableRow>
         </TableBody>
       </Table>
-      <p class="text-xs text-muted-foreground space-y-1">
-        <span class="block">
-          Placeholder <code class="text-[11px]">{{ '{value}' }}</code> — raw header value. Optional pipeline left→right:
-          <code class="text-[11px] block mt-1 break-all">{{ '{value|trim|lower|urlencode}' }}</code>
-        </span>
-        <span class="block mt-1">
-          Examples:
-          <code class="text-[11px] block break-all">{{ '{value|regex:^Bearer\\s+(.+)$|replace:$1}' }}</code>
-          <code class="text-[11px] block break-all">{{ '{value|default:unknown}' }}</code>
-        </span>
+      <p class="text-xs text-muted-foreground">
+        {{ t('netset.valueHelp') }}
       </p>
     </template>
   </div>

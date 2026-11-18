@@ -7,12 +7,15 @@
 import type { JSONPath } from 'immutable-json-patch'
 import { ChevronRight, Copy, Pencil, X } from 'lucide-vue-next'
 import { computed, nextTick, ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
 import { ScrollAreaRoot, ScrollAreaViewport } from 'reka-ui'
 import { parseJSONPath, stringifyJSONPath } from 'vanilla-jsoneditor'
 
 import { Button } from '@/components/ui/button'
 import ScrollBar from '@/components/ui/scroll-area/ScrollBar.vue'
 import { copyToClipboard } from '@/utils/networkUtils'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -32,7 +35,7 @@ const emit = defineEmits<{
 const segments = computed(() => {
   const p = props.focusPath
   const out: { prefix: JSONPath, label: string }[] = []
-  out.push({ prefix: [], label: 'JSON' })
+  out.push({ prefix: [], label: t('editor.jsonRoot') })
   for (let i = 0; i < p.length; i++) {
     const prefix = p.slice(0, i + 1) as JSONPath
     out.push({ prefix, label: String(p[i]) })
@@ -103,7 +106,7 @@ async function copyPathToClipboard() {
 <template>
   <nav
     class="json-tree-navigation-bar flex min-h-[28px] shrink-0 items-center gap-1 border-x border-border bg-muted/40 px-1.5 py-0.5 text-xs"
-    aria-label="JSON path"
+    :aria-label="t('editor.jsonPath')"
   >
     <template v-if="!editingPath">
       <ScrollAreaRoot class="relative min-h-7 h-7 min-w-0 flex-1 overflow-hidden">
@@ -138,8 +141,8 @@ async function copyPathToClipboard() {
         variant="ghost"
         size="sm"
         class="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-        title="Edit JSON path"
-        aria-label="Edit JSON path"
+        :title="t('editor.editPath')"
+        :aria-label="t('editor.editPath')"
         @click="openPathEditor"
       >
         <Pencil class="size-3.5" />
@@ -155,8 +158,8 @@ async function copyPathToClipboard() {
         spellcheck="false"
         autocapitalize="off"
         autocomplete="off"
-        placeholder="e.g. items[0].name — Enter to go"
-        title="JSON path — Enter to navigate, Esc to cancel"
+        :placeholder="t('editor.pathPh')"
+        :title="t('editor.pathTip')"
         @keydown="onPathKeydown"
       />
 
@@ -165,8 +168,8 @@ async function copyPathToClipboard() {
         variant="ghost"
         size="sm"
         class="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-        title="Cancel"
-        aria-label="Cancel path edit"
+        :title="t('common.cancel')"
+        :aria-label="t('editor.cancelPath')"
         @click="cancelPathEdit"
       >
         <X class="size-3.5" />
@@ -177,8 +180,8 @@ async function copyPathToClipboard() {
         variant="ghost"
         size="sm"
         class="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-        title="Copy path to clipboard"
-        aria-label="Copy path to clipboard"
+        :title="t('editor.copyPath')"
+        :aria-label="t('editor.copyPath')"
         @click="copyPathToClipboard"
       >
         <Copy class="size-3.5" />

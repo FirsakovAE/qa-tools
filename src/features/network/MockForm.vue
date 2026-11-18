@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { ArrowLeft, Check, Shuffle } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,8 @@ const emit = defineEmits<{
   (e: 'back'): void
   (e: 'confirm', mock: MockRule): void
 }>()
+
+const { t } = useI18n()
 
 useEscapeClose(computed(() => true), () => emit('back'))
 
@@ -81,6 +84,13 @@ const mockContentType = computed(() => {
 })
 
 const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
+
+function sectionLabel(section: { id: string; label: string }) {
+  if (section.id === 'matching') return t('network.urlMatching')
+  if (section.id === 'headers') return t('common.headers')
+  if (section.id === 'response') return t('common.response')
+  return section.label
+}
 </script>
 
 <template>
@@ -96,13 +106,13 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
           <div class="flex items-center gap-2 mb-1">
             <Badge variant="outline" class="text-purple-500 border-purple-500/50 gap-1">
               <Shuffle class="h-3 w-3" />
-              Mock Response
+              {{ t('network.mockResponse') }}
             </Badge>
             <Badge variant="outline" class="font-mono text-xs">
               {{ entry.method }}
             </Badge>
             <Badge variant="outline" :class="statusClass" class="font-mono text-xs">
-              {{ entry.pending ? '⏳ Pending' : entry.status }}
+              {{ entry.pending ? '⏳ ' + t('network.pending') : entry.status }}
             </Badge>
           </div>
           <div class="text-sm truncate text-muted-foreground" :title="entry.url">
@@ -121,11 +131,11 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
               @click="handleConfirm"
             >
               <Check class="h-3.5 w-3.5" />
-              Save Mock
+              {{ t('network.saveMock') }}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {{ isRewrite ? 'Update existing mock rule' : 'Create mock rule to intercept matching requests' }}
+            {{ isRewrite ? t('network.updateMock') : t('network.createMock') }}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -142,7 +152,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
           }"
           @click="activeSection = section.id"
         >
-          {{ section.label }}
+          {{ sectionLabel(section) }}
         </button>
       </div>
       
@@ -153,7 +163,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
           <div class="p-3 space-y-4">
             <div class="grid grid-cols-3 gap-3">
               <div class="space-y-1.5">
-                <Label for="method" class="text-xs">Method</Label>
+                <Label for="method" class="text-xs">{{ t('common.method') }}</Label>
                 <Input
                   id="method"
                   v-model="method"
@@ -162,7 +172,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
                 />
               </div>
               <div class="space-y-1.5">
-                <Label for="scheme" class="text-xs">Scheme</Label>
+                <Label for="scheme" class="text-xs">{{ t('common.scheme') }}</Label>
                 <Input
                   id="scheme"
                   v-model="scheme"
@@ -171,7 +181,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
                 />
               </div>
               <div class="space-y-1.5">
-                <Label for="port" class="text-xs">Port</Label>
+                <Label for="port" class="text-xs">{{ t('common.port') }}</Label>
                 <Input
                   id="port"
                   v-model="port"
@@ -182,45 +192,45 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
             </div>
             
             <div class="space-y-1.5">
-              <Label for="host" class="text-xs">Host <span class="text-destructive_text">*</span></Label>
+              <Label for="host" class="text-xs">{{ t('common.host') }} <span class="text-destructive_text">*</span></Label>
               <Input
                 id="host"
                 v-model="host"
-                placeholder="api.example.com"
+                :placeholder="t('network.phHost')"
                 class="h-8 text-sm font-mono"
               />
             </div>
             
             <div class="space-y-1.5">
-              <Label for="path" class="text-xs">Path (supports * wildcard)</Label>
+              <Label for="path" class="text-xs">{{ t('network.pathWildcard') }}</Label>
               <Input
                 id="path"
                 v-model="path"
-                placeholder="/api/v1/users/*"
+                :placeholder="t('network.phPath')"
                 class="h-8 text-sm font-mono"
               />
             </div>
             
             <div class="space-y-1.5">
-              <Label for="query" class="text-xs">Query (optional)</Label>
+              <Label for="query" class="text-xs">{{ t('network.queryOptional') }}</Label>
               <Input
                 id="query"
                 v-model="query"
-                placeholder="page=*"
+                :placeholder="t('network.phQuery')"
                 class="h-8 text-sm font-mono"
               />
             </div>
             
             <!-- Preview -->
             <div class="p-3 bg-muted/50 rounded-md">
-              <Label class="text-xs text-muted-foreground">URL Pattern Preview</Label>
+              <Label class="text-xs text-muted-foreground">{{ t('network.patternPreview') }}</Label>
               <div class="font-mono text-sm mt-1 break-all">{{ urlPreview }}</div>
             </div>
             
             <!-- Options -->
             <div class="grid grid-cols-2 gap-3 pt-2 border-t">
               <div class="space-y-1.5">
-                <Label for="delay" class="text-xs">Delay (ms)</Label>
+                <Label for="delay" class="text-xs">{{ t('network.delay') }}</Label>
                 <Input
                   id="delay"
                   v-model.number="delay"
@@ -231,11 +241,11 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
                 />
               </div>
               <div class="space-y-1.5">
-                <Label for="description" class="text-xs">Description</Label>
+                <Label for="description" class="text-xs">{{ t('common.description') }}</Label>
                 <Input
                   id="description"
                   v-model="description"
-                  placeholder="Mock for user API"
+                  :placeholder="t('network.phMock')"
                   class="h-8 text-sm"
                 />
               </div>
@@ -247,19 +257,19 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
         <div v-else-if="activeSection === 'response'" class="h-full flex flex-col">
           <div class="shrink-0 flex items-center justify-between px-3 py-2 border-b">
             <div class="flex items-center gap-2">
-              <span class="text-sm text-muted-foreground">Response Body</span>
+              <span class="text-sm text-muted-foreground">{{ t('network.responseBody') }}</span>
               <Badge variant="outline" class="text-xs font-mono">
                 {{ mockContentType }}
               </Badge>
               <Badge variant="outline" class="text-xs text-purple-500 border-purple-500/50">
-                Editable
+                {{ t('common.editable') }}
               </Badge>
             </div>
           </div>
           
           <div class="shrink-0 grid grid-cols-2 gap-3 px-3 py-2 border-b">
             <div class="space-y-1">
-              <Label for="status" class="text-xs">Status Code</Label>
+              <Label for="status" class="text-xs">{{ t('network.statusCode') }}</Label>
               <Input
                 id="status"
                 :model-value="String(status)"
@@ -270,7 +280,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
               />
             </div>
             <div class="space-y-1">
-              <Label for="statusText" class="text-xs">Status Text</Label>
+              <Label for="statusText" class="text-xs">{{ t('network.statusText') }}</Label>
               <Input
                 id="statusText"
                 :model-value="statusText"
@@ -296,7 +306,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
             />
           </div>
           <div class="shrink-0 px-3 py-1 text-xs text-muted-foreground border-t">
-            Leave empty for no response body
+            {{ t('network.noBody') }}
           </div>
         </div>
         
@@ -304,7 +314,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
         <ScrollArea v-else-if="activeSection === 'headers'" class="h-full">
           <div class="p-3 space-y-4">
             <div class="flex items-center justify-between">
-              <h4 class="text-sm font-semibold">Response Headers</h4>
+              <h4 class="text-sm font-semibold">{{ t('network.responseHeaders') }}</h4>
               <div class="flex items-center gap-2">
                 <Button 
                   variant="outline" 
@@ -313,22 +323,22 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
                   :disabled="responseHeaders.length === 0"
                   @click="removeAllHeaders"
                 >
-                  Remove all
+                  {{ t('common.removeAll') }}
                 </Button>
                 <Button variant="outline" size="sm" class="h-7 text-xs" @click="addHeader">
-                  Add Header
+                  {{ t('network.addHeader') }}
                 </Button>
               </div>
             </div>
             
             <div v-if="responseHeaders.length === 0" class="text-sm text-muted-foreground text-center py-8">
-              No response headers
+              {{ t('network.noHeaders') }}
             </div>
             <Table v-else>
               <TableHeader>
                 <TableRow>
-                  <TableHead class="w-1/3">Name</TableHead>
-                  <TableHead>Value</TableHead>
+                  <TableHead class="w-1/3">{{ t('general.name') }}</TableHead>
+                  <TableHead>{{ t('common.value') }}</TableHead>
                   <TableHead class="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -337,14 +347,14 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
                   <TableCell class="py-2 align-top">
                     <Input
                       v-model="header.name"
-                      placeholder="Header name"
+                      :placeholder="t('network.headerName')"
                       class="h-7 text-xs font-mono"
                     />
                   </TableCell>
                   <TableCell class="py-2 align-top">
                     <Input
                       v-model="header.value"
-                      placeholder="Header value"
+                      :placeholder="t('network.headerValue')"
                       class="h-7 text-xs font-mono"
                     />
                   </TableCell>
@@ -363,7 +373,7 @@ const bodyLanguage = computed(() => detectLanguage(mockContentType.value))
             </Table>
             
             <p class="text-xs text-muted-foreground">
-              Common headers: Content-Type, Cache-Control, Access-Control-Allow-Origin
+              {{ t('network.headerHint') }}
             </p>
           </div>
         </ScrollArea>

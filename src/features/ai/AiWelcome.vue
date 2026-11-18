@@ -2,23 +2,24 @@
 import { Sparkles, Settings, ShieldAlert } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { useAiChat } from './useAiChat'
 import { customProvider, giveConsent } from './credentials'
 import { providerLabel } from './providers'
 import { baseUrlHost, isInsecureRemote, isLocalUrl } from './customProviders'
-
-const EXAMPLES = [
-  'Why did the last failed request fail?',
-  'Explain the errors in the logs and where they come from in the code',
-  'Which store changes happened after the last navigation?',
-  'How do I set a breakpoint on a request in Vue Inspector?',
-]
 
 const emit = defineEmits<{
   (e: 'open-settings', anchor?: string): void
   (e: 'submit', text: string): void
 }>()
 
+const { t } = useI18n()
+const examples = computed(() => [
+  t('ai.exampleFail'),
+  t('ai.exampleErrors'),
+  t('ai.exampleStore'),
+  t('ai.exampleBreakpoint'),
+])
 const { provider, hasKey, consent, busy, entries } = useAiChat()
 
 const custom = computed(() => customProvider(provider.value))
@@ -29,47 +30,44 @@ const target = computed(() => custom.value ? `${custom.value.label} (${baseUrlHo
   <div v-if="!hasKey" class="max-w-md mx-auto mt-6 border rounded-lg p-4 space-y-3 bg-background">
     <div class="flex items-center gap-2 font-semibold">
       <Sparkles class="h-4 w-4" />
-      Connect an AI provider
+      {{ t('ai.connect') }}
     </div>
     <p class="text-sm text-muted-foreground">
-      The assistant reads the captured logs and the page code to explain what went wrong.
-      Add a free API key of Gemini or OpenRouter, or connect your own: OpenAI, DeepSeek, a local
-      model (Ollama, LM Studio) or any OpenAI-compatible agent.
+      {{ t('ai.connectBody') }}
     </p>
     <Button size="sm" class="h-8 gap-1.5" @click="emit('open-settings')">
       <Settings class="h-3.5 w-3.5" />
-      Connect in Options → AI
+      {{ t('ai.connectLink') }}
     </Button>
   </div>
 
   <div v-else-if="!consent" class="max-w-md mx-auto mt-6 border rounded-lg p-4 space-y-3 bg-background">
     <div class="flex items-center gap-2 font-semibold">
       <ShieldAlert class="h-4 w-4 text-orange-500" />
-      Data sent to {{ target }}
+      {{ t('ai.dataSent', { provider: target }) }}
     </div>
     <ul class="text-sm text-muted-foreground list-disc pl-5 space-y-1">
-      <li>Your questions, a digest of the captured logs, the event data and the page code the assistant asks for.</li>
-      <li>Tokens, passwords, API keys and other values from the AI masking list are replaced with [MASKED] before sending. What the assistant may read is set in Options → AI → Agent access.</li>
-      <li v-if="!custom">Free models may store prompts and use them for training. Do not use the assistant on pages with data that must not leave your company.</li>
-      <li v-else-if="isLocalUrl(custom.baseUrl)">The server is on your machine or local network; what it does with the data is up to its settings.</li>
-      <li v-else>The data goes to {{ baseUrlHost(custom.baseUrl) }} and is kept under that service's terms. Do not use the assistant on pages with data that must not leave your company.</li>
-      <li v-if="custom && isInsecureRemote(custom.baseUrl)" class="text-orange-500">The address uses http: the key and the data travel unencrypted.</li>
+      <li>{{ t('ai.sentBody') }}</li>
+      <li>{{ t('ai.maskBody') }}</li>
+      <li v-if="!custom">{{ t('ai.freeWarn') }}</li>
+      <li v-else-if="isLocalUrl(custom.baseUrl)">{{ t('ai.localNote') }}</li>
+      <li v-else>{{ t('ai.terms', { host: baseUrlHost(custom.baseUrl) }) }}</li>
+      <li v-if="custom && isInsecureRemote(custom.baseUrl)" class="text-orange-500">{{ t('ai.httpWarn') }}</li>
     </ul>
     <div class="flex flex-wrap gap-2">
-      <Button size="sm" class="h-8" @click="giveConsent(provider)">I understand</Button>
-      <Button size="sm" variant="outline" class="h-8" @click="emit('open-settings', 'ai-access-section')">Review access</Button>
+      <Button size="sm" class="h-8" @click="giveConsent(provider)">{{ t('ai.understand') }}</Button>
+      <Button size="sm" variant="outline" class="h-8" @click="emit('open-settings', 'ai-access-section')">{{ t('ai.reviewAccess') }}</Button>
     </div>
   </div>
 
   <div v-else-if="entries.length === 0 && !busy" class="max-w-lg mx-auto mt-6 space-y-3 text-center">
     <Sparkles class="h-6 w-6 mx-auto text-muted-foreground" />
     <p class="text-sm text-muted-foreground">
-      Describe what goes wrong on the site. The assistant starts from the logs digest, reads full events
-      when needed and then the page code.
+      {{ t('ai.welcomeHint') }}
     </p>
     <div class="flex flex-wrap justify-center gap-2">
       <Button
-        v-for="example in EXAMPLES"
+        v-for="example in examples"
         :key="example"
         variant="outline"
         size="sm"

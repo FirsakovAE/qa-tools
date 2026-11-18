@@ -5,6 +5,7 @@
  */
 
 import { ref, toRaw } from 'vue'
+import { t } from '@/i18n'
 import { getRuntimeAdapter } from '@/runtime'
 import { toast } from '@/components/ui/Toaster'
 import { useLogs } from '@/features/logs/useLogs'
@@ -78,7 +79,7 @@ export async function askAiAboutProps(row: PropsRow): Promise<void> {
     : undefined
   const props = res?.props ?? row.props
   if (!props) {
-    toast.error('Could not read the props of the component')
+    toast.error(t('ai.propsReadFail'))
     return
   }
   const name = row.name || 'Component'
@@ -88,7 +89,7 @@ export async function askAiAboutProps(row: PropsRow): Promise<void> {
 export async function askAiAboutStore(storeId: string, name = storeId): Promise<void> {
   const res = await request<{ state?: unknown; getters?: unknown; error?: string }>({ type: 'PINIA_GET_STORE_STATE', storeId })
   if (!res || res.error || !('state' in res)) {
-    toast.error(`Could not read the store ${name}`)
+    toast.error(t('ai.storeReadFail', { name }))
     return
   }
   attach({ kind: 'store', key: `store:${storeId}`, label: short(`Store ${name}`), storeId, name, state: plain(res.state ?? {}), getters: plain(res.getters ?? {}) })

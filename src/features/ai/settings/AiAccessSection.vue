@@ -1,41 +1,42 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/i18n'
 import { Label } from '@/components/ui/label'
 import {
   aiCredentials,
   DEFAULT_AI_ACCESS,
   saveAiCredentials,
   setAiAccess,
-  type AiToolAccess,
-  type AiToolGroup,
 } from '../credentials'
 import AiSettingsHead from './AiSettingsHead.vue'
 import AiSelectRow from './AiSelectRow.vue'
 
-const TOOL_ACCESS: Array<{ id: AiToolAccess; label: string }> = [
-  { id: 'allow', label: 'Allowed' },
-  { id: 'ask', label: 'Ask each time' },
-  { id: 'deny', label: 'Off' },
-]
+const { t } = useI18n()
 
-const SHARING = [
-  { id: 'on', label: 'Allowed' },
-  { id: 'off', label: 'Off' },
-] as const
+const TOOL_ACCESS = computed(() => [
+  { id: 'allow' as const, label: t('ai.accessAllowed') },
+  { id: 'ask' as const, label: t('ai.accessAsk') },
+  { id: 'deny' as const, label: t('common.off') },
+])
 
-type Sharing = typeof SHARING[number]['id']
+const SHARING = computed(() => [
+  { id: 'on' as const, label: t('ai.accessAllowed') },
+  { id: 'off' as const, label: t('common.off') },
+])
 
-const TOOL_GROUPS: Array<{ id: AiToolGroup; label: string; hint: string }> = [
-  { id: 'logs', label: 'Logs', hint: 'Event details and search over the captured logs' },
-  { id: 'sources', label: 'Page code', hint: 'List, read and search the scripts of the page and their source maps' },
-  { id: 'page', label: 'Live page', hint: 'Find elements on the page, why they are disabled or hidden, their components, handler code and the current store state' },
-]
+type Sharing = 'on' | 'off'
 
-const DATA_SCOPES: Array<{ id: 'headers' | 'bodies' | 'appData'; label: string; hint: string }> = [
-  { id: 'headers', label: 'Request and response headers', hint: 'Sensitive headers stay masked' },
-  { id: 'bodies', label: 'Request / response bodies and WebSocket messages', hint: '' },
-  { id: 'appData', label: 'Values of store state, props, emits and actions', hint: 'Off: only names, paths and types' },
-]
+const TOOL_GROUPS = computed(() => [
+  { id: 'logs' as const, label: t('log.title'), hint: t('ai.logsHint') },
+  { id: 'sources' as const, label: t('ai.pageCode'), hint: t('ai.pageCodeHint') },
+  { id: 'page' as const, label: t('ai.livePage'), hint: t('ai.livePageHint') },
+])
+
+const DATA_SCOPES = computed(() => [
+  { id: 'headers' as const, label: t('ai.scopeHeaders'), hint: t('ai.scopeHeadersHint') },
+  { id: 'bodies' as const, label: t('ai.scopeBodies'), hint: '' },
+  { id: 'appData' as const, label: t('ai.scopeApp'), hint: t('ai.scopeAppHint') },
+])
 
 const isDefault = computed(() => JSON.stringify(aiCredentials.access) === JSON.stringify(DEFAULT_AI_ACCESS))
 
@@ -51,24 +52,24 @@ function reset() {
 <template>
   <div id="ai-access-section" class="space-y-4 border-t pt-4">
     <AiSettingsHead
-      title="Agent access"
-      description="What the assistant may read and send to the provider."
-      reset-label="Defaults"
+      :title="t('ai.agentAccess')"
+      :description="t('ai.accessLead')"
+      :reset-label="t('common.defaults')"
       :reset-disabled="isDefault"
       @reset="reset"
     />
 
     <AiSelectRow
       id="ai-access-digest"
-      label="Attach the logs digest to questions"
-      hint="A short summary of errors and the timeline."
+      :label="t('ai.attachDigest')"
+      :hint="t('ai.attachDigestHint')"
       :options="SHARING"
       :model-value="sharing(aiCredentials.access.digest)"
       @update:model-value="setAiAccess({ digest: $event === 'on' })"
     />
 
     <div class="space-y-3">
-      <Label class="text-xs font-medium text-muted-foreground">Tools</Label>
+      <Label class="text-xs font-medium text-muted-foreground">{{ t('ai.tools') }}</Label>
       <AiSelectRow
         v-for="group in TOOL_GROUPS"
         :id="`ai-access-tool-${group.id}`"
@@ -82,7 +83,7 @@ function reset() {
     </div>
 
     <div class="space-y-3">
-      <Label class="text-xs font-medium text-muted-foreground">Data in the logs</Label>
+      <Label class="text-xs font-medium text-muted-foreground">{{ t('ai.dataInLogs') }}</Label>
       <AiSelectRow
         v-for="scope in DATA_SCOPES"
         :id="`ai-access-${scope.id}`"
