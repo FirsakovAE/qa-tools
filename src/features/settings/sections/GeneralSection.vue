@@ -1217,7 +1217,7 @@ const siteWhitelistTableHeight = computed(() =>
         <SelectTrigger class="h-8 w-56">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent scrollbar>
           <SelectItem v-for="code in UI_LANGUAGES" :key="code" :value="code">{{ LANGUAGE_LABELS[code] }}</SelectItem>
         </SelectContent>
       </Select>

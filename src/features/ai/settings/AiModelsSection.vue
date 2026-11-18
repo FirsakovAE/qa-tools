@@ -32,10 +32,10 @@ const { t } = useI18n()
 const modelsProvider = ref<AiProviderId>('openrouter')
 const { all, free, loading, error, reload, catalog, catalogLoading, catalogError } = providerModels(() => modelsProvider.value)
 
+const connectedProviders = computed(() => providerOptions().filter(p => isConnected(p.id)))
 const hasKey = computed(() => isConnected(modelsProvider.value))
 const custom = computed(() => isCustomProvider(modelsProvider.value))
 const blockedCount = computed(() => all.value.filter(m => isModelBlocked(m.id, modelsProvider.value)).length)
-const recommendedIds = computed(() => new Set(free.value.filter(m => m.recommended).map(m => m.id)))
 
 function setAllowed(model: AiModel, allowed: boolean) {
   const provider = modelsProvider.value
@@ -87,12 +87,17 @@ function openPicker() {
 }
 
 function inList(model: AiModel): boolean {
-  return recommendedIds.value.has(model.id) || isModelAdded(modelsProvider.value, model.id)
+  return all.value.some(item => item.id === model.id)
 }
 
 function toggleAdded(model: AiModel, added: boolean) {
-  if (recommendedIds.value.has(model.id)) return
+  if (!added && custom.value && free.value.some(item => item.id === model.id)) return
   void setModelAdded(modelsProvider.value, model, added)
+}
+
+function selectConnected(preferred: AiProviderId) {
+  const list = connectedProviders.value
+  modelsProvider.value = list.some(p => p.id === preferred) ? preferred : list[0]?.id ?? preferred
 }
 
 watch(modelsProvider, id => {
@@ -101,14 +106,13 @@ watch(modelsProvider, id => {
   if (isConnected(id)) void loadModels(id)
 })
 
-// A removed connection leaves the picker on a built-in provider
-watch(() => providerOptions().some(p => p.id === modelsProvider.value), known => {
-  if (!known) modelsProvider.value = aiCredentials.provider
+watch(connectedProviders, () => {
+  if (!connectedProviders.value.some(p => p.id === modelsProvider.value)) selectConnected(aiCredentials.provider)
 })
 
 onMounted(async () => {
   await loadAiCredentials()
-  modelsProvider.value = aiCredentials.provider
+  selectConnected(aiCredentials.provider)
   if (isConnected(modelsProvider.value)) void loadModels(modelsProvider.value)
 })
 </script>
@@ -120,12 +124,12 @@ onMounted(async () => {
     />
 
     <div class="flex items-center gap-2">
-      <Select v-model="modelsProvider">
+      <Select v-if="connectedProviders.length" v-model="modelsProvider">
         <SelectTrigger class="h-8 w-[160px] text-sm">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem v-for="p in providerOptions()" :key="p.id" :value="p.id">{{ p.label }}</SelectItem>
+          <SelectItem v-for="p in connectedProviders" :key="p.id" :value="p.id">{{ p.label }}</SelectItem>
         </SelectContent>
       </Select>
       <Button
@@ -181,19 +185,18 @@ onMounted(async () => {
               <label
                 v-for="m in shown"
                 :key="m.id"
-                class="flex items-center gap-3 px-3 py-1.5 text-sm hover:bg-muted/50"
-                :class="recommendedIds.has(m.id) ? 'cursor-default' : 'cursor-pointer'"
+                class="flex cursor-pointer items-center gap-3 px-3 py-1.5 text-sm hover:bg-muted/50"
               >
                 <Checkbox
                   :model-value="inList(m)"
-                  :disabled="recommendedIds.has(m.id)"
+                  :disabled="custom && free.some(item => item.id === m.id)"
                   @update:model-value="toggleAdded(m, !!$event)"
                 />
                 <span class="flex-1 min-w-0">
                   <span class="block truncate">{{ m.name }}</span>
                   <span class="block truncate text-[11px] text-muted-foreground">{{ m.id }}</span>
                 </span>
-                <span v-if="recommendedIds.has(m.id)" class="text-[10px] text-muted-foreground shrink-0">{{ t('ai.recommended') }}</span>
+                <span v-if="m.recommended" class="text-[10px] text-muted-foreground shrink-0">{{ t('ai.recommended') }}</span>
                 <span
                   v-if="!custom"
                   class="text-[10px] shrink-0 rounded px-1.5"
@@ -213,6 +216,7 @@ onMounted(async () => {
       {{ t('ai.connectAbove', { provider: providerLabel(modelsProvider) }) }}
     </p>
     <p v-else-if="loading && !all.length" class="text-xs text-muted-foreground">{{ t('ai.loadingModels') }}</p>
+    <p v-else-if="!custom && !all.length && !error" class="text-xs text-muted-foreground">{{ t('ai.modelSearch') }}</p>
     <p v-if="hasKey && error" class="text-sm text-destructive_text">{{ error }}</p>
     <p v-if="hasKey && custom && error && !all.length" class="text-xs text-muted-foreground">
       {{ t('ai.typeModel') }}
@@ -244,12 +248,11 @@ onMounted(async () => {
         <span v-if="m.unstable" class="text-[10px] text-orange-500 shrink-0">{{ t('ai.unstable') }}</span>
         <span v-if="m.paid" class="text-[10px] shrink-0 rounded px-1.5 bg-orange-500/15 text-orange-500">{{ t('ai.paid') }}</span>
         <Button
-          v-if="!m.recommended"
+          v-if="!custom || (isModelAdded(modelsProvider, m.id) && !free.some(item => item.id === m.id))"
           variant="ghost"
           size="icon"
           class="h-6 w-6 shrink-0"
           :title="t('ai.removeFromList')"
-          :disabled="isLastAllowed(m)"
           @click="setModelAdded(modelsProvider, m, false)"
         >
           <X class="h-3.5 w-3.5" />

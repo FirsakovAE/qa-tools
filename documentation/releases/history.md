@@ -502,8 +502,13 @@ A request and its response are exported together. The **ignored** badge opens **
 * **Requests** and **WebSocket** are separate switches. WebSocket can be turned off while HTTP requests stay on.
 * The **Ignore list** is shown again, above **Data masking**.
 
+### Language
+
+**Options → General → Language** switches the inspector interface. The choice is saved with the settings and starts as English. Available languages: English, Spanish, Simplified Chinese, German, French, Japanese, Portuguese (Brazil), Russian, Korean, Italian, Polish, Turkish, and Arabic.
+
 ### Fixes
 
 * Fixed the false **Body truncated** notice on complete responses with non-ASCII text, such as Cyrillic. Reports exported before this fix no longer show that notice either.
 * Removed **Search by Label** in **Props**. The checkbox did not filter the list.
 * The **Support Vue Inspector** title lines up with the text of the card.
+* Minor layout fixes.

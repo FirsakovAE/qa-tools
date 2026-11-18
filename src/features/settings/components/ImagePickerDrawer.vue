@@ -203,7 +203,7 @@ function formatFileSize(bytes: number): string {
                     </div>
                   </div>
                 </ContextMenuTrigger>
-                <ContextMenuContent class="w-max whitespace-nowrap">
+                <ContextMenuContent class="min-w-[200px] w-max whitespace-nowrap">
                   <ContextMenuItem class="text-destructive_text" @click="emit('remove-url', url)">
                     <Trash2Icon class="h-4 w-4 mr-2" />
                     {{ t('general.delete') }}
@@ -248,7 +248,7 @@ function formatFileSize(bytes: number): string {
                     </div>
                   </div>
                 </ContextMenuTrigger>
-                <ContextMenuContent class="w-max whitespace-nowrap">
+                <ContextMenuContent class="min-w-[200px] w-max whitespace-nowrap">
                   <ContextMenuItem class="text-destructive_text" @click="emit('remove-file', file.id)">
                     <Trash2Icon class="h-4 w-4 mr-2" />
                     {{ t('general.delete') }}

@@ -112,7 +112,7 @@ export interface AiCredentials {
   routing: AiRouting
   /** Models hidden from the AI tab and skipped as fallbacks, per provider */
   blockedModels: Partial<Record<AiProviderId, string[]>>
-  /** Models the user added to the recommended ones, per provider */
+  /** Models the user added, per provider */
   addedModels: Partial<Record<AiProviderId, AiModel[]>>
   /** Masking applied to everything the assistant sends to the provider, apart from the Logs masking */
   masking: AiMasking

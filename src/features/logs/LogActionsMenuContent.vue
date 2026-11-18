@@ -57,7 +57,7 @@ function handleClick(e: Event, action: () => void) {
 <template>
   <component
     :is="Content"
-    class="w-max whitespace-nowrap"
+    class="min-w-[200px] w-max whitespace-nowrap"
     v-bind="variant === 'dropdown' ? { align: 'end' } : {}"
   >
     <component :is="Item" @click="handleClick($event, () => askAiAboutLog(event))">

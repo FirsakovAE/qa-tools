@@ -564,22 +564,24 @@ onMounted(async () => {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" class="flex h-full w-[240px] flex-col overflow-hidden p-4 text-foreground bg-background">
-          <nav class="mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-            <Button
-              v-for="section in sections"
-              :key="section.id"
-              variant="ghost"
-              size="sm"
-              :class="[
-                'w-full justify-start h-10 text-sm',
-                activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
-              ]"
-              @click="selectSection(section.id)"
-            >
-              <component :is="section.icon" class="w-5 h-5 mr-2 shrink-0" />
-              {{ section.label }}
-            </Button>
-          </nav>
+          <ScrollArea type="auto" :horizontal="false" class="options-nav-scroll mt-4 min-h-0 flex-1">
+            <nav class="flex flex-col gap-1">
+              <Button
+                v-for="section in sections"
+                :key="section.id"
+                variant="ghost"
+                size="sm"
+                :class="[
+                  'w-full shrink-0 justify-start h-10 text-sm',
+                  activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
+                ]"
+                @click="selectSection(section.id)"
+              >
+                <component :is="section.icon" class="w-5 h-5 mr-2 shrink-0" />
+                {{ section.label }}
+              </Button>
+            </nav>
+          </ScrollArea>
           <SupportMenu class="shrink-0" />
         </SheetContent>
       </Sheet>
@@ -609,22 +611,24 @@ onMounted(async () => {
 
         <!-- Sidebar Nav (hidden at ≤1200px) -->
         <div class="options-sidebar flex h-full min-h-0 w-[240px] shrink-0 flex-col overflow-hidden rounded-lg bg-muted/50 p-1">
-          <div class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-            <Button
-              v-for="section in sections"
-              :key="section.id"
-              variant="ghost"
-              size="sm"
-              :class="[
-                'w-full justify-start h-10 text-sm',
-                activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
-              ]"
-              @click="activeSection = section.id"
-            >
-              <component :is="section.icon" class="w-5 h-5 mr-2 shrink-0" />
-              {{ section.label }}
-            </Button>
-          </div>
+          <ScrollArea type="auto" :horizontal="false" class="options-nav-scroll min-h-0 flex-1">
+            <div class="flex flex-col gap-1">
+              <Button
+                v-for="section in sections"
+                :key="section.id"
+                variant="ghost"
+                size="sm"
+                :class="[
+                  'w-full shrink-0 justify-start h-10 text-sm',
+                  activeSection === section.id ? 'bg-accent text-accent-foreground' : ''
+                ]"
+                @click="activeSection = section.id"
+              >
+                <component :is="section.icon" class="w-5 h-5 mr-2 shrink-0" />
+                {{ section.label }}
+              </Button>
+            </div>
+          </ScrollArea>
           <SupportMenu class="shrink-0" />
         </div>
 
@@ -764,5 +768,11 @@ onMounted(async () => {
 /* Allow section content to shrink so long filenames truncate */
 .options-section-scroll :deep([data-reka-scroll-area-viewport] > div) {
   min-width: 0;
+}
+
+/* Keep nav items at their own height; the kit scrollbar owns the overflow */
+.options-nav-scroll :deep([data-reka-scroll-area-viewport] > div) {
+  display: block !important;
+  width: 100%;
 }
 </style>

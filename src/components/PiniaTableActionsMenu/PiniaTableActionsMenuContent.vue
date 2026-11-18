@@ -21,7 +21,7 @@ const props = withDefaults(
     isFavorite: boolean
     contentClass?: string
   }>(),
-  { contentClass: 'w-max whitespace-nowrap' }
+  { contentClass: 'min-w-[200px] w-max whitespace-nowrap' }
 )
 
 const emit = defineEmits<{

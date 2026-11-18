@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from '@/i18n'
 import { Check, Copy, ExternalLink } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,54 @@ const USDT_ADDRESS = 'TPStwFujav3ZZATYb43iwHrrpMCZaoud84'
 const { t } = useI18n()
 const donateOpen = ref(false)
 const copied = ref(false)
+const root = ref<HTMLElement | null>(null)
+const compact = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null
+let descriptionHeight = 0
+let resizeObserver: ResizeObserver | null = null
+let observedViewport: HTMLElement | null = null
+let frame = 0
+
+function navViewport(): HTMLElement | null {
+  return root.value?.parentElement?.querySelector<HTMLElement>('[data-reka-scroll-area-viewport]') ?? null
+}
+
+function measureDescriptions(): number {
+  if (!root.value) return 0
+  let height = 0
+  root.value.querySelectorAll<HTMLElement>('.support-detail').forEach(node => {
+    const style = getComputedStyle(node)
+    height += node.offsetHeight + parseFloat(style.marginTop) + parseFloat(style.marginBottom)
+  })
+  return height
+}
+
+function scheduleUpdate(): void {
+  cancelAnimationFrame(frame)
+  frame = requestAnimationFrame(() => updateCompact())
+}
+
+function updateCompact(): void {
+  const viewport = navViewport()
+  if (!viewport || viewport.clientHeight < 40) return
+  if (resizeObserver && viewport !== observedViewport) {
+    resizeObserver.observe(viewport)
+    observedViewport = viewport
+  }
+
+  const contentHeight = viewport.firstElementChild?.getBoundingClientRect().height ?? 0
+  const spare = viewport.clientHeight - contentHeight
+  if (!compact.value) {
+    if (spare < -1) {
+      const saved = measureDescriptions()
+      if (saved <= 0) return
+      descriptionHeight = saved
+      compact.value = true
+    }
+    return
+  }
+  if (spare > descriptionHeight + 8) compact.value = false
+}
 
 function markCopied(): void {
   copied.value = true
@@ -38,16 +85,36 @@ async function copyAddress(): Promise<void> {
   }
 }
 
+onMounted(() => {
+  window.addEventListener('resize', scheduleUpdate)
+  nextTick(() => {
+    scheduleUpdate()
+    const parent = root.value?.parentElement
+    if (!parent) return
+    resizeObserver = new ResizeObserver(() => scheduleUpdate())
+    resizeObserver.observe(parent)
+    if (root.value) resizeObserver.observe(root.value)
+    const viewport = navViewport()
+    if (viewport) {
+      resizeObserver.observe(viewport)
+      observedViewport = viewport
+    }
+  })
+})
+
 onBeforeUnmount(() => {
   if (copiedTimer) clearTimeout(copiedTimer)
+  cancelAnimationFrame(frame)
+  window.removeEventListener('resize', scheduleUpdate)
+  resizeObserver?.disconnect()
 })
 </script>
 
 <template>
-  <div class="mt-2 w-full">
+  <div ref="root" class="mt-2 w-full">
     <div class="border border-transparent px-2">
       <h4 class="text-sm font-semibold leading-tight">{{ t('support.title') }}</h4>
-      <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+      <p v-if="!compact" class="support-detail mt-1 text-xs leading-relaxed text-muted-foreground">
         {{ t('support.fund') }}
       </p>
     </div>
@@ -63,7 +130,7 @@ onBeforeUnmount(() => {
           {{ t('support.monthly') }}
           <ExternalLink class="h-3 w-3 shrink-0 opacity-60" />
         </span>
-        <span class="mt-0.5 block text-xs leading-snug text-muted-foreground">
+        <span v-if="!compact" class="support-detail mt-0.5 block text-xs leading-snug text-muted-foreground">
           {{ t('support.boosty') }}
         </span>
       </a>
@@ -74,7 +141,7 @@ onBeforeUnmount(() => {
         @click="donateOpen = true"
       >
         <span class="block text-sm font-medium leading-tight">{{ t('support.usdt') }}</span>
-        <span class="mt-0.5 block text-xs leading-snug text-muted-foreground">
+        <span v-if="!compact" class="support-detail mt-0.5 block text-xs leading-snug text-muted-foreground">
           {{ t('support.usdtShort') }}
         </span>
       </button>

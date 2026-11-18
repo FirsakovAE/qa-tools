@@ -2,12 +2,13 @@
  * Model catalogs of each provider. Shared by the AI tab and Options, so a list loaded
  * in one place is reused in the other and OpenRouter's health checks run once.
  *
- * The models the assistant uses are the recommended free ones plus those the user added;
- * the whole catalog (free and paid) is loaded only to search it in Options.
+ * The assistant uses the models the user added for a built-in provider, and the models an
+ * own connection lists. The whole catalog (free and paid) is loaded only to search it in Options.
  */
 
 import { computed, reactive } from 'vue'
 import { activeKey, aiCredentials, isModelBlocked } from './credentials'
+import { isCustomProvider } from './customProviders'
 import { catalogModels, listModels, openRouterDailyLimit } from './providers'
 import { reportedLimit, requestsToday, setReportedLimit } from './modelStatus'
 import type { AiModel, AiProviderId } from './types'
@@ -76,17 +77,17 @@ export async function loadCatalog(provider: AiProviderId, force = false): Promis
   await fill(target, () => catalogModels(provider, key, force))
 }
 
-/** Recommended free models, then the added ones; a known model keeps its catalog info (unstable) */
+/** Models the user connected: added ones for a built-in provider, listed ones for an own connection */
 function availableModels(provider: AiProviderId): AiModel[] {
   const free = catalog(provider).free.list
   const byId = new Map(free.map(m => [m.id, m]))
-  const out = free.filter(m => m.recommended)
-  const seen = new Set(out.map(m => m.id))
-  for (const added of aiCredentials.addedModels[provider] ?? []) {
-    if (seen.has(added.id)) continue
-    seen.add(added.id)
-    const known = byId.get(added.id)
-    out.push(known ? { ...known, recommended: false } : added)
+  const added = aiCredentials.addedModels[provider] ?? []
+  const out: AiModel[] = isCustomProvider(provider) ? free.map(model => ({ ...model })) : []
+  const seen = new Set(out.map(model => model.id))
+  for (const model of added) {
+    if (seen.has(model.id)) continue
+    seen.add(model.id)
+    out.push(byId.get(model.id) ?? model)
   }
   return out
 }
@@ -95,7 +96,7 @@ function availableModels(provider: AiProviderId): AiModel[] {
 export function providerModels(provider: () => AiProviderId) {
   const all = computed(() => availableModels(provider()))
   return {
-    /** Recommended and added models, blocked ones included */
+    /** Models the user connected, blocked ones included */
     all,
     /** What the AI tab offers and Auto picks from */
     models: computed(() => all.value.filter(m => !isModelBlocked(m.id, provider()))),
