@@ -25,6 +25,7 @@ import { NetworkTab } from '@/features/network'
 import { LogsTab, initLogsCollector } from '@/features/logs'
 import { pendingLogsEvent } from '@/features/logs/logsNavigation'
 import { askAiRequest } from '@/features/ai/attachments'
+import { activeTabId } from '@/features/activeTab'
 import { postToContentScript } from '@/utils/postToContentScript'
 import { useI18n } from '@/i18n'
 
@@ -378,6 +379,10 @@ const UI_FEATURE_FLAGS: UIFeatureFlags = {
   type TabId = 'props' | 'stores' | 'network' | 'logs' | 'ai' | 'options'
   
   const activeTab = ref<TabId>('props')
+
+  watch(activeTab, id => {
+    activeTabId.value = id
+  }, { immediate: true })
   
   // Pending breakpoint info (from breakpoint hit while on another tab)
   interface PendingBreakpointInfo {

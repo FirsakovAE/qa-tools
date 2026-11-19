@@ -441,6 +441,14 @@ A new **AI** tab, after **Logs**. Describe the problem: the assistant explains w
 
 **Ask AI** on a row in **Network**, **Props**, **Pinia** or **Logs** attaches that item to the question. Several items can be attached. An event id in the answer opens that event on **Logs**.
 
+**Files**
+
+**+** next to the field attaches a **Text file** (TXT, LOG, JSON, HAR, MD, CSV, PDF) or a **Vue inspector Log**. Files can also be dropped on the field or pasted into it, up to 64 MB each. A long paste, over 4000 characters or 60 lines, becomes a **Pasted text** chip and is handled like a file.
+
+A text file goes with the question it was attached to. The assistant can read it again in later questions of the same chat, and **New chat** drops it. An exported log stays pinned to the chat: the logs digest and the logs tools read it instead of the live capture until **New chat**.
+
+A small file goes to the assistant whole. A bigger file is not sent: the assistant gets an overview and tools to search the file, read parts of it and query JSON or HAR by path. The first step of the answer says **(overview; content read with file tools)**. For a PDF only the text layer is read; scanned pages and password-protected files are refused.
+
 The answer appears as it is written. Stopping keeps the text written so far; reasoning stays on one line until you expand it. Under the answer: which model answered, how many requests it took, tokens and time. A follow-up sends only the events captured since the last answer.
 
 **Connection and models**
@@ -473,6 +481,20 @@ Before the first question the tab shows what goes to the provider. **I understan
 The first step of an answer says what was sent, which access is in force and how many values were masked.
 
 **Options → AI → Data masking for AI** is a separate list from **Logs**. Passwords, tokens, API keys, cookies, sessions and token-like values (JWT, Bearer, card numbers) are sent as `[MASKED]`, including values found in page code. The **Logs** view and its exports stay as they are.
+
+---
+
+### Props
+
+**Keep after reload**, under the buttons of a component card, saves the current props as a **prop rule**. After a reload, or when the component is created again, it receives those values before its `setup()` and first render. The rule matches this component name at the same route of parent components, on the site where it was saved, and stores a full snapshot of the current props as JSON. Functions and other non-JSON values cannot be kept.
+
+While a rule applies, updates from the parent do not overwrite it. Turning the rule off or deleting it gives the component the parent's current value back at once, without a reload.
+
+A row with a rule has a purple bar on the left, and the selected row has a purple background, like a mocked request on **Network**. The Props toolbar shows a pin with how many rules apply on this page out of the total; the card shows a pin with the number of props the rule holds. Both open **Options → Props → Prop rules**. The checkbox can be changed only while editing: unchecking it and pressing **Save** deletes the rule, and **Cancel** keeps it. **Delete rule** in the row menu deletes it at once.
+
+**Options → Props → Prop rules**, after **Favorite Components**, lists the rules. **Apply rules** turns them all off without deleting them. The row menu has **Edit**, **Enable** / **Disable** and **Delete**.
+
+In the extension the rules apply on page load even when the panel is closed. A page that loads Vue 3.3 or newer through a bundler gets the values on the first render. Other builds and Vue 2 get them once the inspector starts.
 
 ---
 

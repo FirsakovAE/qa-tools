@@ -2,7 +2,8 @@
 import { computed, ref } from 'vue'
 import { useI18n } from '@/i18n'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { FavoriteItem } from '@/types/inspector'
+import type { FavoriteItem, PropOverrideRule } from '@/types/inspector'
+import { propOverridePathLabel } from '@/utils/propOverrides'
 import { TableCell } from '@/components/ui/table'
 import SearchSettingsBlock from '../components/SearchSettingsBlock.vue'
 import SettingsTableSection from '../components/SettingsTableSection.vue'
@@ -10,7 +11,7 @@ import type { TableColumn } from '../components/SettingsTableSection.vue'
 import type { MenuAction } from '@/components/OptionsItemActionsMenu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Power, Trash } from 'lucide-vue-next'
+import { Power, Trash, Pencil } from 'lucide-vue-next'
 
 const props = defineProps<{
   settings: InspectorSettings
@@ -18,7 +19,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'select', item: { type: 'blacklist' | 'favorite'; id: string }): void
+  (e: 'select', item: { type: 'blacklist' | 'favorite' | 'prop-override'; id: string }): void
+  (e: 'edit', item: { type: 'prop-override'; id: string }): void
 }>()
 
 const { t } = useI18n()
@@ -108,6 +110,36 @@ function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
     { label: t('general.delete'), icon: Trash, onClick: () => removeFromFavorites(fav.id), destructiveText: true },
   ]
 }
+
+// -------------------- PROP OVERRIDE RULES --------------------
+const overrideRows = computed<PropOverrideRule[]>(() => props.settings.propOverrides || [])
+
+const overrideColumns = computed<TableColumn[]>(() => [
+  { header: t('common.component') },
+  { header: t('props.overrideValues') },
+  { header: t('common.status'), width: '70px', class: 'text-center' },
+])
+
+function overrideScopeLabel(rule: PropOverrideRule): string {
+  return rule.scope === 'all' ? t('props.scopeAll', { name: rule.component }) : propOverridePathLabel(rule)
+}
+
+function toggleOverride(id: string) {
+  const rule = props.settings.propOverrides.find(r => r.id === id)
+  if (rule) rule.enabled = !rule.enabled
+}
+
+function removeOverride(id: string) {
+  props.settings.propOverrides = props.settings.propOverrides.filter(r => r.id !== id)
+}
+
+function getOverrideActions(rule: PropOverrideRule): MenuAction[] {
+  return [
+    { label: t('general.edit'), icon: Pencil, onClick: () => emit('edit', { type: 'prop-override', id: rule.id }) },
+    { label: rule.enabled ? t('common.disable') : t('common.enable'), icon: Power, onClick: () => toggleOverride(rule.id) },
+    { label: t('general.delete'), icon: Trash, onClick: () => removeOverride(rule.id), destructiveText: true },
+  ]
+}
 </script>
 
 <template>
@@ -184,6 +216,57 @@ function getFavoritesActions(fav: FavoriteItem): MenuAction[] {
         <TableCell class="w-[80px] text-center !py-2">
           <div class="text-xs text-muted-foreground">
             {{ new Date((row as FavoriteItem).timestamp).toLocaleDateString() }}
+          </div>
+        </TableCell>
+      </template>
+    </SettingsTableSection>
+
+    <SettingsTableSection
+      section-id="props-overrides-section"
+      :title="t('props.overrides')"
+      :description="t('props.overridesDesc')"
+      :columns="overrideColumns"
+      :rows="overrideRows"
+      :row-key="(r) => (r as PropOverrideRule).id"
+      :get-actions="(row) => getOverrideActions(row as PropOverrideRule)"
+      :empty-message="t('props.noOverrides')"
+      :selected-item-id="selectedItemId"
+      @select="(row) => emit('select', { type: 'prop-override', id: (row as PropOverrideRule).id })"
+    >
+      <template #after-title>
+        <div class="flex items-center gap-2">
+          <Checkbox
+            id="props-overrides-enabled"
+            :aria-label="t('props.applyOverrides')"
+            :model-value="settings.propOverridesEnabled !== false"
+            @update:model-value="settings.propOverridesEnabled = !!$event"
+          />
+          <Label for="props-overrides-enabled" class="text-sm font-normal cursor-pointer">
+            {{ t('props.applyOverrides') }}
+          </Label>
+        </div>
+      </template>
+      <template #row="{ row }">
+        <TableCell class="overflow-hidden !py-2">
+          <div :class="!(row as PropOverrideRule).enabled ? 'opacity-50' : ''">
+            <div class="font-mono text-sm truncate">{{ (row as PropOverrideRule).component }}</div>
+            <div class="text-xs text-muted-foreground mt-0.5 truncate" :title="overrideScopeLabel(row as PropOverrideRule)">
+              {{ (row as PropOverrideRule).host }} · {{ overrideScopeLabel(row as PropOverrideRule) }}
+            </div>
+          </div>
+        </TableCell>
+        <TableCell class="overflow-hidden !py-2">
+          <div
+            :class="!(row as PropOverrideRule).enabled ? 'opacity-50' : ''"
+            class="font-mono text-xs truncate"
+            :title="Object.keys((row as PropOverrideRule).props).join(', ')"
+          >
+            {{ Object.keys((row as PropOverrideRule).props).join(', ') }}
+          </div>
+        </TableCell>
+        <TableCell class="w-[70px] text-center !py-2">
+          <div :class="!(row as PropOverrideRule).enabled ? 'opacity-50' : ''" class="text-xs">
+            {{ (row as PropOverrideRule).enabled ? t('common.active') : t('details.disabled') }}
           </div>
         </TableCell>
       </template>

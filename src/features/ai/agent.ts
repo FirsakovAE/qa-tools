@@ -51,6 +51,8 @@ export interface AgentRun {
   digestCount?: number
   /** The digest lists only events from this id on: the earlier digests of the chat stay valid */
   digestFrom?: number
+  /** Attached Vue Inspector log: the digest and the logs tools read it, the file is not inlined */
+  logFile?: string
   history: ChatMessage[]
   /** Core instructions with the access limits and the skills of the chosen routing */
   systemPrompt?: string
@@ -214,9 +216,16 @@ async function complete(run: AgentRun, messages: ChatMessage[], toolChoice: 'aut
   throw noModelsError(run, failures, lastError)
 }
 
+function xmlAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+}
+
 function userMessage(run: AgentRun): ChatMessage {
   const parts = [run.question]
   if (run.attachments) parts.push(run.attachments)
+  if (run.logFile) {
+    parts.push(`<logs_source file="${xmlAttr(run.logFile)}">The logs digest and the logs tools read this attached Vue Inspector log, not the live capture. The file is not included; use get_events, search_logs and find_items. Page and code tools still read the live page.</logs_source>`)
+  }
   if (run.digest) parts.push(`<logs_digest events="${run.digestCount ?? 0}"${run.digestFrom ? ` new_from="${run.digestFrom}"` : ''}>\n${run.digest}\n</logs_digest>`)
   return { role: 'user', content: parts.join('\n\n') }
 }
@@ -224,7 +233,9 @@ function userMessage(run: AgentRun): ChatMessage {
 function shortAttachment(block: string): string {
   if (block.length <= OLD_TOOL_RESULT_CHARS) return block
   const close = '\n</attachment>'
-  return `${block.slice(0, OLD_TOOL_RESULT_CHARS)}\n... [shortened; get_events for the full data of a logs event]${close}`
+  const file = block.match(/^<attachment[^>]*\bfile="([^"]+)"/)?.[1]
+  const how = file ? `search_file / read_file file="${file}" for the content` : 'get_events for the full data of a logs event'
+  return `${block.slice(0, OLD_TOOL_RESULT_CHARS)}\n... [shortened; ${how}]${close}`
 }
 
 /** Models follow the latest user turn more than the end of a long system prompt; not kept in the history */

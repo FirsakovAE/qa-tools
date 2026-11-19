@@ -3,7 +3,10 @@
  * of the selected provider.
  */
 
-import { computed, ref, watch } from 'vue'
+import { computed, effectScope, markRaw, ref, watch } from 'vue'
+import { t } from '@/i18n'
+import { toast, CustomUpdateNotification } from '@/components/ui/Toaster'
+import { activeTabId } from '@/features/activeTab'
 import {
   activeKey,
   aiCredentials,
@@ -29,8 +32,11 @@ import { maskText } from './privacy'
 import { hasVisibleText } from './format'
 import { allowedTools, TOOL_GROUPS } from './tools'
 import { digestUpdate, takeLogsSnapshot, type LogsSnapshot, type SentLogs } from './logsContext'
-import { attachmentsText } from './attachmentContext'
-import type { AiAttachment } from './attachments'
+import { attachmentsText, fileDelivery } from './attachmentContext'
+import { aiAttachments, type AiAttachment } from './attachments'
+import { attachedLog, clearAttachedLog } from './logFile'
+import { dropChatFiles, hasChatFiles, markFilesSent } from './textFiles'
+import { FILES_NO_TOOLS_NOTE, FILES_NOTE } from './fileTools'
 import type { AiChatEntry, AiProviderId, AiStep, AiUsage, ChatMessage } from './types'
 
 /** Sent to the model when the user attached items without typing a question */
@@ -61,6 +67,32 @@ let initialized = false
 function nextId(): string {
   return `ai-${Date.now()}-${++entryCounter}`
 }
+
+/** Toast shown when a run ends while the user is on another tab. Dismissed on return. */
+let agentDoneToast: string | number | null = null
+
+function notifyAgentDone(): void {
+  if (activeTabId.value === 'ai') return
+  if (agentDoneToast != null) toast.dismiss(agentDoneToast)
+  agentDoneToast = toast.custom(markRaw(CustomUpdateNotification), {
+    duration: 10000,
+    componentProps: {
+      data: {
+        id: '',
+        title: t('ai.doneTitle'),
+        description: t('ai.doneBody'),
+      },
+    },
+  })
+}
+
+effectScope().run(() => {
+  watch(activeTabId, id => {
+    if (id !== 'ai' || agentDoneToast == null) return
+    toast.dismiss(agentDoneToast)
+    agentDoneToast = null
+  })
+})
 
 /** Streamed text re-renders Markdown, so updates are batched; clearing is immediate */
 const LIVE_FLUSH_MS = 60
@@ -126,11 +158,20 @@ function accessLabel(access: AiAccess, group: AiToolGroup): string {
 /** What goes to the provider with this question, shown as the first step of the answer */
 function contextStep(snapshot: LogsSnapshot, digest: string | undefined, from: number | undefined, access: AiAccess, attachments: AiAttachment[]): AiStep {
   const size = digest ? `${Math.max(1, Math.round(digest.length / 1024))} KB` : ''
-  const logs = !access.digest ? 'no logs digest (turned off)'
-    : !digest ? (snapshot.count ? 'no new logs events since the last digest' : '')
-    : from ? `logs digest of new events (${snapshot.count - from} of ${snapshot.count}, ${size})`
-    : `logs digest (${snapshot.count} events, ${size})`
-  const attached = attachments.length ? `attached ${attachments.map(a => a.label).join(', ')}` : ''
+  const file = attachedLog.value
+  const source = file ? `attached log "${file.name}"` : 'logs'
+  const logs = !access.digest ? (file ? `${source} (digest turned off)` : 'no logs digest (turned off)')
+    : !digest ? (snapshot.count ? (file ? `${source}, no new events since the last digest` : 'no new logs events since the last digest') : '')
+    : from ? `${source} digest of new events (${snapshot.count - from} of ${snapshot.count}, ${size})`
+    : `${source} digest (${snapshot.count} events, ${size})`
+  const budget = providerBudget(aiCredentials.provider)
+  const tools = toolSupport(aiCredentials.provider) !== 'none'
+  const deliveryNotes = { whole: '', overview: ' (overview; content read with file tools)', cut: ' (cut to fit)' }
+  const labels = attachments.map(a => {
+    const delivery = fileDelivery(a, budget.toolResultChars, tools)
+    return `${a.label}${delivery ? deliveryNotes[delivery] : ''}`
+  })
+  const attached = attachments.length ? `attached ${labels.join(', ')}` : ''
   const shared = ['question', attached, logs].filter(Boolean)
   const hidden = [!access.headers && 'headers', !access.bodies && 'bodies and messages', !access.appData && 'app data values'].filter(Boolean)
   const custom = customProvider()
@@ -219,21 +260,29 @@ export function useAiChat() {
     const started = Date.now()
     const signal = controller.signal
     const isAuto = modelId === AUTO_MODEL
+    markFilesSent(attachments.flatMap(a => (a.kind === 'file' ? [a.fileId] : [])))
+    const files = hasChatFiles()
+    const prompt = [
+      systemPrompt(access, aiCredentials.routing),
+      files ? (noTools ? FILES_NO_TOOLS_NOTE : FILES_NOTE) : '',
+      noTools ? NO_TOOLS_NOTE : '',
+    ].filter(Boolean).join('\n\n')
     try {
-      const attached = attachments.length ? await attachmentsText(attachments, snapshot, budget.toolResultChars) : null
+      const attached = attachments.length ? await attachmentsText(attachments, snapshot, budget.toolResultChars, !noTools) : null
       const result = await runAgent({
         question: text || ATTACHMENT_QUESTION,
         attachments: attached ?? undefined,
         digest,
         digestCount: snapshot.count,
         digestFrom: update?.from,
+        logFile: attachedLog.value?.name,
         history,
-        systemPrompt: noTools ? `${systemPrompt(access, aiCredentials.routing)}\n\n${NO_TOOLS_NOTE}` : systemPrompt(access, aiCredentials.routing),
+        systemPrompt: prompt,
         styleNote: styleNote(aiCredentials),
         request: { provider: aiCredentials.provider, key: activeKey(), model: modelId, signal },
         auto: isAuto,
         models: models.value,
-        tools: noTools ? [] : allowedTools(access, aiCredentials.routing),
+        tools: noTools ? [] : allowedTools(access, aiCredentials.routing, files),
         approve: (name, step) => approveTool(name, step, signal),
         protect: output => maskText(output, aiCredentials.masking),
         onStep: step => { liveSteps.value = [...liveSteps.value, step] },
@@ -271,10 +320,12 @@ export function useAiChat() {
         usage: usage.requests ? usage : undefined,
       }]
     } finally {
+      const stopped = controller?.signal.aborted
       setLive({ content: '', reasoning: '' })
       busy.value = false
       liveSteps.value = []
       controller = null
+      if (!stopped) notifyAgentDone()
     }
   }
 
@@ -305,6 +356,8 @@ export function useAiChat() {
     lastTurn = null
     chatAllowed.clear()
     clearAnswerCache()
+    clearAttachedLog()
+    dropChatFiles(aiAttachments.value.flatMap(a => (a.kind === 'file' ? [a.fileId] : [])))
   }
 
   /** once: this call; chat: every call of the group until a new chat */

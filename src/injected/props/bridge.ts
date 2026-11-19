@@ -35,6 +35,7 @@ import {
   extractRawProps
 } from './props-reader'
 import { search, fastSearch, lazySearch, type SearchOptions } from './search'
+import { getPropOverrides } from './overrides-engine'
 
 // ============================================================================
 // Message Types
@@ -65,7 +66,9 @@ const MESSAGE_TYPES = {
   GET_EXPANDED_PROPS: 'VUE_INSPECTOR_GET_EXPANDED_PROPS',
   EXPANDED_PROPS_DATA: 'VUE_INSPECTOR_EXPANDED_PROPS_DATA',
   GET_COMPONENT_INFO_BY_UID: 'VUE_INSPECTOR_GET_COMPONENT_INFO_BY_UID',
-  COMPONENT_INFO_DATA: 'VUE_INSPECTOR_COMPONENT_INFO_DATA'
+  COMPONENT_INFO_DATA: 'VUE_INSPECTOR_COMPONENT_INFO_DATA',
+  PROP_OVERRIDE_TARGET: 'PROP_OVERRIDE_TARGET',
+  PROP_OVERRIDE_TARGET_RESULT: 'PROP_OVERRIDE_TARGET_RESULT'
 } as const
 
 // ============================================================================
@@ -129,8 +132,11 @@ function metaToLegacyFormatLight(meta: any): any {
   const name = meta.name || 'Anonymous'
   const elementInfo = buildElementInfo(meta.rootEl)
   const componentUid = `${name}::${elementInfo}`
+  const overrides = getPropOverrides()?.applied(meta.instance)
   
   return {
+    overrideRuleIds: overrides?.ruleIds,
+    overriddenKeys: overrides?.keys,
     name,
     props: {},
     path: `uid:${meta.uid}`,
@@ -301,6 +307,19 @@ function handleMessage(event: MessageEvent) {
         requestId
       }, '*')
     }
+    return
+  }
+
+  if (event.source === window && event.data?.type === MESSAGE_TYPES.PROP_OVERRIDE_TARGET) {
+    const uid = parseInt(String(event.data.componentUid ?? '').replace(/^uid:/, ''), 10)
+    const instance = isNaN(uid) ? null : getMetaStore().getByUid(uid)?.instance
+    const engine = getPropOverrides()
+    window.postMessage({
+      __FROM_VUE_INSPECTOR__: true,
+      type: MESSAGE_TYPES.PROP_OVERRIDE_TARGET_RESULT,
+      target: instance && engine ? engine.describe(instance) : null,
+      requestId
+    }, '*')
     return
   }
 

@@ -2,7 +2,7 @@
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from '@/i18n'
 import { useDebounceFn } from '@vueuse/core'
-import { SearchIcon, RefreshCw, Star, MousePointer2, X } from 'lucide-vue-next'
+import { SearchIcon, RefreshCw, Star, MousePointer2, X, Pin } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -31,6 +31,7 @@ import {
   sortRowsByFavorite
 } from './types'
 import { getPropsFavoriteNodeId } from './propsFavorites'
+import { usePropOverridesSync } from './propOverrides'
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
@@ -384,6 +385,25 @@ const favoritesLabel = computed(() => {
   return `${favoritesFound.value}/${total}`
 })
 
+const overridesOn = computed(() => settings.value?.propOverridesEnabled !== false)
+const overridesTotal = computed(() => (settings.value?.propOverrides ?? []).filter(r => r.enabled).length)
+const overridesFound = computed(() => {
+  void visibilityVersion.value
+  const ids = new Set<string>()
+  for (const row of rows.value) for (const id of row.overrideRuleIds ?? []) ids.add(id)
+  return ids.size
+})
+const overridesLabel = computed(() => {
+  const total = overridesTotal.value
+  if (total === 0) return '0'
+  return `${overridesFound.value}/${total}`
+})
+
+const refreshAfterOverrides = useDebounceFn(() => {
+  if (rows.value.length) handleRefresh()
+}, 300)
+usePropOverridesSync(settings, refreshAfterOverrides)
+
 // ============================================================================
 // Actions
 // ============================================================================
@@ -461,6 +481,18 @@ async function ignoreByName(node: PropsRow) {
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
   } catch (error) {
     console.error('[props/PropsTab] ignoreByName save failed:', error)
+  }
+}
+
+async function deleteOverrideRules(node: PropsRow) {
+  const ids = node.overrideRuleIds ?? []
+  if (!settings.value || !ids.length) return
+  settings.value.propOverrides = (settings.value.propOverrides ?? []).filter(rule => !ids.includes(rule.id))
+  try {
+    const settingsToSave = JSON.parse(JSON.stringify(settings.value))
+    await runtime.storage.set('vue-inspector-settings', settingsToSave)
+  } catch (error) {
+    console.error('[props/PropsTab] deleteOverrideRules save failed:', error)
   }
 }
 
@@ -733,6 +765,24 @@ onUnmounted(() => {
             <Star class="h-3 w-3 mr-1" :class="favoritesFound > 0 ? 'fill-yellow-500' : 'fill-muted-foreground'" />
             {{ favoritesLabel }}
           </Badge>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Badge
+                variant="outline"
+                class="cursor-pointer transition-colors"
+                :class="overridesOn && overridesFound > 0
+                  ? 'text-purple-500 border-purple-500/30 hover:bg-purple-500/10'
+                  : 'text-muted-foreground border-muted hover:bg-muted/50'"
+                @click="emit('navigateToOptions', 'props-overrides-section')"
+              >
+                <Pin class="h-3 w-3 mr-1" />
+                {{ overridesLabel }}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {{ overridesOn ? t('props.overridesTip') : t('props.overridesOff') }}
+            </TooltipContent>
+          </Tooltip>
           
           
           <!-- Refresh button -->
@@ -771,6 +821,7 @@ onUnmounted(() => {
             @select="selectEntry"
             @toggle-favorite="toggleFavorite"
             @ignore-by-name="ignoreByName"
+            @delete-rule="deleteOverrideRules"
           />
         </div>
         
@@ -784,6 +835,7 @@ onUnmounted(() => {
             :refreshing="isLoading"
             @back="deselectEntry"
             @refresh="handleRefreshSelected"
+            @open-overrides="emit('navigateToOptions', 'props-overrides-section')"
           />
           
           <div

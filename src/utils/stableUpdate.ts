@@ -101,7 +101,8 @@ export class StableUpdateManager {
             const name = item.name || ''
             const propsCount = item.props ? Object.keys(item.props).length : 0
             const childrenCount = item.children ? item.children.length : 0
-            return `${id}-${name}-${propsCount}-${childrenCount}`
+            const overridden = item.overriddenKeys ? item.overriddenKeys.join(',') : ''
+            return `${id}-${name}-${propsCount}-${childrenCount}-${overridden}`
         }).join('|')
     }
 
@@ -157,6 +158,7 @@ export class StableUpdateManager {
     private hasNodeChanged(oldNode: any, newNode: any): boolean {
         if (oldNode.name !== newNode.name) return true
         if (oldNode.label !== newNode.label) return true
+        if ((oldNode.overriddenKeys ?? []).join(',') !== (newNode.overriddenKeys ?? []).join(',')) return true
 
         const oldProps = oldNode.props || {}
         const newProps = newNode.props || {}

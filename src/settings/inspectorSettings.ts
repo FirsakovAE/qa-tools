@@ -68,6 +68,8 @@ export const defaultInspectorSettings: InspectorSettings = {
     displayMode: 'overlay',
     blacklist: { active: [], inactive: [] },
     favorites: [],
+    propOverrides: [],
+    propOverridesEnabled: true,
     piniaFavorites: [],
     breakpoints: { active: [], inactive: [] },
     mocks: { active: [], inactive: [] },

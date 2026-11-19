@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from '@/i18n'
-import { Box, Database, FileText, Globe, X } from 'lucide-vue-next'
+import { Box, ClipboardPaste, Database, File, FileText, Globe, ScrollText, X } from 'lucide-vue-next'
 import type { AiAttachment } from './attachments'
 
 const props = defineProps<{
-  item: AiAttachment
+  item: { label: string; kind: AiAttachment['kind'] | 'logfile'; meta?: string; pasted?: boolean }
   removable?: boolean
+  title?: string
 }>()
 
 const emit = defineEmits<{
@@ -15,14 +16,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const ICONS = { log: FileText, network: Globe, props: Box, store: Database }
-const icon = computed(() => ICONS[props.item.kind])
+const ICONS = { log: FileText, network: Globe, props: Box, store: Database, logfile: ScrollText, file: File }
+const icon = computed(() => (props.item.pasted ? ClipboardPaste : ICONS[props.item.kind]))
+const tip = computed(() => props.title || (props.item.meta ? `${props.item.label}\n${props.item.meta}` : props.item.label))
 </script>
 
 <template>
   <span
     class="ai-attachment inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-xs text-foreground"
-    :title="item.label"
+    :title="tip"
   >
     <component :is="icon" class="h-3 w-3 shrink-0 text-muted-foreground" />
     <span class="truncate">{{ item.label }}</span>

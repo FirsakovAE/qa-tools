@@ -12,6 +12,7 @@ import { buildAiDigest, type AiDigestOptions } from '@/features/logs/report/aiDi
 import type { LogsReportPayload } from '@/features/logs/report/template'
 import { stackCode } from './sources'
 import { aiCredentials } from './credentials'
+import { attachedLog } from './logFile'
 import { countMasked, privacySignature, protectPayload } from './privacy'
 
 /** Timeline lines of the digest sent with a question; the rest is read with tools */
@@ -92,21 +93,15 @@ function pinnedSnapshot(): LogsSnapshot {
   return cached ?? takeLogsSnapshot()
 }
 
-/**
- * Snapshot of the current logs. Building it (report, masking, digest) walks every event, so it is
- * reused while no event was added or dropped and no network entry changed (the pool size covers
- * a response or merged headers arriving for a logged request).
- */
-export function takeLogsSnapshot(budget: Omit<AiDigestOptions, 'noGuide'> = { maxTimeline: DIGEST_TIMELINE }): LogsSnapshot {
-  logs ??= useLogs()
-  const { events, source } = logs
-  const list = events.value
-  const privacy = { masking: aiCredentials.masking, access: aiCredentials.access }
-  const digestKey = [budget.maxTimeline, budget.maxChars, budget.bodyChars, privacySignature(privacy)].join(':')
-  const signature = [list.length, list[0]?.id ?? '', list[list.length - 1]?.id ?? '', source.value.pool.size, digestKey].join(':')
+/** Builds the digest and the rows the tools read. The caller skips this when `signature` is unchanged. */
+function finishSnapshot(
+  payload: LogsReportPayload,
+  signature: string,
+  digestKey: string,
+  budget: Omit<AiDigestOptions, 'noGuide'>,
+): LogsSnapshot {
   if (cached && cached.signature === signature) return cached
 
-  const payload = protectPayload(buildLogsReport(withNetworkPairs(list, source.value), source.value), privacy)
   const masked = countMasked(payload)
   const rt = createLogsRuntime()
   const digest = buildAiDigest(payload, rt, { ...budget, noGuide: true })
@@ -141,6 +136,32 @@ export function takeLogsSnapshot(budget: Omit<AiDigestOptions, 'noGuide'> = { ma
 
   cached = { signature, digestKey, budget, digest, count: rows.length, masked, payload, rt, rows, getEntry, stores }
   return cached
+}
+
+/**
+ * Snapshot of the logs the assistant reads. An attached Vue Inspector log replaces the live
+ * capture for the whole chat: the digest and the logs tools run on that file, and the file
+ * itself is not sent. Rebuilt only when the capture, the file or the privacy settings change.
+ */
+export function takeLogsSnapshot(budget: Omit<AiDigestOptions, 'noGuide'> = { maxTimeline: DIGEST_TIMELINE }): LogsSnapshot {
+  const privacy = { masking: aiCredentials.masking, access: aiCredentials.access }
+  const limits = [budget.maxTimeline, budget.maxChars, budget.bodyChars, privacySignature(privacy)].join(':')
+  const file = attachedLog.value
+  if (file) {
+    const digestKey = ['file', file.id, limits].join(':')
+    if (cached?.signature === digestKey) return cached
+    return finishSnapshot(protectPayload(file.payload, privacy), digestKey, digestKey, budget)
+  }
+
+  logs ??= useLogs()
+  const { events, source } = logs
+  const list = events.value
+  const digestKey = limits
+  // Pool size covers a response or merged headers arriving for a logged request
+  const signature = [list.length, list[0]?.id ?? '', list[list.length - 1]?.id ?? '', source.value.pool.size, digestKey].join(':')
+  if (cached?.signature === signature) return cached
+  const payload = protectPayload(buildLogsReport(withNetworkPairs(list, source.value), source.value), privacy)
+  return finishSnapshot(payload, signature, digestKey, budget)
 }
 
 /** The logs the model already has in this chat */

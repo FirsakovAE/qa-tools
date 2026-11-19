@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from '@/i18n'
-import { Star, StarOff, EyeOff, Sparkles } from 'lucide-vue-next'
+import { Star, StarOff, EyeOff, Sparkles, PinOff } from 'lucide-vue-next'
 import { askAiAboutProps } from '@/features/ai/attachments'
 import {
   ContextMenuContent,
@@ -27,6 +27,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'toggleFavorite', row: PropsRow): void
   (e: 'ignoreByName', row: PropsRow): void
+  (e: 'deleteRule', row: PropsRow): void
 }>()
 
 const { t } = useI18n()
@@ -71,6 +72,14 @@ function handleClick(e: Event, action: () => void) {
       <StarOff v-if="row.isFavoriteFlag" class="h-4 w-4 mr-2" />
       <Star v-else class="h-4 w-4 mr-2" />
       {{ row.isFavoriteFlag ? t('stores.removeFavorite') : t('stores.addFavorite') }}
+    </component>
+    <component
+      :is="Item"
+      v-if="row.overrideRuleIds?.length"
+      @click="handleClick($event, () => emit('deleteRule', row))"
+    >
+      <PinOff class="h-4 w-4 mr-2" />
+      {{ t('props.deleteRule') }}
     </component>
     <component :is="Separator" />
     <component

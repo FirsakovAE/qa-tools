@@ -44,6 +44,17 @@ The placeholder is **Ask AI**. With chips attached it is **Ask about the attache
 
 While an answer is running the button is **Stop**.
 
+## Attaching files
+
+**+** next to the field opens two items:
+
+* **Text file** (TXT · LOG · JSON · HAR · MD · CSV · PDF): attaches one or more files to the next question, like the chips from the other tabs. The file is not pinned to the chat: it goes with the question it was attached to, and the assistant can read it again in the later questions of the same chat. **New chat** drops it. Files can also be dropped on the field or pasted into it. Up to 64 MB per file. PDF: only the text layer is read; scanned pages and password-protected files are refused.
+* **Vue inspector Log**: an exported Vue Inspector log. It is pinned to the chat: the logs digest and the logs tools read it instead of the live capture until **New chat**.
+
+A long pasted text (over 4000 characters or 60 lines) becomes a chip **Pasted text N** and is handled like a file. A shorter paste goes into the field as usual.
+
+A small file (up to about 2000 tokens) goes to the assistant whole. A bigger file is not sent: the assistant gets its overview (size, structure of JSON, requests and failed requests of a HAR, headings of Markdown, columns of CSV, pages of PDF, first lines and error lines of a log) and tools to search the file, read parts of it and query JSON / HAR by path. This keeps the cost of a big file to the parts the question needs. The first step of the answer says **(overview; content read with file tools)** for such a file. The chip tooltip shows the format, size, lines and the estimated tokens.
+
 Under the field, when the chat is ready:
 
 * OpenRouter: **Today: N of M free OpenRouter requests (counted in this browser). Each assistant step is one request.** **M** is the limit the provider reported, or **50** when it has not. In **Auto**, a second sentence says how many models are skipped because they are out of quota or unavailable.

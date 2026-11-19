@@ -1,7 +1,9 @@
 /**
  * Runs at document_start in the page world, before the site opens sockets.
- * Keeps the live WebSocket objects so the inspector can attach after it starts.
+ * Keeps the live WebSocket objects so the inspector can attach after it starts,
+ * and boots prop override rules so they reach components created during page load.
  */
+import { bootPropOverrides } from './props/overrides-engine'
 ;(() => {
   // The default buffer keeps 250 resources: on a busy page API calls push out the lazy chunks the assistant reads
   try {
@@ -55,3 +57,9 @@
   }
   window.WebSocket = Patched as unknown as typeof WebSocket
 })()
+
+try {
+  bootPropOverrides()
+} catch {
+  /* the injected props module boots it again */
+}

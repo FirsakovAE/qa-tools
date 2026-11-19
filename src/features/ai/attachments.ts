@@ -2,10 +2,12 @@
  * Items the user attaches to the next question with Ask AI in the menus of the other tabs: a logs
  * event, a network request, the props of a component or a store. The data is taken when the item
  * is attached; masking, the logs id and truncation are applied when the question is sent.
+ * Text files (+ → Text file, a long paste) are attached the same way; their content stays in
+ * textFiles.ts and the model reads it with the file tools.
  */
 
 import { ref, toRaw } from 'vue'
-import { t } from '@/i18n'
+import { t, type MessageKey } from '@/i18n'
 import { getRuntimeAdapter } from '@/runtime'
 import { toast } from '@/components/ui/Toaster'
 import { useLogs } from '@/features/logs/useLogs'
@@ -13,6 +15,16 @@ import { describeLog, logLabel } from '@/features/logs/view'
 import type { LogEvent } from '@/types/logs'
 import type { NetworkEntry } from '@/types/network'
 import type { PropsRow } from '@/features/props/types'
+import {
+  fileMeta,
+  MAX_FILE_BYTES,
+  readTextFile,
+  registerPastedText,
+  releaseFile,
+  sizeLabel,
+  TextFileError,
+  type AiTextFile,
+} from './textFiles'
 
 const LABEL_CHARS = 80
 
@@ -21,6 +33,21 @@ export type AiAttachment =
   | { kind: 'network'; key: string; label: string; entry: Record<string, any> }
   | { kind: 'props'; key: string; label: string; component: string; element: string; props: unknown }
   | { kind: 'store'; key: string; label: string; storeId: string; name: string; state: unknown; getters: unknown }
+  /** The content stays in textFiles.ts; `meta` is the chip tooltip */
+  | { kind: 'file'; key: string; label: string; fileId: string; meta: string; pasted?: boolean }
+
+/** A paste longer than this becomes a file instead of text in the input */
+const PASTE_FILE_CHARS = 4000
+const PASTE_FILE_LINES = 60
+const FILE_ERRORS: Record<TextFileError['reason'], MessageKey> = {
+  size: 'ai.fileTooBig',
+  binary: 'ai.fileBinary',
+  pdf: 'ai.filePdfNoText',
+  pdfEncrypted: 'ai.filePdfEncrypted',
+  empty: 'ai.fileEmpty',
+  read: 'ai.fileReadFail',
+}
+let pasteCounter = 0
 
 /** Items attached to the question being typed */
 export const aiAttachments = ref<AiAttachment[]>([])
@@ -47,7 +74,46 @@ function attach(item: AiAttachment): void {
 }
 
 export function removeAttachment(key: string): void {
+  const item = aiAttachments.value.find(a => a.key === key)
+  if (item?.kind === 'file') releaseFile(item.fileId)
   aiAttachments.value = aiAttachments.value.filter(a => a.key !== key)
+}
+
+function attachTextFile(file: AiTextFile): void {
+  attach({ kind: 'file', key: `file:${file.id}`, label: file.name, fileId: file.id, meta: fileMeta(file), pasted: file.pasted || undefined })
+}
+
+/** Files picked with + → Text file, dropped or pasted on the composer */
+export async function attachFiles(list: Iterable<File>): Promise<void> {
+  for (const picked of list) {
+    try {
+      attachTextFile(await readTextFile(picked))
+    } catch (e) {
+      const reason = e instanceof TextFileError ? e.reason : 'read'
+      toast.error(t(FILE_ERRORS[reason], { name: picked.name, max: sizeLabel(MAX_FILE_BYTES) }))
+    }
+  }
+}
+
+export function isLongPaste(text: string): boolean {
+  if (text.length > PASTE_FILE_CHARS) return true
+  let lines = 1
+  for (let i = text.indexOf('\n'); i !== -1 && lines <= PASTE_FILE_LINES; i = text.indexOf('\n', i + 1)) lines++
+  return lines > PASTE_FILE_LINES
+}
+
+/** A long pasted text goes with the question as a file: the model reads it with the file tools */
+export function attachPastedText(text: string): boolean {
+  if (new Blob([text]).size > MAX_FILE_BYTES) {
+    toast.error(t('ai.fileTooBig', { name: t('ai.pastedName', { n: pasteCounter + 1 }), max: sizeLabel(MAX_FILE_BYTES) }))
+    return false
+  }
+  try {
+    attachTextFile(registerPastedText(text, t('ai.pastedName', { n: ++pasteCounter })))
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Takes the attached items for a question and empties the composer */

@@ -5,6 +5,7 @@ import { LOAD_SKILL_TOOL, loadSkills } from './skills'
 import { listSources, readSource, searchSource } from './sources'
 import { readDocs } from './docs'
 import { inspectUi, readStores } from './page'
+import { describeFileTool, FILE_TOOL_NAMES, FILE_TOOLS, runFileTool } from './fileTools'
 
 export const AI_TOOLS: ToolDefinition[] = [
   {
@@ -183,12 +184,13 @@ export const TOOL_GROUPS: Record<string, AiToolGroup | undefined> = {
   read_stores: 'page',
 }
 
-/** Tools the user did not turn off; Lite routing adds the skill loader */
-export function allowedTools(access: AiAccess, routing: AiRouting = 'lite'): ToolDefinition[] {
+/** Tools the user did not turn off; Lite routing adds the skill loader, attached files add the file tools */
+export function allowedTools(access: AiAccess, routing: AiRouting = 'lite', files = false): ToolDefinition[] {
   const tools = AI_TOOLS.filter(t => {
     const group = TOOL_GROUPS[t.function.name]
     return !group || access.tools[group] !== 'deny'
   })
+  if (files) tools.push(...FILE_TOOLS)
   return routing === 'lite' ? [LOAD_SKILL_TOOL, ...tools] : tools
 }
 
@@ -198,6 +200,7 @@ function short(value: unknown, max = 60): string {
 }
 
 export function describeToolCall(name: string, args: Record<string, any>): AiStep {
+  if (FILE_TOOL_NAMES.has(name)) return describeFileTool(name, args)
   switch (name) {
     case 'load_skill':
       return { tool: 'Skill', summary: `Load ${(Array.isArray(args.names) ? args.names : [args.names ?? args.name]).map(n => short(n)).join(', ')}` }
@@ -241,6 +244,7 @@ export function describeToolCall(name: string, args: Record<string, any>): AiSte
 
 export async function runTool(name: string, args: Record<string, any>): Promise<string> {
   try {
+    if (FILE_TOOL_NAMES.has(name)) return runFileTool(name, args)
     switch (name) {
       case 'load_skill':
         return loadSkills(args.names ?? args.name)

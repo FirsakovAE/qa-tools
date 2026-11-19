@@ -109,6 +109,26 @@ export interface MockRule {
     description?: string
 }
 
+/**
+ * Props saved from the Props editor: the matching component gets these values from
+ * the moment it is created, including after a page reload
+ */
+export interface PropOverrideRule {
+    id: string
+    enabled: boolean
+    /** location.host where the rule was saved; the rule only applies there */
+    host: string
+    /** Component name */
+    component: string
+    /** Ancestor component names, root first, parent last */
+    path: string[]
+    /** 'path' — only the component at this place in the tree; 'all' — every instance of the component */
+    scope: 'path' | 'all'
+    /** Changed prop values, by prop name */
+    props: Record<string, unknown>
+    timestamp: string
+}
+
 /** Breakpoint with active/inactive status for UI display */
 export type BreakpointWithStatus = BreakpointItem & { isActive: boolean }
 
@@ -310,6 +330,10 @@ export interface BaseInspectorSettings {
     displayMode: DisplayMode
     blacklist: { active: string[]; inactive: string[] }
     favorites: FavoriteItem[]
+    /** Prop values applied when a component is created (Props tab, "Keep after reload") */
+    propOverrides: PropOverrideRule[]
+    /** When false, prop override rules stay in settings but are not applied. Default true. */
+    propOverridesEnabled: boolean
     /** Pinia store favorites (by store name) */
     piniaFavorites: PiniaFavoriteItem[]
     breakpoints: { active: BreakpointItem[]; inactive: BreakpointItem[] }

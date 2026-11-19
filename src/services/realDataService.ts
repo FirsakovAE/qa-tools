@@ -13,6 +13,8 @@ interface ComponentInfo {
     propsCount: number
     propsCountPassed?: number
     rootElement?: { tagName?: string; id?: string; className?: string; testId?: string } | null
+    overrideRuleIds?: string[]
+    overriddenKeys?: string[]
 }
 
 interface CollectComponentsResponse {
@@ -124,7 +126,9 @@ export class RealDataService {
                     } : undefined,
                     hasProps: comp.hasProps || false,
                     propsCount: comp.propsCount || 0,
-                    propsCountPassed: comp.propsCountPassed ?? comp.propsCount ?? 0
+                    propsCountPassed: comp.propsCountPassed ?? comp.propsCount ?? 0,
+                    overrideRuleIds: comp.overrideRuleIds,
+                    overriddenKeys: comp.overriddenKeys
                 }
             } catch (e) {
                 console.error('[services/realDataService] transformToTreeData component failed:', comp.path, e)

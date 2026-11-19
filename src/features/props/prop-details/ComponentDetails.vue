@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from '@/i18n'
-import { ArrowLeft, Star, X, Save, Edit, RefreshCw } from 'lucide-vue-next'
+import { ArrowLeft, Star, X, Save, Edit, RefreshCw, Pin } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,11 @@ import { isInFavorites, matchFavoriteIds } from '@/utils/favoritesMatcher'
 import { useComponentsTab } from '@/hooks/useComponentsTab'
 import { ref as createRef } from 'vue'
 import { getPropsFavoriteNodeId, isPropsRowResolvedFavorite } from '../propsFavorites'
+import { upsertPropOverrideRule } from '../propOverrides'
+import type { PropOverrideRule } from '@/types/inspector'
+import type { PropOverrideTarget } from '@/injected/props/overrides-engine'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
@@ -36,7 +41,7 @@ const props = withDefaults(
   }>(),
   { refreshing: false, allRows: () => [] }
 )
-const emit = defineEmits<{ (e: 'back'): void; (e: 'refresh'): void }>()
+const emit = defineEmits<{ (e: 'back'): void; (e: 'refresh'): void; (e: 'openOverrides'): void }>()
 
 // --- Settings ---
 const settings = useInspectorSettingsSync()
@@ -209,6 +214,54 @@ const propsSizeFormatted = computed(() => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 })
 
+// --- Override rules ("Keep after reload") ---
+const liveRow = computed(() => props.allRows.find(r => r.id === props.node.id) ?? props.node)
+const overriddenKeys = computed(() => liveRow.value.overriddenKeys ?? [])
+const appliedRules = computed<PropOverrideRule[]>(() => {
+  const ids = liveRow.value.overrideRuleIds ?? []
+  return (settings.value?.propOverrides ?? []).filter(rule => ids.includes(rule.id))
+})
+
+const keepOverride = ref(false)
+const overrideScope = ref<PropOverrideRule['scope']>('path')
+
+function resetOverrideControls() {
+  const rule = appliedRules.value.find(r => r.scope === 'path') ?? appliedRules.value[0]
+  keepOverride.value = !!rule
+  overrideScope.value = rule?.scope ?? 'path'
+}
+
+watch(() => appliedRules.value.map(r => r.id).join(','), resetOverrideControls, { immediate: true })
+
+function setKeepOverride(value: boolean) {
+  keepOverride.value = value
+}
+
+async function deleteAppliedRules() {
+  if (!settings.value || !appliedRules.value.length) return
+  const ids = appliedRules.value.map(r => r.id)
+  settings.value.propOverrides = settings.value.propOverrides.filter(rule => !ids.includes(rule.id))
+  try {
+    const settingsToSave = JSON.parse(JSON.stringify(settings.value))
+    await runtime.storage.set('vue-inspector-settings', settingsToSave)
+  } catch (error) {
+    console.error('[props/ComponentDetails] delete override rule failed:', error)
+  }
+}
+
+async function saveOverrideRule(edited: Record<string, unknown>) {
+  if (!settings.value) return
+  const response = await runtime.sendMessage<{ target?: PropOverrideTarget | null }>({
+    type: 'PROP_OVERRIDE_TARGET',
+    componentUid: componentPath.value
+  })
+  const target = response?.target
+  if (!target) return
+  if (!upsertPropOverrideRule(settings.value, target, overrideScope.value, edited)) return
+  const settingsToSave = JSON.parse(JSON.stringify(settings.value))
+  await runtime.storage.set('vue-inspector-settings', settingsToSave)
+}
+
 // --- Actions ---
 function startEditing() {
   editedJson.value = json.value.trim()
@@ -219,6 +272,7 @@ function startEditing() {
 function cancelEdit() {
   editedJson.value = json.value.trim()
   isEditing.value = false
+  resetOverrideControls()
   cancelPropsEditing?.()
 }
 
@@ -250,6 +304,8 @@ async function saveChanges() {
       props.node.jsonProps = JSON.stringify(parsed, null, 2)
       props.node.timestamp = new Date().toISOString()
       editedJson.value = JSON.stringify(parsed, null, 2)
+      if (keepOverride.value) await saveOverrideRule(parsed)
+      else await deleteAppliedRules()
     }
     
     isEditing.value = false
@@ -287,6 +343,21 @@ async function saveChanges() {
             <Badge v-if="propsSizeFormatted" variant="outline" class="text-xs font-mono shrink-0">
               {{ propsSizeFormatted }}
             </Badge>
+            <Tooltip v-if="overriddenKeys.length">
+              <TooltipTrigger as-child>
+                <Badge
+                  variant="outline"
+                  class="text-xs shrink-0 cursor-pointer gap-1 text-purple-500 border-purple-500/30 hover:bg-purple-500/10"
+                  @click="emit('openOverrides')"
+                >
+                  <Pin class="h-3 w-3" />
+                  {{ overriddenKeys.length }}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {{ t('props.overrideApplied', { keys: overriddenKeys.join(', ') }) }}
+              </TooltipContent>
+            </Tooltip>
           </div>
           <div class="text-xs text-muted-foreground">
             Updated: {{ formattedTime }}
@@ -294,7 +365,8 @@ async function saveChanges() {
         </div>
         
         <!-- Action buttons -->
-        <div class="flex items-center gap-1 shrink-0">
+        <div class="flex flex-col items-end gap-1 shrink-0">
+          <div class="flex items-center gap-1">
           <!-- Favorite button -->
           <Tooltip>
             <TooltipTrigger as-child>
@@ -384,6 +456,22 @@ async function saveChanges() {
               </TooltipContent>
             </Tooltip>
           </template>
+          </div>
+          <div class="flex items-center gap-2">
+            <Checkbox
+              id="props-keep-override"
+              :model-value="keepOverride"
+              :disabled="!isEditing"
+              @update:model-value="setKeepOverride(!!$event)"
+            />
+            <Label
+              for="props-keep-override"
+              class="text-xs font-normal whitespace-nowrap"
+              :class="isEditing ? 'cursor-pointer' : 'cursor-default opacity-50'"
+            >
+              {{ t('props.keepOverride') }}
+            </Label>
+          </div>
         </div>
       </div>
 

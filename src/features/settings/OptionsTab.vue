@@ -44,6 +44,7 @@ import { compareVersions } from '@/services/githubReleaseService'
 import { ignoreVersion } from '@/composables/useUpdateChecker'
 import { useRuntime } from '@/runtime'
 import { postToContentScript } from '@/utils/postToContentScript'
+import { usePropOverridesSync } from '@/features/props/propOverrides'
 
 const AiSection = defineAsyncComponent(() => import('@/features/ai/AiSection.vue'))
 
@@ -90,8 +91,19 @@ const sectionDefs = [
 const sections = computed(() => sectionDefs.map(section => ({ ...section, label: t(section.labelKey) })))
 
 // -------------------- SELECTED ITEM --------------------
-type SelectedItemType = 'breakpoint' | 'mock' | 'header-link' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'
+type SelectedItemType = 'breakpoint' | 'mock' | 'header-link' | 'blacklist' | 'favorite' | 'prop-override' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'
 const selectedItem = ref<{ type: SelectedItemType; id: string } | null>(null)
+
+/** Rule whose values are open for editing in the details panel */
+const propOverrideEditId = ref<string | null>(null)
+const propOverrideEditMode = computed(() =>
+  selectedItem.value?.type === 'prop-override' && propOverrideEditId.value === selectedItem.value.id
+)
+
+function handleEditPropOverride(item: { type: 'prop-override'; id: string }) {
+  onSelectItem(item)
+  propOverrideEditId.value = item.id
+}
 
 watch(activeSection, () => {
   selectedItem.value = null
@@ -192,6 +204,8 @@ function handleEditFromDetails() {
     siteListEditMode.value = false
     headerLinkEditMode.value = false
     piniaFavoriteEditMode.value = true
+  } else if (selectedItem.value.type === 'prop-override') {
+    propOverrideEditId.value = selectedItem.value.id
   } else if (selectedItem.value.type === 'header-link') {
     piniaFavoriteEditMode.value = false
     siteListEditMode.value = false
@@ -403,6 +417,8 @@ function syncMocks() {
   })
 }
 
+usePropOverridesSync(settings)
+
 // Auto-sync when breakpoints/mocks change
 watch(() => settings.value?.breakpoints, () => syncBreakpoints(), { deep: true })
 watch(() => settings.value?.mocks, () => syncMocks(), { deep: true })
@@ -496,7 +512,7 @@ watch(() => props.scrollToAnchor, (anchor) => {
   // Switch section based on anchor
   if (anchor === 'saved-files-section') {
     activeSection.value = 'general'
-  } else if (anchor === 'favorites-section') {
+  } else if (anchor === 'favorites-section' || anchor === 'props-overrides-section') {
     activeSection.value = 'props'
   } else if (anchor === 'pinia-favorites-section') {
     activeSection.value = 'pinia'
@@ -670,8 +686,9 @@ onMounted(async () => {
             <PropsSection
               v-else-if="activeSection === 'props'"
               :settings="settings"
-              :selected-item-id="selectedItem?.type === 'blacklist' || selectedItem?.type === 'favorite' ? selectedItem.id : null"
+              :selected-item-id="selectedItem?.type === 'blacklist' || selectedItem?.type === 'favorite' || selectedItem?.type === 'prop-override' ? selectedItem.id : null"
               @select="onSelectItem"
+              @edit="handleEditPropOverride"
             />
             <PiniaSection
               v-else-if="activeSection === 'pinia'"
@@ -724,7 +741,9 @@ onMounted(async () => {
           :pinia-favorite-edit-mode="piniaFavoriteEditMode"
           :site-list-edit-mode="siteListEditMode"
           :header-link-edit-mode="headerLinkEditMode"
-          @close="selectedItem = null; piniaFavoriteEditMode = false; siteListEditMode = false; headerLinkEditMode = false"
+          :prop-override-edit-mode="propOverrideEditMode"
+          @close="selectedItem = null; piniaFavoriteEditMode = false; siteListEditMode = false; headerLinkEditMode = false; propOverrideEditId = null"
+          @prop-override-edit-done="propOverrideEditId = null"
           @close-release="handleCloseRelease"
           @ignore-version="handleIgnoreVersion"
           @download-update="handleDownloadUpdate"

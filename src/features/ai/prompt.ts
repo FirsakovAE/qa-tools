@@ -73,6 +73,7 @@ function corePrompt(routing: AiRouting): string {
 ## Input
 - \`<attachment type name event>\`: an item the user attached, with its full data (masked and cut like tool results). \`event="#N"\` is its id in the logs. The question is about these items first; do not load them again with \`get_events\`, except to read on from a cut marker.
 - \`<logs_digest>\`: a summary of the logs: \`Summary\`, \`Problems\`, \`Timeline\` (\`#N +time KIND title | details\`; \`!!\` marks a problem, \`(xN)\` folded repeats). \`#N\` ids refer to the newest digest. With \`new_from="M"\` it lists only events from #M on, and the earlier digests stay valid. A message without a digest means no new events.
+- \`<logs_source file>\`: the user attached a Vue Inspector log. The digest and the logs tools read that file, not the live capture, and the file itself is not in the message. Do not ask the user to paste it.
 - \`<answer_style>\` on the latest user message: language, tone, length and personal instructions. Follow it.
 
 ## Choosing the approach

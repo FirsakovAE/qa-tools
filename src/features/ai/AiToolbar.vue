@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAiChat } from './useAiChat'
+import { attachedLog } from './logFile'
 import { AUTO_MODEL } from './credentials'
 import { modelName, modelNote } from './format'
 import { modelStatus } from './modelStatus'
@@ -84,7 +85,7 @@ const groups = computed(() => [
       <AiIconButton :tooltip="t('ai.settingsTip')" @click="emit('open-settings')">
         <Settings class="h-4 w-4" />
       </AiIconButton>
-      <AiIconButton :tooltip="t('ai.newChat')" :disabled="entries.length === 0 && !busy" @click="newChat">
+      <AiIconButton :tooltip="t('ai.newChat')" :disabled="entries.length === 0 && !busy && !attachedLog" @click="newChat">
         <MessageSquarePlus class="h-4 w-4" />
       </AiIconButton>
     </div>

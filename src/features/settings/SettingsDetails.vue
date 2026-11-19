@@ -5,7 +5,9 @@ import { useEscapeClose } from '@/composables/useEscapeClose'
 import { marked } from 'marked'
 import '@/assets/markdown.css'
 import type { InspectorSettings } from '@/settings/inspectorSettings'
-import type { BreakpointItem, MockRule, FavoriteItem, PiniaFavoriteItem, SavedFile, SiteListEntry, HeaderLinkRuleRowDraft } from '@/types/inspector'
+import type { BreakpointItem, MockRule, FavoriteItem, PiniaFavoriteItem, SavedFile, SiteListEntry, HeaderLinkRuleRowDraft, PropOverrideRule } from '@/types/inspector'
+import { propOverridePathLabel } from '@/utils/propOverrides'
+import JsonEditor from '@/components/JsonEditor.vue'
 import { replaceHeaderLinkRulesForHeaderName } from '@/utils/networkHeaderLinks'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
 import { mediaUrls, getMediaBlob, getWallpaperBlob } from '@/settings/mediaStore'
@@ -53,11 +55,12 @@ const { t } = useI18n()
 
 const props = defineProps<{
   settings: InspectorSettings
-  selectedItem: { type: 'breakpoint' | 'mock' | 'header-link' | 'blacklist' | 'favorite' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'; id: string } | null
+  selectedItem: { type: 'breakpoint' | 'mock' | 'header-link' | 'blacklist' | 'favorite' | 'prop-override' | 'pinia-favorite' | 'saved-file' | 'site-blacklist' | 'site-whitelist'; id: string } | null
   releaseInfo?: ReleaseDisplayInfo | null
   piniaFavoriteEditMode?: boolean
   siteListEditMode?: boolean
   headerLinkEditMode?: boolean
+  propOverrideEditMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -69,6 +72,7 @@ const emit = defineEmits<{
   (e: 'pinia-favorite-edit-done', newId?: string): void
   (e: 'site-list-edit-done'): void
   (e: 'header-link-edit-done'): void
+  (e: 'prop-override-edit-done'): void
 }>()
 
 const detailsTitle = computed(() => {
@@ -79,6 +83,8 @@ const detailsTitle = computed(() => {
       return 'File Preview'
     case 'pinia-favorite':
       return 'Favorite Store Details'
+    case 'prop-override':
+      return t('props.overrideDetails')
     case 'header-link':
       return t('netset.linkDetails')
     case 'site-blacklist':
@@ -131,6 +137,40 @@ const favoriteData = computed<FavoriteItem | null>(() => {
   if (props.selectedItem?.type !== 'favorite') return null
   return props.settings.favorites.find(f => f.id === props.selectedItem!.id) || null
 })
+
+const propOverrideData = computed<PropOverrideRule | null>(() => {
+  if (props.selectedItem?.type !== 'prop-override') return null
+  return props.settings.propOverrides?.find(r => r.id === props.selectedItem!.id) || null
+})
+
+const propOverrideJson = computed(() => JSON.stringify(propOverrideData.value?.props ?? {}, null, 2))
+const editedPropOverrideJson = ref('')
+const propOverrideJsonError = computed(() => {
+  if (!props.propOverrideEditMode) return null
+  try {
+    const parsed = JSON.parse(editedPropOverrideJson.value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !Object.keys(parsed).length) return t('props.overrideInvalid')
+    return null
+  } catch {
+    return t('props.overrideInvalid')
+  }
+})
+
+watch(() => props.propOverrideEditMode, (editing) => {
+  if (editing) editedPropOverrideJson.value = propOverrideJson.value
+}, { immediate: true })
+
+function cancelPropOverrideEdit() {
+  emit('prop-override-edit-done')
+}
+
+function savePropOverrideEdit() {
+  const rule = props.settings.propOverrides?.find(r => r.id === props.selectedItem?.id)
+  if (!rule || propOverrideJsonError.value) return
+  rule.props = JSON.parse(editedPropOverrideJson.value)
+  rule.timestamp = new Date().toISOString()
+  emit('prop-override-edit-done')
+}
 
 const piniaFavoriteData = computed<PiniaFavoriteItem | null>(() => {
   if (props.selectedItem?.type !== 'pinia-favorite') return null
@@ -540,6 +580,21 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
             </Button>
           </template>
         </template>
+        <template v-else-if="selectedItem.type === 'prop-override' && propOverrideData">
+          <template v-if="!propOverrideEditMode">
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('general.edit')" @click="emit('edit')">
+              <Edit class="h-4 w-4" />
+            </Button>
+          </template>
+          <template v-else>
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('common.cancel')" @click="cancelPropOverrideEdit">
+              <X class="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('common.save')" :disabled="!!propOverrideJsonError" @click="savePropOverrideEdit">
+              <Save class="h-4 w-4" />
+            </Button>
+          </template>
+        </template>
         <template v-else-if="selectedItem.type === 'header-link' && headerLinkGroup">
           <template v-if="!headerLinkEditMode">
             <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('general.edit')" @click="emit('edit')">
@@ -721,6 +776,65 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
               <div>
                 <span class="text-xs text-muted-foreground">{{ t('general.added') }}</span>
                 <p class="text-sm mt-1">{{ new Date(favoriteData.timestamp).toLocaleString() }}</p>
+              </div>
+            </div>
+          </template>
+
+          <!-- Prop Override Rule Details -->
+          <template v-else-if="selectedItem.type === 'prop-override' && propOverrideData">
+            <div class="space-y-3">
+              <div>
+                <span class="text-xs text-muted-foreground">{{ t('props.componentName') }}</span>
+                <p class="font-mono text-sm mt-1">{{ propOverrideData.component }}</p>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <span class="text-xs text-muted-foreground">{{ t('props.site') }}</span>
+                  <p class="font-mono text-sm mt-1 break-all">{{ propOverrideData.host }}</p>
+                </div>
+                <div>
+                  <span class="text-xs text-muted-foreground">{{ t('common.status') }}</span>
+                  <p class="text-sm mt-1">{{ propOverrideData.enabled ? t('common.active') : t('details.disabled') }}</p>
+                </div>
+              </div>
+              <div>
+                <span class="text-xs text-muted-foreground">{{ t('props.scope') }}</span>
+                <p class="text-sm mt-1">
+                  {{ propOverrideData.scope === 'all' ? t('props.scopeAll', { name: propOverrideData.component }) : t('props.scopePath') }}
+                </p>
+                <p v-if="propOverrideData.scope === 'path'" class="font-mono text-xs text-muted-foreground mt-1 break-all">
+                  {{ propOverridePathLabel(propOverrideData) }}
+                </p>
+              </div>
+              <div>
+                <span class="text-xs text-muted-foreground">{{ t('props.overrideValues') }}</span>
+                <div class="mt-1 h-56 border rounded-md overflow-hidden">
+                  <JsonEditor
+                    v-if="propOverrideEditMode"
+                    v-model="editedPropOverrideJson"
+                    :editable="true"
+                    :show-copy="true"
+                    :editor="settings.json?.editor ?? 'jsoneditor'"
+                    :mode="settings.json?.mode ?? 'text'"
+                    :full-height="true"
+                    class="h-full"
+                  />
+                  <JsonEditor
+                    v-else
+                    :model-value="propOverrideJson"
+                    :editable="false"
+                    :show-copy="true"
+                    :editor="settings.json?.editor ?? 'jsoneditor'"
+                    :mode="settings.json?.mode ?? 'text'"
+                    :full-height="true"
+                    class="h-full"
+                  />
+                </div>
+                <p v-if="propOverrideJsonError" class="text-xs text-destructive mt-1">{{ propOverrideJsonError }}</p>
+              </div>
+              <div>
+                <span class="text-xs text-muted-foreground">{{ t('common.created') }}</span>
+                <p class="text-sm mt-1">{{ new Date(propOverrideData.timestamp).toLocaleString() }}</p>
               </div>
             </div>
           </template>

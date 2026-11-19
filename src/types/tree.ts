@@ -26,4 +26,8 @@ export interface TreeNodeModel {
     propsCount?: number
     /** Count of props with defined values (passed), for display as passed/declared */
     propsCountPassed?: number
+    /** Prop override rules applied to this instance */
+    overrideRuleIds?: string[]
+    /** Prop keys those rules currently hold */
+    overriddenKeys?: string[]
 }

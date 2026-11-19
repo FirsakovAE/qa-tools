@@ -8,7 +8,8 @@ import {
   SelectViewport,
   useForwardPropsEmits,
 } from 'reka-ui';
-import { SelectScrollDownButton, SelectScrollUpButton } from '.';
+import SelectScrollDownButton from './SelectScrollDownButton.vue';
+import SelectScrollUpButton from './SelectScrollUpButton.vue';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/components/ui/utils';
 

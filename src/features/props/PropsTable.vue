@@ -72,6 +72,7 @@ const emit = defineEmits<{
   (e: 'select', row: PropsRow): void
   (e: 'toggleFavorite', row: PropsRow): void
   (e: 'ignoreByName', row: PropsRow): void
+  (e: 'deleteRule', row: PropsRow): void
 }>()
 
 // ============================================================================
@@ -257,8 +258,11 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                 'props-row-selected': selectedId === row.id,
                 'props-row-clickable': row.hasPropsFlag,
                 'props-row-disabled': !row.hasPropsFlag,
-                'props-row-favorite': row.isFavoriteFlag
+                'props-row-favorite': row.isFavoriteFlag,
+                'props-row-override': !!row.overriddenKeys?.length && selectedId !== row.id,
+                'props-row-override-selected': !!row.overriddenKeys?.length && selectedId === row.id
               }"
+              :title="row.overriddenKeys?.length ? t('props.overrideApplied', { keys: row.overriddenKeys.join(', ') }) : undefined"
               @click="handleRowClick(row)"
               @mouseenter="onRowHover(row, $event)"
             >
@@ -326,6 +330,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
                     :row="row"
                     @toggle-favorite="emit('toggleFavorite', $event)"
                     @ignore-by-name="emit('ignoreByName', $event)"
+                    @delete-rule="emit('deleteRule', $event)"
                   />
                 </DropdownMenu>
               </div>
@@ -336,6 +341,7 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
             :row="row"
             @toggle-favorite="emit('toggleFavorite', $event)"
             @ignore-by-name="emit('ignoreByName', $event)"
+            @delete-rule="emit('deleteRule', $event)"
           />
         </ContextMenu>
       </template>
@@ -442,6 +448,19 @@ function handleToggleFavorite(event: Event, row: PropsRow) {
 
 .props-row-selected {
   background: hsl(var(--muted));
+}
+
+.props-row-override {
+  box-shadow: inset 2px 0 0 hsl(262 83% 58% / 0.5);
+}
+
+.props-row-override-selected {
+  background: hsl(262 83% 58% / 0.1);
+  box-shadow: inset 2px 0 0 hsl(262 83% 58% / 0.5);
+}
+
+.props-row-override-selected:hover {
+  background: hsl(262 83% 58% / 0.2);
 }
 
 /* Star button */

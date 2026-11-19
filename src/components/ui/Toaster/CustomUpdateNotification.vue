@@ -6,9 +6,9 @@
     id: number | string
     title: string
     description: string
-    version: string
-    onPreview: () => void
-    onDismiss: () => void
+    version?: string
+    onPreview?: () => void
+    onDismiss?: () => void
   }
   
   type Props = {
@@ -41,8 +41,9 @@
         </div>
       </div>
   
-      <div class="flex gap-2 ml-4 flex-shrink-0 relative z-10">
+      <div v-if="props.data.onPreview || props.data.onDismiss" class="flex gap-2 ml-4 flex-shrink-0 relative z-10">
         <Button
+          v-if="props.data.onPreview"
           size="xs"
           class="bg-white/10 hover:bg-white/20 border-white/20 text-white"
           @click="props.data.onPreview"
@@ -51,6 +52,7 @@
         </Button>
   
         <Button
+          v-if="props.data.onDismiss"
           size="xs"
           variant="secondary"
           class="bg-black/10 hover:bg-black/20 border-white/20 text-white"

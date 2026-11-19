@@ -617,6 +617,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     sendResponse({
                         displayMode: settings?.displayMode || 'overlay',
                         autoRun: settings?.autoRun || null,
+                        propOverrides: settings?.propOverridesEnabled === false ? [] : (settings?.propOverrides || []),
                     })
                 })
                 .catch((e) => {

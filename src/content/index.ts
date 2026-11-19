@@ -30,6 +30,7 @@ import { setupRuntimeMessageListener } from './handlers'
 import { detectStaticSite } from './static-detection'
 import { injectInspectorUI } from './inspector-ui'
 import { setupDevtoolsBridge } from './devtools-bridge'
+import { PROP_OVERRIDES_SYNC, propOverridesToSync } from '@/utils/propOverrides'
 
 // === GLOBAL GUARD ===
 if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
@@ -155,6 +156,9 @@ if (!(window as any).__VUE_INSPECTOR_CONTENT_LOADED__) {
           }
           if (response?.autoRun) {
             autoRun = response.autoRun
+          }
+          if (Array.isArray(response?.propOverrides)) {
+            window.postMessage({ type: PROP_OVERRIDES_SYNC, rules: propOverridesToSync(response.propOverrides, true) }, '*')
           }
         }
       } catch (error) {

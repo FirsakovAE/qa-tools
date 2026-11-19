@@ -2,6 +2,7 @@
 
 import { resolveComponent } from './find-by-path'
 import { getMetaStore } from './meta-store'
+import { getPropOverrides } from './overrides-engine'
 
 /**
  * Сохраняет тип данных при обновлении значения
@@ -158,11 +159,17 @@ export function updateComponentProps(
     if (key in props && !(key in newProps)) omitted[key] = resolveOmittedPropValue(instance, key)
   }
   newProps = { ...newProps, ...omitted }
+  const overrides = getPropOverrides()
 
   for (const key in newProps) {
     if (!(key in props)) continue
 
     try {
+      if (overrides?.write(instance, key, newProps[key])) {
+        success = true
+        continue
+      }
+
       const oldValue = props[key]
 
       // Для useModel пропсов используем emit вместо прямого присваивания

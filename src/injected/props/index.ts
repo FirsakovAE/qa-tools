@@ -46,6 +46,7 @@ import {
   type SearchScope
 } from './search'
 import { clearPathCache, disposePathCache } from './find-by-path'
+import { bootPropOverrides } from './overrides-engine'
 
 // ============================================================================
 // Module State
@@ -64,6 +65,11 @@ let cleanupRegistered = false
 export function initPropsModule() {
   if (initialized) return
   initialized = true
+  try {
+    bootPropOverrides()
+  } catch (e) {
+    console.error('[injected/props] bootPropOverrides failed:', e)
+  }
   initPropsBridge()
   
   // Initialize visibility-aware scanning
