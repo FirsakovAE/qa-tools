@@ -21,11 +21,10 @@ import { isInFavorites, matchFavoriteIds } from '@/utils/favoritesMatcher'
 import { useComponentsTab } from '@/hooks/useComponentsTab'
 import { ref as createRef } from 'vue'
 import { getPropsFavoriteNodeId, isPropsRowResolvedFavorite } from '../propsFavorites'
-import { upsertPropOverrideRule } from '../propOverrides'
+import { findPropOverrideRule, upsertPropOverrideRule } from '../propOverrides'
 import type { PropOverrideRule } from '@/types/inspector'
 import type { PropOverrideTarget } from '@/injected/props/overrides-engine'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { isExpectedExtensionError } from '@/utils/expectedErrors'
 
 const runtime = useRuntime()
@@ -154,6 +153,7 @@ const rawPropsJson = computed(() => {
 watch(() => props.node.id, () => {
   editedJson.value = json.value.trim()
   isEditing.value = false
+  resetOverrideControls()
 })
 
 watch(json, (newJson) => {
@@ -214,7 +214,9 @@ const propsSizeFormatted = computed(() => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 })
 
-// --- Override rules ("Keep after reload") ---
+// --- Save as: Once (live only), Part (changed props), Full (every current prop) ---
+type PropSaveMode = 'once' | 'part' | 'full'
+
 const liveRow = computed(() => props.allRows.find(r => r.id === props.node.id) ?? props.node)
 const overriddenKeys = computed(() => liveRow.value.overriddenKeys ?? [])
 const appliedRules = computed<PropOverrideRule[]>(() => {
@@ -222,34 +224,60 @@ const appliedRules = computed<PropOverrideRule[]>(() => {
   return (settings.value?.propOverrides ?? []).filter(rule => ids.includes(rule.id))
 })
 
-const keepOverride = ref(false)
+const saveMode = ref<PropSaveMode>('once')
 const overrideScope = ref<PropOverrideRule['scope']>('path')
+
+function ruleSaveMode(rule: PropOverrideRule | undefined): PropSaveMode {
+  if (!rule) return 'once'
+  return rule.mode === 'part' ? 'part' : 'full'
+}
 
 function resetOverrideControls() {
   const rule = appliedRules.value.find(r => r.scope === 'path') ?? appliedRules.value[0]
-  keepOverride.value = !!rule
+  saveMode.value = ruleSaveMode(rule)
   overrideScope.value = rule?.scope ?? 'path'
 }
 
-watch(() => appliedRules.value.map(r => r.id).join(','), resetOverrideControls, { immediate: true })
+watch(
+  () => appliedRules.value.map(r => `${r.id}:${r.mode ?? ''}`).join(','),
+  () => { if (!isEditing.value) resetOverrideControls() },
+  { immediate: true }
+)
 
-function setKeepOverride(value: boolean) {
-  keepOverride.value = value
+function setSaveMode(value: unknown) {
+  if (value === 'once' || value === 'part' || value === 'full') saveMode.value = value
 }
 
-async function deleteAppliedRules() {
-  if (!settings.value || !appliedRules.value.length) return
-  const ids = appliedRules.value.map(r => r.id)
-  settings.value.propOverrides = settings.value.propOverrides.filter(rule => !ids.includes(rule.id))
+/** One element keeps a single rule: drop every other rule currently applied to this row */
+function dropOtherAppliedRules(keepId: string | undefined): boolean {
+  if (!settings.value) return false
+  const drop = appliedRules.value.map(rule => rule.id).filter(id => id !== keepId)
+  if (!drop.length) return false
+  settings.value.propOverrides = settings.value.propOverrides.filter(rule => !drop.includes(rule.id))
+  return true
+}
+
+async function persistOverrideSettings() {
+  if (!settings.value) return
   try {
     const settingsToSave = JSON.parse(JSON.stringify(settings.value))
     await runtime.storage.set('vue-inspector-settings', settingsToSave)
   } catch (error) {
-    console.error('[props/ComponentDetails] delete override rule failed:', error)
+    console.error('[props/ComponentDetails] save override rule failed:', error)
   }
 }
 
-async function saveOverrideRule(edited: Record<string, unknown>) {
+async function deleteAppliedRules() {
+  if (!dropOtherAppliedRules(undefined)) return
+  await persistOverrideSettings()
+}
+
+async function saveOverrideRule(
+  mode: 'part' | 'full',
+  original: Record<string, unknown>,
+  edited: Record<string, unknown>,
+  removedKeys: string[]
+) {
   if (!settings.value) return
   const response = await runtime.sendMessage<{ target?: PropOverrideTarget | null }>({
     type: 'PROP_OVERRIDE_TARGET',
@@ -257,9 +285,11 @@ async function saveOverrideRule(edited: Record<string, unknown>) {
   })
   const target = response?.target
   if (!target) return
-  if (!upsertPropOverrideRule(settings.value, target, overrideScope.value, edited)) return
-  const settingsToSave = JSON.parse(JSON.stringify(settings.value))
-  await runtime.storage.set('vue-inspector-settings', settingsToSave)
+  const wrote = upsertPropOverrideRule(settings.value, target, overrideScope.value, mode, original, edited, removedKeys)
+  const kept = findPropOverrideRule(settings.value.propOverrides, target, overrideScope.value)
+  const dropped = dropOtherAppliedRules(kept?.id)
+  if (!wrote && !dropped) return
+  await persistOverrideSettings()
 }
 
 // --- Actions ---
@@ -304,11 +334,12 @@ async function saveChanges() {
       props.node.jsonProps = JSON.stringify(parsed, null, 2)
       props.node.timestamp = new Date().toISOString()
       editedJson.value = JSON.stringify(parsed, null, 2)
-      if (keepOverride.value) await saveOverrideRule(parsed)
-      else await deleteAppliedRules()
+      if (saveMode.value === 'once') await deleteAppliedRules()
+      else await saveOverrideRule(saveMode.value, original ?? {}, parsed, removedKeys)
     }
     
     isEditing.value = false
+    resetOverrideControls()
   } catch (err) {
     if (!isExpectedExtensionError(err)) {
       console.error('[props/ComponentDetails] saveChanges failed:', err)
@@ -458,19 +489,19 @@ async function saveChanges() {
           </template>
           </div>
           <div class="flex items-center gap-2">
-            <Checkbox
-              id="props-keep-override"
-              :model-value="keepOverride"
-              :disabled="!isEditing"
-              @update:model-value="setKeepOverride(!!$event)"
-            />
-            <Label
-              for="props-keep-override"
-              class="text-xs font-normal whitespace-nowrap"
-              :class="isEditing ? 'cursor-pointer' : 'cursor-default opacity-50'"
-            >
-              {{ t('props.keepOverride') }}
-            </Label>
+            <span class="text-xs whitespace-nowrap" :class="isEditing ? '' : 'opacity-50'">
+              {{ t('props.saveAs') }}
+            </span>
+            <Select :model-value="saveMode" :disabled="!isEditing" @update:model-value="setSaveMode">
+              <SelectTrigger class="h-7 w-[132px] text-xs px-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="once">{{ t('props.saveOnce') }}</SelectItem>
+                <SelectItem value="part">{{ t('props.savePart') }}</SelectItem>
+                <SelectItem value="full">{{ t('props.saveFull') }}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>

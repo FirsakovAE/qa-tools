@@ -18,6 +18,7 @@ import type { PropsRow } from '@/features/props/types'
 import {
   fileMeta,
   MAX_FILE_BYTES,
+  nextPasteIndex,
   readTextFile,
   registerPastedText,
   releaseFile,
@@ -47,8 +48,6 @@ const FILE_ERRORS: Record<TextFileError['reason'], MessageKey> = {
   empty: 'ai.fileEmpty',
   read: 'ai.fileReadFail',
 }
-let pasteCounter = 0
-
 /** Items attached to the question being typed */
 export const aiAttachments = ref<AiAttachment[]>([])
 /** Grows on every Ask AI: the app opens the AI tab */
@@ -104,12 +103,13 @@ export function isLongPaste(text: string): boolean {
 
 /** A long pasted text goes with the question as a file: the model reads it with the file tools */
 export function attachPastedText(text: string): boolean {
+  const n = nextPasteIndex()
   if (new Blob([text]).size > MAX_FILE_BYTES) {
-    toast.error(t('ai.fileTooBig', { name: t('ai.pastedName', { n: pasteCounter + 1 }), max: sizeLabel(MAX_FILE_BYTES) }))
+    toast.error(t('ai.fileTooBig', { name: t('ai.pastedName', { n }), max: sizeLabel(MAX_FILE_BYTES) }))
     return false
   }
   try {
-    attachTextFile(registerPastedText(text, t('ai.pastedName', { n: ++pasteCounter })))
+    attachTextFile(registerPastedText(text, t('ai.pastedName', { n }), n))
     return true
   } catch {
     return false

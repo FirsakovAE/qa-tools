@@ -742,7 +742,7 @@ Sensitive data is masked **when an event is captured**, so it never reaches the 
 * [Export](./export.md)\r
 * [Logs settings](./settings.md)\r
 * [Working with requests](/network/general)\r
-`,y=`---\r
+`,v=`---\r
 title: Logs settings\r
 ---\r
 \r
@@ -853,7 +853,7 @@ Masked values of sensitive keys are replaced with \`[MASKED]\`. Card numbers are
 * [Working with logs](./general.md)\r
 * [Export](./export.md)\r
 * [Settings management](/options/settings_management)\r
-`,b="---\r\ntitle: Advanced capture mode\r\n---\r\n\r\n# Advanced capture mode\r\n\r\nUnder **Options → Network** you can choose the **capture mode** for network traffic:\r\n\r\n| Mode | In the UI | What it means |\r\n| ---- | --------- | -------------- |\r\n| **Classic mode** | Radio **Classic mode**. While it is selected: *Captures standard headers available in the classic (non-extension) view.* | Same limits as in-page interception: headers and bodies are only what page scripts can read (including **CORS** rules for cross-origin). See [Working with requests](./general.md#display-limits). |\r\n| **Advanced mode** | Radio **Advanced mode**. While it is selected: *Captures full header data close to original DevTools output.* | The extension requests **`webRequest`** access and enriches the request details with the **full set** of request and response headers as seen by the browser for the exchange—not only the subset exposed to the page. |\r\n\r\n**Advanced mode** (pinning headers, **Header links**, Advanced-only header visibility options) is available **only in the Chrome / Edge extension**.  \r\n**Standalone** still runs without extended capture: the radios are disabled and the section says *Capture Mode is only available for the browser extension version.* The full header set via **`webRequest`** described below **is not available** there.\r\n\r\n---\r\n\r\n## What Advanced mode adds in the Network tab\r\n\r\n- **Request and response headers** in request details use the extended data (including headers not listed in `Access-Control-Expose-Headers`).\r\n- **Pinning header rows** — a header name can be pinned **to the top of the list** separately for **Request** and **Response**. Commands are in [Advanced headers](#advanced-headers).\r\n- **Header links** — for a given header name and request **Host**, open an external URL using a template; the **`{value}`** placeholder (and optional **value pipeline**) controls how the header text is inserted into the link. See [Header links](#header-links) below.\r\n\r\nThe **Header links** list, **Pinned headers** table, and **Advanced headers** options under **Options → Network** are shown **only when Advanced mode is enabled**, so Classic mode stays uncluttered.\r\n\r\n### Advanced headers {#advanced-headers}\r\n\r\n**Options → Network → Advanced headers** has three checkboxes, all on by default. They control headers that Advanced mode adds on top of what the page can read. A **pinned** name stays in that surface even when the checkbox is off.\r\n\r\n| Checkbox | Effect |\r\n| -------- | ------ |\r\n| **Show in details** | **Headers** on the request card |\r\n| **Include in Copy cURL** | **Copy cURL** |\r\n| **Include in Collection export** | **Export Collection** ([Export Collection](./export.md)) |\r\n\r\nIn Advanced mode the header row menu (right click or **⋮**) is:\r\n\r\n| Command | Effect |\r\n| ------- | ------ |\r\n| **Copy** | Copy the header value. Classic mode has this **Copy** column too, without the rest of the menu. |\r\n| **Pin** / **Unpin** | Pin that name to the top of **Request** or **Response** (**Pinned Request Headers** / **Pinned Response Headers**). |\r\n| **Create link** | No rule yet for this header on this host. The editor replaces the details panel. |\r\n| **Open link**, **Edit link**, **Delete link** | A rule for this header and host already exists. |\r\n\r\n### Pinned headers in Options\r\n\r\nThe table is sorted by header name, then by scope. Columns are **Header** and **Type** (**Request** or **Response**). An empty table says *No pinned headers. Add pins from the Network tab (header row menu).* There is no **Add** control. The only row action is **Delete**. Clicking a row does not open a card. Pins are added from the header row menu on the **Network** tab, described above.\r\n\r\n---\r\n\r\n## Header links\r\n\r\nEach rule defines:\r\n\r\n- **Header** — HTTP header name (matched **case-insensitively**);\r\n- **Host** — host of the request URL (normalized: no scheme or path, e.g. `api.example.com`);\r\n- **Link** — URL template; placeholders are resolved as described in **[Value placeholder and pipeline](#value-placeholder-and-pipelines)**.\r\n\r\nYou can create a rule from the **header row menu** on the **Network** tab (Advanced). In **Options** the **Header links** table groups rules by header name, ignoring case, and sorts those names. Columns are **Header** and **Rules** (how many hosts). An empty table says *No header links. Create one from the Network tab (Advanced) via a header row menu.* There is no **Add** control.\r\n\r\n**Delete** in the row menu removes every rule for that header name at once. A click opens **Header Link Details**: the header name, then **Host** and **Link** for each rule, and **Last updated** when a rule has a time. The pencil turns on editing. The header name stays fixed. **Add Rule** appends a row, **×** removes one row, **Remove all** clears the draft. **Save** keeps only rows that have both a host and a link. The host is lowercased, and a scheme or a path typed into it is stripped (`https://api.example.com/v1` is stored as `api.example.com`). Two rows with the same host: the later one is kept. A row with an empty host or an empty link is dropped. **Cancel** discards the draft. **Enter** in **Host** or **Link** saves. If the group is deleted while the card is open, the card says *This header link was removed.* Placeholders in **Link** are described in **[Value placeholder and pipeline](#value-placeholder-and-pipelines)**.\r\n\r\n### Value placeholder and pipeline {#value-placeholder-and-pipelines}\r\n\r\nInside the **Link** field you can use:\r\n\r\n- **`{value}`** — insert the header value exactly as shown on the request card (same as a pipeline with no steps).\r\n- **`{value|…}`** — run a **pipeline**: after `{value`, list steps separated by **`|`**; apply them **left → right**, then insert the result. Example: `{value|trim|urlencode}`.\r\n\r\nUse a **pipe** `|` between steps. The parser splits the chain at `|` only when the **next** segment starts with a **known operation** (see tables below). That way, a `|` **inside a regex** (e.g. alternation `a|b`) is usually fine, as long as the substring after a candidate split does not look like a new op.\r\n\r\nIf a step is invalid (e.g. bad regex), that step is skipped and the value is left unchanged for that step.\r\n\r\n#### No-argument operations\r\n\r\n| Op | Effect |\r\n| --- | --- |\r\n| `trim` | Trim leading/trailing whitespace. |\r\n| `lower` | Lowercase. |\r\n| `upper` | Uppercase. |\r\n| `urlencode` | `encodeURIComponent`-style encoding for use in URL query parts. |\r\n| `urldecode` | Decode URI component (`+` treated as space). Invalid escapes leave the value unchanged. |\r\n| `base64encode` / `base64decode` | Base64 of UTF-8 bytes. |\r\n| `hexencode` / `hexdecode` | Hex string ↔ UTF-8 bytes (`hexdecode` ignores whitespace). |\r\n| `md5` | MD5 hex digest of UTF-8 input (sync). |\r\n| `sha1` / `sha256` | SHA-1 / SHA-256 hex digest via **Web Crypto** (`crypto.subtle`). Requires a context where SubtleCrypto is available (e.g. **HTTPS** or extension pages); otherwise the digest step yields an empty string. |\r\n\r\n#### Regex and replacement\r\n\r\n| Op | Syntax | Notes |\r\n| --- | --- | --- |\r\n| `regex` | `regex:<pattern>` | `new RegExp(<pattern>)` (no flags in the syntax—add them inside the pattern if your engine supports it). Sets the **last match** for a following `replace`. On no match, the value becomes empty. |\r\n| `replace` | `replace:<template>` | After `replace:`, substitute `$1`, `$2`, … from the **last** `regex` match. If there was no match, result is empty. |\r\n| `replaceRegex` | `replaceRegex:<pattern>:<template>` | **Pattern** and **template** are split at the **last** `:` in the segment—so a `:` inside the pattern is awkward; prefer `regex` + `replace` instead. Uses `String.replace` with a `RegExp`. |\r\n| `match` | `match:<pattern>` | If the value matches, keep it; otherwise replace with empty string. |\r\n\r\n#### Strings and structure\r\n\r\n| Op | Syntax | Notes |\r\n| --- | --- | --- |\r\n| `replaceText` | `replaceText:<from>:<to>` | **From** / **to** use the **last** `:` in the payload as separator between `to` and everything before it (`from` may contain `:`). Global replace of all `from` occurrences. Empty `from` skips the step. |\r\n| `substring` | `substring:<start>` or `substring:<start>:<length>` | Same idea as `String.slice` / `substring`: with two numbers, length is a **character count** from `start`. |\r\n| `split` | `split:<delimiter>:<index>` | **Index** is the part after the **last** `:` (must be digits). **Delimiter** is everything before that `:` (may contain `:`). Empty part if index is out of range. |\r\n\r\n#### Conditions and defaults\r\n\r\n| Op | Syntax | Notes |\r\n| --- | --- | --- |\r\n| `default` | `default:<fallback>` | If the current value is exactly the **empty string** after previous steps, set it to `<fallback>`. To treat whitespace-only as empty, use `trim` first. |\r\n| `ifMatch` | `ifMatch:<pattern>:<ifTrue>:<ifFalse>` | **False** branch is after the **last** `:`; **true** branch is between the **second-to-last** and **last** `:`; **pattern** is everything before the **second-to-last** `:` (so colons inside branches are constrained by this rule). |\r\n\r\n### Examples\r\n\r\n```text\r\nhttps://trace.example.com/?id={value}\r\n```\r\n\r\n```text\r\nhttps://trace.example.com/?id={value|trim|urlencode}\r\n```\r\n\r\n```text\r\nhttps://trace.example.com/?t={value|regex:^Bearer\\s+(.+)$|replace:$1|urlencode}\r\n```\r\n\r\n```text\r\nhttps://trace.example.com/?t={value|default:unknown}\r\n```\r\n\r\nMultiple placeholders in one template are allowed; each `{value...}` block is resolved independently using the **same** header value.\r\n\r\n---\r\n\r\n## Quick recap\r\n\r\n- **Advanced mode** extends headers via **`webRequest`**; **Standalone** does not provide this mode.\r\n- **Classic mode** is the original “page-visible” header model.\r\n- **Pin** — separate for **Request** / **Response** lists. Pinned names stay visible when the Advanced header checkboxes above are off.\r\n- **Header links:** **Host** + **Link** template: **`{value}`** or pipeline **`{value|op|…}`** for the header value.\r\n",v=`---\r
+`,y="---\r\ntitle: Advanced capture mode\r\n---\r\n\r\n# Advanced capture mode\r\n\r\nUnder **Options → Network** you can choose the **capture mode** for network traffic:\r\n\r\n| Mode | In the UI | What it means |\r\n| ---- | --------- | -------------- |\r\n| **Classic mode** | Radio **Classic mode**. While it is selected: *Captures standard headers available in the classic (non-extension) view.* | Same limits as in-page interception: headers and bodies are only what page scripts can read (including **CORS** rules for cross-origin). See [Working with requests](./general.md#display-limits). |\r\n| **Advanced mode** | Radio **Advanced mode**. While it is selected: *Captures full header data close to original DevTools output.* | The extension requests **`webRequest`** access and enriches the request details with the **full set** of request and response headers as seen by the browser for the exchange—not only the subset exposed to the page. |\r\n\r\n**Advanced mode** (pinning headers, **Header links**, Advanced-only header visibility options) is available **only in the Chrome / Edge extension**.  \r\n**Standalone** still runs without extended capture: the radios are disabled and the section says *Capture Mode is only available for the browser extension version.* The full header set via **`webRequest`** described below **is not available** there.\r\n\r\n---\r\n\r\n## What Advanced mode adds in the Network tab\r\n\r\n- **Request and response headers** in request details use the extended data (including headers not listed in `Access-Control-Expose-Headers`).\r\n- **Pinning header rows** — a header name can be pinned **to the top of the list** separately for **Request** and **Response**. Commands are in [Advanced headers](#advanced-headers).\r\n- **Header links** — for a given header name and request **Host**, open an external URL using a template; the **`{value}`** placeholder (and optional **value pipeline**) controls how the header text is inserted into the link. See [Header links](#header-links) below.\r\n\r\nThe **Header links** list, **Pinned headers** table, and **Advanced headers** options under **Options → Network** are shown **only when Advanced mode is enabled**, so Classic mode stays uncluttered.\r\n\r\n### Advanced headers {#advanced-headers}\r\n\r\n**Options → Network → Advanced headers** has three checkboxes, all on by default. They control headers that Advanced mode adds on top of what the page can read. A **pinned** name stays in that surface even when the checkbox is off.\r\n\r\n| Checkbox | Effect |\r\n| -------- | ------ |\r\n| **Show in details** | **Headers** on the request card |\r\n| **Include in Copy cURL** | **Copy cURL** |\r\n| **Include in Collection export** | **Export Collection** ([Export Collection](./export.md)) |\r\n\r\nIn Advanced mode the header row menu (right click or **⋮**) is:\r\n\r\n| Command | Effect |\r\n| ------- | ------ |\r\n| **Copy** | Copy the header value. Classic mode has this **Copy** column too, without the rest of the menu. |\r\n| **Pin** / **Unpin** | Pin that name to the top of **Request** or **Response** (**Pinned Request Headers** / **Pinned Response Headers**). |\r\n| **Create link** | No rule yet for this header on this host. The editor replaces the details panel. |\r\n| **Open link**, **Edit link**, **Delete link** | A rule for this header and host already exists. |\r\n\r\n### Pinned headers in Options\r\n\r\nThe table is sorted by header name, then by scope. Columns are **Header** and **Type** (**Request** or **Response**). An empty table says *No pinned headers. Add pins from the Network tab (header row menu).* There is no **Add** control. The only row action is **Delete**. Clicking a row does not open a card. Pins are added from the header row menu on the **Network** tab, described above.\r\n\r\n---\r\n\r\n## Header links\r\n\r\nEach rule defines:\r\n\r\n- **Header** — HTTP header name (matched **case-insensitively**);\r\n- **Host** — host of the request URL (normalized: no scheme or path, e.g. `api.example.com`);\r\n- **Link** — URL template; placeholders are resolved as described in **[Value placeholder and pipeline](#value-placeholder-and-pipelines)**.\r\n\r\nYou can create a rule from the **header row menu** on the **Network** tab (Advanced). In **Options** the **Header links** table groups rules by header name, ignoring case, and sorts those names. Columns are **Header** and **Rules** (how many hosts). An empty table says *No header links. Create one from the Network tab (Advanced) via a header row menu.* There is no **Add** control.\r\n\r\n**Delete** in the row menu removes every rule for that header name at once. A click opens **Header Link Details**: the header name, then **Host** and **Link** for each rule, and **Last updated** when a rule has a time. The pencil turns on editing. The header name stays fixed. **Add Rule** appends a row, **×** removes one row, **Remove all** clears the draft. **Save** keeps only rows that have both a host and a link. The host is lowercased, and a scheme or a path typed into it is stripped (`https://api.example.com/v1` is stored as `api.example.com`). Two rows with the same host: the later one is kept. A row with an empty host or an empty link is dropped. **Cancel** discards the draft. **Enter** in **Host** or **Link** saves. If the group is deleted while the card is open, the card says *This header link was removed.* Placeholders in **Link** are described in **[Value placeholder and pipeline](#value-placeholder-and-pipelines)**.\r\n\r\n### Value placeholder and pipeline {#value-placeholder-and-pipelines}\r\n\r\nInside the **Link** field you can use:\r\n\r\n- **`{value}`** — insert the header value exactly as shown on the request card (same as a pipeline with no steps).\r\n- **`{value|…}`** — run a **pipeline**: after `{value`, list steps separated by **`|`**; apply them **left → right**, then insert the result. Example: `{value|trim|urlencode}`.\r\n\r\nUse a **pipe** `|` between steps. The parser splits the chain at `|` only when the **next** segment starts with a **known operation** (see tables below). That way, a `|` **inside a regex** (e.g. alternation `a|b`) is usually fine, as long as the substring after a candidate split does not look like a new op.\r\n\r\nIf a step is invalid (e.g. bad regex), that step is skipped and the value is left unchanged for that step.\r\n\r\n#### No-argument operations\r\n\r\n| Op | Effect |\r\n| --- | --- |\r\n| `trim` | Trim leading/trailing whitespace. |\r\n| `lower` | Lowercase. |\r\n| `upper` | Uppercase. |\r\n| `urlencode` | `encodeURIComponent`-style encoding for use in URL query parts. |\r\n| `urldecode` | Decode URI component (`+` treated as space). Invalid escapes leave the value unchanged. |\r\n| `base64encode` / `base64decode` | Base64 of UTF-8 bytes. |\r\n| `hexencode` / `hexdecode` | Hex string ↔ UTF-8 bytes (`hexdecode` ignores whitespace). |\r\n| `md5` | MD5 hex digest of UTF-8 input (sync). |\r\n| `sha1` / `sha256` | SHA-1 / SHA-256 hex digest via **Web Crypto** (`crypto.subtle`). Requires a context where SubtleCrypto is available (e.g. **HTTPS** or extension pages); otherwise the digest step yields an empty string. |\r\n\r\n#### Regex and replacement\r\n\r\n| Op | Syntax | Notes |\r\n| --- | --- | --- |\r\n| `regex` | `regex:<pattern>` | `new RegExp(<pattern>)` (no flags in the syntax—add them inside the pattern if your engine supports it). Sets the **last match** for a following `replace`. On no match, the value becomes empty. |\r\n| `replace` | `replace:<template>` | After `replace:`, substitute `$1`, `$2`, … from the **last** `regex` match. If there was no match, result is empty. |\r\n| `replaceRegex` | `replaceRegex:<pattern>:<template>` | **Pattern** and **template** are split at the **last** `:` in the segment—so a `:` inside the pattern is awkward; prefer `regex` + `replace` instead. Uses `String.replace` with a `RegExp`. |\r\n| `match` | `match:<pattern>` | If the value matches, keep it; otherwise replace with empty string. |\r\n\r\n#### Strings and structure\r\n\r\n| Op | Syntax | Notes |\r\n| --- | --- | --- |\r\n| `replaceText` | `replaceText:<from>:<to>` | **From** / **to** use the **last** `:` in the payload as separator between `to` and everything before it (`from` may contain `:`). Global replace of all `from` occurrences. Empty `from` skips the step. |\r\n| `substring` | `substring:<start>` or `substring:<start>:<length>` | Same idea as `String.slice` / `substring`: with two numbers, length is a **character count** from `start`. |\r\n| `split` | `split:<delimiter>:<index>` | **Index** is the part after the **last** `:` (must be digits). **Delimiter** is everything before that `:` (may contain `:`). Empty part if index is out of range. |\r\n\r\n#### Conditions and defaults\r\n\r\n| Op | Syntax | Notes |\r\n| --- | --- | --- |\r\n| `default` | `default:<fallback>` | If the current value is exactly the **empty string** after previous steps, set it to `<fallback>`. To treat whitespace-only as empty, use `trim` first. |\r\n| `ifMatch` | `ifMatch:<pattern>:<ifTrue>:<ifFalse>` | **False** branch is after the **last** `:`; **true** branch is between the **second-to-last** and **last** `:`; **pattern** is everything before the **second-to-last** `:` (so colons inside branches are constrained by this rule). |\r\n\r\n### Examples\r\n\r\n```text\r\nhttps://trace.example.com/?id={value}\r\n```\r\n\r\n```text\r\nhttps://trace.example.com/?id={value|trim|urlencode}\r\n```\r\n\r\n```text\r\nhttps://trace.example.com/?t={value|regex:^Bearer\\s+(.+)$|replace:$1|urlencode}\r\n```\r\n\r\n```text\r\nhttps://trace.example.com/?t={value|default:unknown}\r\n```\r\n\r\nMultiple placeholders in one template are allowed; each `{value...}` block is resolved independently using the **same** header value.\r\n\r\n---\r\n\r\n## Quick recap\r\n\r\n- **Advanced mode** extends headers via **`webRequest`**; **Standalone** does not provide this mode.\r\n- **Classic mode** is the original “page-visible” header model.\r\n- **Pin** — separate for **Request** / **Response** lists. Pinned names stay visible when the Advanced header checkboxes above are off.\r\n- **Header links:** **Host** + **Link** template: **`{value}`** or pipeline **`{value|op|…}`** for the header value.\r\n",b=`---\r
 title: Export Collection\r
 ---\r
 \r
@@ -1730,7 +1730,7 @@ Choose Advanced when you need **tree navigation**, **history**, **search**, and 
 \r
 - [Customize](/options/customize) — other **General** options (theme, background, saved files).\r
 - [Display modes](/options/display_mode) — how the inspector panel is shown on the page.\r
-`,C=`---\r
+`,P=`---\r
 title: Settings management\r
 ---\r
 \r
@@ -1809,7 +1809,7 @@ Partial Auto Run reset (without full wipe) exists via the extension **popup** �
 * [Installation — storage](/install#storage)\r
 * [Customize](/options/customize)\r
 * [Auto run](/options/auto_run)\r
-`,R=`---\r
+`,C=`---\r
 title: Update settings\r
 ---\r
 \r
@@ -1851,7 +1851,7 @@ A shorter non-empty query does not start a new search. The previous result stays
 \r
 * [Settings management](/options/settings_management)\r
 * [Display modes](/options/display_mode)\r
-`,N=`---\r
+`,R=`---\r
 title: Blacklist\r
 ---\r
 \r
@@ -1950,7 +1950,7 @@ While a **Blocked** rule hides a name, that component is not selectable in the t
 * [Props overview](/props/general)\r
 * [Inspect](/props/inspect)\r
 * [Customize](/options/customize)\r
-`,q=`---\r
+`,N=`---\r
 title: Favorites\r
 ---\r
 \r
@@ -2038,7 +2038,7 @@ Clicking the badge opens **Options → Props → Favorite Components**.\r
 * [Blacklist](/props/blacklist)\r
 * [Customize](/options/customize)\r
 * [Store overview](/store/general) — separate Pinia favorites\r
-`,P=`---\r
+`,q=`---\r
 title: Components and props\r
 ---\r
 \r
@@ -2056,7 +2056,7 @@ The **Props** tab shows the **Vue instance tree** on the page: component names, 
 \r
 The search field supports several modes. Active criteria come from **Search by** next to the input. The same checkboxes are the first block on **Options → Props**, under **Search Settings**: **Search by component name**, **Search by root element**, **Search by key**, **Search by value**. Defaults: name and root element on; key and value off. A change applies to the open Props list immediately.\r
 \r
-On **Options → Props** the blocks follow in this order: **Search Settings**, **Inspect Mode**, **Component Blacklist**, **Favorite Components**, **Prop rules**. Inspect, the blacklist, and favorites are described on their own pages; prop rules are in [Keep after reload](#keep-after-reload).\r
+On **Options → Props** the blocks follow in this order: **Search Settings**, **Inspect Mode**, **Component Blacklist**, **Favorite Components**, **Prop rules**. Inspect, the blacklist, and favorites are described on their own pages; prop rules are in [Save as](#save-as).\r
 \r
 | Mode      | What the list uses                                                                                          |\r
 | --------- | ----------------------------------------------------------------------------------------------------------- |\r
@@ -2104,9 +2104,9 @@ A row with no received props is dimmed, shows **—** in **Received** and **Decl
 \r
 Hover highlights the page node only when the row has a DOM element. A \`Logic only\` row clears the highlight. Favorite rows do not take the hover background. Search clears the highlight.\r
 \r
-A row with a purple bar on the left gets values from a [prop rule](#keep-after-reload); the tooltip lists the props the rule holds. The selected row of such a component has a purple background, like a mocked request on **Network**.\r
+A row with a purple bar on the left gets values from a [prop rule](#save-as); the tooltip lists the props the rule holds. The selected row of such a component has a purple background, like a mocked request on **Network**.\r
 \r
-The row menu is **Ask AI**, **Add favorite** / **Remove favorite**, **Delete rule** (only on rows with a [prop rule](#keep-after-reload)), and **Ignore by name**. The star on the row does the same favorite toggle. See [Favorites](/props/favorite) and [Blacklist](/props/blacklist).\r
+The row menu is **Ask AI**, **Add favorite** / **Remove favorite**, **Delete rule** (only on rows with a [prop rule](#save-as)), and **Ignore by name**. The star on the row does the same favorite toggle. See [Favorites](/props/favorite) and [Blacklist](/props/blacklist).\r
 \r
 **Ask AI** in the row menu attaches the current props of the component to a question for the assistant. The **AI** tab opens with a chip above the input, for example *OrderCard props*: **×** removes it from the question. Type a question, or send the chip without one. Values are masked by the AI settings and cut; with **Values of store state, props, emits and actions** off, the assistant gets only names and types. The item is disabled for a component without props.\r
 \r
@@ -2153,13 +2153,13 @@ The editor supports **copying** the contents.\r
 | **Refresh** | re-fetch the selected component from the page; temporarily disabled while a refresh runs; **hidden** in **Edit** mode                  |\r
 | **Edit**    | enter edit mode; **only on the Received** tab                                                                                          |\r
 \r
-Button order in the header (view mode): **Star → Refresh → Edit**. The **Keep after reload** checkbox sits under them.\r
+Button order in the header (view mode): **Star → Refresh → Edit**. **Save as** sits under them.\r
 \r
 ### Edit mode\r
 \r
 **Edit** applies **only** to the **Received** tab.\r
 \r
-When editing, **Refresh** and **Edit** become **Cancel** and **Save**. **Star** stays available, and so does **Keep after reload** under the buttons; see [Keep after reload](#keep-after-reload).\r
+When editing, **Refresh** and **Edit** become **Cancel** and **Save**. **Star** stays available, and so does **Save as** under the buttons; see [Save as](#save-as).\r
 \r
 | Before editing | In edit mode                                                                 |\r
 | -------------- | ----------------------------------------------------------------------------- |\r
@@ -2178,21 +2178,22 @@ When editing, **Refresh** and **Edit** become **Cancel** and **Save**. **Star** 
 \r
 Keys deleted inside an object prop are removed from the object. This lets you check how a component behaves when optional data is missing. After saving, the card shows the edited JSON; use **Refresh** to see the resolved values.\r
 \r
-### Keep after reload\r
+### Save as\r
 \r
-A plain **Save** changes the live component only: a reload, or the component being created again (a dialog reopened, a route revisited), brings back the values from the parent. To keep the edit, check **Keep after reload** under the header buttons before **Save**. The current props become a **prop rule**, and the component gets those values as soon as it is created, before its \`setup()\` and first render. Code that copies a prop into local state on creation sees the rule value too.\r
+**Save as**, under the header buttons, chooses what **Save** keeps. A component has one value here. The list is disabled in view mode and can be changed only while editing. **Cancel** restores the value the component had when editing started.\r
 \r
-The rule applies to components with this name at the same route of parent components (for example \`App › Layout › OrderCard\`). Identical siblings at that route, such as list items, all match.\r
+* **Once** — the basic mode. **Save** changes the live component only. A reload, or the component being created again, brings back the values from the parent. If the component already has a rule, **Save** deletes it.\r
+* **Part** — the rule stores only the props changed in this edit. Saving again adds or updates those props in the same rule. A key deleted from the JSON is removed from the rule. With no change and no existing Part rule, nothing is stored.\r
+* **Full** — the rule stores every current prop. Saving again replaces the rule with the props in the JSON at that moment.\r
+\r
+A rule applies to components with this name at the same route of parent components (for example \`App › Layout › OrderCard\`). Identical siblings at that route, such as list items, all match. The component gets the rule values as soon as it is created, before its \`setup()\` and first render. Code that copies a prop into local state on creation sees the rule value too.\r
 \r
 What the rule stores:\r
 \r
-* every current prop, as a full snapshot, whether or not the JSON was edited before **Save**. Saving again with the checkbox on replaces the rule with the props in the JSON at that moment; a key deleted from the JSON is no longer in the rule;\r
 * the site (\`host\`) where it was saved. Other sites ignore it;\r
 * values as JSON, so functions and other non-JSON values cannot be kept.\r
 \r
-While a rule applies, the parent's value is set aside: updates from the parent do not overwrite the rule value. Disabling or deleting the rule gives the component the parent's current value back at once, without a reload. A plain **Save** on a prop held by a rule changes the value on that instance only; the rule stays as it was.\r
-\r
-The checkbox is checked when the component has a rule. It can be changed only in edit mode; in view mode it is disabled. Unchecking it and pressing **Save** deletes the rule, **Cancel** keeps it. **Delete rule** in the row menu deletes the rule at once.\r
+While a rule applies, the parent's value is set aside: updates from the parent do not overwrite the rule value. Disabling or deleting the rule gives the component the parent's current value back at once, without a reload. Opening a component that has a rule shows **Part** or **Full** in **Save as**. A rule saved before these two values existed is shown as **Full**. **Delete rule** in the row menu deletes the rule at once.\r
 \r
 **Options → Props → Prop rules** lists the rules after **Favorite Components**: component, site and route, the props it holds, and status. The row menu has **Edit**, **Enable** / **Disable**, **Delete**; **Edit** opens the values as JSON in the details panel. **Apply rules** next to the title turns all rules off without deleting them.\r
 \r
@@ -2342,6 +2343,542 @@ More: [Favorites](/props/favorite), [Blacklist](/props/blacklist).\r
 * [Props overview](/props/general)\r
 * [Favorites](/props/favorite)\r
 * [Blacklist](/props/blacklist)\r
+`,W=`---\r
+title: Release history\r
+---\r
+\r
+# Release history\r
+\r
+## [2.0.0] - 2026-01-23\r
+\r
+### Core\r
+\r
+* Corporate-friendly build that does not require installation.\r
+* Version tracking and notifications for new updates.\r
+* Project moved to an **iframe** entry; **popup** is no longer the primary entry point.\r
+\r
+---\r
+\r
+### Performance\r
+\r
+* Fixed a memory spike on static sites, including Docusaurus and Hugo.\r
+\r
+---\r
+\r
+### UI / UX\r
+\r
+* Refreshed styles and overall visual design.\r
+\r
+## [2.1.0] - 2026-02-02\r
+\r
+### Core\r
+\r
+* New **Network** management tab.\r
+* Redesign for **iframe** layout instead of **popup** — more useful space on screen.\r
+* JSON layout tweaks — editor uses full app height.\r
+* Fixed tabs sticking when opening early — **Props** and **Pinia** no longer require a full page reload to appear.\r
+\r
+---\r
+\r
+### Props\r
+\r
+* Fixed favorites not resolving after reload or repeated flows.\r
+* Optimized Props for long sessions without excessive CPU; internal refactor.\r
+* Props tab overhaul — better behavior with large trees and hover search.\r
+* Removed **Props only** mode.\r
+\r
+---\r
+\r
+### Network\r
+\r
+* Intercepts **fetch** and **XMLHttpRequest** except **OPTIONS** and extension-originated calls.\r
+* Summary columns: status, method, name, duration, size.\r
+* Detailed view: params, auth, headers, request, response — only CORS-exposed headers where applicable.\r
+* Pause/resume capture; recording on by default on first open.\r
+* **Breakpoint** — pause and edit outbound requests before send.\r
+* **Mock Response** — intercept and return a synthetic response.\r
+* Quick copy of URLs, tokens, and key fields.\r
+* Clear all captured requests.\r
+* Event-driven architecture without polling for lower CPU.\r
+* Binary detection — textual preview suppressed with metadata only.\r
+\r
+## [2.2.0] - 2026-02-24\r
+\r
+### Core\r
+\r
+* **Display Mode** — move the app into a **DevTools** tab or disable pure overlay.\r
+* **Options** reorganized into logical sections.\r
+* **Props**, **Pinia Store**, and **Network** filters editable inline without jumping to Options.\r
+* Fixed JSON text-mode click target area.\r
+* Large JSON no longer truncates — heavy CSS disabled for performance.\r
+* Update notifications revised:\r
+\r
+  * **Dismiss** → **Later**;\r
+  * **Download** → **Preview** pointing to **Options → About**;\r
+  * detail block with **Ignore** and **Download**.\r
+\r
+---\r
+\r
+### Props\r
+\r
+* Fixed missing Props hover highlight in **Standalone**.\r
+\r
+---\r
+\r
+### Network\r
+\r
+* **form-data** support for reading and traffic substitution.\r
+* Saved files for reuse with **Breakpoint** / **form-data**.\r
+* **Rewrite Breakpoint** / **Rewrite Mock** — overwrite existing rules instead of duplicating.\r
+* Badges for active **Breakpoint** / **Mock** per request; click opens matching Options.\r
+* Search by HTTP status code.\r
+* **Breakpoint** rules consider HTTP method.\r
+* Fixed inspector not opening when a **breakpoint** fired.\r
+* Context menu entries: **Disable/Enable Breakpoint**, **Disable/Enable Mock**, **Delete Breakpoint/Mock** (shown when applicable).\r
+\r
+---\r
+\r
+### Options\r
+\r
+#### General\r
+\r
+* Core settings (**Display Mode**, **Search Parameters**, **Auto Refresh**, **JSON Editor Mode**) grouped together.\r
+* **Settings Management** moved from the tab header.\r
+\r
+#### Network\r
+\r
+* **Search Settings** split into their own section and decoupled.\r
+* **Breakpoints** / **Mocks** table layout fixes — rows no longer over-stretch.\r
+* Toggle and edit existing rules.\r
+\r
+#### Props\r
+\r
+* Settings file controls moved into the section.\r
+* **Component Blacklist** moved here from the general block.\r
+* **Favorite Components** moved here from the general block.\r
+\r
+#### Pinia Store\r
+\r
+* Settings file controls moved into the section.\r
+\r
+#### About\r
+\r
+* **Release notes** and **Check for updates** (extension only).\r
+* When an update exists:\r
+\r
+  * **Ignore** silences this version until a newer one ships;\r
+  * **Download** fetches the app archive.\r
+\r
+## [2.3.0] - 2026-03-16\r
+\r
+### Network\r
+\r
+* **Postman** collection export from captured **Network** traffic.\r
+* Single-panel mode: **Copy cURL** replaced with a header context menu — **Breakpoint**, **Mock**, **Copy cURL**.\r
+* Right-click context menu on request detail header.\r
+\r
+---\r
+\r
+### Props\r
+\r
+* Favorites and blacklist behavior fixes.\r
+* Blacklist applied during collection traversal (not only table filtering) — faster Props load.\r
+* Quick actions menu for **Props**.\r
+* Refresh open component in read mode.\r
+* Shortcut jump to favorites from the favorites counter.\r
+\r
+---\r
+\r
+### Store\r
+\r
+* Pinia **favorites** with shortcut navigation.\r
+* Quick actions menu for **Pinia Store**.\r
+* Refresh open entry in read mode.\r
+* **Options** supports manual favorite entries with **wildcards**.\r
+\r
+---\r
+\r
+### Options\r
+\r
+* User files now persist as local copies in app storage.\r
+* **Standalone** uses dedicated local storage — settings survive relaunch and work across sites.\r
+* Tree JSON editor temporarily disabled — text mode only.\r
+\r
+#### Customize\r
+\r
+**Options → General → Customize** adds theming:\r
+\r
+* **Dark / Light** color scheme;\r
+* **Image** background (**File / Link**) with stills, **GIF**, **MP4**;\r
+* **Browse** or pick from saved files;\r
+* Add by URL;\r
+* **Image Opacity**, **Blur**, **Noise Intensity / Opacity**, **Position (X / Y)**, **Scale** (**100–200%**).\r
+\r
+---\r
+\r
+### UI / UX\r
+\r
+* Responsive layout for smaller screens.\r
+* Wide layout: split list + details.\r
+* ~**1000px** width collapses to single-panel.\r
+* **Esc** closes panels/dialogs.\r
+* **Ctrl+F** search in **DevTools** tab mode.\r
+* Loading skeletons for **Props** / **Pinia** tables instead of raw “Not found”.\r
+* Column visibility toggles for **Props**, **Pinia**, **Network**.\r
+* Chevron redesign for iframe open/close.\r
+* Table context menus (right-click).\r
+\r
+---\r
+\r
+### Performance\r
+\r
+* Blacklist applied during Props tree pre-walk — faster data collection and tab load.\r
+\r
+---\r
+\r
+### Fixes\r
+\r
+* JSON edit hit area while scrolling.\r
+* **Network** tab freezes after long sessions.\r
+* **Ctrl+A** selects only the focused input.\r
+* Reset/delete buttons respect **disabled** state.\r
+* **Options** tables with many rows.\r
+* JSON edit mode styling.\r
+* Minor cosmetic fixes.\r
+\r
+## [2.4.0] - 2026-04-05\r
+\r
+### Network\r
+\r
+* When **Pause** is enabled, inspector interceptors are detached, so native DevTools display the **original initiator** instead of **injected.ts**.\r
+* The **Network** table now uses virtualization for better performance and reduced UI freezes.\r
+* The request details view now opens on the **Response** tab by default.\r
+* When a **Breakpoint** is triggered, the paused method automatically opens on the **Request** tab.\r
+* **Search by** lists on the **Network** tab and in **Options** now support searching by the **Name** column.\r
+\r
+---\r
+\r
+### Props\r
+\r
+* **Props** performance has been significantly improved, making **auto refresh** safe to use.\r
+\r
+* In the **Props** table, the **Props** column has been split into **Passed** and **Declared** (all columns can be hidden):\r
+\r
+  * **Passed** — number of props currently received;\r
+  * **Declared** — number of props declared on the component.\r
+\r
+* In the right-side **Props details** panel, data is now split into two tabs:\r
+\r
+  * **Passed** — props currently received (opened by default);\r
+  * **Declared** — all props declared by the component.\r
+\r
+* The **Props details** panel now includes a **Size** parameter.\r
+\r
+#### Inspect (Props Inspector)\r
+\r
+* Added page element selection mode similar to **Chrome DevTools Elements**.\r
+* Allows selecting elements directly on the page for quick **Props** filtering.\r
+* Highlights **Vue** components on hover.\r
+* Displays quick element info: **Name**, **Root element**, **Received Props**, **Nested components**.\r
+* After selection, **Props** displays only the selected element and its nested components.\r
+* The filter can be quickly cleared via the **Filtered** badge.\r
+\r
+---\r
+\r
+### UI / UX\r
+\r
+#### Windowed mode\r
+\r
+* Added support for windowed mode with saved position for both launch modes.\r
+* Updated the iframe open chevron with a drag indicator.\r
+* Added support for docking the launcher to any of the four browser edges with automatic vertical stretching.\r
+\r
+#### Auto launch settings\r
+\r
+* Added **Whitelist** for automatic app launch and **Blacklist** for excluded sites where launch and launcher display are disabled.\r
+* Added extension **popup** with quick actions:\r
+\r
+  * **Forced Launch** — launches the app ignoring whitelist, blacklist, and static-site restrictions;\r
+  * **Reset Settings** — resets all extension settings.\r
+\r
+#### Other UI improvements\r
+\r
+* Fixed **JSON** styling for large data volumes.\r
+* Added exact search when entering values in quotes; without quotes, search works in **like** mode.\r
+* Minor visual interface improvements.\r
+* Improved **Esc** behavior in **DevTools** mode: first closes nested tabs, and when nothing else remains, opens the **DevTools Console**.\r
+\r
+---\r
+\r
+### Performance\r
+\r
+* Improved **Props** and **Store** detection mechanism for significantly faster data retrieval.\r
+* Increased limits for maximum readable **Props** count.\r
+* Refactored internal project structure: removed unused modules, dead code, and duplicated logic.\r
+\r
+---\r
+\r
+### Documentation\r
+\r
+* Full project documentation has been added.\r
+* Added a **Documentation** section to the landing page.\r
+* Added quick documentation access via **Options → About**.\r
+\r
+---\r
+\r
+### Fixes\r
+\r
+* Blocked native right-click menu inside the application context menu.\r
+• Fixed incorrect favorite detection in Props details when names matched.\r
+* Improved search behavior in **DevTools mode**: fixed cases where search could stop working and added highlight reset when clearing the field or closing search.\r
+* Fixed an issue when saving changes to **Getters** in **Pinia Store**.\r
+* Fixed an issue with retrieving **Props** data in **Vue** during local development.\r
+* Fixed **Network** issues during local development.\r
+\r
+## [2.5.0] - 2026-05-17\r
+\r
+### Network\r
+\r
+* Network header sections can be **collapsed** and **expanded**.\r
+* The app **remembers the last details tab** you used; when you open another request, it opens on the **same tab** you had selected while viewing the previous request.\r
+\r
+**Global suspend for Breakpoint and Mock**\r
+\r
+On the **Network** toolbar (right side, next to log recording controls), two buttons were added: **suspend / resume all breakpoint rules** (pause-in-circle icon; active — **amber** accent) and **suspend / resume all mock responses** (shuffle icon; active — **purple** accent). Rules are **not** removed from **Options → Network**; when turned off, that interception type is **not** applied on the page. The same flags are controlled by **Enable breakpoint rules** and **Enable mock responses** next to the lists in **Options**; the toolbar and **Options** stay in sync. **bp** and **mock** badges use a **muted** style when global rule application is disabled.\r
+\r
+**Network capture: Advanced mode**\r
+\r
+**Network** settings include **Advanced mode**: the extension requests additional permissions and collects the **full** request and response header set (including headers not always visible in the regular DevTools **Network** tab because of page limitations). **Classic mode** still shows only headers available in the standard “classic” view without bypassing those limitations.\r
+\r
+**Standalone**\r
+\r
+Advanced capture and related features are **not available in Standalone**: only the classic flow runs there, without extended headers and without Advanced-only menus and settings.\r
+\r
+**What Advanced mode adds in Network**\r
+\r
+* **Extra headers** in the Request / Response areas on the selected request’s Headers tab.\r
+* **Pinned headers** — pin names to the top of the list separately for **request** and **response**; edit pins in settings (Advanced only).\r
+* **Header links** — per host and URL template, open an external resource with the header value substituted (e.g. traces, ID lookup, internal dashboards). Manage rules in **Network** settings and from the header row context menu (when Advanced).\r
+* **Header links** and **Pinned headers** in **Options** are shown **only when Advanced mode is enabled** so Classic mode stays uncluttered.\r
+\r
+---\r
+\r
+### UI / UX\r
+\r
+**JSON Mode (**Options → General**)**\r
+\r
+**Options → General** now includes a **JSON Mode** switch with two options:\r
+\r
+* **Classic** — built-in text editor with Prism syntax highlighting (**JsonTextEditor**): a single text view with no tree, tuned for large payloads (reduced highlighting on very long JSON and a lightweight viewer for large non-JSON read-only bodies).\r
+* **Advanced** — **vanilla-jsoneditor**: two views of the same JSON — **Text** (code) and **Tree** (structure); switch from the toolbar; the last selected mode (**Text** / **Tree**) is **saved** in settings (**json.mode**). Advanced provides **Format** / **Compact** (where editing is allowed), **Undo / Redo**, **search**, copy; in tree mode — expand/collapse, path navigation, context menus, and sort/edit flows built on the tree.\r
+\r
+The **Classic / Advanced** choice selects the JSON implementation across the UI (**Network** and **Mock** bodies, **Pinia** snapshots, JSON on **Props**, etc.). Non-JSON content still uses text view with highlighting where supported.\r
+\r
+## [2.6.0] - 2026-10-17\r
+\r
+### Logs\r
+\r
+A new **Logs** tab: one chronological journal of page events. Available in the extension and in **Bookmark** (Standalone) mode, always placed after **Pinia Store**.\r
+\r
+#### Event types\r
+\r
+* **Send request** / **Receive response** — \`fetch\` / \`XMLHttpRequest\` requests and responses with parameters, headers, body, status, duration and size.\r
+* **WebSocket open** / **WebSocket sent** / **WebSocket received** / **WebSocket closed** — opening and closing connections, sent and received messages, headers, duration and the close reason.\r
+* **Change props** — component prop changes with a **Before** / **After** comparison.\r
+* **Emit** — component events, arguments, listener type and the parent chain.\r
+* **Change store** — Pinia state changes with a **Before** / **After** comparison. An existing store keeps an initial snapshot; a new store keeps its full state at creation.\r
+* **Store action** — arguments, result or error, status and duration of Pinia actions.\r
+* **Navigation** — SPA navigation with **From** / **To**. The current page is saved when recording starts and after **Clear**.\r
+* **JS error** — uncaught errors, unhandled promise rejections and page \`console.error\` calls. The message, source, location and stack are shown. Messages of Vue Inspector itself and of other browser extensions are not recorded.\r
+\r
+#### Table and details\r
+\r
+* Columns **Time**, **Type**, **Event**, with highlighting for errors and failed requests: **4xx** is a warning, **5xx** and errors are a critical status.\r
+* Filter by event type and search by names, keys and values. Search modes are set in **Options → Logs → Search Settings**; a quoted query matches exactly.\r
+* **Pause** stops recording, **Clear** empties the journal. Events are collected from the moment the inspector starts, even if the **Logs** tab is opened later.\r
+* Details depend on the event type and include the relevant data: request parameters, headers, JSON, WebSocket messages, event arguments and state snapshots.\r
+* Prop and Pinia changes include a **diff** of added, removed and changed paths.\r
+* Actions menu: **Export event**, **Copy cURL**, jump to the paired request or response, **Ignore** to stop recording the selected group of events.\r
+\r
+#### Selection and export\r
+\r
+* Select events with checkboxes, **Shift + click** for a range, **Ctrl / Cmd + click** to toggle individual rows.\r
+* **Export Logs (n)** exports the selected events. With nothing selected, every event that matches the current filters is exported.\r
+* Requests and responses are always exported together.\r
+* **Export Logs** and a single-event export create a self-contained HTML report, format version 1, that opens offline.\r
+* Pinia changes in the report keep the data needed to view **Before** / **After**, even when earlier events were not exported.\r
+\r
+### HTML report\r
+\r
+A self-contained HTML report with a dark theme and no external resources.\r
+\r
+* Sections **Report**, **Network**, **WebSocket**, **Components**, **Pinia**, **Page** with event counters.\r
+* **Overview** summary, and **Events**, **Errors** and **Failed requests** cards that open the matching events.\r
+* Search by titles and inside data (**in data**).\r
+* Keyboard navigation (**↑ / ↓**, **Esc**) and direct links to events.\r
+* Details with the same tabs as **Logs**, and a jump between a request and its response.\r
+* **Locate** opens the event list and brings the selected event into view.\r
+* A **Support Vue Inspector** section with links to Boosty and a USDT donation over Tron (TRC-20).\r
+\r
+### Network\r
+\r
+* Select requests with checkboxes and export only the selected rows with **Export Collection (n)**.\r
+* **bp** and **mock** counts open the list of active rules. **Pause** suspends a rule, **×** deletes it.\r
+* On a narrow panel, saving a **Breakpoint** / **Mock** or leaving the form with the back button closes the request details. On a wide panel they stay open.\r
+* After a request or response is edited at a **Breakpoint**, the data that was actually sent is shown.\r
+* WebSocket connections are listed as separate **WS** rows, including ones already open when the inspector starts.\r
+* **Headers** shows the handshake headers, **Messages** shows sent and received frames, newest first. JSON is formatted; direction and size are shown.\r
+* The latest 200 messages of a connection are kept. WebSocket is not included in **Export Collection**; **Breakpoint** and **Mock** stay available for HTTP.\r
+* **Logs** and the HTML report record WebSocket events separately: **open**, **sent**, **received**, **closed**.\r
+* A recognized Centrifuge close, for example **3501**, shows the reason and **No automatic reconnect**. Sending \`{}\` on that connection shows a warning that the socket may close.\r
+* Binary responses show a notice with the content type; in the HTML report it uses the same styling as the truncated-data warning.\r
+\r
+### Props / Pinia Store\r
+\r
+Saving removed keys in **Edit** mode is fixed.\r
+\r
+* **Pinia** — nested keys are deleted from the store; removing top-level keys is handled for both options stores and setup stores.\r
+* **Props** — a removed prop gets the value Vue uses for a prop that is not passed: its **default**, \`false\` for **Boolean**, otherwise \`undefined\`. Nested keys of object props are deleted.\r
+\r
+### Options → Logs\r
+\r
+* **Search Settings** — default search modes.\r
+* **Ignore list** — ignored event groups, with **Log again** and **Log all again**.\r
+* **Logs and limits** — turn event types on and off, memory budget, event size limit and the **Used X of Y** indicator.\r
+* **Data masking** — masking of sensitive data, patterns and the key list.\r
+\r
+#### Data storage and limits\r
+\r
+* Sensitive data is masked when an event is recorded, by keys and by value patterns, including JWT, **Bearer** / **Basic** and card numbers.\r
+* The default memory budget is **20 MB**. When the limit is reached, older events are dropped.\r
+* Pinia change history is compacted into a **Store checkpoint**, so the remaining changes can still be viewed.\r
+* Repeated values are stored once and restored in full in the UI and in the HTML report.\r
+* Events are stored whole by default. An optional event size limit of **512 KB** limits the volume by dropping large parts of events and truncating network bodies.\r
+\r
+### UI / UX\r
+\r
+* **Options** has a **Support Vue Inspector** section with links to Boosty and a USDT donation over Tron (TRC-20).\r
+* Filter dropdowns use the UI kit scrollbar instead of the browser scrollbar.\r
+* The favorites column in **Pinia** is aligned with the columns in **Props**, **Network** and **Logs**.\r
+\r
+### Fixes\r
+\r
+* Fixed the inspector failing to start when page global names clashed with names in the injected scripts.\r
+* Fixed **Breakpoint** with relative request and response URLs.\r
+* Fixed the display of the request and response data that was actually sent after a **Breakpoint** edit.\r
+* Fixed applying edited \`XMLHttpRequest\` headers when the URL and method did not change.\r
+* Fixed resolving relative URLs that were edited at a **Breakpoint**.\r
+* Fixed saving removed keys when editing **Pinia** and **Props**.\r
+\r
+## [2.7.0] - 2026-11-18\r
+\r
+### AI assistant\r
+\r
+A new **AI** tab, after **Logs**. Describe the problem: the assistant explains what went wrong, the likely cause, the evidence and how to fix it. The same chat works in the extension and in **Bookmark** mode.\r
+\r
+**What you can ask**\r
+\r
+* Why a request failed, where an error comes from, or what changed after a navigation. The assistant starts from the captured logs and reads the page code when the logs are not enough. With source maps, the answer points at the original Vue file.\r
+* Why a button is disabled, an element is hidden or a message appears — also when the logs recorded nothing. It checks the live page: the component, the current props and store state, and the conditions in the code.\r
+* Where a value sits in the logged data: find it, list the matching rows or count them (for example filters that are visible by default, or rows with no price).\r
+* How to reproduce the session: the clicks, in order, as a scenario.\r
+* How Vue Inspector itself works: where a setting is and what a feature does.\r
+\r
+**Ask AI** on a row in **Network**, **Props**, **Pinia** or **Logs** attaches that item to the question. Several items can be attached. An event id in the answer opens that event on **Logs**.\r
+\r
+**Files**\r
+\r
+**+** next to the field attaches a **Text file** (TXT, LOG, JSON, HAR, MD, CSV, PDF) or a **Vue inspector Log**. Files can also be dropped on the field or pasted into it, up to 64 MB each. A long paste, over 4000 characters or 60 lines, becomes a **Pasted text** chip and is handled like a file.\r
+\r
+A text file goes with the question it was attached to. The assistant can read it again in later questions of the same chat, and **New chat** drops it. An exported log stays pinned to the chat: the logs digest and the logs tools read it instead of the live capture until **New chat**.\r
+\r
+A small file goes to the assistant whole. A bigger file is not sent: the assistant gets an overview and tools to search the file, read parts of it and query JSON or HAR by path. The first step of the answer says **(overview; content read with file tools)**. For a PDF only the text layer is read; scanned pages and password-protected files are refused.\r
+\r
+The answer appears as it is written. Stopping keeps the text written so far; reasoning stays on one line until you expand it. Under the answer: which model answered, how many requests it took, tokens and time. A follow-up sends only the events captured since the last answer.\r
+\r
+**Connection and models**\r
+\r
+**Options → AI → Connection** takes a free API key of **Gemini** (Google AI Studio) or **OpenRouter**. **Your own providers** adds OpenAI, DeepSeek, Ollama, LM Studio or any OpenAI-compatible server or agent, with an optional API key. The key stays in this browser: it is not part of settings export, and **Reset** does not remove it.\r
+\r
+The model list starts with **Auto**. Auto picks an available model and moves to the next when one runs out of quota, cannot be used with the key, or is overloaded, and it remembers that until the quota resets, the key changes, or the model is free again. A model you pick yourself is always the one used. When it fails, the answer says why and offers **Switch to Auto and try again**. The line under the message field shows today's requests and how many models Auto is skipping.\r
+\r
+**Options → AI → Models** lists the recommended models and the ones you add, free and paid. Uncheck a model to hide it from the tab and from **Auto**. Each row shows today's requests and, when it applies, that the quota is used up, the key cannot use it, or it is busy. Models whose providers are down are hidden; models that fail often are marked **unstable**.\r
+\r
+**How answers are written**\r
+\r
+**Options → AI → Personalization**:\r
+\r
+* **Base style and tone** — **Default**, **Professional**, **Friendly**, **Direct** or **Mentor**.\r
+* **Answer detail** — **Brief** (cause, evidence and the fix), **Normal**, or **Detailed** (the chain of events, ruled-out causes, steps to reproduce).\r
+* **Instruction routing** — **Full** sends every task instruction with each request, for strong models. **Lite** sends the core rules and loads the instructions of the current task.\r
+* **Your style instructions** — your own text, up to 2000 characters. For example: answer in Russian, end with a checklist for the bug report.\r
+\r
+**What may be sent**\r
+\r
+Before the first question the tab shows what goes to the provider. **I understand** confirms it. **Review access** opens **Agent access**.\r
+\r
+**Options → AI → Agent access** sets what the assistant may read and send:\r
+\r
+* **Attach the logs digest** — a short summary of errors and the timeline. On by default; off, the question goes out without it.\r
+* **Logs**, **Page code** and **Live page** — each is **Allowed**, **Ask each time** or **Off**. **Off** means that group is not offered. **Ask each time** (the default) shows the call and waits for **Allow**, **Allow in this chat** or **Deny**.\r
+* **Request and response headers**, **bodies and WebSocket messages**, and **values of store state, props, emits and actions** — each **Allowed** or **Off**. Off, names and types stay, values do not. Headers are the ones the page itself can see.\r
+\r
+The first step of an answer says what was sent, which access is in force and how many values were masked.\r
+\r
+**Options → AI → Data masking for AI** is a separate list from **Logs**. Passwords, tokens, API keys, cookies, sessions and token-like values (JWT, Bearer, card numbers) are sent as \`[MASKED]\`, including values found in page code. The **Logs** view and its exports stay as they are.\r
+\r
+---\r
+\r
+### Props\r
+\r
+**Save as**, under the buttons of a component card, chooses what **Save** keeps. **Once** changes the live component only and removes a rule it already has. **Part** stores just the props changed in this edit. **Full** stores every current prop. A component has one of these. After a reload, or when the component is created again, a Part or Full rule is applied before \`setup()\` and the first render. The rule matches this component name at the same route of parent components, on the site where it was saved. Values are JSON, so functions cannot be kept.\r
+\r
+While a rule applies, updates from the parent do not overwrite it. Turning the rule off or deleting it gives the component the parent's current value back at once, without a reload.\r
+\r
+A row with a rule has a purple bar on the left, and the selected row has a purple background, like a mocked request on **Network**. The Props toolbar shows a pin with how many rules apply on this page out of the total; the card shows a pin with the number of props the rule holds. Both open **Options → Props → Prop rules**. **Save as** shows **Part** or **Full** when a rule applies, and **Once** otherwise. It can be changed only while editing; **Cancel** restores it. **Delete rule** in the row menu deletes the rule at once.\r
+\r
+**Options → Props → Prop rules**, after **Favorite Components**, lists the rules. **Apply rules** turns them all off without deleting them. The row menu has **Edit**, **Enable** / **Disable** and **Delete**.\r
+\r
+In the extension the rules apply on page load even when the panel is closed. A page that loads Vue 3.3 or newer through a bundler gets the values on the first render. Other builds and Vue 2 get them once the inspector starts.\r
+\r
+---\r
+\r
+### Logs\r
+\r
+**Export for AI**, next to **Export Logs**, downloads a short Markdown digest of the selected events, or of every event that matches the filters. It is meant to be handed to an assistant and is many times smaller than the full report: how to read the file, a **Summary**, grouped **Problems** and a **Timeline**. An event id \`#N\` opens the same event in the HTML report.\r
+\r
+**Click** records a primary click: the control and the text on it. A click on an icon inside a button is recorded as the button. Clicks on Vue Inspector itself are skipped, and the value of a password or hidden field is not stored. **Clicks** is its own switch in **Options → Logs**, on by default.\r
+\r
+A request and its response are exported together. The **ignored** badge opens **Options → Logs** at the ignore list.\r
+\r
+### Network\r
+\r
+* A WebSocket row can be sent to the assistant with **Ask AI**.\r
+* The **bp** and **mock** badges open **Options → Network** at the breakpoints or mocks. A pulsing pending breakpoint still selects the first pending row.\r
+* WebSocket **Messages** read as a chat: the composer at the bottom, sent frames on the right, received on the left, newest at the bottom.\r
+\r
+### HTML report\r
+\r
+* **Export for AI** downloads the same digest. **Export JSON** saves the full report data, including from a compressed report. On a narrow screen the buttons are **Export AI** and **JSON**.\r
+* **Failed requests / WS** also counts WebSocket connections that closed with an error, closed without reconnecting, or failed.\r
+* **Page** lists **Click** next to **Navigation** and **JS error**.\r
+\r
+### Options → Logs\r
+\r
+* **Compress report**, on by default, stores the report as gzip. The file is several times smaller and opens the same way. It needs Chrome / Edge 80+, Firefox 113+ or Safari 16.4+. In a browser without gzip the option is off and the report stays uncompressed.\r
+* **Requests** and **WebSocket** are separate switches. WebSocket can be turned off while HTTP requests stay on.\r
+* The **Ignore list** is shown again, above **Data masking**.\r
+\r
+### Language\r
+\r
+**Options → General → Language** switches the inspector interface. The choice is saved with the settings and starts as English. Available languages: English, Spanish, Simplified Chinese, German, French, Japanese, Portuguese (Brazil), Russian, Korean, Italian, Polish, Turkish, and Arabic.\r
+\r
+### Fixes\r
+\r
+* Fixed the false **Body truncated** notice on complete responses with non-ASCII text, such as Cyrillic. Reports exported before this fix no longer show that notice either.\r
+* Removed **Search by Label** in **Props**. The checkbox did not filter the list.\r
+* The **Support Vue Inspector** title lines up with the text of the card.\r
+* Minor layout fixes.\r
 `,_=`---\r
 title: Standalone\r
 ---\r
@@ -2368,7 +2905,7 @@ Standalone uses **its own local storage**: settings and media persist between la
 1. Open a page with a Vue application;\r
 2. Click the saved **Vue Inspector** bookmark;\r
 3. The inspector panel opens at the bottom of the page.\r
-`,W=`---\r
+`,D=`---\r
 title: Favorites\r
 ---\r
 \r
@@ -2470,7 +3007,7 @@ The card does not select that store on the Stores tab.\r
 * [Store overview](/store/general)\r
 * [Favorites (Props)](/props/favorite)\r
 * [Customize](/options/customize)\r
-`,D=`---\r
+`,L=`---\r
 title: Pinia stores\r
 ---\r
 \r
@@ -2767,7 +3304,7 @@ Response: \`PINIA_PATCH_GETTERS_RESULT\` (\`success\`, \`updated\`). **Refresh**
 * [State](/store/state)\r
 * [Store overview](/store/general)\r
 * [Favorites](/store/favorite)\r
-`,L=`---\r
+`,M=`---\r
 title: State\r
 ---\r
 \r
@@ -2938,20 +3475,20 @@ function patchState(storeId, path, value) {\r
 * [Getters](/store/getters)\r
 * [Store overview](/store/general)\r
 * [Favorites](/store/favorite)\r
-`,M=Object.assign({"../../../documentation/ai/general.md":h,"../../../documentation/ai/settings.md":c,"../../../documentation/extension.md":p,"../../../documentation/general_principles.md":u,"../../../documentation/index.md":m,"../../../documentation/install.md":g,"../../../documentation/logs/export.md":f,"../../../documentation/logs/general.md":w,"../../../documentation/logs/settings.md":y,"../../../documentation/network/advanced.md":b,"../../../documentation/network/export.md":v,"../../../documentation/network/general.md":k,"../../../documentation/network/traffic.md":S,"../../../documentation/options/about.md":T,"../../../documentation/options/auto_run.md":x,"../../../documentation/options/customize.md":A,"../../../documentation/options/display_mode.md":I,"../../../documentation/options/json_mode.md":O,"../../../documentation/options/settings_management.md":C,"../../../documentation/options/update_settings.md":R,"../../../documentation/props/blacklist.md":N,"../../../documentation/props/favorite.md":q,"../../../documentation/props/general.md":P,"../../../documentation/props/inspect.md":E,"../../../documentation/standalone.md":_,"../../../documentation/store/favorite.md":W,"../../../documentation/store/general.md":D,"../../../documentation/store/getters.md":B,"../../../documentation/store/state.md":L});function F(e){const r=e.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/),s=r?.[1].match(/^title:\s*(.+)$/m)?.[1].trim()??"",t=e.slice(r?.[0].length??0).replace(/<!--[\s\S]*?-->/g,"").replace(/^[ \t]*!\[[^\]]*\]\([^)]*\)[ \t]*$/gm,"").replace(/^[ \t]*<\/?[a-z][^\n]*>[ \t]*$/gim,"").replace(/\n{3,}/g,`
+`,F=Object.assign({"../../../documentation/ai/general.md":h,"../../../documentation/ai/settings.md":c,"../../../documentation/extension.md":p,"../../../documentation/general_principles.md":u,"../../../documentation/index.md":m,"../../../documentation/install.md":g,"../../../documentation/logs/export.md":f,"../../../documentation/logs/general.md":w,"../../../documentation/logs/settings.md":v,"../../../documentation/network/advanced.md":y,"../../../documentation/network/export.md":b,"../../../documentation/network/general.md":k,"../../../documentation/network/traffic.md":S,"../../../documentation/options/about.md":T,"../../../documentation/options/auto_run.md":x,"../../../documentation/options/customize.md":A,"../../../documentation/options/display_mode.md":I,"../../../documentation/options/json_mode.md":O,"../../../documentation/options/settings_management.md":P,"../../../documentation/options/update_settings.md":C,"../../../documentation/props/blacklist.md":R,"../../../documentation/props/favorite.md":N,"../../../documentation/props/general.md":q,"../../../documentation/props/inspect.md":E,"../../../documentation/releases/history.md":W,"../../../documentation/standalone.md":_,"../../../documentation/store/favorite.md":D,"../../../documentation/store/general.md":L,"../../../documentation/store/getters.md":B,"../../../documentation/store/state.md":M});function U(e){const r=e.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/),s=r?.[1].match(/^title:\s*(.+)$/m)?.[1].trim()??"",t=e.slice(r?.[0].length??0).replace(/<!--[\s\S]*?-->/g,"").replace(/^[ \t]*!\[[^\]]*\]\([^)]*\)[ \t]*$/gm,"").replace(/^[ \t]*<\/?[a-z][^\n]*>[ \t]*$/gim,"").replace(/\n{3,}/g,`
 
-`).trim();return{title:s,text:t}}function U(e){return e.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu,"").trim().replace(/\s+/g,"-")}function H(e){const r=[];let s=!1;return e.forEach((t,n)=>{/^\s*```/.test(t)&&(s=!s);const o=!s&&t.match(/^(#{1,6})\s+(.+?)\s*$/);if(!o)return;const a=o[2].match(/\s*\{#([^}]+)\}$/),d=o[2].slice(0,a?.index).replace(/[*`]/g,"");r.push({line:n,level:o[1].length,text:d,id:a?.[1]??U(d)})}),r}const l=Object.entries(M).map(([e,r])=>{const s={id:e.replace(/^.*\/documentation\//,"").replace(/\.md$/,""),...F(r)};return{...s,headings:H(s.text.split(`
-`))}}).sort((e,r)=>e.id.localeCompare(r.id));function z(e,r){const s=r.trim().toLowerCase().replace(/^#/,""),t=[...e].sort((n,o)=>(n.level===1?1:0)-(o.level===1?1:0));return t.find(n=>n.text.toLowerCase()===s||n.id===s)??t.find(n=>n.text.toLowerCase().includes(s))}function j(e){const r=e.trim().toLowerCase().replace(/^\/+/,"").replace(/#.*$/,"").replace(/\.md$/,""),s=l.find(n=>n.id===r);if(s)return s;const t=l.filter(n=>n.id.split("/").pop()===r||n.title.toLowerCase()===r);return t.length===1?t[0]:t.length?t:l.filter(n=>n.id.includes(r))}function V(e,r){const s=e.text.split(`
+`).trim();return{title:s,text:t}}function H(e){return e.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu,"").trim().replace(/\s+/g,"-")}function z(e){const r=[];let s=!1;return e.forEach((t,n)=>{/^\s*```/.test(t)&&(s=!s);const o=!s&&t.match(/^(#{1,6})\s+(.+?)\s*$/);if(!o)return;const a=o[2].match(/\s*\{#([^}]+)\}$/),d=o[2].slice(0,a?.index).replace(/[*`]/g,"");r.push({line:n,level:o[1].length,text:d,id:a?.[1]??H(d)})}),r}const l=Object.entries(F).map(([e,r])=>{const s={id:e.replace(/^.*\/documentation\//,"").replace(/\.md$/,""),...U(r)};return{...s,headings:z(s.text.split(`
+`))}}).sort((e,r)=>e.id.localeCompare(r.id));function j(e,r){const s=r.trim().toLowerCase().replace(/^#/,""),t=[...e].sort((n,o)=>(n.level===1?1:0)-(o.level===1?1:0));return t.find(n=>n.text.toLowerCase()===s||n.id===s)??t.find(n=>n.text.toLowerCase().includes(s))}function J(e){const r=e.trim().toLowerCase().replace(/^\/+/,"").replace(/#.*$/,"").replace(/\.md$/,""),s=l.find(n=>n.id===r);if(s)return s;const t=l.filter(n=>n.id.split("/").pop()===r||n.title.toLowerCase()===r);return t.length===1?t[0]:t.length?t:l.filter(n=>n.id.includes(r))}function V(e,r){const s=e.text.split(`
 `),t=e.headings,n=t.filter(i=>i.level>=2&&i.level<=3).map(i=>i.text),o=`# docs: ${e.id} (${e.title})`;if(!r)return n.length>2?`${o}
 Sections: ${n.join("; ")}
 
 ${e.text}`:`${o}
 
-${e.text}`;const a=z(t,r);if(!a)return`${o}
+${e.text}`;const a=j(t,r);if(!a)return`${o}
 No section "${r}". Sections: ${n.join("; ")}`;const d=t.find(i=>i.line>a.line&&i.level<=a.level);return`${o}
 
 ${s.slice(a.line,d?.line).join(`
-`).trim()}`}function G(e,r){const s=(Array.isArray(e)?e:e?[e]:[]).map(String).filter(Boolean).slice(0,3);return s.length?s.map(t=>{const n=t.match(/#(.+)$/)?.[1],o=j(t);return Array.isArray(o)?o.length?`Page "${t}" is ambiguous: ${o.map(a=>a.id).join(", ")}`:`No page "${t}". Pages: ${l.map(a=>a.id).join(", ")}`:V(o,r||n)}).join(`
+`).trim()}`}function G(e,r){const s=(Array.isArray(e)?e:e?[e]:[]).map(String).filter(Boolean).slice(0,3);return s.length?s.map(t=>{const n=t.match(/#(.+)$/)?.[1],o=J(t);return Array.isArray(o)?o.length?`Page "${t}" is ambiguous: ${o.map(a=>a.id).join(", ")}`:`No page "${t}". Pages: ${l.map(a=>a.id).join(", ")}`:V(o,r||n)}).join(`
 
 ---
 

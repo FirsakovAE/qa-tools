@@ -486,11 +486,11 @@ The first step of an answer says what was sent, which access is in force and how
 
 ### Props
 
-**Keep after reload**, under the buttons of a component card, saves the current props as a **prop rule**. After a reload, or when the component is created again, it receives those values before its `setup()` and first render. The rule matches this component name at the same route of parent components, on the site where it was saved, and stores a full snapshot of the current props as JSON. Functions and other non-JSON values cannot be kept.
+**Save as**, under the buttons of a component card, chooses what **Save** keeps. **Once** changes the live component only and removes a rule it already has. **Part** stores just the props changed in this edit. **Full** stores every current prop. A component has one of these. After a reload, or when the component is created again, a Part or Full rule is applied before `setup()` and the first render. The rule matches this component name at the same route of parent components, on the site where it was saved. Values are JSON, so functions cannot be kept.
 
 While a rule applies, updates from the parent do not overwrite it. Turning the rule off or deleting it gives the component the parent's current value back at once, without a reload.
 
-A row with a rule has a purple bar on the left, and the selected row has a purple background, like a mocked request on **Network**. The Props toolbar shows a pin with how many rules apply on this page out of the total; the card shows a pin with the number of props the rule holds. Both open **Options → Props → Prop rules**. The checkbox can be changed only while editing: unchecking it and pressing **Save** deletes the rule, and **Cancel** keeps it. **Delete rule** in the row menu deletes it at once.
+A row with a rule has a purple bar on the left, and the selected row has a purple background, like a mocked request on **Network**. The Props toolbar shows a pin with how many rules apply on this page out of the total; the card shows a pin with the number of props the rule holds. Both open **Options → Props → Prop rules**. **Save as** shows **Part** or **Full** when a rule applies, and **Once** otherwise. It can be changed only while editing; **Cancel** restores it. **Delete rule** in the row menu deletes the rule at once.
 
 **Options → Props → Prop rules**, after **Favorite Components**, lists the rules. **Apply rules** turns them all off without deleting them. The row menu has **Edit**, **Enable** / **Disable** and **Delete**.
 

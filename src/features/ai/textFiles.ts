@@ -24,6 +24,8 @@ export interface AiTextFile {
   jsonError?: string
   /** Went with a question: the chat history refers to it */
   sent: boolean
+  /** Label number of a pasted text. Reused once that paste is gone */
+  pasteIndex?: number
 }
 
 export class TextFileError extends Error {
@@ -43,7 +45,30 @@ const files = new Map<string, AiTextFile>()
 /** Parsed JSON of a file, read on demand: a big HAR costs several times its size in memory */
 const parsed = new WeakMap<AiTextFile, unknown>()
 const lowered = new WeakMap<AiTextFile, string>()
-let counter = 0
+
+/** Smallest positive integer not present in `used` */
+function freeNumber(used: Set<number>): number {
+  let n = 1
+  while (used.has(n)) n++
+  return n
+}
+
+/** F1, F2… among the files that are still in this chat. A removed unsent file gives its number back */
+function nextFileId(): string {
+  const used = new Set<number>()
+  for (const id of files.keys()) {
+    const match = /^F(\d+)$/.exec(id)
+    if (match) used.add(Number(match[1]))
+  }
+  return `F${freeNumber(used)}`
+}
+
+/** Label number of a pasted text. Grows only while another paste is still in the composer or the thread */
+export function nextPasteIndex(): number {
+  const used = new Set<number>()
+  for (const file of files.values()) if (file.pasted && file.pasteIndex) used.add(file.pasteIndex)
+  return freeNumber(used)
+}
 
 export function getTextFile(id: string): AiTextFile | undefined {
   return files.get(String(id ?? '').trim().toUpperCase().replace(/^#/, ''))
@@ -73,7 +98,6 @@ export function releaseFile(id: string): void {
 export function dropChatFiles(keep: Iterable<string>): void {
   const kept = new Set(keep)
   for (const id of [...files.keys()]) if (!kept.has(id)) files.delete(id)
-  if (!files.size) counter = 0
 }
 
 export function formatLabel(format: TextFileFormat): string {
@@ -192,12 +216,12 @@ function decode(bytes: Uint8Array): string {
   return new TextDecoder('utf-8').decode(bytes)
 }
 
-function register(name: string, text: string, bytes: number, pasted: boolean, ext: string, pages?: number): AiTextFile {
+function register(name: string, text: string, bytes: number, pasted: boolean, ext: string, pages?: number, pasteIndex?: number): AiTextFile {
   const clean = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
   if (!clean.trim()) throw new TextFileError('empty')
   const kind = ext === 'pdf' ? { format: 'pdf' as const } : classify(clean, ext)
   const file: AiTextFile = {
-    id: `F${++counter}`,
+    id: nextFileId(),
     name,
     format: kind.format,
     pasted,
@@ -207,6 +231,7 @@ function register(name: string, text: string, bytes: number, pasted: boolean, ex
     pages,
     jsonError: kind.jsonError,
     sent: false,
+    pasteIndex,
   }
   if ('json' in kind && kind.json !== undefined) parsed.set(file, kind.json)
   files.set(file.id, file)
@@ -238,6 +263,6 @@ export async function readTextFile(file: File): Promise<AiTextFile> {
   return register(file.name, text, file.size, false, ext)
 }
 
-export function registerPastedText(text: string, name: string): AiTextFile {
-  return register(name, text, new Blob([text]).size, true, '')
+export function registerPastedText(text: string, name: string, pasteIndex: number): AiTextFile {
+  return register(name, text, new Blob([text]).size, true, '', undefined, pasteIndex)
 }

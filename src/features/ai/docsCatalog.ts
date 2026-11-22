@@ -4,7 +4,7 @@
  */
 
 const files = import.meta.glob<string>(
-  ['../../../documentation/**/*.md', '!../../../documentation/ru/**', '!../../../documentation/releases/**'],
+  ['../../../documentation/**/*.md', '!../../../documentation/ru/**'],
   { query: '?raw', import: 'default', eager: true },
 )
 

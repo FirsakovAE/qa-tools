@@ -121,7 +121,9 @@ const overrideColumns = computed<TableColumn[]>(() => [
 ])
 
 function overrideScopeLabel(rule: PropOverrideRule): string {
-  return rule.scope === 'all' ? t('props.scopeAll', { name: rule.component }) : propOverridePathLabel(rule)
+  const where = rule.scope === 'all' ? t('props.scopeAll', { name: rule.component }) : propOverridePathLabel(rule)
+  const mode = rule.mode === 'part' ? t('props.savePart') : t('props.saveFull')
+  return `${where} · ${mode}`
 }
 
 function toggleOverride(id: string) {

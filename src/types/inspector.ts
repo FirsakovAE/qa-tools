@@ -124,7 +124,12 @@ export interface PropOverrideRule {
     path: string[]
     /** 'path' — only the component at this place in the tree; 'all' — every instance of the component */
     scope: 'path' | 'all'
-    /** Changed prop values, by prop name */
+    /**
+     * Part keeps only the props changed while editing. Full keeps every current prop.
+     * A rule saved before this field existed is treated as Full.
+     */
+    mode?: 'part' | 'full'
+    /** Prop values the rule applies, by prop name */
     props: Record<string, unknown>
     timestamp: string
 }

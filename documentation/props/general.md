@@ -16,7 +16,7 @@ The **Props** tab shows the **Vue instance tree** on the page: component names, 
 
 The search field supports several modes. Active criteria come from **Search by** next to the input. The same checkboxes are the first block on **Options → Props**, under **Search Settings**: **Search by component name**, **Search by root element**, **Search by key**, **Search by value**. Defaults: name and root element on; key and value off. A change applies to the open Props list immediately.
 
-On **Options → Props** the blocks follow in this order: **Search Settings**, **Inspect Mode**, **Component Blacklist**, **Favorite Components**, **Prop rules**. Inspect, the blacklist, and favorites are described on their own pages; prop rules are in [Keep after reload](#keep-after-reload).
+On **Options → Props** the blocks follow in this order: **Search Settings**, **Inspect Mode**, **Component Blacklist**, **Favorite Components**, **Prop rules**. Inspect, the blacklist, and favorites are described on their own pages; prop rules are in [Save as](#save-as).
 
 | Mode      | What the list uses                                                                                          |
 | --------- | ----------------------------------------------------------------------------------------------------------- |
@@ -64,9 +64,9 @@ A row with no received props is dimmed, shows **—** in **Received** and **Decl
 
 Hover highlights the page node only when the row has a DOM element. A `Logic only` row clears the highlight. Favorite rows do not take the hover background. Search clears the highlight.
 
-A row with a purple bar on the left gets values from a [prop rule](#keep-after-reload); the tooltip lists the props the rule holds. The selected row of such a component has a purple background, like a mocked request on **Network**.
+A row with a purple bar on the left gets values from a [prop rule](#save-as); the tooltip lists the props the rule holds. The selected row of such a component has a purple background, like a mocked request on **Network**.
 
-The row menu is **Ask AI**, **Add favorite** / **Remove favorite**, **Delete rule** (only on rows with a [prop rule](#keep-after-reload)), and **Ignore by name**. The star on the row does the same favorite toggle. See [Favorites](/props/favorite) and [Blacklist](/props/blacklist).
+The row menu is **Ask AI**, **Add favorite** / **Remove favorite**, **Delete rule** (only on rows with a [prop rule](#save-as)), and **Ignore by name**. The star on the row does the same favorite toggle. See [Favorites](/props/favorite) and [Blacklist](/props/blacklist).
 
 **Ask AI** in the row menu attaches the current props of the component to a question for the assistant. The **AI** tab opens with a chip above the input, for example *OrderCard props*: **×** removes it from the question. Type a question, or send the chip without one. Values are masked by the AI settings and cut; with **Values of store state, props, emits and actions** off, the assistant gets only names and types. The item is disabled for a component without props.
 
@@ -113,13 +113,13 @@ The editor supports **copying** the contents.
 | **Refresh** | re-fetch the selected component from the page; temporarily disabled while a refresh runs; **hidden** in **Edit** mode                  |
 | **Edit**    | enter edit mode; **only on the Received** tab                                                                                          |
 
-Button order in the header (view mode): **Star → Refresh → Edit**. The **Keep after reload** checkbox sits under them.
+Button order in the header (view mode): **Star → Refresh → Edit**. **Save as** sits under them.
 
 ### Edit mode
 
 **Edit** applies **only** to the **Received** tab.
 
-When editing, **Refresh** and **Edit** become **Cancel** and **Save**. **Star** stays available, and so does **Keep after reload** under the buttons; see [Keep after reload](#keep-after-reload).
+When editing, **Refresh** and **Edit** become **Cancel** and **Save**. **Star** stays available, and so does **Save as** under the buttons; see [Save as](#save-as).
 
 | Before editing | In edit mode                                                                 |
 | -------------- | ----------------------------------------------------------------------------- |
@@ -138,21 +138,22 @@ When editing, **Refresh** and **Edit** become **Cancel** and **Save**. **Star** 
 
 Keys deleted inside an object prop are removed from the object. This lets you check how a component behaves when optional data is missing. After saving, the card shows the edited JSON; use **Refresh** to see the resolved values.
 
-### Keep after reload
+### Save as
 
-A plain **Save** changes the live component only: a reload, or the component being created again (a dialog reopened, a route revisited), brings back the values from the parent. To keep the edit, check **Keep after reload** under the header buttons before **Save**. The current props become a **prop rule**, and the component gets those values as soon as it is created, before its `setup()` and first render. Code that copies a prop into local state on creation sees the rule value too.
+**Save as**, under the header buttons, chooses what **Save** keeps. A component has one value here. The list is disabled in view mode and can be changed only while editing. **Cancel** restores the value the component had when editing started.
 
-The rule applies to components with this name at the same route of parent components (for example `App › Layout › OrderCard`). Identical siblings at that route, such as list items, all match.
+* **Once** — the basic mode. **Save** changes the live component only. A reload, or the component being created again, brings back the values from the parent. If the component already has a rule, **Save** deletes it.
+* **Part** — the rule stores only the props changed in this edit. Saving again adds or updates those props in the same rule. A key deleted from the JSON is removed from the rule. With no change and no existing Part rule, nothing is stored.
+* **Full** — the rule stores every current prop. Saving again replaces the rule with the props in the JSON at that moment.
+
+A rule applies to components with this name at the same route of parent components (for example `App › Layout › OrderCard`). Identical siblings at that route, such as list items, all match. The component gets the rule values as soon as it is created, before its `setup()` and first render. Code that copies a prop into local state on creation sees the rule value too.
 
 What the rule stores:
 
-* every current prop, as a full snapshot, whether or not the JSON was edited before **Save**. Saving again with the checkbox on replaces the rule with the props in the JSON at that moment; a key deleted from the JSON is no longer in the rule;
 * the site (`host`) where it was saved. Other sites ignore it;
 * values as JSON, so functions and other non-JSON values cannot be kept.
 
-While a rule applies, the parent's value is set aside: updates from the parent do not overwrite the rule value. Disabling or deleting the rule gives the component the parent's current value back at once, without a reload. A plain **Save** on a prop held by a rule changes the value on that instance only; the rule stays as it was.
-
-The checkbox is checked when the component has a rule. It can be changed only in edit mode; in view mode it is disabled. Unchecking it and pressing **Save** deletes the rule, **Cancel** keeps it. **Delete rule** in the row menu deletes the rule at once.
+While a rule applies, the parent's value is set aside: updates from the parent do not overwrite the rule value. Disabling or deleting the rule gives the component the parent's current value back at once, without a reload. Opening a component that has a rule shows **Part** or **Full** in **Save as**. A rule saved before these two values existed is shown as **Full**. **Delete rule** in the row menu deletes the rule at once.
 
 **Options → Props → Prop rules** lists the rules after **Favorite Components**: component, site and route, the props it holds, and status. The row menu has **Edit**, **Enable** / **Disable**, **Delete**; **Edit** opens the values as JSON in the details panel. **Apply rules** next to the title turns all rules off without deleting them.
 

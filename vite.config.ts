@@ -295,7 +295,7 @@ export default defineConfig({
         }
       }]
     },
-    chunkSizeWarningLimit: 1500
+    chunkSizeWarningLimit: 3000
   },
   publicDir: false
 })

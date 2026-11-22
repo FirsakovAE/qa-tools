@@ -47,23 +47,35 @@ export function findPropOverrideRule(
 }
 
 /**
- * Replace the rule for this target with a snapshot of the current props,
- * creating or removing it. Returns false when there is nothing to store.
+ * Store a Part or Full rule for this target. Part keeps the keys changed in this edit,
+ * merged into an existing Part rule. Full replaces the rule with every current prop.
+ * An empty result removes the rule. Returns false when nothing was stored or removed.
  */
 export function upsertPropOverrideRule(
   settings: BaseInspectorSettings,
   target: PropOverrideTarget,
   scope: PropOverrideRule['scope'],
-  edited: Record<string, unknown>
+  mode: 'part' | 'full',
+  original: Record<string, unknown>,
+  edited: Record<string, unknown>,
+  removedKeys: string[]
 ): boolean {
   if (!Array.isArray(settings.propOverrides)) settings.propOverrides = []
-  const props = { ...edited }
+  const changed: Record<string, unknown> = {}
+  for (const key of Object.keys(edited)) {
+    if (json(edited[key]) !== json(original[key])) changed[key] = edited[key]
+  }
   const existing = findPropOverrideRule(settings.propOverrides, target, scope)
+  const props: Record<string, unknown> = mode === 'full'
+    ? { ...edited }
+    : { ...(existing?.mode === 'part' ? existing.props : {}), ...changed }
+  if (mode === 'part') for (const key of removedKeys) delete props[key]
   if (!Object.keys(props).length) {
     if (!existing) return false
     settings.propOverrides = settings.propOverrides.filter(rule => rule !== existing)
     return true
   }
+  if (existing && existing.mode === mode && json(existing.props) === json(props)) return false
   if (!existing) {
     settings.propOverrides.push({
       id: `po_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
@@ -72,11 +84,13 @@ export function upsertPropOverrideRule(
       component: target.component,
       path: [...target.path],
       scope,
+      mode,
       props,
       timestamp: new Date().toISOString()
     })
     return true
   }
+  existing.mode = mode
   existing.props = props
   existing.enabled = true
   existing.timestamp = new Date().toISOString()
