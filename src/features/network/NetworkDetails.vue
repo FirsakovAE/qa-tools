@@ -183,7 +183,6 @@ const { lastNetworkDetailsSection, networkHeadersCollapse } = useNetworkUIState(
 const settings = useInspectorSettingsSync()
 const { t } = useI18n()
 const jsonMode = ref<'text' | 'tree'>('text')
-const jsonEditorImpl = ref<'classic' | 'jsoneditor'>('jsoneditor')
 const copiedHeaderIndex = ref<number | null>(null)
 const copiedResponseHeaderIndex = ref<number | null>(null)
 /** Read-only Advanced header row copy feedback (req:/res: + lowercase name) */
@@ -206,14 +205,13 @@ let urlResizeObserver: ResizeObserver | null = null
 watch(settings, (s) => {
   if (!s) return
   jsonMode.value = s.json?.mode ?? 'text'
-  jsonEditorImpl.value = s.json?.editor ?? 'jsoneditor'
 }, { immediate: true })
 
 function persistJsonVanillaMode(m: 'text' | 'tree') {
   jsonMode.value = m
   const s = settings.value
   if (s) {
-    if (!s.json) s.json = { editor: jsonEditorImpl.value, mode: m }
+    if (!s.json) s.json = { editor: 'jsoneditor', mode: m }
     else s.json.mode = m
   }
 }
@@ -1719,7 +1717,6 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   @update:model-value="updateRequestBody"
                   :editable="true"
                   :show-copy="true"
-                  :editor="jsonEditorImpl"
                   :mode="jsonMode"
                   @update:mode="persistJsonVanillaMode"
                   :language="requestBodyLanguage"
@@ -1777,7 +1774,6 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                   :model-value="requestBodyJson"
                   :editable="false"
                   :show-copy="true"
-                  :editor="jsonEditorImpl"
                   :mode="jsonMode"
                   @update:mode="persistJsonVanillaMode"
                   :language="requestBodyLanguage"
@@ -1828,7 +1824,6 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 @update:model-value="updateResponseBody"
                 :editable="true"
                 :show-copy="true"
-                :editor="jsonEditorImpl"
                 :mode="jsonMode"
                 @update:mode="persistJsonVanillaMode"
                 :language="responseBodyLanguage"
@@ -1840,7 +1835,6 @@ async function copyHeaderValue(value: string, index: number, isResponse: boolean
                 :model-value="responseBodyJson"
                 :editable="false"
                 :show-copy="true"
-                :editor="jsonEditorImpl"
                 :mode="jsonMode"
                 @update:mode="persistJsonVanillaMode"
                 :language="responseBodyLanguage"

@@ -10,6 +10,7 @@ import { propOverridePathLabel } from '@/utils/propOverrides'
 import JsonEditor from '@/components/JsonEditor.vue'
 import { replaceHeaderLinkRulesForHeaderName } from '@/utils/networkHeaderLinks'
 import type { ReleaseDisplayInfo } from '@/services/githubReleaseService'
+import { isChromeStoreBuild } from '@/distribution'
 import { mediaUrls, getMediaBlob, getWallpaperBlob } from '@/settings/mediaStore'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -501,6 +502,7 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
                   {{ t('about.ignore') }}
                 </Button>
                 <Button
+                  v-if="!isChromeStoreBuild"
                   size="sm"
                   class="gap-1.5"
                   :disabled="!releaseInfo.downloadUrl"
@@ -814,7 +816,6 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
                     v-model="editedPropOverrideJson"
                     :editable="true"
                     :show-copy="true"
-                    :editor="settings.json?.editor ?? 'jsoneditor'"
                     :mode="settings.json?.mode ?? 'text'"
                     :full-height="true"
                     class="h-full"
@@ -824,7 +825,6 @@ function formatBreakpointUrl(bp: BreakpointItem): string {
                     :model-value="propOverrideJson"
                     :editable="false"
                     :show-copy="true"
-                    :editor="settings.json?.editor ?? 'jsoneditor'"
                     :mode="settings.json?.mode ?? 'text'"
                     :full-height="true"
                     class="h-full"

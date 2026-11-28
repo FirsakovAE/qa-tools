@@ -139,8 +139,10 @@ async function loadFromStorage(): Promise<void> {
         }
 
         if (savedSettings && typeof savedSettings === 'object') {
+            const wasClassicJson = savedSettings.json?.editor === 'classic'
             const mergedSettings = mergeSettings(defaultInspectorSettings, savedSettings)
             Object.assign(state, mergedSettings)
+            if (wasClassicJson) saveToStorage()
         } else {
             Object.assign(state, structuredClone(defaultInspectorSettings))
             saveToStorage()
@@ -187,15 +189,17 @@ async function loadFromStorage(): Promise<void> {
     })()
 }
 
-function migrateJsonMode(saved: any): void {
-    if (!saved.json || typeof saved.json !== 'object') return
+/** Classic JSON editor was removed; stored `classic` becomes Advanced (`jsoneditor`). */
+function migrateJsonMode(saved: any): boolean {
+    if (!saved.json || typeof saved.json !== 'object') return false
     const j = saved.json
-    // До добавления поля editor переключатель Text/Tree относился только к vanilla-jsoneditor
-    if (j.editor !== 'classic' && j.editor !== 'jsoneditor')
+    const wasClassic = j.editor === 'classic'
+    if (j.editor !== 'jsoneditor')
         j.editor = 'jsoneditor'
     const m = j.mode
     if (m !== 'text' && m !== 'tree')
         j.mode = 'text'
+    return wasClassic
 }
 
 function migrateFavoriteIds(saved: any): void {

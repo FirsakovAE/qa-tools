@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "Vue Inspector"
+  },
+  "appDescription": {
+    "message": "实时检查 Vue.js 应用：组件 props、Pinia store、网络请求和事件日志，无需源代码。"
+  }
+}

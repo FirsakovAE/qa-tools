@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "Vue Inspector"
+  },
+  "appDescription": {
+    "message": "Vue.js uygulamalarını canlı inceleyin: props, Pinia store'ları, ağ istekleri ve olay günlüğü, kaynak kod gerekmez."
+  }
+}

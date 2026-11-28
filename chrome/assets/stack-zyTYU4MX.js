@@ -1,0 +1,7 @@
+const A=/^\s*(?:at\s+)?(?:.*?[@(])?((?:[a-z][a-z0-9+.-]*:)+\/*[^\s()]*?):(\d+):(\d+)\)?\s*$/i,p=/^(?:chrome|moz|safari-web|ms-browser)-extension:/i,_=(()=>{let t="";try{t=document.currentScript?.src??""}catch{}if(t||(t=S(new Error().stack??"")[0]?.url??""),!t)return"";const s=t.lastIndexOf("/js/");return s!==-1?t.slice(0,s+1):t.slice(0,t.lastIndexOf("/")+1)})();function h(t,s){let r=s;return t.split(`
+`).filter(n=>r>0&&(A.test(n)||/^\s*at\s/.test(n))?(r--,!1):!0).join(`
+`)}function S(t){const s=[];for(const r of t.split(`
+`)){const n=A.exec(r);n&&s.push({line:r.trim(),url:n[1],lineno:Number(n[2]),colno:Number(n[3])})}return s}function m(t){return!!_&&t.startsWith(_)}function d(t){return m(t)||p.test(t)}function u(t){return t.length>300?`${t.slice(0,300)}…`:t}function M(t,s={}){const r=t.split(`
+`),n=[],i=[];for(const e of r)A.test(e)||/^\s*at\s/.test(e)?i.push(e.trim()):i.length===0&&e.trim()&&s.header!==!1&&n.push(e);let o=0;if(s.dropLeadingInspector)for(;o<i.length&&m(A.exec(i[o])?.[1]??"");)o++;const c=i.slice(o),f=10,a=c.length>f?c.length-f:0,R=a>0?[...c.slice(0,5).map(e=>`    ${u(e)}`),`    … ${a} more frame${a===1?"":"s"} (stack truncated)`,...c.slice(-5).map(e=>`    ${u(e)}`)]:c.map(e=>`    ${u(e)}`);let l=n.join(`
+`);l.length>1e3&&(l=`${l.slice(0,1e3)}…`);const E={stack:[l,...R].filter(Boolean).join(`
+`)};return a>0&&(E.stackTruncated={frames:c.length,kept:f,head:5,tail:5}),E}export{m as a,M as c,d as i,S as p,h as s};

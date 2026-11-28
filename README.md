@@ -124,7 +124,7 @@ chrome://extensions/
 Open:
 
 ```text
-https://firsakovae.github.io/qa-tools/
+https://vue-inspector.pages.dev/
 ```
 
 Drag the bookmark and launch it on the target page.

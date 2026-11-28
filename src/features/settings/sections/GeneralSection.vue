@@ -10,12 +10,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs'
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -152,14 +146,6 @@ const minLengthValue = ref(props.settings.searchParams.minLength ?? 2)
 
 watch(debounceValue, (val) => { props.settings.searchParams.debounce = val })
 watch(minLengthValue, (val) => { props.settings.searchParams.minLength = val })
-
-const jsonEditorImplementation = computed({
-  get: () => props.settings.json?.editor ?? 'jsoneditor',
-  set: (val: 'classic' | 'jsoneditor') => {
-    if (!props.settings.json) props.settings.json = { editor: val, mode: 'text' }
-    else props.settings.json.editor = val
-  }
-})
 
 const refreshIntervals = computed(() =>
   [1, 2, 5, 10, 30].map(secondsCount => ({ value: secondsCount * 1000, label: seconds(secondsCount) })),
@@ -988,30 +974,6 @@ const siteWhitelistTableHeight = computed(() =>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- JSON VIEWER IMPLEMENTATION -->
-    <div class="space-y-4 border-t pt-4">
-      <h4 class="text-sm font-semibold">{{ t('general.jsonMode') }}</h4>
-
-      <Tabs v-model="jsonEditorImplementation">
-        <TabsList class="grid w-full grid-cols-2">
-          <TabsTrigger value="classic">{{ t('general.classic') }}</TabsTrigger>
-          <TabsTrigger value="jsoneditor">{{ t('general.advanced') }}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="classic" class="mt-4">
-          <p class="text-xs text-muted-foreground">
-            {{ t('general.classicHint') }}
-          </p>
-        </TabsContent>
-
-        <TabsContent value="jsoneditor" class="mt-4">
-          <p class="text-xs text-muted-foreground">
-            {{ t('general.advancedHint') }}
-          </p>
-        </TabsContent>
-      </Tabs>
     </div>
 
     <!-- SAVED FILES -->

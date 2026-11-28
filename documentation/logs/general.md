@@ -94,7 +94,7 @@ When rows are selected, the button shows **Export Logs (n)** and exports only th
 
 ### Event details
 
-Clicking a row opens details on the right. The layout follows **Network**: a tab strip, name/value tables and **JSON** blocks in the selected [JSON mode](/options/json_mode).
+Clicking a row opens details on the right. The layout follows **Network**: a tab strip, name/value tables and **JSON** blocks in the [JSON editor](/options/json_mode).
 
 | Type | Tabs |
 | ---- | ---- |

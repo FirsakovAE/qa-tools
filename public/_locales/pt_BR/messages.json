@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "Vue Inspector"
+  },
+  "appDescription": {
+    "message": "Inspecione apps Vue.js em tempo real: props, stores Pinia, requisições de rede e log de eventos, sem código-fonte."
+  }
+}

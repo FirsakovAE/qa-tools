@@ -1,0 +1,7 @@
+{
+  "tag_name": "v2.0.0",
+  "name": "v2.0.0",
+  "body": "### Core\n\n* Corporate-friendly build that does not require installation.\n* Version tracking and notifications for new updates.\n* Project moved to an **iframe** entry; **popup** is no longer the primary entry point.\n\n---\n\n### Performance\n\n* Fixed a memory spike on static sites, including Docusaurus and Hugo.\n\n---\n\n### UI / UX\n\n* Refreshed styles and overall visual design.",
+  "published_at": "2026-01-23T00:00:00Z",
+  "assets": []
+}

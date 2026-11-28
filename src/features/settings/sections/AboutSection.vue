@@ -5,6 +5,7 @@ import type { InspectorSettings } from '@/settings/inspectorSettings'
 import { Button } from '@/components/ui/button'
 import { ExternalLink, Github, BookOpen, FileText, RefreshCw, Loader2 } from 'lucide-vue-next'
 import { useRuntime } from '@/runtime'
+import { isChromeStoreBuild } from '@/distribution'
 import {
   fetchReleaseByTag,
   fetchLatestRelease,
@@ -165,7 +166,7 @@ async function handleCheckUpdates() {
         </Button>
 
         <Button
-          v-if="isExtension"
+          v-if="isExtension && !isChromeStoreBuild"
           variant="outline"
           size="sm"
           class="justify-start h-8 gap-2"
@@ -184,6 +185,7 @@ async function handleCheckUpdates() {
       <h4 class="text-sm font-semibold">{{ t('common.links') }}</h4>
       <div class="flex flex-wrap items-center gap-2">
         <Button
+          v-if="!isChromeStoreBuild"
           variant="outline"
           size="sm"
           class="h-8 justify-start gap-2"

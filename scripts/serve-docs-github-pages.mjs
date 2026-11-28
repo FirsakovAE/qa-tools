@@ -1,6 +1,6 @@
 /**
- * Serves the `docs/` folder like a GitHub Pages project site (/{repo}/… URLs),
- * so VitePress base `/qa-tools/docs/` and asset paths match production.
+ * Serves the built site (`.cloudflare/site/`) from the host root like Cloudflare Pages,
+ * so VitePress base `/docs/` and asset paths match production.
  */
 import http from 'node:http'
 import fs from 'node:fs'
@@ -8,9 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DOCS_ROOT = path.resolve(__dirname, '../docs')
-const SITE_PREFIX =
-  '/' + (process.env.GH_PAGES_REPO || process.env.VITEPRESS_REPO || 'qa-tools').replace(/^\/+|\/+$/g, '')
+const DOCS_ROOT = path.resolve(__dirname, '../.cloudflare/site')
 /** If PORT is unset, try 5174 and then the next free port. If set, use only that port. */
 const PORT_LOCKED = process.env.PORT !== undefined && String(process.env.PORT).trim() !== ''
 const PREFERRED_PORT = PORT_LOCKED ? Number(process.env.PORT) : 5174
@@ -76,24 +74,9 @@ function resolvePublicPath(urlPath) {
 function handleRequest(req, res) {
   const rawUrl = req.url || '/'
   const url = new URL(rawUrl, 'http://127.0.0.1')
-  let p = url.pathname
-
   res.setHeader('Access-Control-Allow-Origin', '*')
 
-  if (p === '/' || p === '') {
-    res.writeHead(302, { Location: SITE_PREFIX + '/' })
-    res.end()
-    return
-  }
-
-  if (!p.startsWith(SITE_PREFIX)) {
-    res.writeHead(404)
-    res.end(`Not found. Open ${SITE_PREFIX}/ (GitHub Pages-style prefix).`)
-    return
-  }
-
-  p = p.slice(SITE_PREFIX.length) || '/'
-  const filePath = resolvePublicPath(p)
+  const filePath = resolvePublicPath(url.pathname)
 
   if (!filePath) {
     res.writeHead(404)
@@ -126,8 +109,8 @@ function listen(port) {
     if (!PORT_LOCKED && port !== PREFERRED_PORT) {
       console.log(`Port ${PREFERRED_PORT} is busy; using ${port} (set PORT=${port} to pin).`)
     }
-    const u = `http://127.0.0.1:${port}${SITE_PREFIX}/`
-    console.log(`Docs (same URL layout as GitHub Pages): ${u}`)
+    const u = `http://127.0.0.1:${port}/`
+    console.log(`Site (same URL layout as Cloudflare Pages): ${u}`)
   })
 }
 

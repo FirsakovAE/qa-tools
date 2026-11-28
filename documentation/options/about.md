@@ -30,7 +30,7 @@ A failed request shows the error in the card. The messages are **Could not deter
 
 ## Links
 
-**GitHub** opens [https://github.com/FirsakovAE/qa-tools](https://github.com/FirsakovAE/qa-tools). **Docs** opens [https://firsakovae.github.io/qa-tools/docs/index.html](https://firsakovae.github.io/qa-tools/docs/index.html).
+**GitHub** opens [https://github.com/FirsakovAE/qa-tools](https://github.com/FirsakovAE/qa-tools). **Docs** opens [https://vue-inspector.pages.dev/docs/](https://vue-inspector.pages.dev/docs/).
 
 ## Footer
 

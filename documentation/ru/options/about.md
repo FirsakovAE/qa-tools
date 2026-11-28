@@ -30,7 +30,7 @@ title: About
 
 ## Links
 
-**GitHub** открывает [https://github.com/FirsakovAE/qa-tools](https://github.com/FirsakovAE/qa-tools). **Docs** открывает [https://firsakovae.github.io/qa-tools/docs/index.html](https://firsakovae.github.io/qa-tools/docs/index.html).
+**GitHub** открывает [https://github.com/FirsakovAE/qa-tools](https://github.com/FirsakovAE/qa-tools). **Docs** открывает [https://vue-inspector.pages.dev/docs/](https://vue-inspector.pages.dev/docs/).
 
 ## Footer
 

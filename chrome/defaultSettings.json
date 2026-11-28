@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "search": {
+    "debounce": 300,
+    "minLength": 2,
+    "byName": true,
+    "byLabel": true,
+    "byProps": true,
+    "byRootElement": true
+  },
+  "blacklist": {
+    "active": []
+  }
+}

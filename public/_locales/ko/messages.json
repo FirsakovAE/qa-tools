@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "Vue Inspector"
+  },
+  "appDescription": {
+    "message": "Vue.js 앱을 실행 중에 검사: 컴포넌트 props, Pinia 스토어, 네트워크 요청, 이벤트 로그를 소스 코드 없이 확인하세요."
+  }
+}

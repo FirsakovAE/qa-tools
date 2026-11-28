@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Vue Inspector",
+    "description": "Extension name"
+  },
+  "appDescription": {
+    "message": "Inspect Vue.js apps at runtime: component props, Pinia stores, network requests and event logs, no source code needed.",
+    "description": "Extension description, up to 132 characters"
+  }
+}

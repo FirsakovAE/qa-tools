@@ -649,18 +649,9 @@ No proxies. No rebuilds. No DevTools limitations.
   <script>
     // ── Bookmarklet ──
     (function(){
+      // Site root = directory of this page (GitHub Pages and Cloudflare both serve it under /qa-tools/)
       function getStandaloneBaseURL() {
-        var parts = location.pathname.split('/').filter(Boolean);
-        var first = parts[0] || '';
-        if (location.hostname.endsWith('github.io')) {
-          if (first) return location.origin + '/' + first;
-          return location.origin;
-        }
-        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-          if (first && first.indexOf('.') === -1) return location.origin + '/' + first;
-          return location.origin;
-        }
-        return location.origin;
+        return new URL('.', location.href).href.replace(/\/$/, '');
       }
       var baseURL = getStandaloneBaseURL();
       var code = `
@@ -712,17 +703,7 @@ document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
       var el = document.getElementById('bookmarklet');
       if (el) {
         function getStandaloneBaseURL() {
-          var parts = location.pathname.split('/').filter(Boolean);
-          var first = parts[0] || '';
-          if (location.hostname.endsWith('github.io')) {
-            if (first) return location.origin + '/' + first;
-            return location.origin;
-          }
-          if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-            if (first && first.indexOf('.') === -1) return location.origin + '/' + first;
-            return location.origin;
-          }
-          return location.origin;
+          return new URL('.', location.href).href.replace(/\/$/, '');
         }
         var baseURL = getStandaloneBaseURL();
         var loaderPath = '/loader.js';
@@ -765,13 +746,25 @@ document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
       sel.removeAllRanges();
       sel.addRange(range);
     }
-    // ── GitHub Release (inline: runs even if main.js fails) ──
+    // ── Release (inline: runs even if main.js fails) ──
+    // Site feed (scripts/releaseFeed.ts) first; GitHub API only works while the repo is public.
     (async function(){
+      async function loadRelease() {
+        var sources = ['./releases/latest.json', 'https://api.github.com/repos/FirsakovAE/qa-tools/releases/latest'];
+        for (var i = 0; i < sources.length; i++) {
+          try {
+            var r = await fetch(sources[i]);
+            if (!r.ok) continue;
+            var json = await r.json();
+            if (!json || !json.tag_name) continue;
+            (json.assets || []).forEach(function(a){ a.browser_download_url = new URL(a.browser_download_url, r.url).href; });
+            return json;
+          } catch (e) {}
+        }
+        throw new Error('No release source available');
+      }
       try {
-        var res = await fetch('https://api.github.com/repos/FirsakovAE/qa-tools/releases/latest');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        var data = await res.json();
-        if (!data || !data.tag_name) return;
+        var data = await loadRelease();
         var version = data.tag_name;
         var date = data.published_at ? new Date(data.published_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) : '';
         var body = data.body || 'No release notes available.';

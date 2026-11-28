@@ -147,7 +147,7 @@ Opening a row shows exchange details:
 * **Response** — response body;
 * **Messages** — for a WebSocket row, each sent and received message.
 
-With nothing selected the panel says **Select a request to see details**. The section you last opened is kept for this inspector session and is not written to settings. Until you switch sections, an HTTP row opens on **Response**. A WebSocket row uses **Messages** unless **Headers** was the last section that applies. JSON bodies use the editor from **Options → General → JSON Mode** ([JSON Mode](/options/json_mode)). Text shorter than **200 KB** is pretty-printed when it is JSON; a longer body is shown as captured.
+With nothing selected the panel says **Select a request to see details**. The section you last opened is kept for this inspector session and is not written to settings. Until you switch sections, an HTTP row opens on **Response**. A WebSocket row uses **Messages** unless **Headers** was the last section that applies. JSON bodies use the [JSON editor](/options/json_mode). Text shorter than **200 KB** is pretty-printed when it is JSON; a longer body is shown as captured.
 
 **Back** and **Escape** close the details. On a paused breakpoint they release the pause and send the original request ([Traffic interception](./traffic.md)). While a breakpoint is waiting, **Apply** sends the edited request and the card shows a **Breakpoint** badge. A changed method or URL is drawn in amber.
 

@@ -38,7 +38,6 @@ export function useMockFormState(options: UseMockFormStateOptions) {
 
   const settings = ref<BaseInspectorSettings | null>(null)
   const jsonMode = ref<'text' | 'tree'>('text')
-  const jsonEditorImpl = ref<'classic' | 'jsoneditor'>('jsoneditor')
 
   const isRewrite = computed(() => !!existingMock())
 
@@ -48,7 +47,6 @@ export function useMockFormState(options: UseMockFormStateOptions) {
       try {
         settings.value = await useInspectorSettings()
         jsonMode.value = settings.value?.json?.mode ?? 'text'
-        jsonEditorImpl.value = settings.value?.json?.editor ?? 'jsoneditor'
       } catch (error) {
         console.error('[network/useMockFormState] useInspectorSettings failed:', error)
         /* use defaults */
@@ -61,7 +59,7 @@ export function useMockFormState(options: UseMockFormStateOptions) {
     jsonMode.value = m
     const s = settings.value
     if (s) {
-      if (!s.json) s.json = { editor: jsonEditorImpl.value, mode: m }
+      if (!s.json) s.json = { editor: 'jsoneditor', mode: m }
       else s.json.mode = m
     }
   }
@@ -244,7 +242,6 @@ export function useMockFormState(options: UseMockFormStateOptions) {
   return {
     activeSection,
     jsonMode,
-    jsonEditorImpl,
     persistJsonVanillaMode,
     isRewrite,
     // URL fields

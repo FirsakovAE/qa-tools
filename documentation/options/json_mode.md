@@ -4,35 +4,15 @@ title: JSON Mode
 
 # JSON Mode
 
-In **Options → General**, the **JSON Mode** switch chooses which implementation is used to **view and edit JSON** across the inspector (for example request/response bodies in **Network**, payloads in **Mock response**, **Pinia** state snapshots, and **Props** component data when the content is JSON).
+JSON across the inspector — request and response bodies in **Network**, payloads in **Mock response**, **Pinia** snapshots, and **Props** data when the content is JSON — opens in **vanilla-jsoneditor**.
 
-The default is **Advanced**. **Classic** says **JSON in text format with syntax highlighting**. **Advanced** says **Advanced mode with support for tree mode.** The last **Text** or **Tree** choice inside Advanced is stored and reused.
+There is no Classic / Advanced switch. Older settings saved as **Classic** are read as this editor.
 
-Non-JSON bodies (XML, plain text, etc.) still use a **single text view** with Prism highlighting where applicable; the switch mainly affects **JSON** payloads.
+- **Two representations of the same JSON**: **Text** (code) and **Tree** (structured). Switch them from the editor toolbar; the last choice is remembered (`json.mode`).
+- **Text mode**: formatting helpers (**Format** / **Compact** where editing is allowed), **Undo / Redo**, **Search**, and copy.
+- **Tree mode**: expand and collapse, breadcrumb navigation, context menus on nodes, and sorting.
 
----
-
-## Classic
-
-**Classic** uses the built-in **text editor with Prism syntax highlighting** (`JsonTextEditor`):
-
-- One **plain text** surface — there is **no separate tree UI**.
-- **Read-only** views get highlighted JSON (and other supported languages).
-- Tuned for **large fragments**: above a size threshold, highlighting is reduced so the UI stays responsive (very large **non-JSON** read-only payloads may use a lightweight viewer instead).
-
-Choose Classic when you want a **minimal, fast text-only** experience.
-
----
-
-## Advanced
-
-**Advanced** uses **vanilla-jsoneditor** (the `JsonEditor` UI component):
-
-- **Two representations of the same JSON**: **Text** (code) and **Tree** (structured). You can switch from the editor toolbar; the last choice (**Text** vs **Tree**) is **remembered** in settings (`json.mode`).
-- **Text mode**: formatting helpers (e.g. **Format** / **Compact** where editing is allowed), **Undo / Redo**, **Search**, copy, and the same editing model as the library.
-- **Tree mode**: expand/collapse, **breadcrumb / path** navigation, context menus on nodes, and integrated sorting / editing flows provided by the app on top of the tree.
-
-Choose Advanced when you need **tree navigation**, **history**, **search**, and richer editing around JSON.
+Non-JSON bodies (XML, plain text, and so on) stay in a single text view with Prism highlighting where that applies.
 
 ---
 

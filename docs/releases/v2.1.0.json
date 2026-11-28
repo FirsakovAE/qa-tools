@@ -1,0 +1,7 @@
+{
+  "tag_name": "v2.1.0",
+  "name": "v2.1.0",
+  "body": "### Core\n\n* New **Network** management tab.\n* Redesign for **iframe** layout instead of **popup** — more useful space on screen.\n* JSON layout tweaks — editor uses full app height.\n* Fixed tabs sticking when opening early — **Props** and **Pinia** no longer require a full page reload to appear.\n\n---\n\n### Props\n\n* Fixed favorites not resolving after reload or repeated flows.\n* Optimized Props for long sessions without excessive CPU; internal refactor.\n* Props tab overhaul — better behavior with large trees and hover search.\n* Removed **Props only** mode.\n\n---\n\n### Network\n\n* Intercepts **fetch** and **XMLHttpRequest** except **OPTIONS** and extension-originated calls.\n* Summary columns: status, method, name, duration, size.\n* Detailed view: params, auth, headers, request, response — only CORS-exposed headers where applicable.\n* Pause/resume capture; recording on by default on first open.\n* **Breakpoint** — pause and edit outbound requests before send.\n* **Mock Response** — intercept and return a synthetic response.\n* Quick copy of URLs, tokens, and key fields.\n* Clear all captured requests.\n* Event-driven architecture without polling for lower CPU.\n* Binary detection — textual preview suppressed with metadata only.",
+  "published_at": "2026-02-02T00:00:00Z",
+  "assets": []
+}

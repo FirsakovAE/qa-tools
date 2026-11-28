@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Cloudflare Pages project → https://vue-inspector.pages.dev
+  "name": "vue-inspector",
+  "compatibility_date": "2026-11-28",
+  // Assembled by `npm run build` (vite.config.ts → prepare-site).
+  "pages_build_output_dir": "./.cloudflare/site"
+}

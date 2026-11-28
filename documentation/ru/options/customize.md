@@ -100,5 +100,5 @@ title: Персонализация
 ## См. также
 
 - [Режимы отображения](/ru/options/display_mode)
-- [Режим JSON](/ru/options/json_mode) — Classic и Advanced редактор JSON (тоже в **General**).
+- [Режим JSON](/ru/options/json_mode) — как показывается и правится JSON.
 - [Менеджер настроек](/ru/options/settings_management)

@@ -64,11 +64,6 @@ const baseEn = {
   'general.noWhitelist': 'No site in whitelist',
   'general.whitelistHint': 'When the whitelist is not empty, the application will only run when the page origin (scheme, host including www, port) matches a pattern.',
 
-  'general.jsonMode': 'JSON Mode',
-  'general.classic': 'Classic',
-  'general.advanced': 'Advanced',
-  'general.classicHint': 'JSON in text format with syntax highlighting',
-  'general.advancedHint': 'Advanced mode with support for tree mode.',
 
   'general.savedFiles': 'Saved Files',
   'general.savedFilesHint': 'Files saved from breakpoint form-data editing for quick reuse.',
@@ -157,11 +152,6 @@ const baseRu: { [K in keyof typeof baseEn]: string } = {
   'general.noWhitelist': 'В белом списке нет сайтов',
   'general.whitelistHint': 'Если белый список не пуст, приложение запускается только когда источник страницы (схема, хост вместе с www, порт) совпадает с шаблоном.',
 
-  'general.jsonMode': 'Режим JSON',
-  'general.classic': 'Классический',
-  'general.advanced': 'Расширенный',
-  'general.classicHint': 'JSON текстом с подсветкой синтаксиса',
-  'general.advancedHint': 'Расширенный режим с деревом.',
 
   'general.savedFiles': 'Сохранённые файлы',
   'general.savedFilesHint': 'Файлы, сохранённые при правке form-data перехваченного запроса, чтобы использовать их снова.',

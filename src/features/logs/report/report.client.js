@@ -8,7 +8,7 @@
 (function () {
   'use strict'
 
-  var APP_URL = 'https://firsakovae.github.io/qa-tools/'
+  var APP_URL = 'https://vue-inspector.pages.dev/'
   var BOOSTY_URL = 'https://boosty.to/adambarmy'
   var USDT_ADDRESS = 'TPStwFujav3ZZATYb43iwHrrpMCZaoud84'
   var USDT_QR_SIZE = 29

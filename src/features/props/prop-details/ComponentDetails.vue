@@ -45,19 +45,17 @@ const emit = defineEmits<{ (e: 'back'): void; (e: 'refresh'): void; (e: 'openOve
 // --- Settings ---
 const settings = useInspectorSettingsSync()
 const jsonMode = ref<'text' | 'tree'>('text')
-const jsonEditorImpl = ref<'classic' | 'jsoneditor'>('jsoneditor')
 
 watch(settings, (s) => {
   if (!s) return
   jsonMode.value = s.json?.mode ?? 'text'
-  jsonEditorImpl.value = s.json?.editor ?? 'jsoneditor'
 }, { immediate: true })
 
 function persistJsonVanillaMode(m: 'text' | 'tree') {
   jsonMode.value = m
   const s = settings.value
   if (s) {
-    if (!s.json) s.json = { editor: jsonEditorImpl.value, mode: m }
+    if (!s.json) s.json = { editor: 'jsoneditor', mode: m }
     else s.json.mode = m
   }
 }
@@ -531,7 +529,6 @@ async function saveChanges() {
               v-model="editedJson"
               :editable="isEditing"
               :show-copy="true"
-              :editor="jsonEditorImpl"
               :mode="jsonMode"
               @update:mode="persistJsonVanillaMode"
               :full-height="true"
@@ -547,7 +544,6 @@ async function saveChanges() {
               :model-value="rawPropsJson"
               :editable="false"
               :show-copy="true"
-              :editor="jsonEditorImpl"
               :mode="jsonMode"
               @update:mode="persistJsonVanillaMode"
               :full-height="true"

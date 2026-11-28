@@ -45,7 +45,6 @@ useEscapeClose(computed(() => true), () => emit('back'))
 const {
   activeSection,
   jsonMode,
-  jsonEditorImpl,
   persistJsonVanillaMode,
   isRewrite,
   scheme,
@@ -297,7 +296,6 @@ function sectionLabel(section: { id: string; label: string }) {
               v-model="responseBody"
               :editable="true"
               :show-copy="true"
-              :editor="jsonEditorImpl"
               :mode="jsonMode"
               @update:mode="persistJsonVanillaMode"
               :language="bodyLanguage"

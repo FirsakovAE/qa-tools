@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "Vue Inspector"
+  },
+  "appDescription": {
+    "message": "Vue.js-Apps zur Laufzeit untersuchen: Props, Pinia-Stores, Netzwerkanfragen und Ereignisprotokolle – ohne Quellcode."
+  }
+}

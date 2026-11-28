@@ -1,8 +1,9 @@
 /**
- * GitHub Release API Service
+ * Release info service
  *
- * Fetches release info from GitHub API with ETag caching and rate limit handling.
- * Unauthenticated limit: 60 requests/hour.
+ * Reads the static release feed published with the site (`{site}/releases/*.json`, see
+ * `scripts/releaseFeed.ts`): Cloudflare first, then GitHub Pages. The GitHub Releases API is the
+ * last fallback (ETag caching, 60 unauthenticated requests/hour, unavailable for a private repo).
  */
 
 export interface GitHubRelease {
@@ -35,8 +36,11 @@ export interface ReleaseDisplayInfo {
 /** `owner/repo` — releases API, repo links, and GitHub Pages project site host/path. */
 export const GITHUB_REPO_SLUG = 'FirsakovAE/qa-tools'
 
+/** Site on Cloudflare Pages (`wrangler.jsonc`), no trailing slash. Works when the repository is private. */
+export const CLOUDFLARE_SITE_ROOT = 'https://vue-inspector.pages.dev'
+
 const REPO = GITHUB_REPO_SLUG
-const BASE_URL = `https://api.github.com/repos/${REPO}/releases`
+const API_BASE_URL = `https://api.github.com/repos/${REPO}/releases`
 
 /** `https://github.com/owner/repo` */
 export function getGithubRepoUrl(): string {
@@ -54,22 +58,28 @@ export function getGithubPagesProjectSiteRoot(): string {
 }
 
 /**
- * English docs entry: home page is the introduction (VitePress `base` = `/{repo}/docs/`).
+ * English docs entry: home page is the introduction (VitePress `base` = `/docs/`).
  */
 export function getPublishedDocsIntroductionUrl(): string {
-  return `${getGithubPagesProjectSiteRoot()}/docs/index.html`
+  return `${CLOUDFLARE_SITE_ROOT}/docs/index.html`
 }
+
+const RELEASE_FEED_ROOTS = [
+  `${CLOUDFLARE_SITE_ROOT}/releases`,
+  `${getGithubPagesProjectSiteRoot()}/releases`,
+]
 
 const etagCache = new Map<string, { etag: string; data: GitHubRelease }>()
 
 async function fetchRelease(url: string): Promise<ReleaseResult> {
-  const headers: Record<string, string> = {
-    'Accept': 'application/vnd.github.v3+json',
-  }
+  const isGithubApi = url.startsWith(API_BASE_URL)
+  const headers: Record<string, string> = {}
 
+  // Non-safelisted headers trigger a CORS preflight, which static hosts don't answer (standalone mode).
   const cached = etagCache.get(url)
-  if (cached?.etag) {
-    headers['If-None-Match'] = cached.etag
+  if (isGithubApi) {
+    headers['Accept'] = 'application/vnd.github.v3+json'
+    if (cached?.etag) headers['If-None-Match'] = cached.etag
   }
 
   try {
@@ -107,13 +117,17 @@ async function fetchRelease(url: string): Promise<ReleaseResult> {
       }
       return {
         release: null,
-        error: `GitHub API error: ${response.status} ${response.statusText}`,
+        error: `Release request failed: ${response.status} ${response.statusText}`,
         rateLimited: false,
         notModified: false,
       }
     }
 
     const release: GitHubRelease = await response.json()
+    release.assets = (release.assets ?? []).map(asset => ({
+      ...asset,
+      browser_download_url: new URL(asset.browser_download_url, url).href,
+    }))
 
     const etag = response.headers.get('ETag')
     if (etag) {
@@ -137,13 +151,24 @@ async function fetchRelease(url: string): Promise<ReleaseResult> {
   }
 }
 
+async function fetchFromSources(feedFile: string, apiPath: string): Promise<ReleaseResult> {
+  let firstFailure: ReleaseResult | null = null
+  for (const root of RELEASE_FEED_ROOTS) {
+    const result = await fetchRelease(`${root}/${feedFile}`)
+    if (result.release) return result
+    firstFailure ??= result
+  }
+  const api = await fetchRelease(`${API_BASE_URL}/${apiPath}`)
+  return api.release || !firstFailure ? api : firstFailure
+}
+
 export function fetchReleaseByTag(version: string): Promise<ReleaseResult> {
-  const cleanVersion = version.replace(/^v/, '')
-  return fetchRelease(`${BASE_URL}/tags/v${cleanVersion}`)
+  const tag = `v${version.replace(/^v/, '')}`
+  return fetchFromSources(`${tag}.json`, `tags/${tag}`)
 }
 
 export function fetchLatestRelease(): Promise<ReleaseResult> {
-  return fetchRelease(`${BASE_URL}/latest`)
+  return fetchFromSources('latest.json', 'latest')
 }
 
 export function compareVersions(version1: string, version2: string): number {

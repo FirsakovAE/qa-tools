@@ -5,9 +5,8 @@ import JsonEditorReadOnlyLarge from './JsonEditorReadOnlyLarge.vue'
 import { JsonEditor as UiJsonEditor } from '@/components/ui/JsonEditor'
 
 /**
- * JSON: either Prism `JsonTextEditor` (Classic) or vanilla-jsoneditor
- * (JSONEditor), per settings. Tree/text for the library is toggled in its
- * toolbar. Non-JSON uses `JsonTextEditor` or, for huge read-only payloads,
+ * JSON uses vanilla-jsoneditor. Tree/text is toggled in its toolbar.
+ * Non-JSON uses `JsonTextEditor` or, for huge read-only payloads,
  * `JsonEditorReadOnlyLarge` — Prism is slow on very large fragments.
  */
 const LARGE_NON_JSON_THRESHOLD = 500 * 1024
@@ -16,15 +15,12 @@ const props = withDefaults(defineProps<{
   modelValue: string
   editable?: boolean
   showCopy?: boolean
-  /** Only for JSON + JSONEditor backend: vanilla-jsoneditor text vs tree. */
+  /** vanilla-jsoneditor text vs tree. */
   mode?: 'text' | 'tree'
-  /** Classic = Prism `JsonTextEditor`; JSONEditor = vanilla-jsoneditor. */
-  editor?: 'classic' | 'jsoneditor'
   fullHeight?: boolean
   language?: string
 }>(), {
   fullHeight: false,
-  editor: 'jsoneditor',
   language: 'json'
 })
 
@@ -41,10 +37,7 @@ const valueLength = computed(() => props.modelValue?.length ?? 0)
 
 const effectiveMode = computed<'text' | 'tree'>(() => props.mode ?? 'text')
 
-/** vanilla-jsoneditor only for JSON when JSONEditor backend is chosen. */
-const useVanillaEditor = computed(
-  () => isJsonLanguage.value && props.editor !== 'classic',
-)
+const useVanillaEditor = computed(() => isJsonLanguage.value)
 
 /** Lightweight read-only view only for *non-JSON* huge content. */
 const useLargeReadOnly = computed(

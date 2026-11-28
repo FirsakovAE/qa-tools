@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "Vue Inspector"
+  },
+  "appDescription": {
+    "message": "Badaj aplikacje Vue.js na żywo: propsy, store'y Pinia, żądania sieciowe i dziennik zdarzeń, bez kodu źródłowego."
+  }
+}

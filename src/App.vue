@@ -3,6 +3,7 @@
   import { Infusion } from '@/components/ui/infusion'
   import { useAutoUnhighlight } from '@/composables/useAutoUnhighlight'
   import { useUpdateChecker } from '@/composables/useUpdateChecker'
+  import { isChromeStoreBuild } from '@/distribution'
   import { inspectorState, useInspectorSettings } from '@/settings/useInspectorSettings'
   import { mediaUrls } from '@/settings/mediaStore'
   import { wallpapers, defaultWallpaperUrl } from '@/assets/wallpapers'
@@ -11,7 +12,7 @@
   import { PhysicalKey } from '@/utils/keyboardLayoutShortcuts'
 
   useAutoUnhighlight()
-  useUpdateChecker()
+  if (!isChromeStoreBuild) useUpdateChecker()
 
   function applyTheme(theme: 'dark' | 'light') {
     if (theme === 'dark') {

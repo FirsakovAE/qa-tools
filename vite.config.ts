@@ -7,8 +7,13 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 import { copyFileSync, existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { join, dirname, normalize, posix } from 'path'
 import { execFileSync } from 'node:child_process'
+import { writeReleaseFeed } from './scripts/releaseFeed.ts'
+import { writeGithubPagesRedirect } from './scripts/githubPagesRedirect.ts'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const chromeStore = mode === 'chrome'
+  let bundleDir = ''
+  return {
   base: './',
   plugins: [
     vue(),
@@ -16,7 +21,17 @@ export default defineConfig({
     basicSsl(),
     viteStaticCopy({
       targets: [
-        { src: 'manifest.json', dest: '.' },
+        {
+          src: 'manifest.json',
+          dest: '.',
+          transform: (content: string) => {
+            if (!chromeStore) return content
+            const manifest = JSON.parse(content)
+            manifest.permissions = manifest.permissions.filter((p: string) => p !== 'scripting')
+            return JSON.stringify(manifest, null, 2)
+          },
+        },
+        { src: 'public/_locales/*', dest: '_locales' },
         { src: 'public/icons/*', dest: 'icons' },
         { src: 'public/defaultSettings.json', dest: '.' },
         // Standalone mode files
@@ -27,8 +42,11 @@ export default defineConfig({
     }),
     {
       name: 'copy-html-entries',
+      configResolved(config) {
+        bundleDir = config.build.outDir
+      },
       closeBundle() {
-        const distPath = join(process.cwd(), 'dist')
+        const distPath = bundleDir
 
         // injected_ui: dist/src/injected-ui/index.html → dist/injected_ui/index.html
         const uiSrcHtml = join(distPath, 'src', 'injected-ui', 'index.html')
@@ -72,26 +90,29 @@ export default defineConfig({
       }
     },
     {
-      name: 'prepare-docs-for-github-pages',
+      name: 'prepare-site',
+      configResolved(config) {
+        bundleDir = config.build.outDir
+      },
       closeBundle() {
-        const distPath = join(process.cwd(), 'dist')
-        const docsPath = join(process.cwd(), 'docs')
-
-        // Удаляем существующую папку docs для избежания дублирования файлов
-        if (existsSync(docsPath)) {
-          rmSync(docsPath, { recursive: true, force: true })
+        const distPath = bundleDir
+        if (chromeStore) {
+          const standalonePath = join(distPath, 'standalone')
+          if (existsSync(standalonePath)) rmSync(standalonePath, { recursive: true, force: true })
+          return
         }
+        // Сайт для Cloudflare Pages (корень домена): лендинг, standalone, релизы, VitePress в /docs/
+        const sitePath = join(process.cwd(), '.cloudflare', 'site')
 
-        // Создаем папку docs
-        mkdirSync(docsPath, { recursive: true })
-
-        // GitHub Pages по умолчанию прогоняет Jekyll; он не публикует файлы с именами вида `_*.js`
-        // (например Rollup `_commonjsHelpers-….js`), из‑за чего bookmark/injected_ui ломается с 404.
-        writeFileSync(join(docsPath, '.nojekyll'), '', 'utf-8')
+        // Удаляем существующую папку сайта для избежания дублирования файлов
+        if (existsSync(sitePath)) {
+          rmSync(sitePath, { recursive: true, force: true })
+        }
+        mkdirSync(sitePath, { recursive: true })
 
         // Копируем standalone файлы
         const standaloneSrc = join(distPath, 'standalone')
-        const standaloneDest = docsPath
+        const standaloneDest = sitePath
         if (existsSync(standaloneSrc)) {
           cpSync(standaloneSrc, standaloneDest, { recursive: true, force: true })
         }
@@ -100,25 +121,25 @@ export default defineConfig({
         const foldersToCopy = ['js', 'injected_ui', 'storage', 'assets', 'icons']
         foldersToCopy.forEach(folder => {
           const srcPath = join(distPath, folder)
-          const destPath = join(docsPath, folder)
+          const destPath = join(sitePath, folder)
           if (existsSync(srcPath)) {
             cpSync(srcPath, destPath, { recursive: true, force: true })
           }
         })
 
-        // Исправляем пути в injected_ui/index.html для docs/
-        const injectedUiHtmlPath = join(docsPath, 'injected_ui', 'index.html')
+        // Исправляем пути в injected_ui/index.html сайта
+        const injectedUiHtmlPath = join(sitePath, 'injected_ui', 'index.html')
         if (existsSync(injectedUiHtmlPath)) {
           let content = readFileSync(injectedUiHtmlPath, 'utf-8')
-          // Заменяем пути для docs/ — `../../assets` из injected_ui ломает GitHub Pages (/qa-tools/…)
+          // `../../assets` из injected_ui выходит за префикс сайта (/qa-tools/… на GitHub Pages)
           content = content
             .replace(/src="\.\.\/\.\.\/injected_ui\/index\.js"/g, 'src="./index.js"')
             .replace(/\.\.\/\.\.\/assets\//g, '../assets/')
           writeFileSync(injectedUiHtmlPath, content, 'utf-8')
         }
 
-        // Исправляем пути в docs/index.html для GitHub Pages
-        const indexHtmlPath = join(docsPath, 'index.html')
+        // Исправляем пути в index.html лендинга
+        const indexHtmlPath = join(sitePath, 'index.html')
         if (existsSync(indexHtmlPath)) {
           let content = readFileSync(indexHtmlPath, 'utf-8')
 
@@ -127,7 +148,7 @@ export default defineConfig({
 
           // Извлекаем inline-скрипт, применяем правки путей и сохраняем как main.js.
           // Это гарантирует, что любые изменения в public/standalone/index.html
-          // автоматически попадают в docs/main.js при сборке.
+          // автоматически попадают в main.js сайта при сборке.
           // Extract first script (bookmarklet, carousel, fade-in); second script (fetch) stays inline
           const inlineScriptPattern = /  <script>([\s\S]*?)<\/script>(?=\s*<script>|\s*<\/body>)/
           const inlineMatch = content.match(inlineScriptPattern)
@@ -135,13 +156,13 @@ export default defineConfig({
           if (inlineMatch) {
             let scriptContent = inlineMatch[1]
 
-            // Путь loader.js: в docs он лежит в корне, а не в standalone/
+            // Путь loader.js: на сайте он лежит в корне, а не в standalone/
             scriptContent = scriptContent.replace(
               /\/standalone\/loader\.js/g,
               '/loader.js'
             )
 
-            const mainJsPath = join(docsPath, 'main.js')
+            const mainJsPath = join(sitePath, 'main.js')
             writeFileSync(mainJsPath, scriptContent.trim(), 'utf-8')
           }
 
@@ -161,7 +182,7 @@ export default defineConfig({
           rmSync(standaloneDistPath, { recursive: true, force: true })
         }
 
-        // 2. Удаляем extension-артефакты из docs (standalone должен быть чистым)
+        // 2. Удаляем extension-артефакты из сайта (standalone должен быть чистым)
         // Примечание: иконки оставляем, так как они могут понадобиться для standalone
         const docsArtifactsToRemove = [
           'manifest.json',
@@ -169,13 +190,21 @@ export default defineConfig({
         ]
 
         docsArtifactsToRemove.forEach(name => {
-          const target = join(docsPath, name)
+          const target = join(sitePath, name)
           if (existsSync(target)) {
             rmSync(target, { recursive: true, force: true })
           }
         })
 
-        // 3. VitePress → docs/docs/ (маршрут /docs/ для serve и GitHub Pages)
+        // 3. Лента релизов + zip расширения → releases/ (не зависит от GitHub API)
+        writeReleaseFeed({
+          distDir: distPath,
+          outDir: join(sitePath, 'releases'),
+          manifestPath: join(process.cwd(), 'manifest.json'),
+          changelogPath: join(process.cwd(), 'CHANGELOG.md'),
+        })
+
+        // 4. VitePress → .cloudflare/site/docs/ (маршрут /docs/)
         // `execFileSync('npx.cmd', …)` даёт EINVAL на части установок Windows; CLI через тот же node, что и сборка.
         const vitepressCli = join(process.cwd(), 'node_modules', 'vitepress', 'bin', 'vitepress.js')
         const realpathPreload = join(process.cwd(), 'scripts', 'win-realpath.cjs')
@@ -183,6 +212,19 @@ export default defineConfig({
           stdio: 'inherit',
           cwd: process.cwd(),
           env: process.env,
+        })
+
+        // 5. Cloudflare Pages: без корневого 404.html неизвестные пути отдают лендинг (режим SPA);
+        // CORS как у GitHub Pages — букмарклет и standalone iframe грузят файлы с чужих origin.
+        copyFileSync(join(sitePath, 'docs', '404.html'), join(sitePath, '404.html'))
+        writeFileSync(join(sitePath, '_headers'), '/*\n  Access-Control-Allow-Origin: *\n', 'utf-8')
+
+        // 6. Временно: docs/ (GitHub Pages) — редирект на Cloudflare
+        writeGithubPagesRedirect({
+          siteDir: sitePath,
+          outDir: join(process.cwd(), 'docs'),
+          targetOrigin: 'https://vue-inspector.pages.dev',
+          repoPrefix: 'qa-tools',
         })
       }
     }
@@ -193,7 +235,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: chromeStore ? 'chrome' : 'dist',
     assetsDir: 'assets',
     rollupOptions: {
       input: {
@@ -298,4 +340,5 @@ export default defineConfig({
     chunkSizeWarningLimit: 3000
   },
   publicDir: false
+  }
 })

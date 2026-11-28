@@ -43,6 +43,10 @@ temp/
 
 # Cache
 .cache/
+
+# Cloudflare
+.cloudflare/
+.wrangler/
 .parcel-cache/
 
 # TypeScript

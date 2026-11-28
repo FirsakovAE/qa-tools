@@ -5,26 +5,19 @@ import { resolveRootLandingHref } from './rootLandingNav'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-/** Repository segment in GitHub Pages project URLs: https://{user}.github.io/{repo}/ */
-function githubPagesRepoSegment(): string {
-  const fromEnv = process.env.VITEPRESS_REPO?.trim()
-  if (fromEnv) return fromEnv.replace(/^\/+|\/+$/g, '')
-  return process.env.GITHUB_REPOSITORY?.split('/')[1]?.trim() || 'qa-tools'
-}
-
 /**
- * URL prefix where the VitePress app is mounted (must match GH Pages: /{repo}/docs/).
+ * URL prefix where the VitePress app is mounted on the site root (Cloudflare Pages: /docs/).
  * Override with VITEPRESS_BASE=/other/docs/ when needed.
  */
 function vitepressBase(): string {
   const fromEnv = process.env.VITEPRESS_BASE?.trim()
   if (fromEnv) return fromEnv.endsWith('/') ? fromEnv : `${fromEnv}/`
-  return `/${githubPagesRepoSegment()}/docs/`
+  return '/docs/'
 }
 
 const base = vitepressBase()
 
-/** Host-root landing `/{repo}/index.html` (outside VitePress `…/docs/`). Logo uses raw href; nav uses `VPNavBarRootLandingLink`. */
+/** Site-root landing `/index.html` (outside VitePress `…/docs/`). Logo uses raw href; nav uses `VPNavBarRootLandingLink`. */
 function landingHref(): string {
   return resolveRootLandingHref(base)
 }
@@ -118,7 +111,7 @@ function faviconHead(): [string, Record<string, string>][] {
 
 export default defineConfig({
   base,
-  outDir: resolve(__dirname, '../../docs/docs'),
+  outDir: resolve(__dirname, '../../.cloudflare/site/docs'),
   vite: {
     /** `install/*.svg` + `icons/*.png` (PNG duplicated from `public/icons` for one `publicDir`). */
     publicDir: resolve(__dirname, '../public'),

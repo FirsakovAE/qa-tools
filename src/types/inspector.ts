@@ -396,11 +396,12 @@ export interface BaseInspectorSettings {
     /** Global search parameters (debounce, minLength) shared across all modules */
     searchParams: GlobalSearchSettings
     /**
-     * JSON payload editing: Classic = Prism text (`JsonTextEditor`);
-     * JSONEditor = vanilla-jsoneditor (`text`/`tree` modes in that library).
+     * JSON payload editing uses vanilla-jsoneditor.
+     * `editor` stays `jsoneditor`; older saves with `classic` are migrated on load.
+     * `mode` is the last Text/Tree choice in that editor.
      */
     json: {
-        editor: 'classic' | 'jsoneditor'
+        editor: 'jsoneditor'
         mode: 'text' | 'tree'
     }
     updates?: { refreshIntervalMs?: number; autoRefresh?: boolean; autoRefreshInterval?: number }

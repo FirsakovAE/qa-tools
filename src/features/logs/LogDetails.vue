@@ -53,7 +53,6 @@ const { t } = useI18n()
 useEscapeClose(computed(() => true), () => emit('back'))
 
 const settings = useInspectorSettingsSync()
-const jsonEditorImpl = computed(() => settings.value?.json?.editor ?? 'jsoneditor')
 const jsonMode = ref<'text' | 'tree'>('text')
 watch(settings, s => { if (s) jsonMode.value = s.json?.mode ?? 'text' }, { immediate: true })
 
@@ -566,7 +565,6 @@ function changeTypeClass(type: LogChange['type']): string {
               :language="jsonBlock.language"
               :editable="false"
               :show-copy="true"
-              :editor="jsonEditorImpl"
               :mode="jsonMode"
               :full-height="true"
               class="h-full"
